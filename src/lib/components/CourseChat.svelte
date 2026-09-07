@@ -44,8 +44,9 @@
     messages = [];
     error = '';
     loading = true;
-    const request = classroomMode ? api.getClassroomChat(id) : api.getCourseChat(id);
-    request
+    const owner = classroomMode ? { classroom_session_id: id } : { course_id: id };
+    api
+      .getChat(owner)
       .then((m) => {
         messages = m;
         loading = false;
@@ -85,9 +86,8 @@
     input = '';
     await scrollToBottom();
     try {
-      const thread = classroomMode
-        ? await api.sendClassroomMessage(ownerId, text)
-        : await api.sendCourseMessage(ownerId, text);
+      const owner = classroomMode ? { classroom_session_id: ownerId } : { course_id: ownerId };
+      const thread = await api.sendChatMessage(owner, text);
       messages = thread;
       pendingMessage = '';
       liveAnnouncement = thread[thread.length - 1]?.content ?? '';

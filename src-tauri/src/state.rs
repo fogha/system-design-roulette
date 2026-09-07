@@ -29,13 +29,12 @@ pub struct AppState {
     pub frontend_ready: AtomicBool,
     /// Background generation worker wakeup.
     pub gen_notify: tokio::sync::Notify,
-    /// Session-only, course-grounded chat threads keyed by course id. Never
-    /// written to the database — cleared on completion, skip, extension/new
-    /// session, and implicitly on every app restart (this is memory-only).
-    pub chat_threads: Mutex<HashMap<i64, Vec<ChatTurn>>>,
-    /// Session-only chat for advisory engineering classes. Kept separate from
-    /// primary course ids so independently allocated SQLite ids cannot collide.
-    pub classroom_chat_threads: Mutex<HashMap<i64, Vec<ChatTurn>>>,
+    /// Session-only, course-grounded chat threads keyed by owner key
+    /// ("course:{id}" or "classroom:{id}"). Never written to the database —
+    /// cleared on completion, skip, and implicitly on every app restart
+    /// (this is memory-only). Namespaced keys keep independently allocated
+    /// course and classroom ids from colliding.
+    pub chat_threads: Mutex<HashMap<String, Vec<ChatTurn>>>,
 }
 
 impl AppState {
@@ -43,14 +42,6 @@ impl AppState {
     /// boundary so a new or reopened course never inherits stale Q&A.
     pub fn clear_chat_threads(&self) {
         self.chat_threads.lock().unwrap().clear();
-        self.classroom_chat_threads.lock().unwrap().clear();
-    }
-
-    pub fn clear_classroom_chat(&self, session_id: i64) {
-        self.classroom_chat_threads
-            .lock()
-            .unwrap()
-            .remove(&session_id);
     }
 
     /// Today's date, overridable for testing via SDR_DATE=YYYY-MM-DD.

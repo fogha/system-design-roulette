@@ -507,6 +507,11 @@ export interface ExerciseOwner {
   classroom_session_id?: number | null;
 }
 
+export interface ChatOwner {
+  course_id?: number | null;
+  classroom_session_id?: number | null;
+}
+
 export const isTauri =
   typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
@@ -608,10 +613,17 @@ const realApi = {
       completed,
       reflection,
     }),
-  getClassroomChat: (sessionId: number) =>
-    invoke<ChatMessage[]>('get_classroom_chat', { sessionId }),
-  sendClassroomMessage: (sessionId: number, message: string) =>
-    invoke<ChatMessage[]>('send_classroom_message', { sessionId, message }),
+  getChat: (owner: ChatOwner) =>
+    invoke<ChatMessage[]>('get_chat', {
+      courseId: owner.course_id ?? null,
+      classroomSessionId: owner.classroom_session_id ?? null,
+    }),
+  sendChatMessage: (owner: ChatOwner, message: string) =>
+    invoke<ChatMessage[]>('send_chat_message', {
+      courseId: owner.course_id ?? null,
+      classroomSessionId: owner.classroom_session_id ?? null,
+      message,
+    }),
   submitLanguageSession: (input: {
     session_id: number;
     answers: number[];
@@ -647,10 +659,6 @@ const realApi = {
   getPastCourse: (date: string) =>
     invoke<ArchivedCourse | null>('get_past_course', { date }),
   openResources: () => invoke<number>('open_resources'),
-  getCourseChat: (courseId: number) =>
-    invoke<ChatMessage[]>('get_course_chat', { courseId }),
-  sendCourseMessage: (courseId: number, message: string) =>
-    invoke<ChatMessage[]>('send_course_message', { courseId, message }),
 };
 
 /** Demo mode: outside Tauri (plain `vite dev`), serve canned data from mock.ts. */

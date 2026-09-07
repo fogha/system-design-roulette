@@ -160,7 +160,6 @@ pub fn run() {
                 frontend_ready: AtomicBool::new(false),
                 gen_notify: tokio::sync::Notify::new(),
                 chat_threads: Mutex::new(std::collections::HashMap::new()),
-                classroom_chat_threads: Mutex::new(std::collections::HashMap::new()),
             });
 
             // Self-heal the launchd plist if it points at a stale binary path
@@ -304,10 +303,8 @@ pub fn run() {
             commands::get_exercise,
             commands::save_exercise_draft,
             commands::save_exercise_completion,
-            commands::get_course_chat,
-            commands::send_course_message,
-            commands::get_classroom_chat,
-            commands::send_classroom_message,
+            commands::get_chat,
+            commands::send_chat_message,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

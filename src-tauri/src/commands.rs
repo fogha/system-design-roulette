@@ -1925,8 +1925,6 @@ pub fn get_past_course(
     }))
 }
 
-/// Structured exercise for a course, with any autosaved draft. Available
-/// regardless of session completion — the exercise workspace is reachable
 /// One exercise workspace view for either owner: a primary course or a
 /// classroom session (exactly one of the two ids must be present).
 #[tauri::command]
@@ -2038,53 +2036,80 @@ fn prepare_chat_message(message: String) -> CmdResult<String> {
     Ok(message)
 }
 
-/// Current in-memory chat thread for a course. Empty (never an error) when
-/// nothing has been asked yet — the whole thread lives only for the active
-/// app session and is gone on restart, completion, skip, or extension.
+/// Current in-memory chat thread for one owner: a primary course or a
+/// classroom session (exactly one id). Empty (never an error) when nothing
+/// has been asked yet — the whole thread lives only for the active app
+/// session and is gone on restart, completion, or skip.
 #[tauri::command]
-pub fn get_course_chat(
+pub fn get_chat(
     state: State<'_, AppState>,
-    course_id: i64,
+    course_id: Option<i64>,
+    classroom_session_id: Option<i64>,
 ) -> CmdResult<Vec<ChatMessageView>> {
+    let key = chat_key(course_id, classroom_session_id)?;
     let threads = state.chat_threads.lock().unwrap();
     Ok(threads
-        .get(&course_id)
+        .get(&key)
         .map(|turns| chat_view(turns))
         .unwrap_or_default())
+}
+
+fn chat_key(course_id: Option<i64>, classroom_session_id: Option<i64>) -> CmdResult<String> {
+    match (course_id, classroom_session_id) {
+        (Some(id), None) => Ok(format!("course:{id}")),
+        (None, Some(id)) => Ok(format!("classroom:{id}")),
+        _ => Err("chat owner must be exactly one of course or classroom session".into()),
+    }
 }
 
 /// Ask one bounded, course-grounded question. Never touches the reading
 /// timer, kiosk lock, mastery, or completion state — purely a session-only
 /// side conversation about the course already on screen.
 #[tauri::command]
-pub async fn send_course_message(
+pub async fn send_chat_message(
     state: State<'_, AppState>,
-    course_id: i64,
+    course_id: Option<i64>,
+    classroom_session_id: Option<i64>,
     message: String,
 ) -> CmdResult<Vec<ChatMessageView>> {
+    let key = chat_key(course_id, classroom_session_id)?;
     let message = prepare_chat_message(message)?;
-    let (context, history) = {
-        let conn = state.db.0.lock().unwrap();
-        let course = db::get_course(&conn, course_id)
+    let history = state
+        .chat_threads
+        .lock()
+        .unwrap()
+        .get(&key)
+        .cloned()
+        .unwrap_or_default();
+    let reply = if let Some(id) = classroom_session_id {
+        let (context, profile) = {
+            let conn = state.db.0.lock().unwrap();
+            let context = crate::classroom::engineering_chat_context(&conn, id).map_err(err)?;
+            let program = crate::classroom::program_row(&conn, &context.focus).map_err(err)?;
+            let profile = crate::classroom::generation_profile(&program);
+            (context, profile)
+        };
+        state
+            .generator
+            .answer_course_question_for(&context, &message, &history, &profile)
+            .await
             .map_err(err)?
-            .ok_or("course not found")?;
-        let concept = db::get_concept(&conn, course.concept_id)
-            .map_err(err)?
-            .ok_or("course concept not found")?;
-        let exercise = db::get_course_exercise(&conn, course_id)
-            .map_err(err)?
-            .map(|value| serde_json::to_string_pretty(&value))
-            .transpose()
-            .map_err(err)?
-            .unwrap_or_else(|| "(this course has no separate exercise)".into());
-        let history = state
-            .chat_threads
-            .lock()
-            .unwrap()
-            .get(&course_id)
-            .cloned()
-            .unwrap_or_default();
-        (
+    } else {
+        let course_id = course_id.ok_or("chat owner must be a course")?;
+        let context = {
+            let conn = state.db.0.lock().unwrap();
+            let course = db::get_course(&conn, course_id)
+                .map_err(err)?
+                .ok_or("course not found")?;
+            let concept = db::get_concept(&conn, course.concept_id)
+                .map_err(err)?
+                .ok_or("course concept not found")?;
+            let exercise = db::get_course_exercise(&conn, course_id)
+                .map_err(err)?
+                .map(|value| serde_json::to_string_pretty(&value))
+                .transpose()
+                .map_err(err)?
+                .unwrap_or_else(|| "(this course has no separate exercise)".into());
             crate::generator::CourseChatContext {
                 title: concept.title,
                 focus: concept.focus,
@@ -2092,62 +2117,16 @@ pub async fn send_course_message(
                 learner_outcome: concept.curriculum.learner_outcome,
                 cumulative_artifact: concept.curriculum.artifact,
                 exercise,
-            },
-            history,
-        )
+            }
+        };
+        state
+            .generator
+            .answer_course_question(&context, &message, &history)
+            .await
+            .map_err(err)?
     };
-    let reply = state
-        .generator
-        .answer_course_question(&context, &message, &history)
-        .await
-        .map_err(err)?;
     let mut threads = state.chat_threads.lock().unwrap();
-    let thread = threads.entry(course_id).or_default();
-    thread.push(crate::generator::ChatTurn::user(message));
-    thread.push(crate::generator::ChatTurn::assistant(reply));
-    Ok(chat_view(thread))
-}
-
-#[tauri::command]
-pub fn get_classroom_chat(
-    state: State<'_, AppState>,
-    session_id: i64,
-) -> CmdResult<Vec<ChatMessageView>> {
-    let threads = state.classroom_chat_threads.lock().unwrap();
-    Ok(threads
-        .get(&session_id)
-        .map(|turns| chat_view(turns))
-        .unwrap_or_default())
-}
-
-#[tauri::command]
-pub async fn send_classroom_message(
-    state: State<'_, AppState>,
-    session_id: i64,
-    message: String,
-) -> CmdResult<Vec<ChatMessageView>> {
-    let message = prepare_chat_message(message)?;
-    let (context, profile, history) = {
-        let conn = state.db.0.lock().unwrap();
-        let context = crate::classroom::engineering_chat_context(&conn, session_id).map_err(err)?;
-        let program = crate::classroom::program_row(&conn, &context.focus).map_err(err)?;
-        let profile = crate::classroom::generation_profile(&program);
-        let history = state
-            .classroom_chat_threads
-            .lock()
-            .unwrap()
-            .get(&session_id)
-            .cloned()
-            .unwrap_or_default();
-        (context, profile, history)
-    };
-    let reply = state
-        .generator
-        .answer_course_question_for(&context, &message, &history, &profile)
-        .await
-        .map_err(err)?;
-    let mut threads = state.classroom_chat_threads.lock().unwrap();
-    let thread = threads.entry(session_id).or_default();
+    let thread = threads.entry(key).or_default();
     thread.push(crate::generator::ChatTurn::user(message));
     thread.push(crate::generator::ChatTurn::assistant(reply));
     Ok(chat_view(thread))

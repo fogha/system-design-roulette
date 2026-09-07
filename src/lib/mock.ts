@@ -1132,31 +1132,54 @@ export const mockApi = {
       mockExerciseReflection = reflection;
     }
   },
-  getClassroomChat: async (sessionId: number): Promise<ChatMessage[]> => {
-    return mockClassroomChatThreads.get(sessionId) ?? [];
+  getChat: async (owner: {
+    course_id?: number | null;
+    classroom_session_id?: number | null;
+  }): Promise<ChatMessage[]> => {
+    if (owner.classroom_session_id != null) {
+      return mockClassroomChatThreads.get(owner.classroom_session_id) ?? [];
+    }
+    return mockChatThreads.get(owner.course_id ?? -1) ?? [];
   },
-  sendClassroomMessage: async (
-    sessionId: number,
+  sendChatMessage: async (
+    owner: { course_id?: number | null; classroom_session_id?: number | null },
     message: string,
   ): Promise<ChatMessage[]> => {
     const trimmed = message.trim();
     if (!trimmed) throw new Error('message cannot be empty');
     if (trimmed.length > 2_000) throw new Error('message is too long');
     await new Promise((resolve) => setTimeout(resolve, 500));
-    const thread = mockClassroomChatThreads.get(sessionId) ?? [];
+    if (owner.classroom_session_id != null) {
+      const thread = mockClassroomChatThreads.get(owner.classroom_session_id) ?? [];
+      thread.push({ role: 'user', content: trimmed, section: null, follow_ups: [] });
+      thread.push({
+        role: 'assistant',
+        content:
+          'Start from the smallest mechanism in this lesson, then trace how it composes into the architecture decision. The opening analogy gives you the shape; its “where the analogy breaks” paragraph tells you which runtime constraint must replace the metaphor.',
+        section: 'The precise model',
+        follow_ups: [
+          'Can you trace the mechanism step by step?',
+          'Which observation would disprove your current model?',
+          'How will you expose this in the exercise?',
+        ],
+      });
+      mockClassroomChatThreads.set(owner.classroom_session_id, thread);
+      return thread;
+    }
+    const thread = mockChatThreads.get(owner.course_id ?? -1) ?? [];
     thread.push({ role: 'user', content: trimmed, section: null, follow_ups: [] });
     thread.push({
       role: 'assistant',
       content:
-        'Start from the smallest mechanism in this lesson, then trace how it composes into the architecture decision. The opening analogy gives you the shape; its “where the analogy breaks” paragraph tells you which runtime constraint must replace the metaphor.',
+        "The course's mental model: the loop drains every pending microtask completely before it ever looks at the next macrotask. Think of it like a chef who finishes every add-on ticket for the current dish before glancing at the next order — that ordering is what the diagram in \"The simple version\" is showing.",
       section: 'The precise model',
       follow_ups: [
-        'Can you trace the mechanism step by step?',
-        'Which observation would disprove your current model?',
-        'How will you expose this in the exercise?',
+        'Can you trace one complete event-loop turn?',
+        'Which observation distinguishes microtasks from tasks?',
+        'How does the exercise reveal checkpoint ordering?',
       ],
     });
-    mockClassroomChatThreads.set(sessionId, thread);
+    mockChatThreads.set(owner.course_id ?? -1, thread);
     return thread;
   },
   submitLanguageSession: async (input: {
@@ -1461,29 +1484,5 @@ export const mockApi = {
     state.voluntary = true;
     clearMockChatThreads();
     return session();
-  },
-  getCourseChat: async (courseId: number): Promise<ChatMessage[]> => {
-    return mockChatThreads.get(courseId) ?? [];
-  },
-  sendCourseMessage: async (courseId: number, message: string): Promise<ChatMessage[]> => {
-    const trimmed = message.trim();
-    if (!trimmed) throw new Error('message cannot be empty');
-    if (trimmed.length > 2_000) throw new Error('message is too long');
-    await new Promise((r) => setTimeout(r, 500));
-    const thread = mockChatThreads.get(courseId) ?? [];
-    thread.push({ role: 'user', content: trimmed, section: null, follow_ups: [] });
-    thread.push({
-      role: 'assistant',
-      content:
-        "The course's mental model: the loop drains every pending microtask completely before it ever looks at the next macrotask. Think of it like a chef who finishes every add-on ticket for the current dish before glancing at the next order — that ordering is what the diagram in \"The simple version\" is showing.",
-      section: 'The precise model',
-      follow_ups: [
-        'Can you trace one complete event-loop turn?',
-        'Which observation distinguishes microtasks from tasks?',
-        'How does the exercise reveal checkpoint ordering?',
-      ],
-    });
-    mockChatThreads.set(courseId, thread);
-    return thread;
   },
 };
