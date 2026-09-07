@@ -4,7 +4,6 @@ import {
   type AppStateView,
   type ClassroomSubjectId,
   type EngineeringLessonView,
-  type LanguageId,
   type LanguageLessonView,
   type SessionView,
 } from './ipc';
@@ -114,15 +113,6 @@ class AppStore {
     this.route();
   }
 
-  async startLanguage(language: LanguageId, slotId?: number | null) {
-    try {
-      this.languageLesson = await api.startLanguageSession(language, slotId);
-      this.screen = 'language';
-    } catch (e) {
-      this.error = String(e);
-    }
-  }
-
   async startClass(subjectId: ClassroomSubjectId, slotId?: number | null, revisit = false) {
     try {
       const session = await api.startClassroomSession(subjectId, slotId, revisit);
@@ -164,20 +154,6 @@ class AppStore {
     await this.refresh();
   }
 
-  async resumeLanguage() {
-    try {
-      const lesson = await api.getActiveLanguageSession();
-      if (!lesson) {
-        await this.refresh();
-        return;
-      }
-      this.languageLesson = lesson;
-      this.screen = 'language';
-    } catch (e) {
-      this.error = String(e);
-    }
-  }
-
   async finishLanguage() {
     await this.finishClass();
   }
@@ -188,8 +164,6 @@ class AppStore {
     await this.refresh();
     await onEvent('session:owed', () => this.refresh());
     await onEvent('session:state', () => this.refresh());
-    await onEvent('language:owed', () => this.refresh());
-    await onEvent('language:state', () => this.refresh());
     await onEvent('classroom:owed', () => this.refresh());
     await onEvent('classroom:state', () => this.refresh());
     await onEvent<string>('gen:status', (msg) => {

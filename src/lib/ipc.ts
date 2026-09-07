@@ -65,27 +65,6 @@ export interface LanguageProgramView {
   official_sources: OfficialLanguageSource[];
 }
 
-export interface LanguageSlotView {
-  id: number;
-  language: LanguageId;
-  label: string;
-  hour: number;
-  minute: number;
-  weekdays: number[];
-  enabled: boolean;
-  owed: boolean;
-  next_fire_at: string;
-  in_progress: boolean;
-}
-
-export interface ActiveLanguageSessionView {
-  session_id: number;
-  language: LanguageId;
-  label: string;
-  level: CefrLevel;
-  title: string;
-}
-
 export interface LanguagePhrase {
   target: string;
   translation: string;
@@ -356,10 +335,6 @@ export interface AppStateView {
   agent: AgentId;
   custom_agent_bin: string;
   deepseek_key_configured: boolean;
-  language_programs: LanguageProgramView[];
-  language_slots: LanguageSlotView[];
-  language_due_count: number;
-  active_language_session: ActiveLanguageSessionView | null;
   classroom_programs: ClassroomProgramView[];
   classroom_slots: ClassroomSlotView[];
   classroom_due_count: number;
@@ -634,31 +609,6 @@ const realApi = {
     invoke<ChatMessage[]>('get_classroom_chat', { sessionId }),
   sendClassroomMessage: (sessionId: number, message: string) =>
     invoke<ChatMessage[]>('send_classroom_message', { sessionId, message }),
-  configureLanguageProgram: (input: {
-    language: LanguageId;
-    enabled: boolean;
-    start_level: CefrLevel;
-    target_level: CefrLevel;
-    weekly_minutes: number;
-    session_minutes: number;
-  }) => invoke<LanguageProgramView>('configure_language_program', { input }),
-  upsertLanguageSlot: (input: {
-    id?: number | null;
-    language: LanguageId;
-    hour: number;
-    minute: number;
-    weekdays: number[];
-    enabled: boolean;
-  }) => invoke<LanguageSlotView[]>('upsert_language_slot', { input }),
-  deleteLanguageSlot: (id: number) =>
-    invoke<LanguageSlotView[]>('delete_language_slot', { id }),
-  startLanguageSession: (language: LanguageId, slotId?: number | null) =>
-    invoke<LanguageLessonView>('start_language_session', {
-      language,
-      slotId: slotId ?? null,
-    }),
-  getActiveLanguageSession: () =>
-    invoke<LanguageLessonView | null>('get_active_language_session'),
   submitLanguageSession: (input: {
     session_id: number;
     answers: number[];

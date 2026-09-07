@@ -26,7 +26,6 @@ import type {
   LanguageLessonView,
   LanguageProgramView,
   LanguageSessionResult,
-  LanguageSlotView,
   PlannedSlot,
   QuizQuestionView,
   ReviewData,
@@ -313,23 +312,6 @@ const mockLanguageSettings: Record<
     sessionMinutes: 30,
   },
 };
-let mockLanguageSlots: LanguageSlotView[] = params.get('program')
-  ? [
-      {
-        id: 701,
-        language: params.get('program') as LanguageId,
-        label: params.get('program') === 'italian' ? 'Italian' : 'German',
-        hour: 7,
-        minute: 30,
-        weekdays: [1, 2, 3, 4, 5, 6],
-        enabled: true,
-        owed: params.has('languageDue'),
-        next_fire_at: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString().slice(0, 19),
-        in_progress: false,
-      },
-    ]
-  : [];
-
 const CLASSROOM_CATALOG: Array<{
   id: ClassroomSubjectId;
   kind: 'language' | 'engineering';
@@ -725,10 +707,6 @@ function mockEngineeringLesson(subjectId: FocusArea): EngineeringLessonView {
 
 function appState(): AppStateView {
   const inSetup = location.search.includes('setup') && !setupCompleted;
-  const languagePrograms = [
-    mockLanguageProgram('german'),
-    mockLanguageProgram('italian'),
-  ];
   return {
     onboarded: !inSetup,
     session: session(),
@@ -746,18 +724,6 @@ function appState(): AppStateView {
     agent: mockAgent,
     custom_agent_bin: mockCustomBin,
     deepseek_key_configured: mockDeepseekKeyConfigured,
-    language_programs: languagePrograms,
-    language_slots: mockLanguageSlots,
-    language_due_count: mockLanguageSlots.filter((slot) => slot.owed).length,
-    active_language_session: mockActiveLanguage
-      ? {
-          session_id: mockActiveLanguage.session_id,
-          language: mockActiveLanguage.language,
-          label: mockActiveLanguage.label,
-          level: mockActiveLanguage.level,
-          title: mockActiveLanguage.title,
-        }
-      : null,
     classroom_programs: CLASSROOM_CATALOG.map((item) => mockClassroomProgram(item.id)),
     classroom_slots: mockClassroomSlots,
     classroom_due_count: mockClassroomSlots.filter((slot) => slot.owed).length,
@@ -1162,65 +1128,6 @@ export const mockApi = {
     mockClassroomChatThreads.set(sessionId, thread);
     return thread;
   },
-  configureLanguageProgram: async (input: {
-    language: LanguageId;
-    enabled: boolean;
-    start_level: CefrLevel;
-    target_level: CefrLevel;
-    weekly_minutes: number;
-    session_minutes: number;
-  }) => {
-    const settings = mockLanguageSettings[input.language];
-    settings.enabled = input.enabled;
-    settings.startLevel = input.start_level;
-    settings.currentLevel = input.start_level;
-    settings.targetLevel = input.target_level;
-    settings.weeklyMinutes = input.weekly_minutes;
-    settings.sessionMinutes = input.session_minutes;
-    if (!input.enabled) {
-      mockLanguageSlots = mockLanguageSlots.filter(
-        (slot) => slot.language !== input.language,
-      );
-    }
-    return mockLanguageProgram(input.language);
-  },
-  upsertLanguageSlot: async (input: {
-    id?: number | null;
-    language: LanguageId;
-    hour: number;
-    minute: number;
-    weekdays: number[];
-    enabled: boolean;
-  }) => {
-    const id = input.id ?? Math.max(700, ...mockLanguageSlots.map((slot) => slot.id)) + 1;
-    const existing = mockLanguageSlots.findIndex((slot) => slot.id === id);
-    const slot: LanguageSlotView = {
-      id,
-      language: input.language,
-      label: input.language === 'german' ? 'German' : 'Italian',
-      hour: input.hour,
-      minute: input.minute,
-      weekdays: input.weekdays,
-      enabled: input.enabled,
-      owed: false,
-      in_progress: false,
-      next_fire_at: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 19),
-    };
-    if (existing >= 0) mockLanguageSlots[existing] = slot;
-    else mockLanguageSlots = [...mockLanguageSlots, slot];
-    return mockLanguageSlots;
-  },
-  deleteLanguageSlot: async (id: number) => {
-    mockLanguageSlots = mockLanguageSlots.filter((slot) => slot.id !== id);
-    return mockLanguageSlots;
-  },
-  startLanguageSession: async (language: LanguageId) => {
-    mockLanguageSessionId += 1;
-    mockActiveLanguage = mockLanguageLesson(language);
-    mockActiveLanguage.session_id = mockLanguageSessionId;
-    return mockActiveLanguage;
-  },
-  getActiveLanguageSession: async () => mockActiveLanguage,
   submitLanguageSession: async (input: {
     session_id: number;
     answers: number[];
