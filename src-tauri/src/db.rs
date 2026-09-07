@@ -1,4 +1,4 @@
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -20,6 +20,14 @@ pub enum DbError {
     FocusLocked,
     #[error("invalid curriculum brief for {0}: {1}")]
     InvalidCurriculum(String, String),
+    #[error("{0}")]
+    Invalid(String),
+}
+
+impl From<&str> for DbError {
+    fn from(message: &str) -> Self {
+        DbError::Invalid(message.into())
+    }
 }
 
 pub type Result<T> = std::result::Result<T, DbError>;
@@ -264,11 +272,15 @@ CREATE TABLE IF NOT EXISTS course_exercises (
     hints_json TEXT NOT NULL DEFAULT '[]'
 );
 CREATE TABLE IF NOT EXISTS exercise_drafts (
-    course_id INTEGER PRIMARY KEY REFERENCES courses(id),
+    id INTEGER PRIMARY KEY,
+    course_id INTEGER REFERENCES courses(id),
+    classroom_session_id INTEGER REFERENCES classroom_sessions(id),
     draft TEXT NOT NULL DEFAULT '',
     completed INTEGER NOT NULL DEFAULT 0,
     reflection TEXT NOT NULL DEFAULT '',
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    UNIQUE(course_id),
+    UNIQUE(classroom_session_id)
 );
 CREATE TABLE IF NOT EXISTS mastery (
     concept_id INTEGER PRIMARY KEY REFERENCES concepts(id),
@@ -460,7 +472,71 @@ pub fn open(path: &PathBuf) -> Result<Connection> {
         let _ = conn.execute_batch(ddl);
     }
     migrate_course_sources(&conn)?;
+    migrate_exercise_drafts(&conn)?;
     Ok(conn)
+}
+
+/// Move exercise persistence from two models (exercise_drafts keyed by
+/// course_id, and exercise_* columns on classroom_sessions) into one table
+/// keyed by either owner. Classroom drafts/completions are copied across so
+/// history survives the switch.
+fn migrate_exercise_drafts(conn: &Connection) -> Result<()> {
+    let schema: String = conn.query_row(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'exercise_drafts'",
+        [],
+        |row| row.get(0),
+    )?;
+    if schema.contains("classroom_session_id") {
+        return Ok(());
+    }
+    let _ = conn.execute_batch("PRAGMA foreign_keys=OFF;");
+    conn.execute_batch(
+        "BEGIN IMMEDIATE;
+         DROP TABLE IF EXISTS exercise_drafts_new;
+         CREATE TABLE exercise_drafts_new (
+             id INTEGER PRIMARY KEY,
+             course_id INTEGER REFERENCES courses(id),
+             classroom_session_id INTEGER REFERENCES classroom_sessions(id),
+             draft TEXT NOT NULL DEFAULT '',
+             completed INTEGER NOT NULL DEFAULT 0,
+             reflection TEXT NOT NULL DEFAULT '',
+             updated_at TEXT NOT NULL,
+             UNIQUE(course_id),
+             UNIQUE(classroom_session_id)
+         );
+         INSERT INTO exercise_drafts_new
+             (course_id, draft, completed, reflection, updated_at)
+         SELECT course_id, draft, completed, reflection, updated_at
+         FROM exercise_drafts;
+         DROP TABLE exercise_drafts;
+         ALTER TABLE exercise_drafts_new RENAME TO exercise_drafts;
+         COMMIT;",
+    )?;
+    let has_classroom_columns: bool = conn
+        .prepare("SELECT 1 FROM classroom_sessions LIMIT 1")
+        .and_then(|_| {
+            conn.query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('classroom_sessions')
+                 WHERE name = 'exercise_draft'",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .map(|count| count > 0)
+        })
+        .unwrap_or(false);
+    if has_classroom_columns {
+        let _ = conn.execute(
+            "INSERT OR IGNORE INTO exercise_drafts
+                (classroom_session_id, draft, completed, reflection, updated_at)
+             SELECT id, exercise_draft, exercise_completed, exercise_reflection,
+                    COALESCE(completed_at, started_at)
+             FROM classroom_sessions
+             WHERE exercise_draft <> '' OR exercise_completed = 1
+                OR exercise_reflection <> ''",
+            [],
+        );
+    }
+    Ok(())
 }
 
 fn migrate_course_sources(conn: &Connection) -> Result<()> {
@@ -732,6 +808,22 @@ pub struct CourseExercise {
     pub hints: Vec<String>,
 }
 
+/// One exercise exactly as the workspace renders it, owned by a primary
+/// course or a classroom session (exactly one of the two).
+#[derive(Debug, Clone, Serialize)]
+pub struct ExerciseView {
+    pub course_id: Option<i64>,
+    pub classroom_session_id: Option<i64>,
+    pub title: String,
+    pub instructions: String,
+    pub starter_code: Option<String>,
+    pub deliverable: Option<String>,
+    pub hints: Vec<String>,
+    pub draft: Option<String>,
+    pub completed: bool,
+    pub reflection: String,
+}
+
 /// Upserts so re-generating a course (rare, but possible on retry) never
 /// leaves two exercises for one course.
 pub fn upsert_course_exercise(
@@ -780,7 +872,34 @@ pub fn get_course_exercise(conn: &Connection, course_id: i64) -> Result<Option<C
     })
 }
 
-pub fn save_exercise_draft(conn: &Connection, course_id: i64, draft: &str) -> Result<()> {
+fn exercise_owner(course_id: Option<i64>, classroom_session_id: Option<i64>) -> Result<()> {
+    if course_id.is_some() == classroom_session_id.is_some() {
+        return Err("exercise owner must be exactly one of course or classroom session".into());
+    }
+    Ok(())
+}
+
+pub fn save_exercise_draft(
+    conn: &Connection,
+    course_id: Option<i64>,
+    classroom_session_id: Option<i64>,
+    draft: &str,
+) -> Result<()> {
+    exercise_owner(course_id, classroom_session_id)?;
+    if let Some(id) = classroom_session_id {
+        let changed = conn.execute(
+            "INSERT INTO exercise_drafts (classroom_session_id, draft, updated_at)
+             VALUES (?1, ?2, datetime('now'))
+             ON CONFLICT(classroom_session_id) DO UPDATE SET
+                draft = excluded.draft,
+                updated_at = excluded.updated_at",
+            params![id, draft],
+        )?;
+        if changed == 0 {
+            return Err("classroom session not found".into());
+        }
+        return Ok(());
+    }
     conn.execute(
         "INSERT INTO exercise_drafts (course_id, draft, updated_at)
          VALUES (?1, ?2, datetime('now'))
@@ -792,21 +911,54 @@ pub fn save_exercise_draft(conn: &Connection, course_id: i64, draft: &str) -> Re
     Ok(())
 }
 
-pub fn get_exercise_draft(conn: &Connection, course_id: i64) -> Result<Option<String>> {
-    let mut stmt = conn.prepare("SELECT draft FROM exercise_drafts WHERE course_id = ?1")?;
-    let mut rows = stmt.query(params![course_id])?;
-    Ok(match rows.next()? {
-        Some(r) => Some(r.get(0)?),
-        None => None,
-    })
+pub fn get_exercise_draft(
+    conn: &Connection,
+    course_id: Option<i64>,
+    classroom_session_id: Option<i64>,
+) -> Result<Option<String>> {
+    exercise_owner(course_id, classroom_session_id)?;
+    let row = if let Some(id) = classroom_session_id {
+        conn.query_row(
+            "SELECT draft FROM exercise_drafts WHERE classroom_session_id = ?1",
+            [id],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()?
+    } else {
+        conn.query_row(
+            "SELECT draft FROM exercise_drafts WHERE course_id = ?1",
+            [course_id],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()?
+    };
+    Ok(row.filter(|draft| !draft.is_empty()))
 }
 
 pub fn save_exercise_completion(
     conn: &Connection,
-    course_id: i64,
+    course_id: Option<i64>,
+    classroom_session_id: Option<i64>,
     completed: bool,
     reflection: &str,
 ) -> Result<()> {
+    exercise_owner(course_id, classroom_session_id)?;
+    if let Some(id) = classroom_session_id {
+        let changed = conn.execute(
+            "INSERT INTO exercise_drafts
+                (classroom_session_id, draft, completed, reflection, updated_at)
+             VALUES (?1, '', ?2, ?3, datetime('now'))
+             ON CONFLICT(classroom_session_id) DO UPDATE SET
+                completed = excluded.completed,
+                reflection = excluded.reflection,
+                updated_at = excluded.updated_at",
+            params![id, completed as i64, reflection.trim()],
+        )?;
+        if changed == 0 {
+            return Err("classroom session not found".into());
+        }
+        return Ok(());
+    }
     conn.execute(
         "INSERT INTO exercise_drafts (course_id, draft, completed, reflection, updated_at)
          VALUES (?1, '', ?2, ?3, datetime('now'))
@@ -819,14 +971,29 @@ pub fn save_exercise_completion(
     Ok(())
 }
 
-pub fn get_exercise_completion(conn: &Connection, course_id: i64) -> Result<(bool, String)> {
-    let mut stmt =
-        conn.prepare("SELECT completed, reflection FROM exercise_drafts WHERE course_id = ?1")?;
-    let mut rows = stmt.query(params![course_id])?;
-    Ok(match rows.next()? {
-        Some(row) => (row.get::<_, i64>(0)? != 0, row.get(1)?),
-        None => (false, String::new()),
-    })
+pub fn get_exercise_completion(
+    conn: &Connection,
+    course_id: Option<i64>,
+    classroom_session_id: Option<i64>,
+) -> Result<(bool, String)> {
+    exercise_owner(course_id, classroom_session_id)?;
+    let row = if let Some(id) = classroom_session_id {
+        conn.query_row(
+            "SELECT completed, reflection FROM exercise_drafts
+             WHERE classroom_session_id = ?1",
+            [id],
+            |row| Ok((row.get::<_, i64>(0)? != 0, row.get(1)?)),
+        )
+        .optional()?
+    } else {
+        conn.query_row(
+            "SELECT completed, reflection FROM exercise_drafts WHERE course_id = ?1",
+            [course_id],
+            |row| Ok((row.get::<_, i64>(0)? != 0, row.get(1)?)),
+        )
+        .optional()?
+    };
+    Ok(row.unwrap_or((false, String::new())))
 }
 
 pub fn insert_question(

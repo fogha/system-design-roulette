@@ -492,8 +492,10 @@ pub fn build_dossier(conn: &Connection, today: &str, focus: &str) -> Result<Stri
              JOIN courses co ON co.id = ed.course_id
              JOIN concepts c ON c.id = co.concept_id
              WHERE c.focus = ?1 AND ed.completed = 1)
-          + (SELECT COUNT(*) FROM classroom_sessions
-             WHERE subject_id = ?1 AND exercise_completed = 1)",
+          + (SELECT COUNT(*)
+             FROM exercise_drafts ed
+             JOIN classroom_sessions cs ON cs.id = ed.classroom_session_id
+             WHERE cs.subject_id = ?1 AND ed.completed = 1)",
         params![focus],
         |row| row.get(0),
     )?;
@@ -508,12 +510,12 @@ pub fn build_dossier(conn: &Connection, today: &str, focus: &str) -> Result<Stri
              JOIN concepts c ON c.id = co.concept_id
              WHERE c.focus = ?1 AND ed.completed = 1 AND trim(ed.reflection) <> ''
              UNION ALL
-             SELECT cs.session_date, c.slug, cs.exercise_reflection,
-                    COALESCE(cs.completed_at, cs.started_at)
-             FROM classroom_sessions cs
+             SELECT cs.session_date, c.slug, ed.reflection, ed.updated_at
+             FROM exercise_drafts ed
+             JOIN classroom_sessions cs ON cs.id = ed.classroom_session_id
              JOIN concepts c ON c.id = CAST(json_extract(cs.payload_json, '$.concept_id') AS INTEGER)
-             WHERE cs.subject_id = ?1 AND cs.exercise_completed = 1
-               AND trim(cs.exercise_reflection) <> ''
+             WHERE cs.subject_id = ?1 AND ed.completed = 1
+               AND trim(ed.reflection) <> ''
          )
          ORDER BY updated_at DESC
          LIMIT 3",

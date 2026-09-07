@@ -11,7 +11,6 @@ import type {
   DashboardView,
   ExerciseView,
   CefrLevel,
-  ClassroomExerciseView,
   ClassroomPlanView,
   ClassroomProgramView,
   ClassroomSessionStart,
@@ -140,6 +139,7 @@ const MOCK_CURRICULUM: CurriculumBrief = {
 
 const MOCK_EXERCISE: Omit<ExerciseView, 'draft'> = {
   course_id: MOCK_COURSE_ID,
+  classroom_session_id: null,
   title: 'Trace and tame a microtask storm',
   instructions:
     'Write a tiny script that logs a numbered tag for each callback so you can see the exact order the event loop runs things in.\n\n1. Log a `sync-start` tag.\n2. Schedule a `setTimeout(..., 0)` that logs a `macrotask` tag.\n3. Chain two `.then()` calls off a resolved promise, each logging a `microtask` tag.\n4. Log a `sync-end` tag.\n5. Run it and annotate which line ran in which "wave" (sync, microtask checkpoint, macrotask).',
@@ -1078,28 +1078,59 @@ export const mockApi = {
       })),
     };
   },
-  getClassroomExercise: async (sessionId: number): Promise<ClassroomExerciseView | null> => {
-    const lesson =
-      mockActiveEngineering?.session_id === sessionId ? mockActiveEngineering : null;
-    if (!lesson?.exercise) return null;
-    const completion = mockClassroomExerciseCompletions.get(sessionId);
+  getExercise: async (owner: {
+    course_id?: number | null;
+    classroom_session_id?: number | null;
+  }): Promise<ExerciseView | null> => {
+    if (owner.classroom_session_id != null) {
+      const lesson =
+        mockActiveEngineering?.session_id === owner.classroom_session_id
+          ? mockActiveEngineering
+          : null;
+      if (!lesson?.exercise) return null;
+      const completion = mockClassroomExerciseCompletions.get(owner.classroom_session_id);
+      return {
+        course_id: null,
+        classroom_session_id: owner.classroom_session_id,
+        ...lesson.exercise,
+        draft: mockClassroomExerciseDrafts.get(owner.classroom_session_id) ?? null,
+        completed: completion?.completed ?? false,
+        reflection: completion?.reflection ?? '',
+      };
+    }
     return {
-      session_id: sessionId,
-      ...lesson.exercise,
-      draft: mockClassroomExerciseDrafts.get(sessionId) ?? null,
-      completed: completion?.completed ?? false,
-      reflection: completion?.reflection ?? '',
+      ...MOCK_EXERCISE,
+      course_id: owner.course_id ?? null,
+      classroom_session_id: null,
+      draft: mockExerciseDraft,
+      completed: mockExerciseCompleted,
+      reflection: mockExerciseReflection,
     };
   },
-  saveClassroomExerciseDraft: async (sessionId: number, draft: string) => {
-    mockClassroomExerciseDrafts.set(sessionId, draft);
+  saveExerciseDraft: async (
+    owner: { course_id?: number | null; classroom_session_id?: number | null },
+    draft: string,
+  ) => {
+    if (owner.classroom_session_id != null) {
+      mockClassroomExerciseDrafts.set(owner.classroom_session_id, draft);
+    } else if (owner.course_id === MOCK_COURSE_ID) {
+      mockExerciseDraft = draft;
+    }
   },
-  saveClassroomExerciseCompletion: async (
-    sessionId: number,
+  saveExerciseCompletion: async (
+    owner: { course_id?: number | null; classroom_session_id?: number | null },
     completed: boolean,
     reflection: string,
   ) => {
-    mockClassroomExerciseCompletions.set(sessionId, { completed, reflection });
+    if (owner.classroom_session_id != null) {
+      mockClassroomExerciseCompletions.set(owner.classroom_session_id, {
+        completed,
+        reflection,
+      });
+    } else if (owner.course_id === MOCK_COURSE_ID) {
+      mockExerciseCompleted = completed;
+      mockExerciseReflection = reflection;
+    }
   },
   getClassroomChat: async (sessionId: number): Promise<ChatMessage[]> => {
     return mockClassroomChatThreads.get(sessionId) ?? [];
@@ -1345,27 +1376,6 @@ export const mockApi = {
     resources: RESOURCES,
   }),
   openResources: async () => RESOURCES.length,
-  getCourseExercise: async (courseId: number): Promise<ExerciseView | null> => {
-    if (courseId !== MOCK_COURSE_ID) return null;
-    return {
-      ...MOCK_EXERCISE,
-      draft: mockExerciseDraft,
-      completed: mockExerciseCompleted,
-      reflection: mockExerciseReflection,
-    };
-  },
-  saveExerciseDraft: async (courseId: number, draft: string) => {
-    if (courseId === MOCK_COURSE_ID) mockExerciseDraft = draft;
-  },
-  saveExerciseCompletion: async (
-    courseId: number,
-    completed: boolean,
-    reflection: string,
-  ) => {
-    if (courseId !== MOCK_COURSE_ID) return;
-    mockExerciseCompleted = completed;
-    mockExerciseReflection = reflection;
-  },
   markFrontendReady: async () => {},
   ensureAudio: async () => ({
     engine: 'speech' as const,

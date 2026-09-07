@@ -1087,19 +1087,6 @@ pub struct EngineeringLessonView {
     pub status: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
-pub struct ClassroomExerciseView {
-    pub session_id: i64,
-    pub title: String,
-    pub instructions: String,
-    pub starter_code: Option<String>,
-    pub deliverable: Option<String>,
-    pub hints: Vec<String>,
-    pub draft: Option<String>,
-    pub completed: bool,
-    pub reflection: String,
-}
-
 fn engineering_view(conn: &Connection, session_id: i64) -> Result<Option<EngineeringLessonView>> {
     let row = conn
         .query_row(
@@ -1239,79 +1226,36 @@ pub fn engineering_chat_context(
     })
 }
 
-pub fn classroom_exercise(
-    conn: &Connection,
-    session_id: i64,
-) -> Result<Option<ClassroomExerciseView>> {
-    let row = conn
+pub fn classroom_exercise(conn: &Connection, session_id: i64) -> Result<Option<db::ExerciseView>> {
+    let payload_json: Option<String> = conn
         .query_row(
-            "SELECT payload_json, exercise_draft, exercise_completed, exercise_reflection
-             FROM classroom_sessions WHERE id = ?1",
+            "SELECT payload_json FROM classroom_sessions WHERE id = ?1",
             [session_id],
-            |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, i64>(2)? != 0,
-                    row.get::<_, String>(3)?,
-                ))
-            },
+            |row| row.get(0),
         )
         .optional()
         .map_err(|error| error.to_string())?;
-    let Some((payload_json, draft, completed, reflection)) = row else {
+    let Some(payload_json) = payload_json else {
         return Ok(None);
     };
     let stored: StoredEngineeringLesson =
         serde_json::from_str(&payload_json).map_err(|error| error.to_string())?;
-    Ok(stored.exercise.map(|exercise| ClassroomExerciseView {
-        session_id,
+    let draft =
+        db::get_exercise_draft(conn, None, Some(session_id)).map_err(|error| error.to_string())?;
+    let (completed, reflection) = db::get_exercise_completion(conn, None, Some(session_id))
+        .map_err(|error| error.to_string())?;
+    Ok(stored.exercise.map(|exercise| db::ExerciseView {
+        course_id: None,
+        classroom_session_id: Some(session_id),
         title: exercise.title,
         instructions: exercise.instructions,
         starter_code: exercise.starter_code,
         deliverable: exercise.deliverable,
         hints: exercise.hints,
-        draft: (!draft.is_empty()).then_some(draft),
+        draft,
         completed,
         reflection,
     }))
-}
-
-pub fn save_classroom_exercise_draft(
-    conn: &Connection,
-    session_id: i64,
-    draft: &str,
-) -> Result<()> {
-    let changed = conn
-        .execute(
-            "UPDATE classroom_sessions SET exercise_draft = ?2 WHERE id = ?1",
-            params![session_id, draft],
-        )
-        .map_err(|error| error.to_string())?;
-    if changed == 0 {
-        return Err("classroom session not found".into());
-    }
-    Ok(())
-}
-
-pub fn save_classroom_exercise_completion(
-    conn: &Connection,
-    session_id: i64,
-    completed: bool,
-    reflection: &str,
-) -> Result<()> {
-    let changed = conn
-        .execute(
-            "UPDATE classroom_sessions
-             SET exercise_completed = ?2, exercise_reflection = ?3
-             WHERE id = ?1",
-            params![session_id, i64::from(completed), reflection],
-        )
-        .map_err(|error| error.to_string())?;
-    if changed == 0 {
-        return Err("classroom session not found".into());
-    }
-    Ok(())
 }
 
 fn active_engineering_for(

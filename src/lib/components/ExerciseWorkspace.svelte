@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { api, type ClassroomExerciseView, type ExerciseView } from '../ipc';
+  import { api, type ExerciseOwner, type ExerciseView } from '../ipc';
   import Markdown from './Markdown.svelte';
   import { Lightbulb, Copy, Check, RotateCcw } from 'lucide-svelte';
 
@@ -8,7 +8,7 @@
     classroomSessionId,
   }: { courseId?: number; classroomSessionId?: number } = $props();
 
-  let exercise = $state<ExerciseView | ClassroomExerciseView | null>(null);
+  let exercise = $state<ExerciseView | null>(null);
   let loading = $state(true);
   let loadError = $state('');
   let draft = $state('');
@@ -21,11 +21,14 @@
   let copied = $state(false);
   let loadedFor = -1;
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
-  const ownerId = $derived(classroomSessionId ?? courseId ?? -1);
-  const classroomMode = $derived(classroomSessionId !== undefined);
+  const owner: ExerciseOwner = $derived(
+    classroomSessionId !== undefined
+      ? { classroom_session_id: classroomSessionId }
+      : { course_id: courseId },
+  );
 
   $effect(() => {
-    const id = ownerId;
+    const id = classroomSessionId ?? courseId ?? -1;
     if (id === loadedFor) return;
     loadedFor = id;
     loading = true;
@@ -35,8 +38,8 @@
     saveStatus = 'idle';
     completionStatus = 'idle';
     completionError = '';
-    const request = classroomMode ? api.getClassroomExercise(id) : api.getCourseExercise(id);
-    request
+    api
+      .getExercise(owner)
       .then((e) => {
         exercise = e;
         draft = e?.draft ?? e?.starter_code ?? '';
@@ -56,15 +59,10 @@
     if (!exercise) return;
     saveStatus = 'saving';
     clearTimeout(saveTimer);
-    const id = ownerId;
     const text = draft;
     saveTimer = setTimeout(async () => {
       try {
-        if (classroomMode) {
-          await api.saveClassroomExerciseDraft(id, text);
-        } else {
-          await api.saveExerciseDraft(id, text);
-        }
+        await api.saveExerciseDraft(owner, text);
         saveStatus = 'saved';
       } catch {
         saveStatus = 'error';
@@ -108,11 +106,7 @@
     }
     completionStatus = 'saving';
     try {
-      if (classroomMode) {
-        await api.saveClassroomExerciseCompletion(ownerId, nextCompleted, reflection);
-      } else {
-        await api.saveExerciseCompletion(ownerId, nextCompleted, reflection);
-      }
+      await api.saveExerciseCompletion(owner, nextCompleted, reflection);
       completed = nextCompleted;
       completionStatus = 'saved';
     } catch (e) {

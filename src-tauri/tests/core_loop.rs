@@ -657,7 +657,8 @@ fn dossier_reflects_ledger_and_notes_within_focus() {
     .unwrap();
     db::save_exercise_completion(
         &conn,
-        course,
+        Some(course),
+        None,
         true,
         "Boundary test fails forbidden imports; public facade reduces fan-out.",
     )
@@ -848,17 +849,20 @@ fn migration_adds_exercise_tables_to_pre_existing_db() {
     let saved = db::get_course_exercise(&conn, course).unwrap().unwrap();
     assert_eq!(saved.title, "Build a tiny tracer");
 
-    db::save_exercise_draft(&conn, course, "my draft text").unwrap();
-    let draft = db::get_exercise_draft(&conn, course).unwrap().unwrap();
+    db::save_exercise_draft(&conn, Some(course), None, "my draft text").unwrap();
+    let draft = db::get_exercise_draft(&conn, Some(course), None)
+        .unwrap()
+        .unwrap();
     assert_eq!(draft, "my draft text");
     db::save_exercise_completion(
         &conn,
-        course,
+        Some(course),
+        None,
         true,
         "Trace proves ordering; yielding trades throughput for responsiveness.",
     )
     .unwrap();
-    let completion = db::get_exercise_completion(&conn, course).unwrap();
+    let completion = db::get_exercise_completion(&conn, Some(course), None).unwrap();
     assert!(completion.0);
     assert!(completion.1.contains("yielding trades throughput"));
 }
@@ -911,18 +915,20 @@ fn exercise_draft_autosave_overwrites_and_is_isolated_per_course() {
     let c2 =
         db::insert_course(&conn, "2026-07-18", concepts[1].id, "# B", "[]", "fallback").unwrap();
 
-    assert!(db::get_exercise_draft(&conn, c1).unwrap().is_none());
+    assert!(db::get_exercise_draft(&conn, Some(c1), None)
+        .unwrap()
+        .is_none());
 
-    db::save_exercise_draft(&conn, c1, "draft v1").unwrap();
-    db::save_exercise_draft(&conn, c1, "draft v2").unwrap();
-    db::save_exercise_draft(&conn, c2, "other course draft").unwrap();
+    db::save_exercise_draft(&conn, Some(c1), None, "draft v1").unwrap();
+    db::save_exercise_draft(&conn, Some(c1), None, "draft v2").unwrap();
+    db::save_exercise_draft(&conn, Some(c2), None, "other course draft").unwrap();
 
     assert_eq!(
-        db::get_exercise_draft(&conn, c1).unwrap(),
+        db::get_exercise_draft(&conn, Some(c1), None).unwrap(),
         Some("draft v2".to_string())
     );
     assert_eq!(
-        db::get_exercise_draft(&conn, c2).unwrap(),
+        db::get_exercise_draft(&conn, Some(c2), None).unwrap(),
         Some("other course draft".to_string())
     );
 }
@@ -1110,4 +1116,72 @@ fn insert_exit_attempt_persists_every_field_and_supports_multiple_rounds() {
         )
         .unwrap();
     assert_eq!(total, 2);
+}
+
+#[test]
+fn migration_moves_classroom_exercise_columns_into_the_unified_table() {
+    let n = COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    let dir = std::env::temp_dir().join(format!(
+        "sdr-exercise-migration-{}-{}",
+        std::process::id(),
+        n
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("test.db");
+    {
+        // An install from before the unified exercise table: drafts keyed by
+        // course only, classroom work stored as columns on classroom_sessions.
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE exercise_drafts (
+                 course_id INTEGER PRIMARY KEY,
+                 draft TEXT NOT NULL DEFAULT '',
+                 completed INTEGER NOT NULL DEFAULT 0,
+                 reflection TEXT NOT NULL DEFAULT '',
+                 updated_at TEXT NOT NULL
+             );
+             INSERT INTO exercise_drafts VALUES (7, 'course draft', 1, 'course evidence', 'now');
+             CREATE TABLE classroom_sessions (
+                 id INTEGER PRIMARY KEY,
+                 subject_id TEXT NOT NULL,
+                 session_date TEXT NOT NULL,
+                 status TEXT NOT NULL,
+                 title TEXT NOT NULL,
+                 payload_json TEXT NOT NULL,
+                 score REAL,
+                 agent_used TEXT NOT NULL,
+                 prompt_version TEXT NOT NULL,
+                 started_at TEXT NOT NULL,
+                 completed_at TEXT,
+                 exercise_draft TEXT NOT NULL DEFAULT '',
+                 exercise_completed INTEGER NOT NULL DEFAULT 0,
+                 exercise_reflection TEXT NOT NULL DEFAULT ''
+             );
+             INSERT INTO classroom_sessions
+                 (subject_id, session_date, status, title, payload_json, score,
+                  agent_used, prompt_version, started_at, completed_at,
+                  exercise_draft, exercise_completed, exercise_reflection)
+             VALUES ('javascript', '2026-07-21', 'completed', 'legacy', '{}', 0.6,
+                     'fallback', 'classroom.javascript.v1', '2026-07-21T09:00:00',
+                     '2026-07-21T10:00:00', 'legacy draft', 1, 'legacy evidence');",
+        )
+        .unwrap();
+    }
+    let conn = db::open(&path).unwrap();
+    let classroom_id: i64 = conn
+        .query_row("SELECT id FROM classroom_sessions", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(
+        db::get_exercise_draft(&conn, None, Some(classroom_id)).unwrap(),
+        Some("legacy draft".to_string())
+    );
+    let (completed, reflection) =
+        db::get_exercise_completion(&conn, None, Some(classroom_id)).unwrap();
+    assert!(completed);
+    assert_eq!(reflection, "legacy evidence");
+    assert_eq!(
+        db::get_exercise_draft(&conn, Some(7), None).unwrap(),
+        Some("course draft".to_string())
+    );
 }

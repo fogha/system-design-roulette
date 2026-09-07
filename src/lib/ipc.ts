@@ -256,13 +256,6 @@ export interface ClassroomExercise {
   hints: string[];
 }
 
-export interface ClassroomExerciseView extends ClassroomExercise {
-  session_id: number;
-  draft: string | null;
-  completed: boolean;
-  reflection: string;
-}
-
 export interface EngineeringLessonView {
   session_id: number;
   subject_id: FocusArea;
@@ -492,12 +485,13 @@ export interface ArchivedCourse {
 }
 
 /**
- * Structured exercise for a course, with any autosaved draft. Reachable
- * from the active reader and from archived-course history — never gated
- * by session completion.
+ * Structured exercise for a course or classroom session (exactly one owner),
+ * with any autosaved draft. Reachable from the active reader and from
+ * archived-course history — never gated by session completion.
  */
 export interface ExerciseView {
-  course_id: number;
+  course_id: number | null;
+  classroom_session_id: number | null;
   title: string;
   instructions: string;
   starter_code: string | null;
@@ -506,6 +500,11 @@ export interface ExerciseView {
   draft: string | null;
   completed: boolean;
   reflection: string;
+}
+
+export interface ExerciseOwner {
+  course_id?: number | null;
+  classroom_session_id?: number | null;
 }
 
 export const isTauri =
@@ -591,17 +590,21 @@ const realApi = {
     reflection: string;
   }) =>
     invoke<EngineeringSessionResult>('submit_classroom_engineering_session', { input }),
-  getClassroomExercise: (sessionId: number) =>
-    invoke<ClassroomExerciseView | null>('get_classroom_exercise', { sessionId }),
-  saveClassroomExerciseDraft: (sessionId: number, draft: string) =>
-    invoke<void>('save_classroom_exercise_draft', { sessionId, draft }),
-  saveClassroomExerciseCompletion: (
-    sessionId: number,
-    completed: boolean,
-    reflection: string,
-  ) =>
-    invoke<void>('save_classroom_exercise_completion', {
-      sessionId,
+  getExercise: (owner: ExerciseOwner) =>
+    invoke<ExerciseView | null>('get_exercise', {
+      courseId: owner.course_id ?? null,
+      classroomSessionId: owner.classroom_session_id ?? null,
+    }),
+  saveExerciseDraft: (owner: ExerciseOwner, draft: string) =>
+    invoke<void>('save_exercise_draft', {
+      courseId: owner.course_id ?? null,
+      classroomSessionId: owner.classroom_session_id ?? null,
+      draft,
+    }),
+  saveExerciseCompletion: (owner: ExerciseOwner, completed: boolean, reflection: string) =>
+    invoke<void>('save_exercise_completion', {
+      courseId: owner.course_id ?? null,
+      classroomSessionId: owner.classroom_session_id ?? null,
       completed,
       reflection,
     }),
@@ -644,20 +647,6 @@ const realApi = {
   getPastCourse: (date: string) =>
     invoke<ArchivedCourse | null>('get_past_course', { date }),
   openResources: () => invoke<number>('open_resources'),
-  getCourseExercise: (courseId: number) =>
-    invoke<ExerciseView | null>('get_course_exercise', { courseId }),
-  saveExerciseDraft: (courseId: number, draft: string) =>
-    invoke<void>('save_exercise_draft', { courseId, draft }),
-  saveExerciseCompletion: (
-    courseId: number,
-    completed: boolean,
-    reflection: string,
-  ) =>
-    invoke<void>('save_exercise_completion', {
-      courseId,
-      completed,
-      reflection,
-    }),
   getCourseChat: (courseId: number) =>
     invoke<ChatMessage[]>('get_course_chat', { courseId }),
   sendCourseMessage: (courseId: number, message: string) =>

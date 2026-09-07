@@ -112,10 +112,11 @@ fn classroom_reader_persists_exercise_work_and_exposes_chat_context() {
     assert_eq!(initial.title, "Build a boundary probe");
     assert!(initial.draft.is_none());
 
-    classroom::save_classroom_exercise_draft(&conn, session_id, "draft evidence").unwrap();
-    classroom::save_classroom_exercise_completion(
+    db::save_exercise_draft(&conn, None, Some(session_id), "draft evidence").unwrap();
+    db::save_exercise_completion(
         &conn,
-        session_id,
+        None,
+        Some(session_id),
         true,
         "The boundary test proves the chosen contract remains isolated.",
     )
@@ -153,16 +154,22 @@ fn classroom_completion_becomes_teacher_memory_for_the_next_course() {
     conn.execute(
         "INSERT INTO classroom_sessions
             (subject_id, session_date, status, title, payload_json, score,
-             exercise_completed, exercise_reflection, agent_used, prompt_version,
-             started_at, completed_at)
+             agent_used, prompt_version, started_at, completed_at)
          VALUES ('javascript', '2026-07-21', 'completed', 'Classroom runtime evidence',
-                 ?1, 0.6, 1, 'Measured the runtime boundary in DevTools.',
-                 'fixture', 'classroom.javascript.v1', '2026-07-21T09:00:00',
+                 ?1, 0.6, 'fixture', 'classroom.javascript.v1', '2026-07-21T09:00:00',
                  '2026-07-21T10:00:00')",
         [payload],
     )
     .unwrap();
     let session_id = conn.last_insert_rowid();
+    db::save_exercise_completion(
+        &conn,
+        None,
+        Some(session_id),
+        true,
+        "Measured the runtime boundary in DevTools.",
+    )
+    .unwrap();
     conn.execute(
         "INSERT INTO classroom_exit_attempts
             (session_id, concept_id, question_id, section, learning_objective,

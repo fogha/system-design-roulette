@@ -1927,33 +1927,30 @@ pub fn get_past_course(
 
 /// Structured exercise for a course, with any autosaved draft. Available
 /// regardless of session completion — the exercise workspace is reachable
-/// from the active reader and from archived-course history alike.
-#[derive(Serialize)]
-pub struct ExerciseView {
-    pub course_id: i64,
-    pub title: String,
-    pub instructions: String,
-    pub starter_code: Option<String>,
-    pub deliverable: Option<String>,
-    pub hints: Vec<String>,
-    pub draft: Option<String>,
-    pub completed: bool,
-    pub reflection: String,
-}
-
+/// One exercise workspace view for either owner: a primary course or a
+/// classroom session (exactly one of the two ids must be present).
 #[tauri::command]
-pub fn get_course_exercise(
+pub fn get_exercise(
     state: State<'_, AppState>,
-    course_id: i64,
-) -> CmdResult<Option<ExerciseView>> {
+    course_id: Option<i64>,
+    classroom_session_id: Option<i64>,
+) -> CmdResult<Option<db::ExerciseView>> {
     let conn = state.db.0.lock().unwrap();
-    let Some(exercise) = db::get_course_exercise(&conn, course_id).map_err(err)? else {
+    if let Some(id) = classroom_session_id {
+        return crate::classroom::classroom_exercise(&conn, id).map_err(err);
+    }
+    let Some(id) = course_id else {
+        return Err("exercise owner must be a course or a classroom session".into());
+    };
+    let Some(exercise) = db::get_course_exercise(&conn, id).map_err(err)? else {
         return Ok(None);
     };
-    let draft = db::get_exercise_draft(&conn, course_id).map_err(err)?;
-    let (completed, reflection) = db::get_exercise_completion(&conn, course_id).map_err(err)?;
-    Ok(Some(ExerciseView {
-        course_id: exercise.course_id,
+    let draft = db::get_exercise_draft(&conn, Some(id), None).map_err(err)?;
+    let (completed, reflection) =
+        db::get_exercise_completion(&conn, Some(id), None).map_err(err)?;
+    Ok(Some(db::ExerciseView {
+        course_id: Some(exercise.course_id),
+        classroom_session_id: None,
         title: exercise.title,
         instructions: exercise.instructions,
         starter_code: exercise.starter_code,
@@ -1971,11 +1968,12 @@ pub fn get_course_exercise(
 #[tauri::command]
 pub fn save_exercise_draft(
     state: State<'_, AppState>,
-    course_id: i64,
+    course_id: Option<i64>,
+    classroom_session_id: Option<i64>,
     draft: String,
 ) -> CmdResult<()> {
     let conn = state.db.0.lock().unwrap();
-    db::save_exercise_draft(&conn, course_id, &draft).map_err(err)
+    db::save_exercise_draft(&conn, course_id, classroom_session_id, &draft).map_err(err)
 }
 
 /// Self-certified practice evidence. Completion stays non-blocking, but the
@@ -1984,7 +1982,8 @@ pub fn save_exercise_draft(
 #[tauri::command]
 pub fn save_exercise_completion(
     state: State<'_, AppState>,
-    course_id: i64,
+    course_id: Option<i64>,
+    classroom_session_id: Option<i64>,
     completed: bool,
     reflection: String,
 ) -> CmdResult<()> {
@@ -1994,43 +1993,14 @@ pub fn save_exercise_completion(
         );
     }
     let conn = state.db.0.lock().unwrap();
-    db::save_exercise_completion(&conn, course_id, completed, &reflection).map_err(err)
-}
-
-#[tauri::command]
-pub fn get_classroom_exercise(
-    state: State<'_, AppState>,
-    session_id: i64,
-) -> CmdResult<Option<crate::classroom::ClassroomExerciseView>> {
-    let conn = state.db.0.lock().unwrap();
-    crate::classroom::classroom_exercise(&conn, session_id).map_err(err)
-}
-
-#[tauri::command]
-pub fn save_classroom_exercise_draft(
-    state: State<'_, AppState>,
-    session_id: i64,
-    draft: String,
-) -> CmdResult<()> {
-    let conn = state.db.0.lock().unwrap();
-    crate::classroom::save_classroom_exercise_draft(&conn, session_id, &draft).map_err(err)
-}
-
-#[tauri::command]
-pub fn save_classroom_exercise_completion(
-    state: State<'_, AppState>,
-    session_id: i64,
-    completed: bool,
-    reflection: String,
-) -> CmdResult<()> {
-    if completed && reflection.split_whitespace().count() < 5 {
-        return Err(
-            "add a short evidence/trade-off reflection before marking this complete".into(),
-        );
-    }
-    let conn = state.db.0.lock().unwrap();
-    crate::classroom::save_classroom_exercise_completion(&conn, session_id, completed, &reflection)
-        .map_err(err)
+    db::save_exercise_completion(
+        &conn,
+        course_id,
+        classroom_session_id,
+        completed,
+        &reflection,
+    )
+    .map_err(err)
 }
 
 #[derive(Serialize, Clone)]
