@@ -3659,6 +3659,21 @@ mod exercise_tests {
                     "{} does not explain where its opening analogy breaks",
                     fallback.slug
                 );
+                // The first-principles chain ends in application, not
+                // vocabulary: every bundled course carries a runnable
+                // experiment and a tool-building exercise as the
+                // reconstruction check.
+                assert!(
+                    markdown.contains("## runnable experiment"),
+                    "{} lacks a runnable experiment",
+                    fallback.slug
+                );
+                assert!(
+                    markdown.contains("## tool-building exercise")
+                        || markdown.contains("## practical exercise"),
+                    "{} lacks its reconstruction-style exercise",
+                    fallback.slug
+                );
                 validate_generated_quiz(&fallback.questions)
                     .unwrap_or_else(|error| panic!("{} quiz: {error}", fallback.slug));
             }

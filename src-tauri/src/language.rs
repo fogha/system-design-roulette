@@ -74,6 +74,12 @@ struct UnitSpec {
     strands: Vec<String>,
     #[serde(default)]
     foundations: Vec<FoundationBlock>,
+    /// One concrete analogy that frames the scenario (first-principles step 3).
+    #[serde(default)]
+    analogy: String,
+    /// Where that analogy stops being true — prevents it becoming a false rule.
+    #[serde(default)]
+    breakage: String,
     grammar: Vec<String>,
     vocabulary: Vec<VocabularyItem>,
     phrases: Vec<Phrase>,
@@ -194,6 +200,34 @@ pub fn validate_curriculum(language: &str) -> Result<()> {
                     "{} contains an incomplete first-principles foundation",
                     unit.slug
                 ));
+            }
+            // First-principles audit: every unit must teach the plain
+            // outcome, the building blocks, one analogy, where that analogy
+            // breaks, and a reconstruction check — never vocabulary by rote.
+            if unit.analogy.split_whitespace().count() < 12
+                || unit.breakage.split_whitespace().count() < 12
+                || !unit.breakage.to_lowercase().contains("break")
+            {
+                return Err(format!(
+                    "{} must state one analogy and where it breaks",
+                    unit.slug
+                ));
+            }
+            let lesson = build_lesson(language, expected, unit, 1);
+            for required in [
+                "## First principles foundation",
+                "**Outcome in plain terms:**",
+                "**Smallest reliable pieces:**",
+                "### One analogy, and where it breaks",
+                "**Where it breaks:**",
+                "**Derive it:**",
+            ] {
+                if !lesson.markdown.contains(required) {
+                    return Err(format!(
+                        "{} lesson is missing the first-principles marker {required:?}",
+                        unit.slug
+                    ));
+                }
             }
         }
         if *expected == "A1" {
@@ -795,7 +829,24 @@ fn build_questions(unit: &UnitSpec, phase: i64) -> Vec<StoredQuestion> {
 }
 
 fn build_lesson(language: &str, level: &str, unit: &UnitSpec, phase: i64) -> StoredLesson {
-    let foundations = if unit.foundations.is_empty() {
+    let building_blocks = {
+        let grammar_blocks = unit
+            .grammar
+            .iter()
+            .take(2)
+            .map(|topic| format!("- {topic}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let chunk_blocks = unit
+            .phrases
+            .iter()
+            .take(3)
+            .map(|phrase| format!("- **{}** — {}", phrase.target, phrase.translation))
+            .collect::<Vec<_>>()
+            .join("\n");
+        format!("{grammar_blocks}\n{chunk_blocks}")
+    };
+    let authored_blocks = if unit.foundations.is_empty() {
         String::new()
     } else {
         let blocks = unit
@@ -809,10 +860,24 @@ fn build_lesson(language: &str, level: &str, unit: &UnitSpec, phase: i64) -> Sto
             })
             .collect::<Vec<_>>()
             .join("\n\n");
-        format!(
-            "## First principles foundation\n\nStart here before memorising the scenario. Build the smallest reliable pieces first, then combine them into useful language.\n\n{blocks}\n\n"
-        )
+        format!("{blocks}\n\n")
     };
+    let foundations = format!(
+        "## First principles foundation\n\n\
+         Start here before memorising the scenario. Build the smallest reliable pieces first, then combine them into useful language.\n\n\
+         **Outcome in plain terms:** {scenario} — {can_do}\n\n\
+         {authored_blocks}\
+         **Smallest reliable pieces:**\n{building_blocks}\n\n\
+         ### One analogy, and where it breaks\n\n\
+         {analogy} **Where it breaks:** {breakage}\n\n\
+         **Derive it:** after the dialogue below, close the transcript and rebuild the exchange from these pieces in your own words. That reconstruction — not repeating the vocabulary — is the check that you understand the mechanism.",
+        scenario = unit.scenario,
+        can_do = unit.can_do,
+        authored_blocks = authored_blocks,
+        building_blocks = building_blocks,
+        analogy = unit.analogy,
+        breakage = unit.breakage,
+    );
     let vocabulary = unit
         .vocabulary
         .iter()

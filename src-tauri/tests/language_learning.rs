@@ -95,6 +95,15 @@ fn a1_completes_alphabet_and_counting_foundations_before_later_scenarios() {
             .markdown
             .contains("The German alphabet and letter names"));
         assert!(lesson.markdown.contains("A ah, B beh, C tseh"));
+        // First-principles contract: outcome, building blocks, one analogy
+        // with its breaking point, and a reconstruction check.
+        assert!(lesson.markdown.contains("**Outcome in plain terms:**"));
+        assert!(lesson.markdown.contains("**Smallest reliable pieces:**"));
+        assert!(lesson
+            .markdown
+            .contains("### One analogy, and where it breaks"));
+        assert!(lesson.markdown.contains("**Where it breaks:**"));
+        assert!(lesson.markdown.contains("**Derive it:**"));
         pass_session(&conn, lesson.session_id, &today);
     }
 

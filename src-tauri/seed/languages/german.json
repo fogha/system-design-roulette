@@ -241,7 +241,9 @@
               "explanation": "Sie is the formal address.",
               "strand": "spoken_interaction"
             }
-          ]
+          ],
+          "analogy": "Pronouncing German is like tuning a radio: most letters map to one predictable sound, so once you know the station frequencies (letter sounds) you can receive almost any word you read aloud.",
+          "breakage": "this breaks with borrowed words (Job, Handy) and fixed letter teams (ei, sch, ch) that carry their own signal — those must be learned as whole chunks, not assembled letter by letter."
         },
         {
           "slug": "de-a1-numbers-personal-info",
@@ -454,7 +456,9 @@
               "explanation": "Geburtstag = birthday.",
               "strand": "vocabulary_pragmatics"
             }
-          ]
+          ],
+          "analogy": "Building German numbers is like assembling toy bricks: 21 is one-and-twenty (einundzwanzig) — you say the units first, then the tens.",
+          "breakage": "the analogy breaks for the teens (dreizehn, vierzehn), where the units come first but without und, and for the hundreds — so it is two or three assembly rules, not one universal one."
         },
         {
           "slug": "de-a1-family-relationships",
@@ -647,7 +651,9 @@
               "explanation": "Siblings is a safe, common question.",
               "strand": "spoken_interaction"
             }
-          ]
+          ],
+          "analogy": "Describing family is like labeling a family tree: possessive words (mein, dein) are name tags you attach to each branch.",
+          "breakage": "the tree analogy breaks where grammar begins: the tag changes with the branch's gender and role (mein Bruder, meine Schwester, meinen Bruder), and German uses a different tag for his and her — a real tree has no gendered endings."
         },
         {
           "slug": "de-a1-daily-routines-time",
@@ -840,7 +846,9 @@
               "explanation": "normalerweise = usually.",
               "strand": "reading"
             }
-          ]
+          ],
+          "analogy": "Separable verbs are like a sandwich: the verb splits and the prefix travels to the very end of the sentence, holding the meaning together around the filling.",
+          "breakage": "the sandwich breaks when the verb enters a subordinate clause or the infinitive with zu (aufzustehen), because the two halves snap back together — the split is a main-clause behavior, not a property of the verb."
         },
         {
           "slug": "de-a1-food-ordering",
@@ -1033,7 +1041,9 @@
               "explanation": "Rechnung = bill/check.",
               "strand": "reading"
             }
-          ]
+          ],
+          "analogy": "Ordering food is a call-and-response ritual: a fixed opener (Ich hätte gern ...), a fixed reply, a fixed closing — you learn the turns first, then swap in new items.",
+          "breakage": "the ritual breaks the moment the reply is unexpected, because you then need the follow-up questions (Haben Sie ...?, Was kostet ...?) — the script is a skeleton, not the conversation."
         },
         {
           "slug": "de-a1-home-rooms",
@@ -1226,7 +1236,9 @@
               "explanation": "All can express location with dative.",
               "strand": "spoken_production"
             }
-          ]
+          ],
+          "analogy": "Prepositions of place are like a floor plan: in, auf, neben plus the dative mark where things sit, a static map of the room.",
+          "breakage": "the floor-plan analogy breaks the moment something moves: direction takes the accusative instead (in das Zimmer, an die Wand) — the same preposition has two map layers, and only the verb tells you which one to read."
         },
         {
           "slug": "de-a1-shopping-clothes",
@@ -1419,7 +1431,9 @@
               "explanation": "Fitting room = Umkleidekabine.",
               "strand": "reading"
             }
-          ]
+          ],
+          "analogy": "Polite shopping requests are like a vending machine: insert the exact request format (Ich möchte ..., bitte) and the goods come back.",
+          "breakage": "the vending machine breaks because a real vendor asks questions back — size, color, count — so you need the size adjectives, plural forms, and price-reading phrases the machine never requests."
         },
         {
           "slug": "de-a1-hobbies-freetime",
@@ -1612,7 +1626,9 @@
               "explanation": "Leider geht es nicht is polite.",
               "strand": "spoken_interaction"
             }
-          ]
+          ],
+          "analogy": "Modal verbs are the engine of the sentence: ich kann schwimmen puts the engine (kann) in second position and leaves the raw activity (schwimmen) as untouched fuel at the end.",
+          "breakage": "the engine analogy breaks because modals are not interchangeable — möchten is a polite wish, not 'would like to be able' — each engine changes the meaning of the trip, and the fuel must never be conjugated."
         },
         {
           "slug": "de-a1-weather-seasons",
@@ -1805,7 +1821,9 @@
               "explanation": "After Sommer comes Herbst.",
               "strand": "reading"
             }
-          ]
+          ],
+          "analogy": "Talking about the weather is like reading snapshot cards: es regnet, es ist kalt — impersonal es plays the empty subject English needs as 'it'.",
+          "breakage": "the snapshot breaks with seasons, because the frame is glued to the season (im Sommer, im Winter) — you learn the preposition and the season as one fixed chunk, not from the snapshot."
         },
         {
           "slug": "de-a1-transport-directions",
@@ -1998,7 +2016,9 @@
               "explanation": "Entschuldigung is polite.",
               "strand": "spoken_interaction"
             }
-          ]
+          ],
+          "analogy": "Giving directions is like planning a delivery route: fixed landmarks plus turn commands (geradeaus, links, rechts) that move the listener step by step.",
+          "breakage": "the route analogy breaks with polite commands (Gehen Sie ...) and with two-way prepositions (an der Ecke vs. um die Ecke) — the same corner changes case depending on whether you stand at it or move around it."
         }
       ]
     },
@@ -2197,7 +2217,9 @@
               "explanation": "Health opening line.",
               "strand": "spoken_interaction"
             }
-          ]
+          ],
+          "analogy": "Describing pain is like filing an error report: name the component (der Kopf) and the failure signal (tut weh).",
+          "breakage": "the report analogy breaks when the conversation turns to advice and obligation — Sie müssen, Sie sollten — because now it is a negotiation about actions, not a description of symptoms."
         },
         {
           "slug": "de-a2-work-professions",
@@ -2390,7 +2412,9 @@
               "explanation": "Sensitive topic needs tact.",
               "strand": "spoken_interaction"
             }
-          ]
+          ],
+          "analogy": "Job vocabulary is like an inventory of roles: each profession is a labeled shelf (der Arzt, die Ärztin).",
+          "breakage": "the inventory breaks because German job language expects the feminine -in form in job ads and formal contexts, and because many job titles borrow from English — the shelves keep gaining new labels the old system never designed."
         },
         {
           "slug": "de-a2-past-events",
@@ -2583,7 +2607,9 @@
               "explanation": "Partizip II after haben.",
               "strand": "writing"
             }
-          ]
+          ],
+          "analogy": "The Perfekt is like a photo album: every past event gets a caption built from an auxiliary (haben) and a frozen snapshot participle (gemacht).",
+          "breakage": "the album analogy breaks with movement and change-of-state verbs, which take sein (ich bin gefahren), and the participle of separable verbs wraps the prefix around it (aufgestanden) — some pictures travel with a different carrier and some snapshots are re-sealed."
         },
         {
           "slug": "de-a2-travel-hotels",
@@ -2776,7 +2802,9 @@
               "explanation": "Complaint about AC.",
               "strand": "listening"
             }
-          ]
+          ],
+          "analogy": "Travel talk is like a railway of scripted stations: check-in phrases, booking questions, and schedule words are stops you arrive at in order.",
+          "breakage": "the station model breaks when plans change and you must re-route — weil- and wenn-clauses push the verb to the end, so the re-routing itself changes the word order of every station."
         },
         {
           "slug": "de-a2-phone-messages",
@@ -2969,7 +2997,9 @@
               "explanation": "zurückrufen = call back.",
               "strand": "reading"
             }
-          ]
+          ],
+          "analogy": "Phone formulas are like a compressed radio protocol: fixed openers (Hier ist ...), short confirmations, and a predictable sign-off.",
+          "breakage": "the protocol breaks on a bad connection — you must ask for repetition (Wie bitte? Können Sie das wiederholen?) and spell names with the alphabet, moves the script never contains."
         },
         {
           "slug": "de-a2-invitations-plans",
@@ -3162,7 +3192,9 @@
               "explanation": "verschieben = postpone.",
               "strand": "reading"
             }
-          ]
+          ],
+          "analogy": "Making plans is like negotiating a shared calendar: the invitation is a move (Kannst du ...?), the acceptance or decline is the answering move.",
+          "breakage": "the calendar analogy breaks because a polite decline carries a reason, usually a weil-clause with verb-last order — the calendar records the answer, the grammar rebuilds the sentence to give it."
         },
         {
           "slug": "de-a2-describing-people",
@@ -3355,7 +3387,9 @@
               "explanation": "Meter = height measure.",
               "strand": "reading"
             }
-          ]
+          ],
+          "analogy": "Describing a person is like painting a portrait in layers: size and hair first, then character traits.",
+          "breakage": "the portrait breaks with comparison and judgment — größer als, so alt wie, ich finde ihn nett — because comparing needs als/wie and judging needs verbs of opinion the paintbrush model does not provide."
         },
         {
           "slug": "de-a2-media-entertainment",
@@ -3548,7 +3582,9 @@
               "explanation": "gefallen = to please/like.",
               "strand": "spoken_interaction"
             }
-          ]
+          ],
+          "analogy": "Media talk is like a TV guide: genres and schedules listed factually (der Film läuft um acht).",
+          "breakage": "the guide analogy breaks the moment you give an opinion: mir gefällt ..., ich mag ... flip the sentence so the liked thing, not the liker, is the subject — a guide lists, opinions judge."
         },
         {
           "slug": "de-a2-environment-city",
@@ -3741,7 +3777,9 @@
               "explanation": "weil + verb-final clause.",
               "strand": "grammar"
             }
-          ]
+          ],
+          "analogy": "City life is like a services system: the S-Bahn runs, the market opens — often described with the impersonal man (man kann ...).",
+          "breakage": "the system analogy breaks because man erases the actor: 'man nimmt die U-Bahn' names no one, and the passive-like reports hide the agent too — the city runs itself in this grammar."
         },
         {
           "slug": "de-a2-festivals-traditions",
@@ -3934,7 +3972,9 @@
               "explanation": "an + holiday (Weihnachten).",
               "strand": "grammar"
             }
-          ]
+          ],
+          "analogy": "Traditions are like a recurring ritual calendar: fixed seasons and fixed activities in fixed phrases (Weihnachten feiern, Ostereier suchen).",
+          "breakage": "the ritual model breaks with regional variants — Karneval, Fasching, Fastnacht — and with wish phrases (Ich würde gern ...), where the subjunctive marks the wish as not-yet-real, something no calendar records."
         }
       ]
     },
@@ -4133,7 +4173,9 @@
               "explanation": "Formal application language.",
               "strand": "writing"
             }
-          ]
+          ],
+          "analogy": "Career planning is like a branching roadmap: Ausbildung, Studium, and Weiterbildung are forks that open different routes.",
+          "breakage": "the roadmap breaks with time and condition — seit drei Jahren studiere ich, wenn ich fertig bin — because routes change with duration and condition, and the verb order changes with them."
         },
         {
           "slug": "de-b1-opinions-discussions",
@@ -4326,7 +4368,9 @@
               "explanation": "Two-sided structure.",
               "strand": "reading"
             }
-          ]
+          ],
+          "analogy": "An opinion is like a two-sided coin: the claim on one side, the justification on the other (Ich finde, dass ..., weil ...).",
+          "breakage": "the coin breaks because dass forces verb-last order and ich glaube shifts the claim into a subordinate shape — the sentence architecture changes with the verb of saying, not just the content."
         },
         {
           "slug": "de-b1-news-current-events",
@@ -4519,7 +4563,9 @@
               "explanation": "Formal news/academic phrase.",
               "strand": "reading"
             }
-          ]
+          ],
+          "analogy": "News is like an evidence chain: source, event, consequence — often reported in the passive (wurde gemeldet).",
+          "breakage": "the chain analogy breaks because the passive removes the actor: 'es wurde beschlossen' does not say who decided — news omits the very link the chain model insists on."
         },
         {
           "slug": "de-b1-health-lifestyle",
@@ -4712,7 +4758,9 @@
               "explanation": "Formal imperative: Verb + Sie.",
               "strand": "writing"
             }
-          ]
+          ],
+          "analogy": "Prevention is like a balance sheet: habit on one side, consequence on the other (wenn ich ..., dann ...).",
+          "breakage": "the balance-sheet analogy breaks with purpose constructions — um ... zu — because purpose is a direction, not a balance, and it needs the infinitive clause the ledger never uses."
         },
         {
           "slug": "de-b1-culture-art",
@@ -4905,7 +4953,9 @@
               "explanation": "Aesthetic preference.",
               "strand": "spoken_interaction"
             }
-          ]
+          ],
+          "analogy": "Art history is like a guided museum tour: eras, artists, and works described in order.",
+          "breakage": "the tour analogy breaks with the written/spoken past split — Präteritum for the guidebook, Perfekt for the guided conversation — the same tour is told in two different tenses depending on the medium."
         },
         {
           "slug": "de-b1-technology-digital",
@@ -5098,7 +5148,9 @@
               "explanation": "Elster = German tax software/portal.",
               "strand": "reading"
             }
-          ]
+          ],
+          "analogy": "Digital life is like a device manual: verbs of use and clear steps (herunterladen, einloggen).",
+          "breakage": "the manual breaks with time ordering — bevor, nachdem — because sequencing clauses reorder the verbs, and with the fact that most tech vocabulary is borrowed English that ignores German spelling rules."
         },
         {
           "slug": "de-b1-relationships-communication",
@@ -5291,7 +5343,9 @@
               "explanation": "Constructive communication.",
               "strand": "spoken_interaction"
             }
-          ]
+          ],
+          "analogy": "Communication is like a bridge between two positions: feelings and reactions travel across it.",
+          "breakage": "the bridge analogy breaks with polite subjunctives — Könntest du ...?, Ich hätte eine Frage — because requests bend reality toward possibility, and a bridge only carries what already exists."
         },
         {
           "slug": "de-b1-formal-writing-complaints",
@@ -5484,7 +5538,9 @@
               "explanation": "Erstattung = refund.",
               "strand": "spoken_production"
             }
-          ]
+          ],
+          "analogy": "A complaint letter is like a fixed skeleton: salutation, description, demand, closing — fill the bones with your case.",
+          "breakage": "the skeleton breaks with fixed register words (hiermit, beigefügt, wir fordern Sie auf) that have no everyday equivalent — you cannot assemble them from conversational blocks, they must be learned as units."
         },
         {
           "slug": "de-b1-subjunctive-hypotheticals",
@@ -5677,7 +5733,9 @@
               "explanation": "Konj. II polite.",
               "strand": "spoken_interaction"
             }
-          ]
+          ],
+          "analogy": "The Konjunktiv II is like a parallel universe: wenn ich reich wäre marks a world that is not real.",
+          "breakage": "the parallel-universe model breaks because polite requests use the same forms (Ich hätte gern, Könnten Sie ...) — the unreal marker also does everyday softness, so only context decides which universe you are in."
         },
         {
           "slug": "de-b1-job-applications",
@@ -5870,7 +5928,9 @@
               "explanation": "Cultural expectation.",
               "strand": "reading"
             }
-          ]
+          ],
+          "analogy": "An interview is like a two-sided match: your qualifications are evidence, the questions are probes.",
+          "breakage": "the match analogy breaks with the formal Sie register and indirect questions (ob, wann) that invert word order — the grammar of caution changes the shape of every probe and answer."
         }
       ]
     },
@@ -6069,7 +6129,9 @@
               "explanation": "Turnout at elections.",
               "strand": "reading"
             }
-          ]
+          ],
+          "analogy": "Politics is like a system of institutions where processes happen — largely in the passive (wird beschlossen).",
+          "breakage": "the system analogy breaks with Konjunktiv I in reported speech: 'die Regierung habe ...' carries 'allegedly' inside the verb — systems state facts, reports carry doubt in the same grammar."
         },
         {
           "slug": "de-b2-economics-consumer",
@@ -6262,7 +6324,9 @@
               "explanation": "Formal topic introduction.",
               "strand": "writing"
             }
-          ]
+          ],
+          "analogy": "Consumer rights are like a contract: right, duty, and remedy listed as clauses.",
+          "breakage": "the contract analogy breaks with nominal style — das Rückgaberecht, die Widerrufsfrist — because official German packs whole verb meanings into compound nouns, and the contract becomes a list of packed boxes, not clauses."
         },
         {
           "slug": "de-b2-science-research",
@@ -6455,7 +6519,9 @@
               "explanation": "Study sample.",
               "strand": "spoken_production"
             }
-          ]
+          ],
+          "analogy": "Research is like a hypothesis loop: claim, evidence, and a hedge (soll, könnte).",
+          "breakage": "the loop analogy breaks with nominalizations and the passive — die Untersuchung wurde durchgeführt — because scientific German removes the experimenter from the sentence, and the loop has no actor left."
         },
         {
           "slug": "de-b2-literature-philosophy",
@@ -6648,7 +6714,9 @@
               "explanation": "Figurative interpretation.",
               "strand": "spoken_interaction"
             }
-          ]
+          ],
+          "analogy": "A literary text is like layers: plot on top, style below, interpretation deeper still.",
+          "breakage": "the layer analogy breaks with interpretation grammar — würde bedeuten, könnte zeigen — because readings are proposals in the subjunctive, and layers of a fixed structure cannot be proposals."
         },
         {
           "slug": "de-b2-advanced-grammar",
@@ -6841,7 +6909,9 @@
               "explanation": "Genitive after wegen.",
               "strand": "listening"
             }
-          ]
+          ],
+          "analogy": "Grammar is like a machine with fine controls: particles (doch, ja, denn) are the knobs that tune a sentence's tone.",
+          "breakage": "the machine analogy breaks because particles are context-dependent tones, not functions — the same knob means surprise, confirmation, or impatience depending on intonation, which no machine spec captures."
         },
         {
           "slug": "de-b2-professional-communication",
@@ -7034,7 +7104,9 @@
               "explanation": "Written record.",
               "strand": "reading"
             }
-          ]
+          ],
+          "analogy": "A meeting is like a structured exchange: agenda, decision, minutes — each with its fixed phrase.",
+          "breakage": "the structure analogy breaks with hedging and indirectness — wäre es möglich, dürfte ich bitten — because professional German softens imperatives into questions, and the structure model has no slot for a question that means 'do it'."
         },
         {
           "slug": "de-b2-media-criticism",
@@ -7227,7 +7299,9 @@
               "explanation": "Cross-verify.",
               "strand": "spoken_production"
             }
-          ]
+          ],
+          "analogy": "Media is like a lens: source, frame, and bias are the properties you inspect.",
+          "breakage": "the lens analogy breaks with attributive participle constructions — die veröffentlichten Daten, der zitierte Bericht — because the sentence packs a whole clause into a noun phrase, and a lens stays flat while the German noun phrase folds information inside itself."
         },
         {
           "slug": "de-b2-migration-identity",
@@ -7420,7 +7494,9 @@
               "explanation": "Standard integration program.",
               "strand": "spoken_production"
             }
-          ]
+          ],
+          "analogy": "Identity is like a mosaic: terms of belonging (Herkunft, Zugehörigkeit) are the tiles.",
+          "breakage": "the mosaic analogy breaks with fixed prepositional frames — sich integrieren in + accusative, sich fühlen als — because each tile of belonging is glued with its own grammar, and the glue carries as much meaning as the tile."
         },
         {
           "slug": "de-b2-academic-writing",
@@ -7613,7 +7689,9 @@
               "explanation": "Plagiarism = uncredited use.",
               "strand": "spoken_production"
             }
-          ]
+          ],
+          "analogy": "An essay is like an argument machine: thesis, development, conclusion — driven by nominal style and the passive.",
+          "breakage": "the machine analogy breaks with connective grammar — dadurch, dass; indem — because one idea is subordinated under another, and subordination is a hierarchy the sequence-machine cannot represent."
         },
         {
           "slug": "de-b2-debates-argumentation",
@@ -7806,7 +7884,9 @@
               "explanation": "Logical consistency.",
               "strand": "reading"
             }
-          ]
+          ],
+          "analogy": "Argumentation is like a chess match: claim, counter, concession — each move answered.",
+          "breakage": "the chess analogy breaks with concession grammar — zwar ..., aber ... — which preserves the opponent's point while overturning it: chess captures pieces, German debates concede them before winning."
         }
       ]
     }

@@ -237,7 +237,9 @@
               "explanation": "'Di dove sei?' asks where someone is from.",
               "strand": "listening"
             }
-          ]
+          ],
+          "analogy": "Italian pronunciation is like a musical score: most letters sound one consistent way, so reading aloud works almost mechanically once you know the notes.",
+          "breakage": "the score breaks with double consonants (nono vs. nonno) and stress (ancora vs. ancora) — the same written note has two lengths and two accents, and the score does not print them."
         },
         {
           "slug": "it-a1-numbers",
@@ -450,7 +452,9 @@
               "explanation": "'Indirizzo' means address.",
               "strand": "reading"
             }
-          ]
+          ],
+          "analogy": "Italian numbers are like brick assembly: ventuno, trentadue — tens plus units, with the tens dropping their final vowel.",
+          "breakage": "the assembly breaks for 11-16 (undici, sedici), which follow no pattern at all, and for ventitré, which carries an accent — some bricks are custom-molded."
         },
         {
           "slug": "it-a1-cafe",
@@ -643,7 +647,9 @@
               "explanation": "Cappuccino is a morning drink in Italian culture.",
               "strand": "vocabulary_pragmatics"
             }
-          ]
+          ],
+          "analogy": "The Italian bar is a scripted ritual: order at the counter (vorrei un caffè), then pay separately — a fixed sequence of turns.",
+          "breakage": "the ritual breaks because 'prego' shifts meaning with each step (please, you're welcome, go ahead) and because paying comes after drinking, an order the script of a German bakery would never predict."
         },
         {
           "slug": "it-a1-family",
@@ -836,7 +842,9 @@
               "explanation": "Expresses family/household size.",
               "strand": "listening"
             }
-          ]
+          ],
+          "analogy": "Family is like a labeled photo: possessive words (mio, tua) are caption tags on each person.",
+          "breakage": "the caption breaks with singular family members — mio padre, NOT il mio padre — because grammar deletes the article the caption model predicts, while plurals and modified nouns keep it (i miei fratelli)."
         },
         {
           "slug": "it-a1-home",
@@ -1029,7 +1037,9 @@
               "explanation": "Plural uses ci sono.",
               "strand": "listening"
             }
-          ]
+          ],
+          "analogy": "c'è and ci sono are like a location snapshot: an inventory of what the room contains, item by item.",
+          "breakage": "the snapshot breaks when definite articles join quantities — c'è il tavolo, ci sono le sedie — because the inventory mixes 'a table exists' with 'the table is there', and the snapshot cannot tell them apart."
         },
         {
           "slug": "it-a1-time",
@@ -1222,7 +1232,9 @@
               "explanation": "Proposal with day + time.",
               "strand": "spoken_production"
             }
-          ]
+          ],
+          "analogy": "Time is like a clock face of fixed chunks: sono le tre, è mezzogiorno, alle cinque.",
+          "breakage": "the clock-face breaks with the frame words — a che ora, alle, di mattina — because the same hour changes its preposition depending on whether you ask, answer, or describe a routine: the frame is part of the time."
         },
         {
           "slug": "it-a1-shopping",
@@ -1415,7 +1427,9 @@
               "explanation": "Quanto costa/costano = price.",
               "strand": "spoken_interaction"
             }
-          ]
+          ],
+          "analogy": "Shopping quantities are like measures: un chilo di ..., un po' di ... — a measuring system for food.",
+          "breakage": "the measure analogy breaks with the partitive — del pane, dell'acqua — where di fuses with the article and the 'some' melts into the noun, so measuring turns into grammar."
         },
         {
           "slug": "it-a1-directions",
@@ -1608,7 +1622,9 @@
               "explanation": "Walking.",
               "strand": "listening"
             }
-          ]
+          ],
+          "analogy": "Asking directions is like routing on a map: motion verbs (andare, girare) plus landmarks.",
+          "breakage": "the map breaks because dove and come take different verbs — dov'è il duomo? vs. come arrivo al duomo? — location questions and route questions use two coordinate systems on the same map."
         },
         {
           "slug": "it-a1-weather",
@@ -1801,7 +1817,9 @@
               "explanation": "Sun uses c'è il sole.",
               "strand": "spoken_production"
             }
-          ]
+          ],
+          "analogy": "Weather is like impersonal snapshots: fa caldo, piove — no 'it' actor needed, the sky speaks for itself.",
+          "breakage": "the snapshot breaks with the seasons: in estate, d'estate — the same season takes two frames, and the snapshot model has only one, so the frame must be learned with the season."
         },
         {
           "slug": "it-a1-plans",
@@ -1994,7 +2012,9 @@
               "explanation": "Potere = can/be able.",
               "strand": "grammar"
             }
-          ]
+          ],
+          "analogy": "Simple plans are like diary entries: domani vado al mare, stasera mangiamo fuori — future time words carry the future meaning.",
+          "breakage": "the diary breaks with piacere constructions — mi piace ballare — where the liker sits in the indirect object and the activity is the true subject: the diary's 'I' is not the grammar's subject."
         }
       ]
     },
@@ -2193,7 +2213,9 @@
               "explanation": "bottiglia d'acqua (elision).",
               "strand": "grammar"
             }
-          ]
+          ],
+          "analogy": "The restaurant is a staged service: coperto, ordinazione, conto — a service script in fixed order.",
+          "breakage": "the script breaks with the polite conditional — vorrei, potrebbe portare — because the request verb carries courtesy the script must simulate, and every region changes the dishes the script cannot list."
         },
         {
           "slug": "it-a2-health",
@@ -2386,7 +2408,9 @@
               "explanation": "Duration of illness.",
               "strand": "listening"
             }
-          ]
+          ],
+          "analogy": "A doctor's visit is like a symptom report: mi fa male la testa names the failing part.",
+          "breakage": "the report breaks because the body part keeps its article (la testa) while the sufferer stays indirect (mi) — the grammar splits the self into experiencer and body part, and the report model has only one subject."
         },
         {
           "slug": "it-a2-travel",
@@ -2579,7 +2603,9 @@
               "explanation": "per + destination.",
               "strand": "grammar"
             }
-          ]
+          ],
+          "analogy": "Travel is like reading a timetable: binari, orari, biglietti — departures and platforms as schedule cells.",
+          "breakage": "the timetable breaks with duration expressions — ci vuole un'ora, ci metto mezz'ora — because how long something takes uses different verbs from when it leaves, and the timetable only knows departures."
         },
         {
           "slug": "it-a2-past",
@@ -2772,7 +2798,9 @@
               "explanation": "Time expression.",
               "strand": "listening"
             }
-          ]
+          ],
+          "analogy": "The passato prossimo is like a photo album: avere or essere plus a frozen participle caption.",
+          "breakage": "the album breaks with movement and reflexive verbs — sono andato, mi sono alzato — which take essere and make the participle agree with the subject: some photos change shape to match their owner."
         },
         {
           "slug": "it-a2-hobbies",
@@ -2965,7 +2993,9 @@
               "explanation": "Natural preference statement.",
               "strand": "spoken_interaction"
             }
-          ]
+          ],
+          "analogy": "Free time is like a shelf of activities with piacere-style verbs: mi piace nuotare, mi interessa leggere.",
+          "breakage": "the shelf breaks because the activity, not the person, is the grammatical subject — piacciono i libri — so the shelf labels the object while the person's name sits in the drawer (mi)."
         },
         {
           "slug": "it-a2-work",
@@ -3158,7 +3188,9 @@
               "explanation": "Correct routine statement.",
               "strand": "grammar"
             }
-          ]
+          ],
+          "analogy": "The workday is like a routine timetable: tutti i giorni, di mattina, plus reflexive verbs — mi alzo, mi vesto.",
+          "breakage": "the timetable breaks because reflexives cast the person as both actor and receiver — mi lavo — one human in two grammatical roles, where the timetable has a single column."
         },
         {
           "slug": "it-a2-shopping-clothes",
@@ -3351,7 +3383,9 @@
               "explanation": "Purchase decision.",
               "strand": "vocabulary_pragmatics"
             }
-          ]
+          ],
+          "analogy": "Clothes shopping is like a fitting session: la taglia, provare, mi sta bene — sizes and fits.",
+          "breakage": "the fitting analogy breaks with demonstratives — questo, quella, queste — which must agree in gender and number with the clothing: even pointing at clothes gets gendered in Italian."
         },
         {
           "slug": "it-a2-housing",
@@ -3544,7 +3578,9 @@
               "explanation": "Caparra = security deposit.",
               "strand": "spoken_interaction"
             }
-          ]
+          ],
+          "analogy": "House-hunting is like a checklist: affitto, stanze, spese — features you tick off.",
+          "breakage": "the checklist breaks with article-free and article-fused forms — cercare casa (no article!), il prezzo della casa (fused di+la) — the same noun wears different grammatical clothes on different checklist lines."
         },
         {
           "slug": "it-a2-phone",
@@ -3737,7 +3773,9 @@
               "explanation": "Future: chiamerò.",
               "strand": "grammar"
             }
-          ]
+          ],
+          "analogy": "Phone calls are like a protocol: pronto?, chi parla?, mi scusi — fixed handshake phrases.",
+          "breakage": "the protocol breaks with the Lei register — the same verb changes person for one addressee (mi scusi, not mi scusa) — the protocol runs a different conjugation than the friendship it pretends to be."
         },
         {
           "slug": "it-a2-invitations",
@@ -3930,7 +3968,9 @@
               "explanation": "Natural invitation.",
               "strand": "grammar"
             }
-          ]
+          ],
+          "analogy": "Invitations are like an RSVP exchange: vieni?, volentieri, mi dispiace — accept or decline moves.",
+          "breakage": "the RSVP breaks with impersonal necessity — bisogna prenotare — and fused particles — ce l'ho — where whole phrases compress into pronouns, machinery the invitation never announced."
         }
       ]
     },
@@ -4129,7 +4169,9 @@
               "explanation": "Motivated polite disagreement.",
               "strand": "spoken_production"
             }
-          ]
+          ],
+          "analogy": "Opinions are like thesis plus reason: penso che ..., perché ... — a claim with a supporting clause.",
+          "breakage": "the thesis model breaks because verbs of belief and feeling trigger the subjunctive — penso che sia — so the reason clause changes mood in a way a factual claim would not."
         },
         {
           "slug": "it-b1-media",
@@ -4322,7 +4364,9 @@
               "explanation": "Check multiple sources.",
               "strand": "vocabulary_pragmatics"
             }
-          ]
+          ],
+          "analogy": "Media is like a shelf of sources: secondo me, l'articolo dice che ... — each claim tagged with its source.",
+          "breakage": "the source model breaks with the subjunctive split — report verbs take the indicative (dice che è) while doubt verbs take the subjunctive (dubito che sia) — so trust, not grammar, decides the verb mood."
         },
         {
           "slug": "it-b1-environment",
@@ -4515,7 +4559,9 @@
               "explanation": "Pollution.",
               "strand": "listening"
             }
-          ]
+          ],
+          "analogy": "Sustainability is like a chain of cause and effect: se ricicli, aiuti — condition and consequence.",
+          "breakage": "the chain breaks with the impersonal si — si deve, si può — which erases the actor: green advice in Italian often has no grammatical subject at all."
         },
         {
           "slug": "it-b1-culture",
@@ -4708,7 +4754,9 @@
               "explanation": "Relative superlative pattern.",
               "strand": "grammar"
             }
-          ]
+          ],
+          "analogy": "Culture is like layered history: the passato remoto tells the distant past in narrative layers.",
+          "breakage": "the layer model breaks with regional clocks — northern Italy uses the passato prossimo where the south uses the remoto — the same historical layer is told in two tenses depending on where the speaker stands."
         },
         {
           "slug": "it-b1-workplace",
@@ -4901,7 +4949,9 @@
               "explanation": "Status question.",
               "strand": "spoken_interaction"
             }
-          ]
+          ],
+          "analogy": "The workplace is like a role network: collega, capo, riunione — each person a node with a title.",
+          "breakage": "the network breaks with the particles ci and ne — parlarne, ci penso — which compress whole phrases into single syllables: the network's sentences shrink into pronouns."
         },
         {
           "slug": "it-b1-healthcare",
@@ -5094,7 +5144,9 @@
               "explanation": "Real future condition.",
               "strand": "grammar"
             }
-          ]
+          ],
+          "analogy": "Healthcare is like a pathway: medico di base, ricetta, visita — steps in fixed order.",
+          "breakage": "the pathway breaks with verb-plus-noun chunks — fare la fila, prendere appuntamento — where the pair is one fixed unit: you cannot route word-by-word, the chunk is the step."
         },
         {
           "slug": "it-b1-education",
@@ -5287,7 +5339,9 @@
               "explanation": "Dice che = he/she says that.",
               "strand": "grammar"
             }
-          ]
+          ],
+          "analogy": "School is like a stage system: materie, esami, voti — levels you pass through.",
+          "breakage": "the stage model breaks with duration grammar — studio da tre anni — where Italian uses the present tense for something still ongoing, a timeline the stage model, with its English intuition, does not predict."
         },
         {
           "slug": "it-b1-travel-regions",
@@ -5480,7 +5534,9 @@
               "explanation": "Comparative più... che/di.",
               "strand": "grammar"
             }
-          ]
+          ],
+          "analogy": "Italy is like a patchwork: il Nord, il Mezzogiorno, the regions as colored patches with local names.",
+          "breakage": "the patchwork breaks with articulated prepositions — nel Lazio but in Toscana — because the same map uses in for some regions and nel for others, and the patch's name decides the frame."
         },
         {
           "slug": "it-b1-relationships",
@@ -5673,7 +5729,9 @@
               "explanation": "Potevo = I could have.",
               "strand": "grammar"
             }
-          ]
+          ],
+          "analogy": "Relationships are like an exchange of feelings: mi sento ..., gli voglio bene — feelings travel between people.",
+          "breakage": "the exchange breaks with double pronouns — glielo dico — where two pronouns fuse, shorten, and reorder: the exchange model counts one pronoun at a time, the grammar stacks them."
         },
         {
           "slug": "it-b1-future",
@@ -5866,7 +5924,9 @@
               "explanation": "Se + presente, presente/futuro.",
               "strand": "spoken_production"
             }
-          ]
+          ],
+          "analogy": "The future is like conditional branches: vorrei, se potessi — wishful forks of possibility.",
+          "breakage": "the branch model breaks with the modal future — sarà vero? — because the future tense also expresses guesswork about the present: the branch that points forward sometimes points at 'now, probably'."
         }
       ]
     },
@@ -6065,7 +6125,9 @@
               "explanation": "Conditional with imperfect subjunctive.",
               "strand": "grammar"
             }
-          ]
+          ],
+          "analogy": "Society is like a set of institutions in debate — largely told through the congiuntivo after impersonal frames (è importante che ...).",
+          "breakage": "the institution model breaks because the subjunctive marks the speaker's stance, not the facts: the same event is conjugated differently by attitude, and institutions do not change conjugation."
         },
         {
           "slug": "it-b2-economy",
@@ -6258,7 +6320,9 @@
               "explanation": "Exports key for Italy.",
               "strand": "listening"
             }
-          ]
+          ],
+          "analogy": "Work and markets are like contracts: stipendio, licenziamento, partita IVA — terms with fixed meanings.",
+          "breakage": "the contract model breaks with the third-type conditional — se avessi saputo, non avrei firmato — which retroactively rewrites the contract in an irrealis mood the original clauses never contained."
         },
         {
           "slug": "it-b2-literature",
@@ -6451,7 +6515,9 @@
               "explanation": "Neorealism movement.",
               "strand": "listening"
             }
-          ]
+          ],
+          "analogy": "Literature is like interpretable layers: the passato remoto narrates, metaphor sits on top.",
+          "breakage": "the layer model breaks with the subjunctive imperfect — credessi, fosse — because interpretation is proposed in a mood that suspends assertion: readings are hypotheses, layers are fixed strata."
         },
         {
           "slug": "it-b2-history",
@@ -6644,7 +6710,9 @@
               "explanation": "Festa della Liberazione.",
               "strand": "listening"
             }
-          ]
+          ],
+          "analogy": "History is like a timeline: the passato remoto pins events to dates in order.",
+          "breakage": "the timeline breaks with the trapassato — era già successo — because events carry their own past-before-past shadows: a one-dimensional line cannot show an event that had already ended when another began."
         },
         {
           "slug": "it-b2-law",
@@ -6837,7 +6905,9 @@
               "explanation": "Bisogna + infinitive.",
               "strand": "grammar"
             }
-          ]
+          ],
+          "analogy": "Law is like a procedure: norme, diritti, doveri — steps and obligations in formal register.",
+          "breakage": "the procedure model breaks with purpose clauses — affinché + congiuntivo — because the law states purposes in a mood that suspends assertion: the procedure describes facts, the purpose clause proposes outcomes."
         },
         {
           "slug": "it-b2-science",
@@ -7030,7 +7100,9 @@
               "explanation": "-zione nominalization.",
               "strand": "grammar"
             }
-          ]
+          ],
+          "analogy": "Science is like an evidence chain: secondo lo studio, si è scoperto ... — claim linked to finding.",
+          "breakage": "the chain breaks with the impersonal passive — si è osservato — which reports the finding without naming the observer: the chain's strongest link has no actor."
         },
         {
           "slug": "it-b2-arts",
@@ -7223,7 +7295,9 @@
               "explanation": "Absolute superlative pattern.",
               "strand": "grammar"
             }
-          ]
+          ],
+          "analogy": "Criticism is like judging an exhibition: valutare, ritenere — a verdict delivered over a work you walked through.",
+          "breakage": "the judgment model breaks with taste verbs and the subjunctive — credo che sia bello — because judgment and fact part ways in the verb mood: what you believe about art is conjugated as uncertain even when you feel certain."
         },
         {
           "slug": "it-b2-debate",
@@ -7416,7 +7490,9 @@
               "explanation": "To conclude.",
               "strand": "grammar"
             }
-          ]
+          ],
+          "analogy": "Argumentation is like a sequence of moves: da un lato, tuttavia, sebbene — advance and retreat.",
+          "breakage": "the move model breaks with concession conjunctions — sebbene, benché + congiuntivo — because conceding uses the subjunctive even though the conceded fact is real: grammar treats concessions as unreal by construction."
         },
         {
           "slug": "it-b2-professional",
@@ -7609,7 +7685,9 @@
               "explanation": "Past hypothetical: avremmo.",
               "strand": "grammar"
             }
-          ]
+          ],
+          "analogy": "Professional communication is like register switching: dare del Lei, formule fisse — formal layers you put on.",
+          "breakage": "the register model breaks with nominal style — la consegna del progetto — because official Italian packs verbs into nouns: the register does not just change tone, it changes the sentence's skeleton."
         },
         {
           "slug": "it-b2-integration",
@@ -7802,7 +7880,9 @@
               "explanation": "Balanced civic knowledge.",
               "strand": "writing"
             }
-          ]
+          ],
+          "analogy": "Citizenship is like a bundle of rights and duties: cittadinanza, permesso, diritti — items in a legal bundle.",
+          "breakage": "the bundle model breaks with experiential verbs and their prepositions — integrarsi in, sentirsi parte di — because belonging lives in prepositional frames whose glue carries meaning the bundle's noun list cannot hold."
         }
       ]
     }
