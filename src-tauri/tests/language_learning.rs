@@ -89,7 +89,7 @@ fn a1_completes_alphabet_and_counting_foundations_before_later_scenarios() {
 
     for day in 21..=23 {
         let today = format!("2026-07-{day}");
-        let lesson = language::start_session(&conn, "german", None, &today).unwrap();
+        let lesson = language::start_session(&conn, "german", None, &today, false).unwrap();
         assert_eq!(lesson.unit_slug, "de-a1-greetings-introductions");
         assert!(lesson.markdown.contains("## First principles foundation"));
         assert!(lesson
@@ -99,7 +99,7 @@ fn a1_completes_alphabet_and_counting_foundations_before_later_scenarios() {
         pass_session(&conn, lesson.session_id, &today);
     }
 
-    let numbers = language::start_session(&conn, "german", None, "2026-07-24").unwrap();
+    let numbers = language::start_session(&conn, "german", None, "2026-07-24", false).unwrap();
     assert_eq!(numbers.unit_slug, "de-a1-numbers-personal-info");
     assert!(numbers
         .markdown
@@ -126,7 +126,7 @@ fn italian_a1_starts_with_alphabet_and_sound_spelling() {
     )
     .unwrap();
 
-    let lesson = language::start_session(&conn, "italian", None, "2026-07-21").unwrap();
+    let lesson = language::start_session(&conn, "italian", None, "2026-07-21", false).unwrap();
     assert_eq!(lesson.unit_slug, "it-a1-greetings");
     assert!(lesson
         .markdown
@@ -227,7 +227,8 @@ fn frontend_completion_does_not_consume_or_mutate_language_practice() {
     let slots = language::slot_views(&conn, "2026-07-21", true).unwrap();
     assert!(slots.iter().any(|slot| slot.id == slot_id && slot.owed));
 
-    let lesson = language::start_session(&conn, "german", Some(slot_id), "2026-07-21").unwrap();
+    let lesson =
+        language::start_session(&conn, "german", Some(slot_id), "2026-07-21", false).unwrap();
     assert_eq!(lesson.language, "german");
     assert_eq!(lesson.level, "A1");
     assert_eq!(lesson.unit_slug, "de-a1-greetings-introductions");
@@ -243,7 +244,7 @@ fn frontend_completion_does_not_consume_or_mutate_language_practice() {
 fn passed_language_session_records_skill_and_unit_evidence() {
     let conn = test_db();
     enable_german(&conn);
-    let lesson = language::start_session(&conn, "german", None, "2026-07-21").unwrap();
+    let lesson = language::start_session(&conn, "german", None, "2026-07-21", false).unwrap();
     let answers = correct_answers(&conn, lesson.session_id);
     let result = language::submit_session(
         &conn,
@@ -295,7 +296,7 @@ fn cefr_level_advances_only_after_unit_and_skill_gate_evidence() {
         )
         .unwrap();
     }
-    let lesson = language::start_session(&conn, "german", None, "2026-07-21").unwrap();
+    let lesson = language::start_session(&conn, "german", None, "2026-07-21", false).unwrap();
     let result = language::submit_session(
         &conn,
         &SubmitSessionInput {
@@ -341,4 +342,99 @@ fn due_calculation_honors_weekdays_time_and_completion() {
         monday,
         true
     ));
+}
+
+fn complete_level(conn: &rusqlite::Connection, language: &str, level: &str) {
+    let seed: serde_json::Value =
+        serde_json::from_str(include_str!("../seed/languages/german.json")).unwrap();
+    let spec = seed["levels"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|candidate| candidate["level"] == level)
+        .unwrap();
+    let sessions_per_unit = spec["sessions_per_unit"].as_i64().unwrap();
+    for unit in spec["units"].as_array().unwrap() {
+        conn.execute(
+            "INSERT INTO language_unit_progress
+                (language, unit_slug, phase_completed, score_ema, encounters)
+             VALUES (?1, ?2, ?3, 0.4, 1)
+             ON CONFLICT(language, unit_slug) DO UPDATE SET phase_completed = ?3",
+            rusqlite::params![language, unit["slug"].as_str().unwrap(), sessions_per_unit],
+        )
+        .unwrap();
+    }
+}
+
+fn wrong_answers(conn: &rusqlite::Connection, session_id: i64) -> Vec<usize> {
+    let lesson_json: String = conn
+        .query_row(
+            "SELECT lesson_json FROM language_sessions WHERE id = ?1",
+            [session_id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let payload: serde_json::Value = serde_json::from_str(&lesson_json).unwrap();
+    payload["questions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|question| {
+            let correct = question["correct_index"].as_u64().unwrap() as usize;
+            let count = question["choices"].as_array().unwrap().len();
+            (correct + 1) % count
+        })
+        .collect()
+}
+
+#[test]
+fn completed_level_units_are_never_reserved_automatically() {
+    let conn = test_db();
+    enable_german(&conn);
+    complete_level(&conn, "german", "A1");
+    // Every unit complete + skills below the gate => targeted remediation on
+    // the weakest unit, never a fresh rotation through completed units.
+    let remediation = language::start_session(&conn, "german", None, "2026-07-22", false).unwrap();
+    assert_eq!(remediation.level, "A1");
+    assert!(
+        remediation.phase > 3,
+        "remediation runs past the completed phases"
+    );
+    // Failing keeps the skill gate unmet, so the next start is remediation
+    // again rather than a phase-1 re-serve of a completed unit.
+    language::submit_session(
+        &conn,
+        &SubmitSessionInput {
+            session_id: remediation.session_id,
+            answers: wrong_answers(&conn, remediation.session_id),
+            writing_response: "short".into(),
+            speaking_completed: false,
+            listened: false,
+            confidence: 1,
+        },
+        "2026-07-22",
+    )
+    .unwrap();
+    let again = language::start_session(&conn, "german", None, "2026-07-23", false).unwrap();
+    assert!(
+        again.phase > 3,
+        "completed units are never started from phase 1 again"
+    );
+}
+
+#[test]
+fn a_finished_top_level_rejects_new_sessions_but_allows_revisit() {
+    let conn = test_db();
+    enable_german(&conn);
+    conn.execute(
+        "UPDATE language_programs SET current_level = 'B2' WHERE language = 'german'",
+        [],
+    )
+    .unwrap();
+    complete_level(&conn, "german", "B2");
+    let error = language::start_session(&conn, "german", None, "2026-07-22", false).unwrap_err();
+    assert!(error.contains("complete"), "{error}");
+    let revisit = language::start_session(&conn, "german", None, "2026-07-22", true).unwrap();
+    assert_eq!(revisit.level, "B2");
+    assert!(revisit.phase > 27);
 }

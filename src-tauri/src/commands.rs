@@ -533,12 +533,14 @@ pub fn plan_classroom_schedule(
 
 /// Route a classroom start to the subject's isolated engine. Advisory classes
 /// never engage the kiosk or mutate the primary frontend session row.
+/// `revisit` is the opt-in path for re-serving a completed module.
 #[tauri::command]
 pub async fn start_classroom_session(
     app: AppHandle,
     state: State<'_, AppState>,
     subject_id: String,
     slot_id: Option<i64>,
+    revisit: Option<bool>,
 ) -> CmdResult<serde_json::Value> {
     if session::session_owed(&state) {
         return Err(
@@ -546,6 +548,7 @@ pub async fn start_classroom_session(
                 .into(),
         );
     }
+    let revisit = revisit.unwrap_or(false);
     let spec = crate::classroom::subject(subject_id.trim()).map_err(err)?;
     let value = match spec.kind {
         crate::classroom::SubjectKind::Language => {
@@ -556,6 +559,7 @@ pub async fn start_classroom_session(
                     spec.id,
                     slot_id,
                     &state.today(),
+                    revisit,
                 )
                 .map_err(err)?;
                 let seed = crate::language::stored_lesson(&conn, base.session_id).map_err(err)?;
@@ -577,7 +581,8 @@ pub async fn start_classroom_session(
         }
         crate::classroom::SubjectKind::Engineering => {
             let lesson =
-                crate::classroom::start_engineering_session(&state, spec.id, slot_id).await?;
+                crate::classroom::start_engineering_session(&state, spec.id, slot_id, revisit)
+                    .await?;
             serde_json::json!({ "kind": "engineering", "lesson": lesson })
         }
     };
@@ -703,7 +708,7 @@ pub fn start_language_session(
     }
     let lesson = {
         let conn = state.db.0.lock().unwrap();
-        crate::language::start_session(&conn, language.trim(), slot_id, &state.today())
+        crate::language::start_session(&conn, language.trim(), slot_id, &state.today(), false)
             .map_err(err)?
     };
     // Language practice is advisory by design. Do not call kiosk::engage and
@@ -1088,6 +1093,31 @@ pub struct RouletteView {
     pub concept_category: String,
     pub pool_unlocked: usize,
     pub pool_total: usize,
+    /// Every module in the track is completed: no new lesson can be drawn.
+    /// The wheel is empty and the frontend offers a track-complete state
+    /// (with an opt-in revisit instead of an automatic re-serve).
+    pub track_complete: bool,
+}
+
+/// End a lesson day whose track has no drawable module left. Only legal from
+/// the roulette step and only when the track is actually complete — the
+/// mastered track's retrieval lives in pop-quiz days, not repeated lessons.
+#[tauri::command]
+pub fn complete_track_day(app: AppHandle, state: State<'_, AppState>) -> CmdResult<SessionView> {
+    let today = state.today();
+    {
+        let conn = state.db.0.lock().unwrap();
+        let track_focus = session::session_focus(&conn, &today)
+            .map_err(err)?
+            .ok_or("session focus not chosen")?;
+        if crate::roulette::drawable_exists(&conn, &track_focus).map_err(err)? {
+            return Err("the track still has new modules — draw one instead".into());
+        }
+    }
+    session::complete_session(&app, &state).map_err(err)?;
+    let v = session::view(&state);
+    let _ = app.emit("session:state", v.clone());
+    Ok(v)
 }
 
 #[tauri::command]
@@ -1112,13 +1142,24 @@ pub fn finish_review(app: AppHandle, state: State<'_, AppState>) -> CmdResult<Se
 }
 
 /// Wheel data: pool of titles + the index of today's (pre-decided) concept.
+/// `revisit` is the opt-in path that draws from completed modules only —
+/// never the automatic selection.
 #[tauri::command]
-pub fn get_roulette(state: State<'_, AppState>) -> CmdResult<RouletteView> {
+pub fn get_roulette(state: State<'_, AppState>, revisit: Option<bool>) -> CmdResult<RouletteView> {
     let today = state.today();
     let conn = state.db.0.lock().unwrap();
     let track_focus = session::session_focus(&conn, &today)
         .map_err(err)?
         .ok_or("session focus not chosen")?;
+    let empty_view = RouletteView {
+        pool: vec![],
+        chosen_index: 0,
+        concept_title: String::new(),
+        concept_category: String::new(),
+        pool_unlocked: 0,
+        pool_total: 0,
+        track_complete: true,
+    };
     // Reuse pre-drawn concept if pregen already picked one, else draw now.
     let concept = {
         let existing = db::get_session(&conn, &today)
@@ -1129,9 +1170,26 @@ pub fn get_roulette(state: State<'_, AppState>) -> CmdResult<RouletteView> {
                 .map_err(err)?
                 .ok_or("concept missing")?,
             None => {
-                let c = crate::roulette::draw(&conn, &today, &track_focus)
-                    .map_err(err)?
-                    .ok_or("empty pool")?;
+                let drawn = if revisit.unwrap_or(false) {
+                    crate::roulette::draw_completed(&conn, &today, &track_focus).map_err(err)?
+                } else {
+                    crate::roulette::draw(&conn, &today, &track_focus).map_err(err)?
+                };
+                let Some(c) = drawn else {
+                    let completed_available =
+                        crate::roulette::draw_completed(&conn, &today, &track_focus)
+                            .map_err(err)?
+                            .is_some();
+                    if !revisit.unwrap_or(false) && completed_available {
+                        // Track mastered: every unlocked module is completed.
+                        return Ok(empty_view);
+                    }
+                    return Err(if revisit.unwrap_or(false) {
+                        "no completed modules to revisit".into()
+                    } else {
+                        "empty pool".into()
+                    });
+                };
                 let mut s = db::get_session(&conn, &today)
                     .map_err(err)?
                     .ok_or("no session")?;
@@ -1141,11 +1199,13 @@ pub fn get_roulette(state: State<'_, AppState>) -> CmdResult<RouletteView> {
             }
         }
     };
-    // Build a wheel pool from UNLOCKED concepts only: chosen + up to 11 others.
-    let (unlocked, locked) = crate::roulette::pool_status(&conn, &track_focus).map_err(err)?;
-    let pool_unlocked = unlocked.len();
+    // Build a wheel pool from UNLOCKED, uncompleted concepts only:
+    // chosen + up to 11 others. Completed modules never appear in the wheel.
+    let (_, locked) = crate::roulette::pool_status(&conn, &track_focus).map_err(err)?;
+    let drawable = crate::roulette::drawable(&conn, &track_focus).map_err(err)?;
+    let pool_unlocked = drawable.len();
     let pool_total = pool_unlocked + locked.len();
-    let mut pool: Vec<String> = unlocked
+    let mut pool: Vec<String> = drawable
         .into_iter()
         .filter(|c| c.id != concept.id)
         .take(11)
@@ -1160,6 +1220,7 @@ pub fn get_roulette(state: State<'_, AppState>) -> CmdResult<RouletteView> {
         concept_category: concept.category,
         pool_unlocked,
         pool_total,
+        track_complete: false,
     })
 }
 

@@ -21,6 +21,21 @@
     wheel?.spin();
   }
 
+  async function revisit() {
+    phase = 'ready';
+    data = null;
+    data = await api.getRoulette(true);
+  }
+
+  async function endDay() {
+    try {
+      await api.completeTrackDay();
+      await app.refresh();
+    } catch (error) {
+      app.error = String(error);
+    }
+  }
+
   async function landed() {
     phase = 'landed';
   }
@@ -47,6 +62,25 @@
   {/if}
   {#if !data}
     <div class="center"><StatusLED tone="pending" label="loading pool…" /></div>
+  {:else if data.track_complete}
+    <div class="roulette-body">
+      <div class="meta-label">
+        TOPIC_SELECTOR — pool: {data.pool_unlocked}/{data.pool_total} unlocked · track mastered
+      </div>
+      <h1 class="topic">track mastered</h1>
+      <p class="fine">
+        every module in this track is completed and will never be re-served automatically.
+        retrieval stays alive in quiz days; revisit a module only when you choose to.
+      </p>
+      <button class="cta mono-cta" onclick={revisit}>revisit a past module <ArrowRight size={13} /></button>
+      <button class="cta mono-cta" onclick={endDay}>end today's session</button>
+      <button class="ghost mono-ghost" onclick={() => (app.screen = 'dashboard')}>
+        cluster overview
+      </button>
+      <button class="ghost mono-ghost" onclick={() => (app.screen = 'idle')}>
+        classroom &amp; other tracks
+      </button>
+    </div>
   {:else}
     <div class="roulette-body">
       <div class="meta-label">

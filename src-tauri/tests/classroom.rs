@@ -5,7 +5,7 @@ use system_design_roulette_lib::{
         UpsertClassroomSlotInput, SUBJECTS,
     },
     db::{self, Session},
-    language, mastery,
+    language, mastery, roulette,
 };
 
 static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -323,7 +323,8 @@ fn generic_language_slot_routes_to_cefr_engine_without_consuming_primary() {
     )
     .unwrap();
     let lesson =
-        language::start_classroom_session(&conn, "german", Some(slot), "2026-07-21").unwrap();
+        language::start_classroom_session(&conn, "german", Some(slot), "2026-07-21", false)
+            .unwrap();
     let linked: i64 = conn
         .query_row(
             "SELECT classroom_slot_id FROM language_sessions WHERE id = ?1",
@@ -393,8 +394,8 @@ fn language_classes_can_be_paused_independently_on_the_same_day() {
     let conn = test_db();
     configure(&conn, "german", "claude");
     configure(&conn, "italian", "deepseek");
-    language::start_classroom_session(&conn, "german", None, "2026-07-21").unwrap();
-    language::start_classroom_session(&conn, "italian", None, "2026-07-21").unwrap();
+    language::start_classroom_session(&conn, "german", None, "2026-07-21", false).unwrap();
+    language::start_classroom_session(&conn, "italian", None, "2026-07-21", false).unwrap();
     let active = language::active_summaries(&conn).unwrap();
     assert_eq!(active.len(), 2);
     assert!(active.iter().any(|session| session.language == "german"));
@@ -757,4 +758,58 @@ fn additive_classroom_migration_preserves_existing_config() {
         })
         .unwrap();
     assert_eq!(count, 6);
+}
+
+#[test]
+fn completed_modules_are_never_redrawn_automatically() {
+    let conn = test_db();
+    configure(&conn, "javascript", "claude");
+    conn.execute(
+        "INSERT INTO mastery (concept_id, state, score_ema, encounters)
+         SELECT id, 'mastered', 1.0, 2 FROM concepts WHERE active = 1 AND focus = 'javascript'",
+        [],
+    )
+    .unwrap();
+    assert!(!roulette::drawable_exists(&conn, "javascript").unwrap());
+    assert!(roulette::draw(&conn, "2026-07-22", "javascript")
+        .unwrap()
+        .is_none());
+    let revisited = roulette::draw_completed(&conn, "2026-07-22", "javascript")
+        .unwrap()
+        .expect("explicit revisit serves a completed module");
+    assert_eq!(revisited.focus, "javascript");
+}
+
+#[test]
+fn decayed_modules_return_but_mastered_ones_do_not() {
+    let conn = test_db();
+    configure(&conn, "javascript", "claude");
+    conn.execute(
+        "INSERT INTO mastery (concept_id, state, score_ema, encounters)
+         SELECT id, 'mastered', 1.0, 2 FROM concepts WHERE active = 1 AND focus = 'javascript'",
+        [],
+    )
+    .unwrap();
+    let decayed_id: i64 = conn
+        .query_row(
+            "SELECT id FROM concepts WHERE focus = 'javascript' AND active = 1 LIMIT 1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    conn.execute(
+        "UPDATE mastery SET state = 'decayed' WHERE concept_id = ?1",
+        [decayed_id],
+    )
+    .unwrap();
+    assert!(roulette::drawable_exists(&conn, "javascript").unwrap());
+    for _ in 0..10 {
+        let drawn = roulette::draw(&conn, "2026-07-22", "javascript")
+            .unwrap()
+            .expect("the decayed module is drawable");
+        assert_eq!(
+            drawn.id, decayed_id,
+            "only the decayed module may be re-served"
+        );
+    }
 }

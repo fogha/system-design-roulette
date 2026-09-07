@@ -116,6 +116,7 @@ describe('next scheduled class', () => {
             target_weekly_minutes: 90,
             progress: 0,
             progress_label: '',
+            completed: false,
             language_progress: null,
           },
         ],
@@ -149,6 +150,7 @@ describe('next scheduled class', () => {
             target_weekly_minutes: 90,
             progress: 0,
             progress_label: '',
+            completed: false,
             language_progress: null,
           },
         ],
@@ -181,6 +183,7 @@ describe('next scheduled class', () => {
         target_weekly_minutes: 90,
         progress: 0,
         progress_label: '',
+        completed: false,
         language_progress: null,
       },
     ];

@@ -123,9 +123,9 @@ class AppStore {
     }
   }
 
-  async startClass(subjectId: ClassroomSubjectId, slotId?: number | null) {
+  async startClass(subjectId: ClassroomSubjectId, slotId?: number | null, revisit = false) {
     try {
-      const session = await api.startClassroomSession(subjectId, slotId);
+      const session = await api.startClassroomSession(subjectId, slotId, revisit);
       if (session.kind === 'language') {
         this.languageLesson = session.lesson;
         this.screen = 'language';

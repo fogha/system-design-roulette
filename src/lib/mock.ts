@@ -641,6 +641,7 @@ function mockClassroomProgram(subjectId: ClassroomSubjectId): ClassroomProgramVi
         : settings.enabled
           ? '6 / 34 concepts practiced'
           : '0 / 34 concepts practiced',
+    completed: false,
     language_progress: languageProgress,
   };
 }
@@ -1298,6 +1299,12 @@ export const mockApi = {
     mockEmit('session:state', session());
     return session();
   },
+  completeTrackDay: async () => {
+    state.step = 'done';
+    state.status = 'completed';
+    mockEmit('session:state', session());
+    return session();
+  },
   getRoulette: async (): Promise<RouletteView> => ({
     pool: [
       'Closures and lexical scope',
@@ -1318,6 +1325,7 @@ export const mockApi = {
     concept_category: 'runtime',
     pool_unlocked: 31,
     pool_total: 72,
+    track_complete: false,
   }),
   ensureCourse: async (): Promise<CourseView> => {
     // Demo the live agent log the way a real generation streams it.

@@ -291,6 +291,7 @@ pub fn run() {
             commands::get_review,
             commands::finish_review,
             commands::get_roulette,
+            commands::complete_track_day,
             commands::ensure_course,
             commands::start_course,
             commands::finish_course,

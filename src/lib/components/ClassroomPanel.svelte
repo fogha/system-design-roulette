@@ -325,8 +325,8 @@
                 <strong>{program.label}</strong>
                 <small>{program.native_label}</small>
               </span>
-              <span class:online={program.enabled} class="class-state mono">
-                {program.enabled ? 'ACTIVE' : 'OFF'}
+              <span class:online={program.enabled} class:complete={program.completed} class="class-state mono">
+                {program.completed ? 'COMPLETE' : program.enabled ? 'ACTIVE' : 'OFF'}
               </span>
             </header>
 
@@ -442,11 +442,14 @@
                 title={primaryOwed
                   ? 'complete or skip the due frontend session first'
                   : program.enabled
-                    ? undefined
+                    ? program.completed
+                      ? 'every module is completed — revisit is opt-in'
+                      : undefined
                     : `enable ${program.label} first`}
-                onclick={() => app.startClass(program.subject_id)}
+                onclick={() =>
+                  app.startClass(program.subject_id, null, program.completed)}
               >
-                start class
+                {program.completed ? 'revisit a module' : 'start class'}
               </button>
               <button class="power-button mono" type="button" onclick={() => toggleProgram(program)}>
                 {program.enabled ? 'disable' : 'enable'}
@@ -733,6 +736,7 @@
   .class-identity small { color: var(--faint); font-size: 9px; margin-top: 2px; }
   .class-state { color: var(--faint); font-size: 8px; letter-spacing: 1px; }
   .class-state.online { color: var(--green); }
+  .class-state.complete { color: var(--violet); }
   .progress-copy { justify-content: space-between; color: var(--muted); font-size: 9px; margin: 13px 0 5px; }
   .progress-track { height: 3px; background: var(--surface-2); overflow: hidden; }
   .progress-track span { display: block; height: 100%; background: var(--accent); }

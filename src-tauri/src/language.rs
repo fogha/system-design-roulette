@@ -373,6 +373,14 @@ fn level_progress(conn: &Connection, language: &str, level: &LevelSpec) -> Resul
     Ok((completed, required))
 }
 
+/// Every session of every unit in `level` has been completed.
+pub fn level_complete(conn: &Connection, language: &str, level: &str) -> Result<bool> {
+    let curriculum = curriculum(language)?;
+    let spec = level_spec(curriculum, level)?;
+    let (completed, required) = level_progress(conn, language, spec)?;
+    Ok(completed >= required)
+}
+
 fn skills_for(conn: &Connection, language: &str) -> Result<Vec<SkillScoreView>> {
     let mut scores = HashMap::new();
     let mut stmt = conn
@@ -1164,7 +1172,12 @@ fn build_lesson(language: &str, level: &str, unit: &UnitSpec, phase: i64) -> Sto
     }
 }
 
-fn select_unit(conn: &Connection, language: &str, level: &LevelSpec) -> Result<(UnitSpec, i64)> {
+fn select_unit(
+    conn: &Connection,
+    language: &str,
+    level: &LevelSpec,
+    revisit: bool,
+) -> Result<(UnitSpec, i64)> {
     let mut progress = HashMap::new();
     let mut stmt = conn
         .prepare(
@@ -1201,6 +1214,8 @@ fn select_unit(conn: &Connection, language: &str, level: &LevelSpec) -> Result<(
         let current = progress.get(&unit.slug).map(|entry| entry.0).unwrap_or(0);
         return Ok((unit.clone(), current + 1));
     }
+    // Breadth-first rotation over *incomplete* units only: completed units
+    // are never re-served automatically.
     let minimum_phase = level
         .units
         .iter()
@@ -1213,29 +1228,39 @@ fn select_unit(conn: &Connection, language: &str, level: &LevelSpec) -> Result<(
         })
         .min()
         .unwrap_or(0);
-    if let Some(unit) = level.units.iter().find(|unit| {
-        progress
-            .get(&unit.slug)
-            .map(|entry| entry.0)
-            .unwrap_or(0)
-            .min(max_phase)
-            == minimum_phase
-    }) {
-        let current = progress.get(&unit.slug).map(|entry| entry.0).unwrap_or(0);
-        if current < max_phase {
+    if minimum_phase < max_phase {
+        if let Some(unit) = level.units.iter().find(|unit| {
+            progress
+                .get(&unit.slug)
+                .map(|entry| entry.0)
+                .unwrap_or(0)
+                .min(max_phase)
+                == minimum_phase
+        }) {
+            let current = progress.get(&unit.slug).map(|entry| entry.0).unwrap_or(0);
             return Ok((unit.clone(), current + 1));
         }
     }
-    let weakest = level
-        .units
-        .iter()
-        .min_by(|a, b| {
-            let a_score = progress.get(&a.slug).map(|entry| entry.1).unwrap_or(0.0);
-            let b_score = progress.get(&b.slug).map(|entry| entry.1).unwrap_or(0.0);
-            a_score.total_cmp(&b_score)
-        })
-        .ok_or_else(|| format!("{} has no units", level.level))?;
-    Ok((weakest.clone(), max_phase + 1))
+    // Every unit in this level is complete. Only two paths remain: an
+    // explicit revisit, or targeted remediation while the level's skill gate
+    // is still unmet. A fully gated top level ends the program.
+    if revisit || next_level(&level.level).is_some() {
+        let weakest = level
+            .units
+            .iter()
+            .min_by(|a, b| {
+                let a_score = progress.get(&a.slug).map(|entry| entry.1).unwrap_or(0.0);
+                let b_score = progress.get(&b.slug).map(|entry| entry.1).unwrap_or(0.0);
+                a_score.total_cmp(&b_score)
+            })
+            .ok_or_else(|| format!("{} has no units", level.level))?;
+        return Ok((weakest.clone(), max_phase + 1));
+    }
+    Err(format!(
+        "{} is complete — every {} unit is finished. Revisit to practice again.",
+        curriculum(language)?.label,
+        level.level
+    ))
 }
 
 struct LessonMeta<'a> {
@@ -1388,6 +1413,7 @@ pub fn start_session(
     language: &str,
     slot_id: Option<i64>,
     today: &str,
+    revisit: bool,
 ) -> Result<LanguageLessonView> {
     if !valid_language(language) {
         return Err(format!("unsupported language: {language}"));
@@ -1425,7 +1451,7 @@ pub fn start_session(
     }
     let curriculum = curriculum(language)?;
     let level = level_spec(curriculum, &program.current_level)?;
-    let (unit, phase) = select_unit(conn, language, level)?;
+    let (unit, phase) = select_unit(conn, language, level, revisit)?;
     let stored = build_lesson(language, &program.current_level, &unit, phase);
     let lesson_json = serde_json::to_string(&stored).map_err(|error| error.to_string())?;
     conn.execute(
@@ -1461,12 +1487,14 @@ pub fn start_session(
 
 /// Start the language engine from a generic classroom slot. The curriculum,
 /// CEFR evidence, and session payload remain language-owned; only scheduling
-/// is generalized.
+/// is generalized. `revisit` is the opt-in path for re-practicing a completed
+/// unit.
 pub fn start_classroom_session(
     conn: &Connection,
     language: &str,
     classroom_slot_id: Option<i64>,
     today: &str,
+    revisit: bool,
 ) -> Result<LanguageLessonView> {
     if let Some(id) = classroom_slot_id {
         let owner: Option<(String, String)> = conn
@@ -1497,7 +1525,7 @@ pub fn start_classroom_session(
             return Err("this class slot is already complete for today".into());
         }
     }
-    let lesson = start_session(conn, language, None, today)?;
+    let lesson = start_session(conn, language, None, today, revisit)?;
     if let Some(id) = classroom_slot_id {
         conn.execute(
             "UPDATE language_sessions

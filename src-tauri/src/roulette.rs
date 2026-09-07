@@ -26,6 +26,15 @@ fn is_practiced(state: &str) -> bool {
     )
 }
 
+/// Mastery states that count as "this module is done". Completed modules are
+/// never re-served automatically; spaced-repetition retention lives in the
+/// daily quiz, and an explicit opt-in revisit is the only way back to a full
+/// lesson. Struggling/decayed concepts remain re-teachable: they were failed
+/// or forgotten, not finished.
+pub fn is_completed(state: &str) -> bool {
+    matches!(state, "mastered" | "maintenance")
+}
+
 fn phase_rank(phase: &str) -> u8 {
     match phase {
         "foundations" => 0,
@@ -109,10 +118,60 @@ fn hot_categories(conn: &Connection, today: &str, focus: &str) -> db::Result<Has
     Ok(rows.collect::<std::result::Result<HashSet<_>, _>>()?)
 }
 
-/// Weighted random draw over the least-picked *unlocked* concepts, biased
-/// toward categories with open debt. Marks the pick and returns it.
+/// Weighted random draw over the least-picked *unlocked, uncompleted*
+/// concepts, biased toward categories with open debt. Completed modules are
+/// excluded so a finished track never re-serves a lesson. Marks the pick and
+/// returns it.
 pub fn draw(conn: &Connection, date: &str, focus: &str) -> db::Result<Option<Concept>> {
+    draw_from(conn, date, focus, false)
+}
+
+/// Opt-in revisit: draw from the *completed* pool (least-picked first), used
+/// only when the learner explicitly asks to redo a finished module.
+pub fn draw_completed(conn: &Connection, date: &str, focus: &str) -> db::Result<Option<Concept>> {
+    draw_from(conn, date, focus, true)
+}
+
+/// Whether the focus track still has at least one unlocked, uncompleted
+/// concept to teach.
+pub fn drawable_exists(conn: &Connection, focus: &str) -> db::Result<bool> {
+    Ok(!drawable(conn, focus)?.is_empty())
+}
+
+/// All unlocked concepts the wheel may still serve: completed modules are
+/// filtered out so finished tracks stop drawing automatically.
+pub fn drawable(conn: &Connection, focus: &str) -> db::Result<Vec<Concept>> {
     let (unlocked, _) = pool_status(conn, focus)?;
+    let states = states_by_slug(conn, focus)?;
+    Ok(unlocked
+        .into_iter()
+        .filter(|c| {
+            !states
+                .get(&c.slug)
+                .map(|state| is_completed(state))
+                .unwrap_or(false)
+        })
+        .collect())
+}
+
+fn draw_from(
+    conn: &Connection,
+    date: &str,
+    focus: &str,
+    completed_only: bool,
+) -> db::Result<Option<Concept>> {
+    let (unlocked, _) = pool_status(conn, focus)?;
+    let states = states_by_slug(conn, focus)?;
+    let unlocked: Vec<Concept> = unlocked
+        .into_iter()
+        .filter(|c| {
+            let completed = states
+                .get(&c.slug)
+                .map(|state| is_completed(state))
+                .unwrap_or(false);
+            completed == completed_only
+        })
+        .collect();
     if unlocked.is_empty() {
         return Ok(None);
     }

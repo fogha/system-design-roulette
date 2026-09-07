@@ -249,6 +249,10 @@ pub struct ClassroomProgramView {
     pub target_weekly_minutes: i64,
     pub progress: f64,
     pub progress_label: String,
+    /// Every module in the track (or the CEFR goal level) is finished.
+    /// Completed subjects never start a fresh lesson automatically; only an
+    /// explicit revisit is served.
+    pub completed: bool,
     pub language_progress: Option<language::LanguageProgramView>,
 }
 
@@ -270,24 +274,30 @@ pub fn program_view(
     } else {
         None
     };
-    let (progress, progress_label) = if let Some(language) = &language_progress {
+    let (progress, progress_label, completed) = if let Some(language) = &language_progress {
+        let level_done =
+            crate::language::level_complete(conn, subject_id, &language.current_level)?;
+        let goal_met =
+            language.current_level == language.target_level || language.current_level == "B2";
         (
             language.progress,
             format!(
                 "{} / {} evidence steps in {}",
                 language.completed_steps, language.required_steps, language.current_level
             ),
+            level_done && goal_met,
         )
     } else {
-        let (total, covered): (i64, i64) = conn
+        let (total, covered, done): (i64, i64, i64) = conn
             .query_row(
                 "SELECT COUNT(*),
-                        SUM(CASE WHEN COALESCE(m.state, 'unseen') != 'unseen' THEN 1 ELSE 0 END)
+                        SUM(CASE WHEN COALESCE(m.state, 'unseen') != 'unseen' THEN 1 ELSE 0 END),
+                        SUM(CASE WHEN m.state IN ('mastered','maintenance') THEN 1 ELSE 0 END)
                  FROM concepts c
                  LEFT JOIN mastery m ON m.concept_id = c.id
                  WHERE c.active = 1 AND c.focus = ?1",
                 [subject_id],
-                |row| Ok((row.get(0)?, row.get::<_, Option<i64>>(1)?.unwrap_or(0))),
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
             )
             .map_err(|error| error.to_string())?;
         (
@@ -297,6 +307,7 @@ pub fn program_view(
                 covered as f64 / total as f64
             },
             format!("{covered} / {total} concepts practiced"),
+            total > 0 && done == total,
         )
     };
     Ok(ClassroomProgramView {
@@ -316,6 +327,7 @@ pub fn program_view(
         target_weekly_minutes: row.target_weekly_minutes,
         progress,
         progress_label,
+        completed,
         language_progress,
     })
 }
@@ -1355,6 +1367,7 @@ pub async fn start_engineering_session(
     state: &AppState,
     subject_id: &str,
     slot_id: Option<i64>,
+    revisit: bool,
 ) -> Result<EngineeringLessonView> {
     let (program, concept, dossier, contract) = {
         let conn = state.db.0.lock().unwrap();
@@ -1393,9 +1406,24 @@ pub async fn start_engineering_session(
                 return Err("this class slot is already complete for today".into());
             }
         }
-        let concept = roulette::draw(&conn, &state.today(), subject_id)
-            .map_err(|error| error.to_string())?
-            .ok_or_else(|| format!("no unlocked concepts for {subject_id}"))?;
+        let concept = {
+            let drawn = if revisit {
+                roulette::draw_completed(&conn, &state.today(), subject_id)
+            } else {
+                roulette::draw(&conn, &state.today(), subject_id)
+            }
+            .map_err(|error| error.to_string())?;
+            drawn.ok_or_else(|| {
+                if revisit {
+                    format!("no completed modules to revisit in {}", program.label)
+                } else {
+                    format!(
+                        "every module in {} is completed — use revisit or pick another subject",
+                        program.label
+                    )
+                }
+            })?
+        };
         let dossier =
             mastery::build_dossier(&conn, &state.today(), subject_id).map_err(|e| e.to_string())?;
         (program, concept, dossier, spec.prompt)

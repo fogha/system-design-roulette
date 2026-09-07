@@ -164,6 +164,7 @@ export interface ClassroomProgramView {
   target_weekly_minutes: number;
   progress: number;
   progress_label: string;
+  completed: boolean;
   language_progress: LanguageProgramView | null;
 }
 
@@ -400,6 +401,7 @@ export interface RouletteView {
   concept_category: string;
   pool_unlocked: number;
   pool_total: number;
+  track_complete: boolean;
 }
 
 export interface Resource {
@@ -596,10 +598,15 @@ const realApi = {
     windows: AvailabilityWindow[];
     commit: boolean;
   }) => invoke<ClassroomPlanView>('plan_classroom_schedule', { input }),
-  startClassroomSession: (subjectId: ClassroomSubjectId, slotId?: number | null) =>
+  startClassroomSession: (
+    subjectId: ClassroomSubjectId,
+    slotId?: number | null,
+    revisit?: boolean,
+  ) =>
     invoke<ClassroomSessionStart>('start_classroom_session', {
       subjectId,
       slotId: slotId ?? null,
+      revisit: revisit ?? false,
     }),
   resumeClassroomSession: (subjectId: ClassroomSubjectId) =>
     invoke<ClassroomSessionStart | null>('resume_classroom_session', { subjectId }),
@@ -669,7 +676,8 @@ const realApi = {
   finishQuiz: () => invoke<ReviewData>('finish_quiz'),
   getReview: () => invoke<ReviewData>('get_review'),
   finishReview: () => invoke<SessionView>('finish_review'),
-  getRoulette: () => invoke<RouletteView>('get_roulette'),
+  completeTrackDay: () => invoke<SessionView>('complete_track_day'),
+  getRoulette: (revisit?: boolean) => invoke<RouletteView>('get_roulette', { revisit }),
   ensureCourse: () => invoke<CourseView>('ensure_course'),
   startCourse: () => invoke<SessionView>('start_course'),
   finishCourse: () => invoke<SessionView>('finish_course'),

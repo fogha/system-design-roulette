@@ -425,7 +425,7 @@ pub async fn ensure_day_plan(
     track_focus: &str,
 ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
     let planned_key = format!("planned:{date}");
-    let (eligible, milestone_review, dossier) = {
+    let (eligible, milestone_review, track_complete, dossier) = {
         let conn = state.db.0.lock().unwrap();
         let already = db::get_config(&conn, &planned_key)?.is_some();
         let existing_type = db::get_session(&conn, date)?.map(|s| s.session_type);
@@ -455,8 +455,9 @@ pub async fn ensure_day_plan(
             |r| r.get(0),
         )?;
         let milestone_review = weekly_review_due(completed_in_track);
+        let track_complete = !crate::roulette::drawable_exists(&conn, track_focus).unwrap_or(false);
         let dossier = crate::mastery::build_dossier(&conn, date, track_focus).unwrap_or_default();
-        (eligible, milestone_review, dossier)
+        (eligible, milestone_review, track_complete, dossier)
     };
 
     // Test/debug override skips the agent call entirely.
@@ -471,6 +472,13 @@ pub async fn ensure_day_plan(
             reason:
                 "weekly retrieval checkpoint — integrate and strengthen the last seven sessions"
                     .into(),
+        }
+    } else if track_complete && eligible {
+        // Every module in the track is completed: never re-serve a lesson.
+        // A completed track still gets quiz-only retrieval days.
+        crate::generator::SessionPlan {
+            session_type: "pop_quiz".into(),
+            reason: "track mastered — retrieval checkpoint instead of a repeated module".into(),
         }
     } else if !eligible {
         crate::generator::SessionPlan {
