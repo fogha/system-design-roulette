@@ -1743,58 +1743,6 @@ pub fn submit_exit_quiz(
     })
 }
 
-/// Voluntary "one more topic": re-opens today's completed or skipped session
-/// at the roulette with a fresh concept and reading timer. Never locks the
-/// kiosk and never becomes owed — purely user-initiated (TEACHER.md §5).
-#[tauri::command]
-pub fn extend_session(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    focus: String,
-) -> CmdResult<SessionView> {
-    let today = state.today();
-    let tomorrow = state.tomorrow();
-    let track_focus = focus.trim().to_string();
-    crate::focus::validate_selectable(&track_focus).map_err(err)?;
-    {
-        let conn = state.db.0.lock().unwrap();
-        let mut s = db::get_session(&conn, &today)
-            .map_err(err)?
-            .ok_or("no session")?;
-        if s.status != "completed" && s.status != "skipped" {
-            return Err("another session is only available after today's session ends".into());
-        }
-        // New spin, new course, new timer; today's earlier course stays archived.
-        let c = crate::roulette::draw(&conn, &today, &track_focus)
-            .map_err(err)?
-            .ok_or("empty pool")?;
-        s.concept_id = Some(c.id);
-        s.status = "in_progress".into();
-        s.current_step = session::STEP_ROULETTE.into();
-        s.reading_seconds = 0;
-        s.completed_at = None;
-        s.focus = track_focus;
-        db::upsert_session(&conn, &s).map_err(err)?;
-        db::set_session_focus(&conn, &today, &s.focus).map_err(err)?;
-        db::set_config(&conn, &format!("extended:{today}"), "1").map_err(err)?;
-        // Appetite tracking for the dossier.
-        let n: i64 = crate::mastery::get_profile(&conn, "multi_topic_days")
-            .ok()
-            .flatten()
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(0);
-        let _ = crate::mastery::set_profile(&conn, "multi_topic_days", &(n + 1).to_string());
-        let _ = crate::mastery::set_profile(&conn, "preferred_focus", &s.focus);
-        // Tomorrow's quiz must also cover the extension course.
-        db::jobs::requeue(&conn, "quiz", &tomorrow).map_err(err)?;
-    }
-    state.reading_remaining.store(0, Ordering::SeqCst);
-    state.clear_chat_threads();
-    let v = session::view(&state);
-    let _ = app.emit("session:state", v.clone());
-    Ok(v)
-}
-
 #[tauri::command]
 pub fn escape_session(
     app: AppHandle,

@@ -659,8 +659,17 @@ pub struct LanguageLessonView {
     pub speaking_prompt: String,
     pub writing_prompt: String,
     pub listen_text: String,
+    /// BCP-47 locale for the Web Speech synthesis voice.
+    pub speech_locale: &'static str,
     pub estimated_minutes: i64,
     pub status: String,
+}
+
+fn speech_locale_for(language: &str) -> &'static str {
+    match language {
+        "german" => "de-DE",
+        _ => "it-IT",
+    }
 }
 
 fn phase_label(phase: i64) -> &'static str {
@@ -1046,6 +1055,7 @@ fn lesson_view(meta: LessonMeta<'_>, stored: StoredLesson) -> Result<LanguageLes
         speaking_prompt: stored.speaking_prompt,
         writing_prompt: stored.writing_prompt,
         listen_text: stored.listen_text,
+        speech_locale: speech_locale_for(meta.language),
         estimated_minutes: meta.estimated_minutes,
         status: meta.status.to_string(),
     })
@@ -1557,18 +1567,6 @@ pub fn submit_session(
 
 pub fn now_iso() -> String {
     Local::now().format("%Y-%m-%dT%H:%M:%S").to_string()
-}
-
-pub fn language_name(language: &str) -> Result<String> {
-    Ok(curriculum(language)?.label.clone())
-}
-
-pub fn speech_locale(language: &str) -> Result<&'static str> {
-    match language {
-        "german" => Ok("de-DE"),
-        "italian" => Ok("it-IT"),
-        _ => Err(format!("unsupported language: {language}")),
-    }
 }
 
 pub fn pedagogical_summary(language: &str) -> Result<String> {

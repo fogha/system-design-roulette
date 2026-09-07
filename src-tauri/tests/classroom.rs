@@ -18,7 +18,7 @@ fn test_db() -> rusqlite::Connection {
     let conn = db::open(&dir.join("test.db")).unwrap();
     db::seed_concepts(&conn, include_str!("../seed/concepts.json")).unwrap();
     language::initialize(&conn, "2026-07-21").unwrap();
-    classroom::initialize(&conn, "2026-07-21").unwrap();
+    classroom::initialize(&conn).unwrap();
     db::set_config(&conn, "schedule_hour", "19").unwrap();
     db::set_config(&conn, "schedule_minute", "0").unwrap();
     conn
@@ -754,7 +754,7 @@ fn additive_classroom_migration_preserves_existing_config() {
     }
     let conn = db::open(&path).unwrap();
     language::initialize(&conn, "2026-07-21").unwrap();
-    classroom::initialize(&conn, "2026-07-21").unwrap();
+    classroom::initialize(&conn).unwrap();
     assert_eq!(
         db::get_config(&conn, "legacy-marker").unwrap().as_deref(),
         Some("preserved")

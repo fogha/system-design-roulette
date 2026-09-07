@@ -103,6 +103,7 @@ export interface LanguageLessonView {
   speaking_prompt: string;
   writing_prompt: string;
   listen_text: string;
+  speech_locale: string;
   estimated_minutes: number;
   status: 'in_progress' | 'completed' | 'skipped';
 }
@@ -647,7 +648,6 @@ const realApi = {
   startCourse: () => invoke<SessionView>('start_course'),
   finishCourse: () => invoke<SessionView>('finish_course'),
   escapeSession: (phrase: string) => invoke<boolean>('escape_session', { phrase }),
-  extendSession: (focus: FocusArea) => invoke<SessionView>('extend_session', { focus }),
   ensureAudio: () => invoke<AudioView>('ensure_audio'),
   getAudioEnabled: () => invoke<boolean>('get_audio_enabled'),
   setAudioEnabled: (enabled: boolean) => invoke<void>('set_audio_enabled', { enabled }),

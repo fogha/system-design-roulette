@@ -591,6 +591,7 @@ Use **Lei** and the third-person verb with unfamiliar adults; **tu** belongs wit
     listen_text: german
       ? 'Guten Morgen! Wie heißen Sie? Ich heiße Maria Santos. Woher kommen Sie?'
       : 'Buongiorno! Come si chiama? Mi chiamo Marco. Piacere. Di dove è?',
+    speech_locale: german ? 'de-DE' : 'it-IT',
     estimated_minutes: 30,
     status: 'in_progress',
   };
@@ -1476,13 +1477,5 @@ export const mockApi = {
       next_question_count: nextQuestionCount,
       next_focus_areas: nextFocusAreas,
     };
-  },
-  extendSession: async (focus: FocusArea): Promise<SessionView> => {
-    mockSelectedFocus = focus;
-    state.status = 'in_progress';
-    state.step = 'roulette';
-    state.voluntary = true;
-    clearMockChatThreads();
-    return session();
   },
 };

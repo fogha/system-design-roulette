@@ -182,7 +182,7 @@ fn legacy_language_slots_migrate_into_the_classroom_schedule() {
         )
         .unwrap();
     }
-    classroom::initialize(&conn, "2026-07-21").unwrap();
+    classroom::initialize(&conn).unwrap();
     assert_eq!(
         classroom::all_schedule_times(&conn).unwrap(),
         vec![(7, 30), (12, 15), (19, 0)]
@@ -193,7 +193,7 @@ fn legacy_language_slots_migrate_into_the_classroom_schedule() {
 fn frontend_completion_does_not_consume_or_mutate_language_practice() {
     let conn = test_db();
     enable_german(&conn);
-    classroom::initialize(&conn, "2026-07-21").unwrap();
+    classroom::initialize(&conn).unwrap();
     let slot_id = classroom::upsert_slot(
         &conn,
         &classroom::UpsertClassroomSlotInput {

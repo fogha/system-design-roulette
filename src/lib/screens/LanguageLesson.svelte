@@ -56,7 +56,7 @@
     }
     speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = lesson.language === 'german' ? 'de-DE' : 'it-IT';
+    utterance.lang = lesson.speech_locale;
     utterance.rate = lesson.level === 'A1' ? 0.82 : lesson.level === 'A2' ? 0.9 : 0.96;
     utterance.onstart = () => {
       speaking = true;
@@ -142,7 +142,7 @@
             <Volume2 size={16} />
             <span>
               <strong>Listen to the model exchange</strong>
-              <small>System voice · {lesson.language === 'german' ? 'de-DE' : 'it-IT'} · slowed at beginner levels</small>
+              <small>System voice · {lesson.speech_locale} · slowed at beginner levels</small>
             </span>
           </div>
           {#if speaking}

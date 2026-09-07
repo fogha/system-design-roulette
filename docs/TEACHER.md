@@ -218,20 +218,15 @@ remediation-day variants remain future work; the current Teacher instead uses
 days 7/14/21/30 as cumulative practical-work checkpoints and uses the dossier
 to reteach recorded misconceptions inside later lessons.
 
-## 5. Elastic days: "one more topic"
+## 5. Extra topics: the classroom, not extensions
 
-After Completion, if the user has time, an **`▲ extend session`** action:
-
-- spins again (same wheel rules), generates live behind the progress screen,
-  runs a full read cycle; quiz questions for the extra topic join tomorrow's
-  quiz like any other.
-- No limit, but extension is always *user-initiated* — the lock never demands
-  more than the one scheduled session. Extensions feed the dossier
-  (`multi-topic days`) so the Teacher learns the user's appetite and may
-  suggest ("you usually extend on Sundays — today's wheel has two related
-  topics queued").
-- Counts toward pool coverage and uptime stats; shown on the dashboard as
-  stacked cells.
+The "one more topic" extension loop was retired: after Completion, extra
+learning happens in the **classroom** — any enabled subject starts a session
+any time, and a completed track is never re-served automatically. Completed
+modules stay out of the wheel (mastered/maintenance concepts are excluded),
+retrieval lives in pop-quiz and spaced-review days, and the only way back to a
+finished module is an explicit **revisit**. The dossier no longer tracks
+`multi-topic days`; appetite shows up as classroom subject choice instead.
 
 ## 5a. Audio mode (NotebookLM-style listening days)
 
@@ -316,7 +311,8 @@ SQLite + the dossier. No daemon-resident agent, no conversation state to lose.
    wheel, Teacher topic-override in nightly planning call.
 4. **M4 — Session types**: pop-quiz day first (cheapest, pure reuse), then
    remediation, then design-lab (needs free-text editor + rubric grading).
-5. **M5 — Elastic days**: extend-session loop + dossier appetite tracking.
+5. **M5 — Classroom** (replaced the elastic-days loop): per-subject programs,
+   schedules, completion-aware rotation, and opt-in revisits.
 6. **M6 — Audio mode**: dialogue-script prompt + audio player UI on macOS
    `say` first (proves the flow with zero deps), then the VibeVoice/mlx-audio
    provisioned engine as the quality tier.

@@ -1,6 +1,6 @@
 use crate::generator::{Exercise, GeneratedCourse, GenerationProfile, Resource};
-use crate::{db, focus, language, mastery, roulette, state::AppState};
-use chrono::{Datelike, Duration, Local, NaiveDate, NaiveDateTime, Timelike, Weekday};
+use crate::{db, language, mastery, roulette, state::AppState};
+use chrono::{Datelike, Duration, Local, NaiveDateTime, Timelike, Weekday};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -106,7 +106,7 @@ pub fn subject(subject_id: &str) -> Result<&'static SubjectSpec> {
         .ok_or_else(|| format!("unknown classroom subject: {subject_id}"))
 }
 
-pub fn initialize(conn: &Connection, today: &str) -> Result<()> {
+pub fn initialize(conn: &Connection) -> Result<()> {
     let global_agent = db::get_config(conn, "agent")
         .map_err(|error| error.to_string())?
         .unwrap_or_else(|| "claude".into());
@@ -153,7 +153,6 @@ pub fn initialize(conn: &Connection, today: &str) -> Result<()> {
         .map_err(|error| error.to_string())?;
     }
     migrate_language_slots(conn)?;
-    let _ = today;
     Ok(())
 }
 
@@ -1692,14 +1691,6 @@ pub fn prompt_contracts_are_isolated() -> Result<()> {
         }
     }
     Ok(())
-}
-
-pub fn classroom_date(date: &str) -> NaiveDate {
-    NaiveDate::parse_from_str(date, "%Y-%m-%d").unwrap_or_else(|_| Local::now().date_naive())
-}
-
-pub fn focus_is_classroom_subject(subject_id: &str) -> bool {
-    focus::is_selectable(subject_id) && subject(subject_id).is_ok()
 }
 
 #[cfg(test)]

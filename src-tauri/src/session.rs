@@ -46,11 +46,6 @@ pub fn session_owed(state: &AppState) -> bool {
             return false;
         }
     }
-    // A voluntary extension re-opens the session but is never owed — the
-    // kiosk must not re-engage on extra topics the user chose to do.
-    if matches!(db::get_config(&conn, &format!("extended:{today}")), Ok(Some(v)) if v == "1") {
-        return false;
-    }
     if state.debug_day {
         return true;
     }

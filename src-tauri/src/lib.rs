@@ -105,7 +105,7 @@ pub fn run() {
             db::seed_concepts(&conn, SEED_CONCEPTS)?;
             let startup_today = chrono::Local::now().format("%Y-%m-%d").to_string();
             language::initialize(&conn, &startup_today).map_err(std::io::Error::other)?;
-            classroom::initialize(&conn, &startup_today).map_err(std::io::Error::other)?;
+            classroom::initialize(&conn).map_err(std::io::Error::other)?;
             let codex_bin = resolve_codex_bin(&conn);
             // Primary model for course generation: config 'model' (default opus).
             // Held behind Arc<Mutex> so settings changes apply live.
@@ -294,7 +294,6 @@ pub fn run() {
             commands::set_audio_enabled,
             commands::get_exit_quiz,
             commands::submit_exit_quiz,
-            commands::extend_session,
             commands::escape_session,
             commands::get_escape_phrase,
             commands::get_dashboard,

@@ -290,11 +290,6 @@ pub fn build_dossier(conn: &Connection, today: &str, focus: &str) -> Result<Stri
             "MILESTONE SESSION: the exercise must integrate at least two named earlier concepts or artifacts and produce cumulative evidence for the 30-day outcome.\n",
         );
     }
-    if let Ok(Some(n)) = get_profile(conn, "multi_topic_days") {
-        out.push_str(&format!(
-            "Voluntary extra-topic sessions taken: {n} — this student sometimes asks for more.\n"
-        ));
-    }
     if !mastered.is_empty() {
         out.push_str(&format!(
             "MASTERED ({}): {}\n",
