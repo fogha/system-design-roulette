@@ -17,10 +17,14 @@
   }: { pool: string[]; chosenIndex: number; lockedCount?: number; onLanded: () => void } = $props();
 
   type ShardState = 'in' | 'out' | 'scan' | 'winner';
-  let states = $state<ShardState[]>(pool.map(() => 'in'));
+  let states = $state<ShardState[]>([]);
   let term = $state(0);
   let phase = $state<'idle' | 'election' | 'duel' | 'done'>('idle');
   let burst = $state(false); // packet-burst celebration on the winner
+
+  $effect(() => {
+    if (phase === 'idle') states = pool.map(() => 'in');
+  });
 
   export function spin() {
     if (phase !== 'idle') return;

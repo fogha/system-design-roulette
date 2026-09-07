@@ -4,6 +4,7 @@
   import ClusterBar from '../components/ClusterBar.svelte';
   import NodeCard from '../components/NodeCard.svelte';
   import MetaBadge from '../components/MetaBadge.svelte';
+  import Markdown from '../components/Markdown.svelte';
   import { Check, X, Circle, TriangleAlert, ArrowRight } from 'lucide-svelte';
 
   let { data = null }: { data?: ReviewData | null } = $props();
@@ -73,25 +74,27 @@
         accent={current.correct === false ? 'var(--led-err)' : current.correct === true ? '#2b4a3f' : 'var(--led-warn)'}
       >
         {#snippet children()}
-          <h2 class="prompt">{current.prompt}</h2>
+          <div class="prompt"><Markdown markdown={current.prompt} compact /></div>
           <div class="trace">
             <div class="trace-line">
               <span class="trace-key mono">your_answer</span>
-              <p>{current.user_answer || '(blank)'}</p>
+              <div class="trace-value">
+                {#if current.user_answer}<Markdown markdown={current.user_answer} compact />{:else}(blank){/if}
+              </div>
             </div>
             <div class="trace-line">
               <span class="trace-key mono">expected</span>
-              <p>{current.correct_answer}</p>
+              <div class="trace-value"><Markdown markdown={current.correct_answer} compact /></div>
             </div>
             {#if current.feedback}
               <div class="trace-line">
                 <span class="trace-key mono">grader_log</span>
-                <p>{current.feedback}</p>
+                <div class="trace-value"><Markdown markdown={current.feedback} compact /></div>
               </div>
             {/if}
             <div class="trace-line explain">
               <span class="trace-key mono">why</span>
-              <p>{current.explanation}</p>
+              <div class="trace-value"><Markdown markdown={current.explanation} compact /></div>
             </div>
           </div>
         {/snippet}
@@ -146,6 +149,8 @@
     font-size: 17px;
     line-height: 1.45;
     margin-bottom: 14px;
+    font-weight: 500;
+    min-width: 0;
   }
   .trace {
     display: flex;
@@ -158,18 +163,20 @@
     display: grid;
     grid-template-columns: 110px 1fr;
     gap: 12px;
-    align-items: baseline;
+    align-items: start;
   }
   .trace-key {
     font-size: 10px;
     color: var(--faint);
     letter-spacing: 0.5px;
   }
-  .trace-line p {
+  .trace-value {
     margin: 0;
     font-size: 14px;
+    min-width: 0;
+    overflow: hidden;
   }
-  .explain p {
+  .explain .trace-value {
     color: var(--muted);
   }
   .actions {

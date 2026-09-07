@@ -29,7 +29,7 @@
       name: 'HARD',
       tag: 'no mercy',
       tone: 'red',
-      desc: 'Everything in FIRM, plus ⌘Tab, Force Quit, ⌘⌥⎋, logout and shutdown are disabled while locked. The only exits are: finish the session, pass the 3-question exit check, or type the break-glass phrase (streak resets).',
+      desc: 'Everything in FIRM, plus ⌘Tab, Force Quit, ⌘⌥⎋, logout and shutdown are disabled while locked. The only exits are: finish the session, pass a perfect adaptive exit-check round, or type the break-glass phrase (streak resets).',
       blocks: 'blocks: ⌘Tab, Force Quit, logout, shutdown',
     },
   ];

@@ -4,6 +4,7 @@
   import ClusterBar from '../components/ClusterBar.svelte';
   import NodeCard from '../components/NodeCard.svelte';
   import StatusLED from '../components/StatusLED.svelte';
+  import Markdown from '../components/Markdown.svelte';
   import { Inbox, TriangleAlert, Zap, ArrowUp } from 'lucide-svelte';
 
   let questions = $state<QuizQuestionView[]>([]);
@@ -76,13 +77,19 @@
           {#if current.origin === 'carryover'}
             <div class="dlq-note mono"><TriangleAlert size={11} /> you failed this before — it returns until you pass it</div>
           {/if}
-          <h2 class="prompt">{current.prompt}</h2>
+          <div class="prompt"><Markdown markdown={current.prompt} compact /></div>
           {#if current.kind === 'mcq' && current.choices}
-            <div class="choices">
+            <div class="choices" role="radiogroup" aria-label="answer choices">
               {#each current.choices as choice, i}
-                <button class="choice" class:selected={answer === choice} onclick={() => (answer = choice)}>
+                <button
+                  class="choice"
+                  role="radio"
+                  aria-checked={answer === choice}
+                  class:selected={answer === choice}
+                  onclick={() => (answer = choice)}
+                >
                   <span class="choice-key mono">{String.fromCharCode(65 + i)}</span>
-                  {choice}
+                  <Markdown markdown={choice} compact />
                 </button>
               {/each}
             </div>
@@ -158,6 +165,8 @@
     font-size: 20px;
     line-height: 1.5;
     margin: 6px 0 18px;
+    font-weight: 500;
+    min-width: 0;
   }
   .choices {
     display: flex;
@@ -177,7 +186,9 @@
     transition: border-color 0.15s ease;
     display: flex;
     gap: 12px;
-    align-items: baseline;
+    align-items: flex-start;
+    min-width: 0;
+    overflow: hidden;
   }
   .choice:hover {
     border-color: var(--muted);
@@ -193,6 +204,11 @@
     border-radius: 4px;
     padding: 1px 7px;
     flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .choice :global(.md) {
+    flex: 1;
+    min-width: 0;
   }
   .choice.selected .choice-key {
     color: var(--accent);

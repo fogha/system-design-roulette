@@ -1,0 +1,34 @@
+[
+  {
+    "slug": "js-event-loop",
+    "dossier": "Day 4. The learner can explain promises but confuses microtask checkpoints with rendering opportunities. No cumulative browser trace exists yet."
+  },
+  {
+    "slug": "js-navigation-api",
+    "dossier": "Day 18. History and bfcache are practiced. The learner needs a production navigation failure investigation and progressive-enhancement decision."
+  },
+  {
+    "slug": "ts-generics-variance",
+    "dossier": "Day 6. Structural typing is practiced. The learner previously exposed an unreadable generic component API and needs to understand assignability."
+  },
+  {
+    "slug": "ts-runtime-schema-libraries",
+    "dossier": "Day 20. Runtime validation boundaries are practiced. The learner must choose between handwritten, generated, and schema-first validation."
+  },
+  {
+    "slug": "fa-rendering-strategy",
+    "dossier": "Day 8. The learner knows rendering vocabulary but has not made route-level decisions from latency, cache, accessibility, and ownership evidence."
+  },
+  {
+    "slug": "fa-auth-session-bff",
+    "dossier": "Day 21. Security trust boundaries are practiced. The learner needs an explicit browser, BFF, identity-provider, and refresh failure model."
+  },
+  {
+    "slug": "dt-ast-parsing",
+    "dossier": "Day 3. The learner has used codemods but cannot explain concrete syntax trees, source ranges, or safe transformation invariants."
+  },
+  {
+    "slug": "dt-webpack-vite-rspack-migration",
+    "dossier": "Day 28. Bundler graphs and deterministic CI are practiced. The learner needs a measured migration and rollback artifact for a large monorepo."
+  }
+]

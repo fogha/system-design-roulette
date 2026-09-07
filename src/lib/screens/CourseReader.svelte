@@ -1,12 +1,23 @@
 <script lang="ts">
-  import { api, type CourseView, type ExitQuizQuestion, type AudioView } from '../ipc';
+  import {
+    api,
+    type CourseView,
+    type ExitQuizQuestion,
+    type ExitQuizResult,
+    type AudioView,
+  } from '../ipc';
   import { app } from '../stores.svelte';
   import Markdown from '../components/Markdown.svelte';
   import AudioPlayer from '../components/AudioPlayer.svelte';
   import AgentLog from '../components/AgentLog.svelte';
-  import { BookOpen, Headphones, Zap, Check, Hourglass, X, ArrowUp } from 'lucide-svelte';
+  import ExerciseWorkspace from '../components/ExerciseWorkspace.svelte';
+  import CourseChat from '../components/CourseChat.svelte';
+  import CoursePurpose from '../components/CoursePurpose.svelte';
+  import { tick } from 'svelte';
+  import { BookOpen, Headphones, Zap, Check, X, ArrowUp, MessageCircle } from 'lucide-svelte';
 
   let course = $state<CourseView | null>(null);
+  let chatOpen = $state(false);
 
   // ---- audio lesson ----
   let audio = $state<AudioView | null>(null);
@@ -66,6 +77,15 @@
     onScroll();
   }
 
+  /** Show who published a source so its authority is visible while links are locked. */
+  function publisher(url: string): string {
+    try {
+      return new URL(url).host.replace(/^www\./, '');
+    } catch {
+      return 'unverified source';
+    }
+  }
+
   function onScroll() {
     if (!bodyEl) return;
     const max = bodyEl.scrollHeight - bodyEl.clientHeight;
@@ -101,12 +121,21 @@
   let exitQs = $state<ExitQuizQuestion[]>([]);
   let exitAnswers = $state<Record<number, string>>({});
   let exitLoading = $state(false);
+  let exitSubmitting = $state(false);
   let exitMsg = $state('');
-  let cooldown = $state(0);
+  let exitReview = $state<ExitQuizResult['incorrect']>([]);
+  let exitRound = $state(1);
+  let nextQuestionCount = $state(0);
+  let nextFocusAreas = $state<string[]>([]);
+  let exitPanelEl = $state<HTMLElement | undefined>(undefined);
+  let exitReturnFocus: HTMLElement | null = null;
 
   async function openExit() {
+    exitReturnFocus = document.activeElement as HTMLElement | null;
     exitOpen = true;
     exitMsg = '';
+    await tick();
+    exitPanelEl?.focus();
     if (exitQs.length === 0) {
       exitLoading = true;
       try {
@@ -119,30 +148,82 @@
     }
   }
 
-  async function submitExit() {
-    exitMsg = '';
-    try {
-      const r = await api.submitExitQuiz(exitAnswers);
-      if (r.passed) {
-        exitOpen = false;
-      } else if (r.cooldown_seconds > 0 && r.correct.length === 0 && Object.keys(exitAnswers).length === 0) {
-        startCooldown(r.cooldown_seconds);
-      } else {
-        exitMsg = `${r.correct.length}/${exitQs.length} — the breaker holds. keep reading.`;
-        startCooldown(r.cooldown_seconds);
-        exitAnswers = {};
+  function closeExit() {
+    exitOpen = false;
+    exitReturnFocus?.focus();
+  }
+
+  function exitKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeExit();
+      return;
+    }
+    if (e.key === 'Tab') trapFocus(e);
+  }
+
+  function trapFocus(e: KeyboardEvent) {
+    const panel = exitPanelEl;
+    if (!panel) return;
+    const focusable = Array.from(
+      panel.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
+      )
+    ).filter((el) => el.offsetParent !== null);
+    if (focusable.length === 0) {
+      e.preventDefault();
+      panel.focus();
+      return;
+    }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    const activeEl = document.activeElement;
+    if (e.shiftKey) {
+      if (activeEl === first || activeEl === panel) {
+        e.preventDefault();
+        last.focus();
       }
-    } catch (e) {
-      exitMsg = String(e);
+    } else if (activeEl === last) {
+      e.preventDefault();
+      first.focus();
     }
   }
 
-  function startCooldown(s: number) {
-    cooldown = s;
-    const id = setInterval(() => {
-      cooldown -= 1;
-      if (cooldown <= 0) clearInterval(id);
-    }, 1000);
+  async function submitExit() {
+    exitMsg = '';
+    exitSubmitting = true;
+    try {
+      const r = await api.submitExitQuiz(exitAnswers);
+      if (r.passed) {
+        await api.finishCourse();
+        exitOpen = false;
+        await app.refresh();
+      } else {
+        exitRound = r.round;
+        exitReview = r.incorrect;
+        nextQuestionCount = r.next_question_count;
+        nextFocusAreas = r.next_focus_areas;
+      }
+    } catch (e) {
+      exitMsg = String(e);
+    } finally {
+      exitSubmitting = false;
+    }
+  }
+
+  async function loadNextExitRound() {
+    exitLoading = true;
+    exitMsg = '';
+    exitAnswers = {};
+    exitReview = [];
+    exitQs = [];
+    try {
+      exitQs = await api.getExitQuiz();
+    } catch (e) {
+      exitMsg = String(e);
+    } finally {
+      exitLoading = false;
+    }
   }
 
   async function finish() {
@@ -175,6 +256,15 @@
           <button class="ghost mono-ghost listen" onclick={loadAudio} disabled={audioLoading}>
             <Headphones size={11} />{audioLoading ? 'writing script…' : audio ? 'listening' : 'listen'}
           </button>
+          <button
+            class="ghost mono-ghost chat-btn"
+            class:active={chatOpen}
+            onclick={() => (chatOpen = !chatOpen)}
+            aria-expanded={chatOpen}
+            aria-controls="course-chat-drawer"
+          >
+            <MessageCircle size={11} /> {chatOpen ? 'close chat' : 'ask about this course'}
+          </button>
           <div class="font-ctl mono">
             <button onclick={() => bumpFont(-1)} aria-label="smaller text">A−</button>
             <button onclick={() => bumpFont(1)} aria-label="larger text">A+</button>
@@ -196,80 +286,140 @@
       {/if}
     </header>
 
-    <div class="reader-layout">
-      <nav class="toc">
-        <div class="toc-label mono">SECTIONS · {Math.round(scrollPct)}% scrolled</div>
-        {#each toc as t}
-          <button class="toc-item" class:active={t.active} onclick={() => jump(t.id)}>
-            <span class="toc-check mono">{t.read ? '✓' : '·'}</span>
-            {t.label}
-          </button>
-        {/each}
-      </nav>
+    <CoursePurpose
+      whyNow={course.why_now}
+      curriculum={course.curriculum}
+      prerequisites={course.prerequisites}
+    />
 
-      <div class="reader-body" bind:this={bodyEl} onscroll={onScroll}>
-        <article class="column" style="font-size: {fontSize}px">
-          <Markdown markdown={course.markdown} locked />
-          {#if course.resources.length > 0}
-            <section class="resources">
-              <h3>Reading list ({course.resources.length})</h3>
-              <p class="fine mono">egress queue — links unlock after the session completes</p>
-              <ul>
-                {#each course.resources as r}
-                  <li>
-                    <span class="r-title">{r.title}</span>
-                    {#if r.why}<span class="r-why"> — {r.why}</span>{/if}
-                  </li>
-                {/each}
-              </ul>
-            </section>
-          {/if}
-          <div class="finish-row">
-            <button class="cta mono-cta" onclick={finish} disabled={!done}>
-              {#if done}<Check size={13} />{/if}{done ? 'complete session' : 'keep reading — TTL running'}
+    <div class="reader-layout">
+        <nav class="toc">
+          <div class="toc-label mono">SECTIONS · {Math.round(scrollPct)}% scrolled</div>
+          {#each toc as t}
+            <button class="toc-item" class:active={t.active} onclick={() => jump(t.id)}>
+              <span class="toc-check mono">{t.read ? '✓' : '·'}</span>
+              {t.label}
             </button>
-          </div>
-        </article>
+          {/each}
+        </nav>
+
+        <div class="reader-body" bind:this={bodyEl} onscroll={onScroll}>
+          <article class="column" style="font-size: {fontSize}px">
+            <Markdown markdown={course.markdown} locked />
+            {#if course.resources.length > 0}
+              <section class="resources">
+                <h3>Reading list ({course.resources.length})</h3>
+                <p class="fine mono">
+                  verified primary sources — links unlock after the session completes
+                </p>
+                <ul>
+                  {#each course.resources as r}
+                    <li>
+                      <span class="r-title">{r.title}</span>
+                      <span class="r-host mono">{publisher(r.url)}</span>
+                      {#if r.why}<span class="r-why"> — {r.why}</span>{/if}
+                    </li>
+                  {/each}
+                </ul>
+              </section>
+            {/if}
+            <section class="course-exercise-end" aria-label="course exercise">
+              <ExerciseWorkspace courseId={course.course_id} />
+            </section>
+            <div class="finish-row">
+              <button class="cta mono-cta" onclick={finish} disabled={!done}>
+                {#if done}<Check size={13} />{/if}{done ? 'complete session' : 'keep reading — TTL running'}
+              </button>
+            </div>
+          </article>
+        </div>
       </div>
-    </div>
+
+    <CourseChat courseId={course.course_id} bind:open={chatOpen} />
 
     {#if exitOpen}
       <div class="exit-overlay">
-        <div class="exit-panel">
+        <div
+          class="exit-panel"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="exit-check-title"
+          tabindex="-1"
+          bind:this={exitPanelEl}
+          onkeydown={exitKeydown}
+        >
           <div class="exit-head mono">
-            <span class="exit-tag">EXIT CHECK</span>
-            <span>3/3 correct unlocks the TTL — prove you absorbed today's course</span>
-            <button class="exit-close" onclick={() => (exitOpen = false)}>×</button>
+            <span class="exit-tag" id="exit-check-title">EXIT CHECK</span>
+            <span>every answer must be correct — a perfect round exits immediately</span>
+            <button class="exit-close" onclick={closeExit} aria-label="close exit check">×</button>
           </div>
           {#if exitLoading}
-            <p class="mono dim">generating exit check from today's course…</p>
-          {:else if cooldown > 0}
-            <p class="mono cool"><Hourglass size={12} /> breaker cooling down — retry in {cooldown}s</p>
+            <p class="mono dim" role="status">generating {nextQuestionCount || 5} fresh questions from today's course…</p>
+          {:else if exitReview.length > 0}
+            <section class="exit-review" aria-live="polite">
+              <h3>{exitQs.length - exitReview.length}/{exitQs.length} correct — review each miss</h3>
+              <p class="mono review-note">
+                Round {exitRound} did not unlock the session. Each missed answer adds one question to
+                the next round.
+              </p>
+              {#if nextFocusAreas.length > 0}
+                <p class="mono review-note focus-note">
+                  Next round retests: {nextFocusAreas.join(' · ')}
+                </p>
+              {/if}
+              {#each exitReview as item, index}
+                <article class="review-item">
+                  <div class="exit-prompt">
+                    <span class="mono qnum">{index + 1}.</span>
+                    <Markdown markdown={item.prompt} compact />
+                  </div>
+                  <div class="answer-line">
+                    <strong>Your answer:</strong>
+                    <div class="wrong-answer"><Markdown markdown={item.user_answer || '(blank)'} compact /></div>
+                  </div>
+                  <div class="answer-line">
+                    <strong>Correct answer:</strong>
+                    <div><Markdown markdown={item.correct_answer} compact /></div>
+                  </div>
+                  <div class="explanation"><Markdown markdown={item.explanation} /></div>
+                </article>
+              {/each}
+              <div class="exit-actions">
+                <button class="cta mono-cta" onclick={loadNextExitRound}>
+                  continue — {nextQuestionCount} new questions
+                </button>
+              </div>
+            </section>
           {:else}
             {#each exitQs as q, qi}
               <div class="exit-q">
-                <p class="exit-prompt"><span class="mono qnum">{qi + 1}.</span> {q.prompt}</p>
-                <div class="exit-choices">
+                <div class="exit-prompt">
+                  <span class="mono qnum">{qi + 1}.</span>
+                  <Markdown markdown={q.prompt} compact />
+                </div>
+                <div class="exit-choices" role="radiogroup" aria-label={`answer choices for question ${qi + 1}`}>
                   {#each q.choices as c}
                     <button
                       class="exit-choice"
+                      role="radio"
+                      aria-checked={exitAnswers[q.id] === c}
                       class:selected={exitAnswers[q.id] === c}
                       onclick={() => (exitAnswers = { ...exitAnswers, [q.id]: c })}
                     >
-                      {c}
+                      <Markdown markdown={c} compact />
                     </button>
                   {/each}
                 </div>
               </div>
             {/each}
             <div class="exit-actions">
-              {#if exitMsg}<span class="mono exit-msg">{exitMsg}</span>{/if}
+              {#if exitMsg}<span class="mono exit-msg" role="alert">{exitMsg}</span>{/if}
               <button
                 class="cta mono-cta"
                 onclick={submitExit}
-                disabled={Object.keys(exitAnswers).length < exitQs.length || exitQs.length === 0}
+                disabled={exitSubmitting || Object.keys(exitAnswers).length < exitQs.length || exitQs.length === 0}
               >
-                <ArrowUp size={13} /> submit — unlock early
+                <ArrowUp size={13} /> {exitSubmitting ? 'checking…' : 'check answers'}
               </button>
             </div>
           {/if}
@@ -313,7 +463,9 @@
   .head-right {
     display: flex;
     align-items: center;
-    gap: 14px;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 10px 14px;
     flex-shrink: 0;
   }
   .font-ctl {
@@ -344,6 +496,14 @@
   }
   .listen {
     border-color: var(--border);
+  }
+  .chat-btn {
+    border-color: var(--border);
+    white-space: nowrap;
+  }
+  .chat-btn.active {
+    border-color: var(--accent);
+    color: var(--accent);
   }
   .audio-err {
     font-size: 11px;
@@ -450,6 +610,16 @@
   .r-why {
     color: var(--muted);
   }
+  .r-host {
+    margin-left: 6px;
+    font-size: 10px;
+    color: var(--accent);
+    text-transform: lowercase;
+  }
+  .course-exercise-end {
+    margin-top: 44px;
+    border-top: 1px solid var(--border);
+  }
   .finish-row {
     margin-top: 48px;
     display: flex;
@@ -508,10 +678,16 @@
     font-size: 14.5px;
     margin: 0 0 8px;
     line-height: 1.5;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    gap: 8px;
+    min-width: 0;
   }
   .qnum {
     color: var(--accent);
     font-size: 12px;
+    padding-top: 2px;
   }
   .exit-choices {
     display: flex;
@@ -528,6 +704,11 @@
     font-family: var(--font-body);
     font-size: 13px;
     cursor: pointer;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .exit-choice :global(.md) {
+    min-width: 0;
   }
   .exit-choice:hover {
     border-color: var(--muted);
@@ -551,8 +732,53 @@
     color: var(--faint);
     font-size: 12px;
   }
-  .cool {
-    color: var(--warn-fg);
+  .exit-review h3 {
+    margin: 2px 0 4px;
+    font-size: 17px;
+  }
+  .review-note {
+    margin: 0 0 16px;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.5;
+  }
+  .focus-note {
+    color: var(--accent);
+    margin-top: -10px;
+  }
+  .review-item {
+    margin-bottom: 12px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--bad-fg);
+    border-radius: 7px;
+    background: var(--surface);
+  }
+  .answer-line {
+    display: grid;
+    grid-template-columns: 110px minmax(0, 1fr);
+    align-items: start;
+    gap: 8px;
+    margin: 7px 0;
     font-size: 13px;
+    line-height: 1.45;
+  }
+  .answer-line > div {
+    min-width: 0;
+  }
+  .wrong-answer {
+    color: var(--bad-fg);
+  }
+  .review-item .explanation {
+    margin-top: 9px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .review-item .explanation :global(.md p:last-child) {
+    margin-bottom: 0;
+  }
+  .exit-panel:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
   }
 </style>

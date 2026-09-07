@@ -1,4 +1,13 @@
-import { api, onEvent, type AppStateView, type SessionView } from './ipc';
+import {
+  api,
+  onEvent,
+  type AppStateView,
+  type ClassroomSubjectId,
+  type EngineeringLessonView,
+  type LanguageId,
+  type LanguageLessonView,
+  type SessionView,
+} from './ipc';
 
 export type Screen =
   | 'loading'
@@ -9,7 +18,53 @@ export type Screen =
   | 'roulette'
   | 'course'
   | 'completion'
+  | 'language'
+  | 'classroom'
   | 'dashboard';
+
+export interface RouteDecision {
+  screen: Screen;
+  stepAway: boolean;
+}
+
+export function resolveRoute(
+  state: AppStateView,
+  currentScreen: Screen,
+  currentStepAway: boolean,
+): RouteDecision {
+  if (!state.onboarded) return { screen: 'setup', stepAway: false };
+  const session = state.session;
+  if (session.status === 'in_progress') {
+    const stepAway = session.locked || state.owed ? false : currentStepAway;
+    if (stepAway) {
+      return {
+        screen: currentScreen === 'loading' ? 'idle' : currentScreen,
+        stepAway,
+      };
+    }
+    return {
+      screen: session.step === 'done' ? 'completion' : (session.step as Screen),
+      stepAway: false,
+    };
+  }
+  if (
+    (session.status === 'completed' || session.status === 'skipped') &&
+    !['dashboard', 'idle', 'language', 'classroom'].includes(currentScreen)
+  ) {
+    return { screen: 'completion', stepAway: false };
+  }
+  if (state.owed) return { screen: 'idle', stepAway: false };
+  return {
+    screen:
+      currentScreen === 'loading' || currentScreen === 'setup' ? 'idle' : currentScreen,
+    stepAway: false,
+  };
+}
+
+export function shouldShowEscapeHatch(state: AppStateView | null): boolean {
+  if (!state) return false;
+  return state.owed || state.session.locked || state.session.status === 'in_progress';
+}
 
 class AppStore {
   state = $state<AppStateView | null>(null);
@@ -18,6 +73,8 @@ class AppStore {
   genLog = $state<string[]>([]);
   timerRemaining = $state<number>(-1);
   error = $state<string>('');
+  languageLesson = $state<LanguageLessonView | null>(null);
+  engineeringLesson = $state<EngineeringLessonView | null>(null);
   /** User stepped away from an UNLOCKED in-progress session (early start /
    *  extension). Cleared the moment the session is owed or locked. */
   stepAway = $state(false);
@@ -39,35 +96,9 @@ class AppStore {
   route() {
     const s = this.state;
     if (!s) return;
-    if (!s.onboarded) {
-      this.screen = 'setup';
-      return;
-    }
-    const sess = s.session;
-    if (sess.status === 'in_progress') {
-      // Enforcement always wins; voluntary sessions can be stepped away from.
-      if (sess.locked || s.owed) this.stepAway = false;
-      if (this.stepAway) {
-        if (this.screen === 'loading') this.screen = 'idle';
-        return;
-      }
-      this.screen = sess.step as Screen;
-      if (sess.step === 'done') this.screen = 'completion';
-      return;
-    }
-    this.stepAway = false;
-    if ((sess.status === 'completed' || sess.status === 'skipped') && this.screen !== 'dashboard') {
-      this.screen = 'completion';
-      return;
-    }
-    if (s.owed) {
-      // Session owed: idle screen shows the "begin" lock-in state.
-      this.screen = 'idle';
-      return;
-    }
-    // Not owed, nothing in progress: leave user-navigated screens (dashboard)
-    // alone, but transient screens (loading, setup) must land somewhere.
-    if (this.screen === 'loading' || this.screen === 'setup') this.screen = 'idle';
+    const decision = resolveRoute(s, this.screen, this.stepAway);
+    this.screen = decision.screen;
+    this.stepAway = decision.stepAway;
   }
 
   /** Leave an unlocked in-progress session for the idle/dashboard screens. */
@@ -83,12 +114,84 @@ class AppStore {
     this.route();
   }
 
+  async startLanguage(language: LanguageId, slotId?: number | null) {
+    try {
+      this.languageLesson = await api.startLanguageSession(language, slotId);
+      this.screen = 'language';
+    } catch (e) {
+      this.error = String(e);
+    }
+  }
+
+  async startClass(subjectId: ClassroomSubjectId, slotId?: number | null) {
+    try {
+      const session = await api.startClassroomSession(subjectId, slotId);
+      if (session.kind === 'language') {
+        this.languageLesson = session.lesson;
+        this.screen = 'language';
+      } else {
+        this.engineeringLesson = session.lesson;
+        this.screen = 'classroom';
+      }
+    } catch (e) {
+      this.error = String(e);
+    }
+  }
+
+  async resumeClass(subjectId: ClassroomSubjectId) {
+    try {
+      const session = await api.resumeClassroomSession(subjectId);
+      if (!session) {
+        await this.refresh();
+        return;
+      }
+      if (session.kind === 'language') {
+        this.languageLesson = session.lesson;
+        this.screen = 'language';
+      } else {
+        this.engineeringLesson = session.lesson;
+        this.screen = 'classroom';
+      }
+    } catch (e) {
+      this.error = String(e);
+    }
+  }
+
+  async finishClass() {
+    this.languageLesson = null;
+    this.engineeringLesson = null;
+    this.screen = 'idle';
+    await this.refresh();
+  }
+
+  async resumeLanguage() {
+    try {
+      const lesson = await api.getActiveLanguageSession();
+      if (!lesson) {
+        await this.refresh();
+        return;
+      }
+      this.languageLesson = lesson;
+      this.screen = 'language';
+    } catch (e) {
+      this.error = String(e);
+    }
+  }
+
+  async finishLanguage() {
+    await this.finishClass();
+  }
+
   async init() {
     // Tell Rust the webview booted — the kiosk refuses to lock before this.
     await api.markFrontendReady().catch(() => {});
     await this.refresh();
     await onEvent('session:owed', () => this.refresh());
     await onEvent('session:state', () => this.refresh());
+    await onEvent('language:owed', () => this.refresh());
+    await onEvent('language:state', () => this.refresh());
+    await onEvent('classroom:owed', () => this.refresh());
+    await onEvent('classroom:state', () => this.refresh());
     await onEvent<string>('gen:status', (msg) => {
       this.genStatus = msg;
     });

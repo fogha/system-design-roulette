@@ -1,5 +1,6 @@
 use crate::db::Db;
-use crate::generator::Generator;
+use crate::generator::{ChatTurn, Generator};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicI64};
 use std::sync::Mutex;
@@ -20,8 +21,6 @@ pub struct AppState {
     pub debug_day: bool,
     /// Failed escape attempts (rate limiting the hatch).
     pub escape_failures: Mutex<Vec<i64>>,
-    /// Failed early-exit quiz attempts (60s cooldown).
-    pub exit_quiz_failures: Mutex<Vec<i64>>,
     /// System mute state before the lock engaged (None = not captured).
     pub prev_muted: Mutex<Option<bool>>,
     /// Webview has booted and called mark_frontend_ready. The kiosk NEVER
@@ -30,9 +29,30 @@ pub struct AppState {
     pub frontend_ready: AtomicBool,
     /// Background generation worker wakeup.
     pub gen_notify: tokio::sync::Notify,
+    /// Session-only, course-grounded chat threads keyed by course id. Never
+    /// written to the database — cleared on completion, skip, extension/new
+    /// session, and implicitly on every app restart (this is memory-only).
+    pub chat_threads: Mutex<HashMap<i64, Vec<ChatTurn>>>,
+    /// Session-only chat for advisory engineering classes. Kept separate from
+    /// primary course ids so independently allocated SQLite ids cannot collide.
+    pub classroom_chat_threads: Mutex<HashMap<i64, Vec<ChatTurn>>>,
 }
 
 impl AppState {
+    /// Drop every in-memory chat thread. Called at every session-lifecycle
+    /// boundary so a new or reopened course never inherits stale Q&A.
+    pub fn clear_chat_threads(&self) {
+        self.chat_threads.lock().unwrap().clear();
+        self.classroom_chat_threads.lock().unwrap().clear();
+    }
+
+    pub fn clear_classroom_chat(&self, session_id: i64) {
+        self.classroom_chat_threads
+            .lock()
+            .unwrap()
+            .remove(&session_id);
+    }
+
     /// Today's date, overridable for testing via SDR_DATE=YYYY-MM-DD.
     pub fn today(&self) -> String {
         if let Ok(d) = std::env::var("SDR_DATE") {

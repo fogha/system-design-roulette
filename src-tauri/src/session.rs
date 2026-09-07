@@ -1,6 +1,8 @@
 use crate::db::{self, Session};
+use crate::focus;
 use crate::generator::GeneratedQuestion;
 use crate::state::AppState;
+use rusqlite::params;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -20,6 +22,7 @@ pub struct SessionView {
     pub locked: bool,
     pub session_type: String,
     pub plan_reason: String,
+    pub focus: Option<String>,
 }
 
 pub fn now_iso() -> String {
@@ -51,21 +54,29 @@ pub fn session_owed(state: &AppState) -> bool {
     if state.debug_day {
         return true;
     }
-    let hour: u32 = db::get_config(&conn, "schedule_hour")
+    let configured_hour: u32 = db::get_config(&conn, "schedule_hour")
         .ok()
         .flatten()
         .and_then(|v| v.parse().ok())
         .unwrap_or(9);
-    let minute: u32 = db::get_config(&conn, "schedule_minute")
+    let configured_minute: u32 = db::get_config(&conn, "schedule_minute")
         .ok()
         .flatten()
         .and_then(|v| v.parse().ok())
         .unwrap_or(0);
+    let (hour, minute) = if configured_hour <= 23 && configured_minute <= 59 {
+        (configured_hour, configured_minute)
+    } else {
+        log::error!(
+            "invalid persisted schedule {configured_hour:02}:{configured_minute:02}; using 09:00"
+        );
+        (9, 0)
+    };
     let now = chrono::Local::now();
     let sched = now
         .date_naive()
         .and_hms_opt(hour, minute, 0)
-        .unwrap_or_else(|| now.naive_local());
+        .expect("validated schedule time");
     now.naive_local() >= sched
 }
 
@@ -87,6 +98,7 @@ pub fn ensure_today_session(state: &AppState) -> db::Result<Session> {
         reading_seconds: 0,
         session_type: "lesson".into(),
         plan_reason: String::new(),
+        focus: String::new(),
     };
     db::upsert_session(&conn, &s)?;
     Ok(s)
@@ -99,14 +111,48 @@ fn pop_quiz_key(date: &str) -> String {
     format!("pop_quiz_set:{date}")
 }
 
-/// Today's question set, honoring the session type. For pop-quiz days the
-/// sampled set is frozen in config at session start so resume mid-quiz is
-/// deterministic; lesson days use carryover + yesterday's fresh questions.
+/// Resolve the persisted focus for a session date. Empty means not chosen yet.
+pub fn session_focus(conn: &rusqlite::Connection, date: &str) -> db::Result<Option<String>> {
+    Ok(db::get_session(conn, date)?.and_then(|s| {
+        if s.focus.is_empty() {
+            None
+        } else {
+            Some(s.focus)
+        }
+    }))
+}
+
+/// Apply focus on session start. New sessions require a selectable focus;
+/// in-progress sessions keep their persisted focus (conflicting input is ignored).
+fn apply_session_focus(s: &mut Session, chosen: Option<&str>) -> db::Result<()> {
+    if s.status == "completed" || s.status == "skipped" {
+        return Ok(());
+    }
+    if !s.focus.is_empty() {
+        if let Some(f) = chosen {
+            if f != s.focus {
+                // Safe ignore: resume with the persisted track.
+                return Ok(());
+            }
+        }
+        return Ok(());
+    }
+    let focus = chosen.ok_or(db::DbError::FocusRequired)?;
+    focus::validate_selectable(focus)?;
+    s.focus = focus.to_string();
+    Ok(())
+}
+
+/// Today's question set, honoring the session type and focus track.
 pub fn questions_for_today(
     conn: &rusqlite::Connection,
     today: &str,
     yesterday: &str,
 ) -> db::Result<Vec<db::Question>> {
+    let focus = session_focus(conn, today)?.unwrap_or_default();
+    if focus.is_empty() {
+        return Ok(Vec::new());
+    }
     let is_pop = db::get_session(conn, today)?
         .map(|s| s.session_type == "pop_quiz")
         .unwrap_or(false);
@@ -137,44 +183,84 @@ pub fn questions_for_today(
             return Ok(out);
         }
     }
-    db::quiz_for_date(conn, today, yesterday)
+    let mut quiz = db::quiz_for_date(conn, today, yesterday, &focus)?;
+    if !is_pop {
+        let exclude: Vec<i64> = quiz.iter().map(|question| question.id).collect();
+        let review = db::spaced_review_sample(conn, today, &focus, &exclude, 2)?;
+        quiz.extend(review);
+    }
+    Ok(quiz)
 }
 
 /// Begin (or resume) today's session: pick the right starting step.
-pub fn start_session(state: &AppState) -> db::Result<Session> {
+pub fn start_session(state: &AppState, chosen_focus: Option<&str>) -> db::Result<Session> {
     let mut s = ensure_today_session(state)?;
     if s.status == "completed" || s.status == "skipped" {
         return Ok(s);
     }
+    apply_session_focus(&mut s, chosen_focus)?;
     let today = state.today();
     let yesterday = state.yesterday();
+    let focus = s.focus.clone();
     let conn = state.db.0.lock().unwrap();
     if s.status == "pending" {
+        // Older builds may have pre-drawn a system-design concept before the
+        // learner chose today's focus. Never carry that concept across tracks.
+        if let Some(concept_id) = s.concept_id {
+            let matches_focus = db::get_concept(&conn, concept_id)?
+                .map(|concept| concept.focus == focus)
+                .unwrap_or(false);
+            if !matches_focus {
+                s.concept_id = None;
+            }
+        }
         if s.session_type == "pop_quiz" {
             // Freeze the audit set: carryover + yesterday's fresh + breadth sample.
-            let base = db::quiz_for_date(&conn, &today, &yesterday)?;
+            let base = db::quiz_for_date(&conn, &today, &yesterday, &focus)?;
             let base_ids: Vec<i64> = base.iter().map(|q| q.id).collect();
             let extra = db::pop_quiz_sample(
                 &conn,
                 &today,
+                &focus,
                 &base_ids,
                 (POP_QUIZ_SIZE - base.len() as i64).max(0),
             )?;
-            let all_ids: Vec<i64> = base_ids.iter().chain(extra.iter().map(|q| &q.id)).copied().collect();
+            let all_ids: Vec<i64> = base_ids
+                .iter()
+                .chain(extra.iter().map(|q| &q.id))
+                .copied()
+                .collect();
             if all_ids.is_empty() {
                 // Nothing to audit (shouldn't happen given planner guardrails):
                 // degrade to a normal lesson day.
                 s.session_type = "lesson".into();
                 s.plan_reason = String::new();
             } else {
-                db::set_config(&conn, &pop_quiz_key(&today), &serde_json::to_string(&all_ids)?)?;
+                db::set_config(
+                    &conn,
+                    &pop_quiz_key(&today),
+                    &serde_json::to_string(&all_ids)?,
+                )?;
             }
         }
         let quiz = questions_for_today(&conn, &today, &yesterday)?;
-        s.current_step = if quiz.is_empty() { STEP_ROULETTE.into() } else { STEP_QUIZ.into() };
+        s.current_step = if quiz.is_empty() {
+            STEP_ROULETTE.into()
+        } else {
+            STEP_QUIZ.into()
+        };
         s.status = "in_progress".into();
         s.started_at = Some(now_iso());
         db::upsert_session(&conn, &s)?;
+        drop(conn);
+        state.clear_chat_threads();
+        // Focus is only known now. Start course generation in the background
+        // while the learner takes the quiz or watches the roulette.
+        if s.session_type == "lesson" {
+            let conn = state.db.0.lock().unwrap();
+            db::jobs::requeue(&conn, "course", &today)?;
+            state.gen_notify.notify_one();
+        }
     }
     Ok(s)
 }
@@ -214,6 +300,11 @@ pub fn view(state: &AppState) -> SessionView {
             locked: state.locked.load(std::sync::atomic::Ordering::SeqCst),
             session_type: s.session_type,
             plan_reason: s.plan_reason,
+            focus: if s.focus.is_empty() {
+                None
+            } else {
+                Some(s.focus)
+            },
         },
         None => SessionView {
             date: today,
@@ -224,6 +315,7 @@ pub fn view(state: &AppState) -> SessionView {
             locked: false,
             session_type: "lesson".into(),
             plan_reason: String::new(),
+            focus: None,
         },
     }
 }
@@ -243,11 +335,11 @@ pub fn complete_session(app: &AppHandle, state: &AppState) -> db::Result<Session
         if let Some(cid) = s.concept_id {
             let _ = crate::mastery::record_course_read(&conn, cid, &today);
         }
-        db::jobs::enqueue(&conn, "course", &tomorrow)?;
         db::jobs::enqueue(&conn, "quiz", &tomorrow)?;
         s
     };
     state.gen_notify.notify_one();
+    state.clear_chat_threads();
     crate::kiosk::release(app, state);
     let _ = app.emit("session:state", view(state));
     Ok(s)
@@ -260,11 +352,7 @@ pub fn persist_quiz_questions(
     questions: &[GeneratedQuestion],
 ) -> db::Result<()> {
     for q in questions {
-        let choices = q
-            .choices
-            .as_ref()
-            .map(|c| serde_json::to_string(c))
-            .transpose()?;
+        let choices = q.choices.as_ref().map(serde_json::to_string).transpose()?;
         db::insert_question(
             conn,
             course_id,
@@ -323,16 +411,21 @@ pub async fn generation_worker(app: AppHandle) {
 }
 
 /// Minimum quizzed concepts before pop-quiz days become possible.
-const POP_QUIZ_MIN_PRACTICED: i64 = 8;
+const POP_QUIZ_MIN_PRACTICED: i64 = 6;
 
-/// Decide (once) what kind of day `date` is. Runs inside the course job, so
-/// the decision lands the night before. Idempotent via a config flag.
+pub fn weekly_review_due(completed_in_track: i64) -> bool {
+    completed_in_track > 0 && completed_in_track % 7 == 0
+}
+
+/// Decide (once) what kind of day `date` is. Requires a chosen focus; without
+/// one the caller must not pre-plan or pre-generate content.
 pub async fn ensure_day_plan(
     state: &tauri::State<'_, AppState>,
     date: &str,
+    track_focus: &str,
 ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
     let planned_key = format!("planned:{date}");
-    let (already, eligible, dossier) = {
+    let (eligible, milestone_review, dossier) = {
         let conn = state.db.0.lock().unwrap();
         let already = db::get_config(&conn, &planned_key)?.is_some();
         let existing_type = db::get_session(&conn, date)?.map(|s| s.session_type);
@@ -340,9 +433,11 @@ pub async fn ensure_day_plan(
             return Ok(existing_type.unwrap_or_else(|| "lesson".into()));
         }
         let practiced: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM mastery
-             WHERE state IN ('practicing','struggling','mastered','maintenance','decayed')",
-            [],
+            "SELECT COUNT(*) FROM mastery m
+             JOIN concepts c ON c.id = m.concept_id
+             WHERE c.focus = ?1
+               AND m.state IN ('practicing','struggling','mastered','maintenance','decayed')",
+            params![track_focus],
             |r| r.get(0),
         )?;
         let prev = chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d")?
@@ -354,21 +449,46 @@ pub async fn ensure_day_plan(
             .map(|s| s.session_type == "pop_quiz")
             .unwrap_or(false);
         let eligible = practiced >= POP_QUIZ_MIN_PRACTICED && !prev_was_pop;
-        let dossier = crate::mastery::build_dossier(&conn, date).unwrap_or_default();
-        (already, eligible, dossier)
+        let completed_in_track: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM sessions WHERE status = 'completed' AND focus = ?1",
+            params![track_focus],
+            |r| r.get(0),
+        )?;
+        let milestone_review = weekly_review_due(completed_in_track);
+        let dossier = crate::mastery::build_dossier(&conn, date, track_focus).unwrap_or_default();
+        (eligible, milestone_review, dossier)
     };
-    let _ = already;
 
     // Test/debug override skips the agent call entirely.
     let plan = if let Ok(forced) = std::env::var("SDR_SESSION_TYPE") {
-        crate::generator::SessionPlan { session_type: forced, reason: "forced via SDR_SESSION_TYPE".into() }
+        crate::generator::SessionPlan {
+            session_type: forced,
+            reason: "forced via SDR_SESSION_TYPE".into(),
+        }
+    } else if milestone_review && eligible {
+        crate::generator::SessionPlan {
+            session_type: "pop_quiz".into(),
+            reason:
+                "weekly retrieval checkpoint — integrate and strengthen the last seven sessions"
+                    .into(),
+        }
     } else if !eligible {
-        crate::generator::SessionPlan { session_type: "lesson".into(), reason: String::new() }
+        crate::generator::SessionPlan {
+            session_type: "lesson".into(),
+            reason: String::new(),
+        }
     } else {
-        state.generator.plan_day(&dossier, eligible).await
+        state
+            .generator
+            .plan_day(&dossier, eligible, track_focus)
+            .await
     };
     // Guardrails beat the model.
-    let session_type = if plan.session_type == "pop_quiz" && eligible { "pop_quiz" } else { "lesson" };
+    let session_type = if plan.session_type == "pop_quiz" && eligible {
+        "pop_quiz"
+    } else {
+        "lesson"
+    };
 
     let conn = state.db.0.lock().unwrap();
     let mut s = db::get_session(&conn, date)?.unwrap_or(Session {
@@ -382,6 +502,7 @@ pub async fn ensure_day_plan(
         reading_seconds: 0,
         session_type: "lesson".into(),
         plan_reason: String::new(),
+        focus: track_focus.to_string(),
     });
     // Never re-type a session already underway.
     if s.status == "pending" {
@@ -401,8 +522,15 @@ async fn run_generation_job(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     match kind {
         "course" => {
-            // The nightly plan decides whether target_date even needs a course.
-            let session_type = ensure_day_plan(state, target_date).await?;
+            let track_focus = {
+                let conn = state.db.0.lock().unwrap();
+                session_focus(&conn, target_date)?
+            };
+            let Some(track_focus) = track_focus else {
+                // Focus is chosen at session start — never pre-draw tomorrow's course.
+                return Ok(());
+            };
+            let session_type = ensure_day_plan(state, target_date, &track_focus).await?;
             if session_type == "pop_quiz" {
                 return Ok(());
             }
@@ -443,17 +571,27 @@ async fn run_generation_job(
                 }
                 return Err(format!("no course for {prev}, cannot build quiz").into());
             };
+            let (track_focus, concept_title) = {
+                let conn = state.db.0.lock().unwrap();
+                db::get_concept(&conn, course.concept_id)?
+                    .map(|concept| (concept.focus, concept.title))
+                    .ok_or("course concept missing")?
+            };
             let (existing, dossier) = {
                 let conn = state.db.0.lock().unwrap();
                 (
                     db::questions_for_course(&conn, course.id)?,
-                    crate::mastery::build_dossier(&conn, target_date).unwrap_or_default(),
+                    crate::mastery::build_dossier(&conn, target_date, &track_focus)
+                        .unwrap_or_default(),
                 )
             };
             if !existing.is_empty() {
                 return Ok(());
             }
-            let (questions, _src) = state.generator.generate_quiz(&course.markdown, &dossier).await?;
+            let (questions, _src) = state
+                .generator
+                .generate_quiz(&course.markdown, &dossier, &track_focus, &concept_title)
+                .await?;
             let conn = state.db.0.lock().unwrap();
             persist_quiz_questions(&conn, course.id, &questions)?;
             Ok(())
@@ -468,14 +606,20 @@ pub async fn ensure_audio_for_course(
     course: &db::Course,
     date: &str,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let existing = {
+    let (existing, focus) = {
         let conn = state.db.0.lock().unwrap();
-        crate::audio::get_script(&conn, course.id)?
+        let focus = db::get_concept(&conn, course.concept_id)?
+            .map(|concept| concept.focus)
+            .ok_or("course concept missing")?;
+        (crate::audio::get_script(&conn, course.id)?, focus)
     };
     let lines = match existing {
         Some(v) => v.lines,
         None => {
-            let lines = state.generator.generate_audio_script(&course.markdown).await?;
+            let lines = state
+                .generator
+                .generate_audio_script(&course.markdown, &focus)
+                .await?;
             if lines.is_empty() {
                 return Err("empty audio script".into());
             }
@@ -502,13 +646,19 @@ pub async fn ensure_course_for_date(
     state: &tauri::State<'_, AppState>,
     date: &str,
 ) -> Result<db::Course, Box<dyn std::error::Error + Send + Sync>> {
+    let track_focus = {
+        let conn = state.db.0.lock().unwrap();
+        session_focus(&conn, date)?
+    };
+    let track_focus = track_focus.ok_or("session focus not chosen yet")?;
     {
         let conn = state.db.0.lock().unwrap();
         if let Some(c) = db::course_for_date(&conn, date)? {
-            // Reuse unless the session points at a different concept (an
-            // extended session re-spun the wheel — generate for the new topic).
-            let session_concept = db::get_session(&conn, date)?.and_then(|s| s.concept_id);
-            if session_concept.is_none() || session_concept == Some(c.concept_id) {
+            let session = db::get_session(&conn, date)?;
+            let session_concept = session.as_ref().and_then(|s| s.concept_id);
+            let concept = db::get_concept(&conn, c.concept_id)?.ok_or("concept missing")?;
+            let focus_ok = concept.focus == track_focus;
+            if focus_ok && (session_concept.is_none() || session_concept == Some(c.concept_id)) {
                 return Ok(c);
             }
         }
@@ -519,9 +669,20 @@ pub async fn ensure_course_for_date(
         let existing = db::get_session(&conn, date)?;
         let concept_id = existing.as_ref().and_then(|s| s.concept_id);
         match concept_id {
-            Some(id) => db::get_concept(&conn, id)?.ok_or("concept missing")?,
+            Some(id) => {
+                let c = db::get_concept(&conn, id)?.ok_or("concept missing")?;
+                if c.focus != track_focus {
+                    return Err(format!(
+                        "session concept focus {} does not match session focus {track_focus}",
+                        c.focus
+                    )
+                    .into());
+                }
+                c
+            }
             None => {
-                let c = crate::roulette::draw(&conn, date)?.ok_or("empty concept pool")?;
+                let c = crate::roulette::draw(&conn, date, &track_focus)?
+                    .ok_or("empty concept pool")?;
                 let mut s = existing.unwrap_or(Session {
                     date: date.to_string(),
                     concept_id: None,
@@ -533,6 +694,7 @@ pub async fn ensure_course_for_date(
                     reading_seconds: 0,
                     session_type: "lesson".into(),
                     plan_reason: String::new(),
+                    focus: track_focus.clone(),
                 });
                 s.concept_id = Some(c.id);
                 db::upsert_session(&conn, &s)?;
@@ -542,24 +704,51 @@ pub async fn ensure_course_for_date(
     };
     let dossier = {
         let conn = state.db.0.lock().unwrap();
-        crate::mastery::build_dossier(&conn, date).unwrap_or_default()
+        crate::mastery::build_dossier(&conn, date, &track_focus).unwrap_or_default()
     };
     let (course, source) = state
         .generator
-        .generate_course(&concept.title, &concept.category, &dossier)
+        .generate_course(crate::generator::CourseRequest {
+            title: &concept.title,
+            category: &concept.category,
+            dossier: &dossier,
+            focus: &track_focus,
+            curriculum: &concept.curriculum,
+        })
         .await?;
     let resources_json = serde_json::to_string(&course.resources)?;
     let course_row = {
         let conn = state.db.0.lock().unwrap();
-        let id = db::insert_course(&conn, date, concept.id, &course.markdown, &resources_json, &source)?;
+        let id = db::insert_course(
+            &conn,
+            date,
+            concept.id,
+            &course.markdown,
+            &resources_json,
+            &source,
+        )?;
         for q in &course.exit_questions {
             let _ = db::insert_exit_question(
                 &conn,
                 id,
+                1,
                 &q.prompt,
                 &serde_json::to_string(&q.choices)?,
                 &q.correct_answer,
                 &q.explanation,
+                &q.section,
+                &q.learning_objective,
+            );
+        }
+        if let Some(exercise) = &course.exercise {
+            let _ = db::upsert_course_exercise(
+                &conn,
+                id,
+                &exercise.title,
+                &exercise.instructions,
+                exercise.starter_code.as_deref(),
+                exercise.deliverable.as_deref(),
+                &exercise.hints,
             );
         }
         db::course_for_date(&conn, date)?.ok_or("course vanished")?
@@ -575,6 +764,10 @@ pub async fn ensure_course_for_date(
 }
 
 /// Authoritative course reading timer. Emits timer:tick {remaining} every second.
+fn timer_tick_is_active(paused: bool, elapsed: std::time::Duration) -> bool {
+    !paused && elapsed < std::time::Duration::from_secs(5)
+}
+
 pub async fn run_course_timer(app: AppHandle) {
     use std::sync::atomic::Ordering;
     let state = app.state::<AppState>();
@@ -582,9 +775,20 @@ pub async fn run_course_timer(app: AppHandle) {
         return;
     }
     let mut persist_counter = 0;
+    let mut last_tick = std::time::Instant::now();
     loop {
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-        if state.timer_paused.load(Ordering::SeqCst) {
+        let elapsed = last_tick.elapsed();
+        last_tick = std::time::Instant::now();
+        let paused = state.timer_paused.load(Ordering::SeqCst);
+        if !timer_tick_is_active(paused, elapsed) {
+            if elapsed >= std::time::Duration::from_secs(5) {
+                log::info!(
+                    "reading timer detected a {:.1}s sleep/wake gap; elapsed sleep is not charged",
+                    elapsed.as_secs_f64()
+                );
+                let _ = app.emit("timer:paused-for-sleep", elapsed.as_secs());
+            }
             continue;
         }
         let remaining = state.reading_remaining.load(Ordering::SeqCst);
@@ -611,4 +815,17 @@ pub async fn run_course_timer(app: AppHandle) {
     }
     state.timer_running.store(false, Ordering::SeqCst);
     let _ = app.emit("timer:done", true);
+}
+
+#[cfg(test)]
+mod timer_tests {
+    use super::timer_tick_is_active;
+    use std::time::Duration;
+
+    #[test]
+    fn reading_timer_never_charges_explicit_pause_or_sleep_gap() {
+        assert!(timer_tick_is_active(false, Duration::from_secs(1)));
+        assert!(!timer_tick_is_active(true, Duration::from_secs(1)));
+        assert!(!timer_tick_is_active(false, Duration::from_secs(30)));
+    }
 }

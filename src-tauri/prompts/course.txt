@@ -1,23 +1,68 @@
-You are generating a daily system design course for an experienced full-stack developer (TypeScript/Node, Docker, Postgres background) who wants to reach staff-engineer-level system design skill.
+You are generating a daily {{FOCUS_LABEL}} course for an experienced full-stack developer who wants deep, staff-level judgment in {{FOCUS_CONTEXT}}
 
 Topic: {{TITLE}}
 Category: {{CATEGORY}}
 
-Requirements:
-- Write a course readable in roughly 30 minutes (3500-4500 words of markdown).
-- Structure: ## Why this matters → ## Core mechanics (the meat — go deep, with concrete numbers and small ASCII diagrams where useful) → ## Trade-offs and failure modes → ## Real-world example (how a well-known system actually does this) → ## Interview framing (how to present this in a system design interview) → ## Key takeaways.
-- Tone: direct, technical, no fluff. Assume the reader codes daily but has gaps in distributed systems theory.
-- Use WebSearch to find 4 to 6 high-quality, real resources (engineering blog posts, papers, talks, docs) about this topic. Only include URLs that appeared in your search results — never invent or guess a URL. Keep research brief: a few searches, no exhaustive verification.
+30-day proof of skill this track is building toward:
+{{MONTH_OUTCOME}}
 
-Your entire final reply must be exactly one fenced JSON code block (```json ... ```) matching this schema, with no text before or after it:
+Pedagogy requirements:
+- Explain simply first: open every major idea in plain language a smart newcomer could follow, using a concrete analogy to something outside software (traffic, plumbing, a kitchen, a library, mail routing, etc). Then explicitly say where the analogy breaks down before going deeper — this stops the analogy from misleading later.
+- First-principles mechanisms: assume no prior mental model for today's mechanism. Start with its irreducible building blocks and constraints, derive how they compose, and only then introduce APIs, syntax sugar, framework conventions, or architecture patterns. Never use a higher-level term to explain itself.
+- Explicit mental models: name the model, show where it breaks, and how to verify it.
+- Concrete executable experiments: include at least one runnable snippet or devtools/compiler experiment the reader can execute in under 10 minutes.
+- Source/runtime/compiler depth: go below the tutorial layer into implementation-relevant internals.
+- Production architecture lens: show where this mechanism belongs in a real frontend system. Name its component/route/package/server/browser boundary, who owns it, what data or state crosses it, the bottleneck at 10x traffic or 10x team size, how it fails, what telemetry exposes the failure, and how to migrate or roll it back.
+- Trade-offs must be decisions, not lists. For each major choice, state: "Choose X when …; choose Y when …; the signal to revisit this is …". Include scalability, operability, consistency, accessibility, security, DX, cost, and reversibility where they apply.
+- Practical artifact: end with a small production-grade exercise tied to today's topic that another engineer could plausibly adopt: a component/package contract, architecture decision record, devtools/CDP script, lint rule or codemod, performance/RUM harness, bundler plugin, browser API wrapper, typed boundary, migration check, or CI policy. Avoid abstract CLI toys disconnected from shipping UI.
+- Do NOT imitate named living authors.
+
+2026 currency and evidence:
+- Treat "modern" as a claim that needs evidence. This app has already fetched primary documentation for you and included it above as RETRIEVED SOURCE MATERIAL — that material is your evidence base. Read it before writing, teach from it, and cite it inline with markdown links using its exact URLs.
+- Attribute contested, recent, or partially supported behavior to the specific publisher (specification, MDN, browser vendor, or maintainer docs). If the retrieved excerpts do not support a claim you want to make, either drop the claim or state plainly that it is outside the retrieved sources.
+- If retrieved material contradicts your prior belief, follow the retrieved material and say what changed.
+- State version/date-sensitive facts precisely. Distinguish broadly available, newly available, experimental, deprecated, and framework-specific behavior. Include a progressive-enhancement or fallback path when support is not universal.
+- Do not make React or any single meta-framework the universal answer. Explain the underlying browser/system mechanism first, then compare how current React, Svelte, Vue, Angular, Astro, or standards-based approaches expose it when relevant.
+- For architecture topics, default to a well-bounded modular frontend. Introduce micro-frontends, distributed state, or independent deployment only when organizational or release constraints justify their coordination cost.
+
+Diagrams:
+- Use a fenced ```mermaid code block wherever a sequence, state machine, timeline, or set of relationships is genuinely clearer as a picture than as prose — most courses should have 1-3.
+- Every diagram needs a one-sentence caption right after it in plain words, explaining what to look at and why.
+- Do not add a diagram just to have one; skip it when a short code snippet or a sentence already makes the point clearly.
+- Keep diagrams small (under ~12 nodes/steps) and use plain descriptive labels, not code syntax, inside diagram nodes.
+
+Requirements:
+- Treat the injected AUTHORITATIVE CURRICULUM BRIEF as a contract, not optional inspiration. The lesson outcome, named mechanisms, production scenario, misconceptions, observable evidence, cumulative artifact, primary sources, phase, and cross-track relationships must all shape the course. Do not replace them with a generic overview.
+- Explicitly connect the practical exercise to the brief's cumulative artifact and make its acceptance criteria produce the brief's observable evidence.
+- If the learner dossier shows prior mastery, transfer it into today's mechanism instead of reteaching it. If it shows a failed objective or misconception, repair that exact mental model and make one exit check verify the repair.
+- Write a detailed course readable in roughly 30 minutes (3500-4500 words of markdown). A deterministic gate rejects anything below 3200 words and rejects thin required sections. Depth must come from worked mechanisms, production examples, and decisions—not repeated summaries or padded restatements.
+- Distribute that depth deliberately: `Core mechanics` must carry the main derivation; `Production architecture lens` must work through the complete scenario; `Trade-offs and failure modes` and `Migration and observability` must contain operational decisions and evidence; `Runnable experiment` and `Practical exercise` must be independently actionable. Do not hide most of the word count in one section.
+- Structure: ## Why this matters → ## The simple version (plain language + analogy + where it breaks) → ## Core mechanics (deep dive, diagrams where useful) → ## Mental model → ## Runnable experiment → ## Production architecture lens → ## Trade-offs and failure modes → ## Migration and observability → ## Practical exercise → ## Key takeaways.
+- Inside `## The simple version`, include a standalone sentence beginning exactly `Where the analogy breaks:` and explain the analogy's concrete limit before introducing core mechanics.
+- Include one worked production scenario with concrete constraints (users, routes, bundle/runtime budget, team ownership, failure or migration pressure). Follow one request or interaction through the relevant boundaries.
+- When code is central, show a small "naive version" and a production-ready revision, then explain the architectural difference. All code must be fenced with an accurate language tag.
+- Make the practical exercise a 30-60 minute deliberate-practice task with 3-5 observable acceptance criteria inside its instructions. It should create a reusable piece of the track's 30-day proof of skill, not a disposable kata. On dossier days 7, 14, 21, and 30, require the exercise to integrate at least two earlier concepts.
+- End the practical exercise with a short self-review: what evidence proves it works, which trade-off was chosen, and what would fail at 10x scale or team size.
+- Tone: direct, technical, no fluff. Assume the reader codes daily but has gaps in this specific depth layer. Plain language does not mean vague — it means precise words a newcomer could still follow.
+- Populate `resources` with 5 to 8 high-quality current sources. Start with every RETRIEVED SOURCE MATERIAL URL you used, then add others only if you are certain they exist. Every URL is checked over the network before the learner sees it, and unreachable links are deleted — so guessing a URL only shrinks the reading list. Prefer standards and maintainer documentation over SEO listicles.
+- Cite at least three different retrieved URLs as inline markdown links inside the course body, placed on the exact claims they support, not collected in a footer.
+- Include exactly 5 exit_questions spanning the course's major sections. Each explanation must: (1) name the specific misconception a wrong answer reveals, (2) restate the correct mental model in plain language, ideally with a short analogy, (3) stay under 4 sentences.
+- The "exercise" field must be a self-contained, structured exercise separate from (but consistent with) the ## Practical exercise markdown section: a short title, clear instructions written as markdown, an optional starter code block the reader edits, a one-sentence "deliverable" describing what done looks like, and 1-3 short hints ordered from vaguest to most direct. This is worked on separately from the reading — do not require finishing it to understand the rest of the course.
+
+Your entire final reply must be exactly one valid JSON object matching this schema, with no commentary before or after it. Escape every quotation mark, backslash, control character, and newline that appears inside a JSON string. A provider-specific instruction to return bare JSON takes precedence over markdown fencing:
 {
   "title": string,
-  "markdown": string,        // the full course in markdown, NOT including the resources
+  "markdown": string,
   "resources": [ { "title": string, "url": string, "type": "article"|"paper"|"video"|"docs", "why": string } ],
-  "key_takeaways": [ string, ... ],  // 4-6 one-sentence takeaways
-  "exit_questions": [        // exactly 3 MCQs gating early exit from the timed reader:
-                             // they test THIS course's core mechanics — what a skimmer would miss.
-                             // 4 plausible choices each; correct_answer = exact text of the right choice.
-    { "prompt": string, "choices": [string,string,string,string], "correct_answer": string, "explanation": string }
-  ]
+  "key_takeaways": [ string, ... ],
+  "exit_questions": [
+    { "prompt": string, "choices": [string,string,string,string], "correct_answer": string, "explanation": string, "section": string, "learning_objective": string }
+  ],
+  "exercise": {
+    "title": string,
+    "instructions": string,
+    "starter_code": string | null,
+    "deliverable": string,
+    "hints": [ string, ... ]
+  }
 }

@@ -4,7 +4,7 @@
   import ClusterBar from '../components/ClusterBar.svelte';
   import NodeCard from '../components/NodeCard.svelte';
   import StatusLED from '../components/StatusLED.svelte';
-  import { Check, ArrowUpRight, Plus, Headphones } from 'lucide-svelte';
+  import { Check, ArrowUpRight, Headphones, Languages } from 'lucide-svelte';
 
   const session = $derived(app.session);
   const skipped = $derived(session?.status === 'skipped');
@@ -25,14 +25,6 @@
     resourcesOpened = n > 0;
   }
 
-  async function extend() {
-    try {
-      await api.extendSession();
-      await app.refresh();
-    } catch (e) {
-      app.error = String(e);
-    }
-  }
 </script>
 
 <div class="done blueprint">
@@ -45,7 +37,16 @@
     {#if skipped}
       <div class="meta-label">POSTMORTEM — streak reset to 0</div>
       <h1>Circuit breaker tripped.</h1>
-      <p class="sub">Today is marked skipped. The wheel spins again tomorrow.</p>
+      <p class="sub">
+        Today is marked skipped. Open Classroom to start any enabled subject without changing
+        the primary session.
+      </p>
+      <div class="actions">
+        <button class="ghost mono-ghost" onclick={() => (app.screen = 'dashboard')}>cluster overview</button>
+        <button class="ghost mono-ghost" onclick={() => (app.screen = 'idle')}>
+          <Languages size={12} /> classroom
+        </button>
+      </div>
     {:else}
       <div class="meta-label">DEPLOY COMPLETE — session shipped</div>
       <h1>Done for today.</h1>
@@ -71,10 +72,10 @@
           {#if resourcesOpened}<Check size={13} />{:else}<ArrowUpRight size={13} />{/if}{resourcesOpened ? 'egress queue flushed' : 'open reading list in browser'}
         </button>
         <button class="ghost mono-ghost" onclick={() => (app.screen = 'dashboard')}>cluster overview</button>
+        <button class="ghost mono-ghost" onclick={() => (app.screen = 'idle')}>
+          <Languages size={12} /> classroom
+        </button>
       </div>
-      <button class="ghost mono-ghost extend" onclick={extend}>
-        <Plus size={11} /> extend session — one more topic (voluntary, no lock)
-      </button>
       <button class="ghost mono-ghost audio-toggle" onclick={toggleAudio}>
         <Headphones size={11} /> audio lesson tomorrow: {audioOn ? 'ON — script pre-renders overnight' : 'off'}
       </button>
@@ -125,12 +126,6 @@
     display: flex;
     gap: 12px;
     align-items: center;
-  }
-  .extend {
-    margin-top: 18px;
-    border-style: dashed;
-    color: var(--violet-fg);
-    border-color: var(--violet);
   }
   .audio-toggle {
     margin-top: 10px;

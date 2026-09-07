@@ -8,14 +8,26 @@
   import EnforcementPicker from '../components/EnforcementPicker.svelte';
   import ModelPicker from '../components/ModelPicker.svelte';
   import AgentPicker from '../components/AgentPicker.svelte';
+  import ClassroomPanel from '../components/ClassroomPanel.svelte';
+  import {
+    formatClassCountdown,
+    formatClassTime,
+    nextScheduledClass,
+  } from '../next-class';
   import { Clock, Lock, Play, Pause, Rocket, Cpu, Bot } from 'lucide-svelte';
 
   const owed = $derived(app.state?.owed ?? false);
   const streak = $derived(app.session?.streak ?? 0);
   const hour = $derived(app.state?.schedule_hour ?? 9);
   const minute = $derived(app.state?.schedule_minute ?? 0);
+  // The enforced primary loop still needs its persisted track internally for
+  // backwards compatibility, but subject selection now belongs to Classroom.
+  const primaryTrack = $derived(app.session?.focus ?? app.state?.selected_focus ?? 'javascript');
 
-  let countdown = $state('');
+  let now = $state(new Date());
+  const nextClass = $derived(nextScheduledClass(app.state, now));
+  const countdown = $derived(formatClassCountdown(nextClass, now));
+  const nextClassTime = $derived(formatClassTime(nextClass, now));
   let editing = $state(false);
   let saved = $state(false);
   let newTime = $state('09:00');
@@ -29,6 +41,7 @@
   let agentSel = $state('claude');
   let agentBin = $state('');
   let agentSaved = $state(false);
+  let starting = $state(false);
 
   $effect(() => {
     agentSel = app.state?.agent ?? 'claude';
@@ -101,25 +114,21 @@
   }
 
   $effect(() => {
-    const tick = () => {
-      const now = new Date();
-      const next = new Date();
-      next.setHours(hour, minute, 0, 0);
-      if (next <= now) next.setDate(next.getDate() + 1);
-      const diff = Math.floor((next.getTime() - now.getTime()) / 1000);
-      const h = Math.floor(diff / 3600);
-      const m = Math.floor((diff % 3600) / 60);
-      const s = diff % 60;
-      countdown = `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-    };
-    tick();
-    const id = setInterval(tick, 1000);
+    const id = setInterval(() => (now = new Date()), 1000);
     return () => clearInterval(id);
   });
 
   async function begin() {
-    await api.startSession();
-    await app.refresh();
+    if (starting) return;
+    starting = true;
+    try {
+      await api.startSession(primaryTrack);
+      await app.refresh();
+    } catch (e) {
+      app.error = String(e);
+    } finally {
+      starting = false;
+    }
   }
 
   async function pauseSched() {
@@ -144,7 +153,7 @@
       ⚠ ENFORCEMENT DISARMED — ~/sdr-unlock exists; every lock releases instantly. Delete the file to re-arm.
     </div>
   {/if}
-  <div class="idle-body">
+  <div class:owed-mode={owed} class="idle-body">
     {#if owed}
       {@const isAudit = app.session?.session_type === 'pop_quiz'}
       <div class="meta-label">INCIDENT — P1 · {isAudit ? 'surprise audit due' : 'training session due'}</div>
@@ -154,10 +163,12 @@
         <MetaBadge tone="teal">{#snippet children()}● uptime {streak}d{/snippet}</MetaBadge>
         <MetaBadge tone="violet">{#snippet children()}est. {isAudit ? '15' : '38'} min{/snippet}</MetaBadge>
       </div>
-      <button class="cta mono-cta" onclick={begin}><Rocket size={14} /> ack &amp; begin session</button>
+      <button class="cta mono-cta" onclick={begin} disabled={starting}>
+        <Rocket size={14} /> {starting ? 'starting…' : 'ack & begin session'}
+      </button>
     {:else}
       <h1>Cluster idle</h1>
-      <p class="sub">Next session deploys automatically. Showing up is the whole job.</p>
+      <p class="sub">The next scheduled class is always visible. Showing up is the whole job.</p>
       <div class="node-wrap">
         {#if app.state?.schedule_paused}
           <NodeCard Icon={Pause} name="cron-scheduler" badge="paused" badgeTone="red" accent="var(--led-err)">
@@ -168,11 +179,12 @@
             {/snippet}
           </NodeCard>
         {:else}
-          <NodeCard Icon={Clock} name="cron-scheduler" badge=":launchd" badgeTone="amber">
+          <NodeCard Icon={Clock} name="class-scheduler" badge="next" badgeTone="amber">
             {#snippet children()}
-              <div class="meta-label">NEXT_FIRE — T-minus</div>
+              <div class="meta-label">NEXT_CLASS — T-minus</div>
               <div class="count mono">{countdown}</div>
-              <div class="sched mono">daily at {String(hour).padStart(2, '0')}:{String(minute).padStart(2, '0')}</div>
+              <div class="next-class">{nextClass?.label ?? 'No enabled classes'}</div>
+              <div class="sched mono">{nextClassTime}</div>
             {/snippet}
           </NodeCard>
         {/if}
@@ -187,10 +199,7 @@
       {/if}
       <div class="actions">
         <button class="ghost mono-ghost" onclick={() => (app.screen = 'dashboard')}>cluster overview</button>
-        {#if app.session?.status !== 'in_progress'}
-          <button class="ghost mono-ghost" onclick={begin}>deploy early</button>
-        {/if}
-        <button class="ghost mono-ghost" onclick={() => (editing = !editing)}>reschedule</button>
+        <button class="ghost mono-ghost" onclick={() => (editing = !editing)}>reschedule primary</button>
         <button class="ghost mono-ghost" onclick={() => (editingEnf = !editingEnf)}>
           <Lock size={11} /> enforcement: {app.state?.kiosk_level ?? 'hard'}
         </button>
@@ -224,7 +233,12 @@
       {/if}
       {#if editingAgent}
         <div class="enf-edit">
-          <AgentPicker bind:agent={agentSel} bind:customBin={agentBin} />
+          <AgentPicker
+            bind:agent={agentSel}
+            bind:customBin={agentBin}
+            deepseekKeyConfigured={app.state?.deepseek_key_configured ?? false}
+            onKeyChanged={() => app.refresh()}
+          />
           <div class="enf-actions">
             <button class="ghost mono-ghost" onclick={saveAgent}>{agentSaved ? 'saved' : 'apply'}</button>
           </div>
@@ -237,6 +251,7 @@
         </div>
       {/if}
     {/if}
+    <ClassroomPanel />
   </div>
 </div>
 
@@ -245,6 +260,7 @@
     flex: 1;
     display: flex;
     flex-direction: column;
+    min-height: 0;
     animation: fade-in 0.35s ease;
   }
   .idle-body {
@@ -252,8 +268,13 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     padding: 24px;
+    overflow-y: auto;
+    min-height: 0;
+  }
+  .idle-body.owed-mode {
+    justify-content: flex-start;
   }
   h1 {
     font-size: 34px;
@@ -278,6 +299,12 @@
     font-size: 30px;
     color: var(--accent);
     margin: 4px 0 2px;
+  }
+  .next-class {
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 2px;
   }
   .sched {
     font-size: 11px;

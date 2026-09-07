@@ -25,6 +25,7 @@ thiserror = "2"
 rand = "0.8"
 log = "0.4"
 env_logger = "0.11"
+reqwest = { version = "0.13.4", default-features = false, features = ["json", "rustls"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = { version = "0.6", features = ["exception"] }

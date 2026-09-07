@@ -4,15 +4,19 @@
   import Markdown from '../components/Markdown.svelte';
   import ClusterBar from '../components/ClusterBar.svelte';
   import NodeCard from '../components/NodeCard.svelte';
+  import ExerciseWorkspace from '../components/ExerciseWorkspace.svelte';
+  import { BookOpen, Hammer } from 'lucide-svelte';
 
   let data = $state<DashboardView | null>(null);
   let viewing = $state<ArchivedCourse | null>(null);
+  let archiveTab = $state<'read' | 'exercise'>('read');
 
   $effect(() => {
     api.getDashboard().then((d) => (data = d));
   });
 
   async function openCourse(date: string) {
+    archiveTab = 'read';
     viewing = await api.getPastCourse(date);
   }
 
@@ -55,10 +59,36 @@
         <button class="ghost mono-ghost" onclick={() => (viewing = null)}>← back</button>
         <h2>{viewing.title} <span class="date mono">({viewing.session_date})</span></h2>
       </div>
+      <div class="archive-tab-bar mono" role="tablist" aria-label="archived course sections">
+        <button
+          class="archive-tab"
+          role="tab"
+          aria-selected={archiveTab === 'read'}
+          class:active={archiveTab === 'read'}
+          onclick={() => (archiveTab = 'read')}
+        >
+          <BookOpen size={12} /> course
+        </button>
+        <button
+          class="archive-tab"
+          role="tab"
+          aria-selected={archiveTab === 'exercise'}
+          class:active={archiveTab === 'exercise'}
+          onclick={() => (archiveTab = 'exercise')}
+        >
+          <Hammer size={12} /> exercise
+        </button>
+      </div>
       <div class="dash-body">
-        <article class="column theme-scholar reader-card">
-          <Markdown markdown={viewing.markdown} />
-        </article>
+        {#if archiveTab === 'exercise'}
+          <article class="column theme-scholar reader-card">
+            <ExerciseWorkspace courseId={viewing.course_id} />
+          </article>
+        {:else}
+          <article class="column theme-scholar reader-card">
+            <Markdown markdown={viewing.markdown} />
+          </article>
+        {/if}
       </div>
     </div>
   {:else}
@@ -188,6 +218,32 @@
   .date {
     color: var(--muted);
     font-size: 13px;
+  }
+  .archive-tab-bar {
+    display: flex;
+    gap: 2px;
+    border-bottom: 1px solid var(--border);
+  }
+  .archive-tab {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--muted);
+    font-size: 11px;
+    letter-spacing: 0.5px;
+    padding: 9px 6px;
+    margin-right: 18px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .archive-tab:hover {
+    color: var(--fg);
+  }
+  .archive-tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
   }
   .sub {
     color: var(--faint);

@@ -1,6 +1,6 @@
 <script lang="ts">
   import '../lib/theme.css';
-  import { app } from '../lib/stores.svelte';
+  import { app, shouldShowEscapeHatch } from '../lib/stores.svelte';
   import type { ReviewData } from '../lib/ipc';
   import SetupWizard from '../lib/screens/SetupWizard.svelte';
   import Idle from '../lib/screens/Idle.svelte';
@@ -9,12 +9,15 @@
   import Roulette from '../lib/screens/Roulette.svelte';
   import CourseReader from '../lib/screens/CourseReader.svelte';
   import Completion from '../lib/screens/Completion.svelte';
+  import LanguageLesson from '../lib/screens/LanguageLesson.svelte';
+  import ClassroomLesson from '../lib/screens/ClassroomLesson.svelte';
   import Dashboard from '../lib/screens/Dashboard.svelte';
   import EscapeHatch from '../lib/components/EscapeHatch.svelte';
 
   let reviewData = $state<ReviewData | null>(null);
   const isBlanker =
     typeof location !== 'undefined' && new URLSearchParams(location.search).has('blanker');
+  const showEscapeHatch = $derived(shouldShowEscapeHatch(app.state));
 
   $effect(() => {
     if (!isBlanker) app.init();
@@ -50,11 +53,15 @@
     <CourseReader />
   {:else if app.screen === 'completion'}
     <Completion />
+  {:else if app.screen === 'language'}
+    <LanguageLesson />
+  {:else if app.screen === 'classroom'}
+    <ClassroomLesson />
   {:else if app.screen === 'dashboard'}
     <Dashboard />
   {/if}
 
-  {#if app.session?.status === 'in_progress'}
+  {#if showEscapeHatch}
     <EscapeHatch />
   {/if}
 

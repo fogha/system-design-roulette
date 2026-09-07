@@ -1,0 +1,202 @@
+import { describe, expect, it } from 'vitest';
+import type { AppStateView, ClassroomSlotView } from './ipc';
+import {
+  formatClassCountdown,
+  nextScheduledClass,
+} from './next-class';
+
+function state(overrides: Partial<AppStateView> = {}): AppStateView {
+  return {
+    onboarded: true,
+    session: {
+      date: '2026-07-27',
+      status: 'completed',
+      step: 'done',
+      quiz_score: 1,
+      streak: 4,
+      locked: false,
+      session_type: 'lesson',
+      plan_reason: '',
+      focus: 'javascript',
+    },
+    selected_focus: 'javascript',
+    owed: false,
+    schedule_hour: 9,
+    schedule_minute: 0,
+    debug_day: false,
+    enforcement_disarmed: false,
+    schedule_paused: false,
+    kiosk_level: 'hard',
+    model: 'opus',
+    agent: 'claude',
+    custom_agent_bin: '',
+    deepseek_key_configured: false,
+    language_programs: [],
+    language_slots: [],
+    language_due_count: 0,
+    active_language_session: null,
+    classroom_programs: [],
+    classroom_slots: [],
+    classroom_due_count: 0,
+    active_classroom_sessions: [],
+    ...overrides,
+  };
+}
+
+function classroomSlot(
+  at: Date,
+  overrides: Partial<ClassroomSlotView> = {},
+): ClassroomSlotView {
+  return {
+    id: 1,
+    subject_id: 'typescript',
+    label: 'TypeScript',
+    short_code: 'TS',
+    kind: 'engineering',
+    hour: at.getHours(),
+    minute: at.getMinutes(),
+    weekdays: [at.getDay() === 0 ? 7 : at.getDay()],
+    enabled: true,
+    owed: false,
+    next_fire_at: at.toISOString(),
+    in_progress: false,
+    source: 'manual',
+    ...overrides,
+  };
+}
+
+describe('next scheduled class', () => {
+  const now = new Date(2026, 6, 28, 8, 0, 0);
+
+  it('returns no countdown while the schedule is paused', () => {
+    expect(nextScheduledClass(state({ schedule_paused: true }), now)).toBeNull();
+  });
+
+  it('shows an owed primary session as due now', () => {
+    const next = nextScheduledClass(state({ owed: true }), now);
+    expect(next?.label).toBe('Frontend engineering');
+    expect(next?.due).toBe(true);
+    expect(formatClassCountdown(next, now)).toBe('due now');
+  });
+
+  it('moves a primary session already completed today to tomorrow', () => {
+    const next = nextScheduledClass(
+      state({
+        session: {
+          ...state().session,
+          date: '2026-07-28',
+          status: 'completed',
+        },
+      }),
+      now,
+    );
+    expect(next?.at.getDate()).toBe(29);
+    expect(next?.due).toBe(false);
+  });
+
+  it('combines classes tied at the same instant', () => {
+    const at = new Date(2026, 6, 28, 9, 0, 0);
+    const next = nextScheduledClass(
+      state({
+        classroom_programs: [
+          {
+            subject_id: 'typescript',
+            kind: 'engineering',
+            label: 'TypeScript',
+            native_label: 'TypeScript',
+            short_code: 'TS',
+            enabled: true,
+            agent: 'claude',
+            model: 'opus',
+            custom_agent_bin: '',
+            prompt_profile: 'classroom.typescript',
+            prompt_version: 'v1',
+            session_minutes: 30,
+            learning_goal: '',
+            target_weekly_minutes: 90,
+            progress: 0,
+            progress_label: '',
+            language_progress: null,
+          },
+        ],
+        classroom_slots: [classroomSlot(at)],
+      }),
+      now,
+    );
+    expect(next?.label).toBe('Frontend engineering + TypeScript');
+  });
+
+  it('ignores an invalid primary time and keeps valid weekday classroom data', () => {
+    const friday = new Date(2026, 6, 31, 18, 30, 0);
+    const next = nextScheduledClass(
+      state({
+        schedule_hour: 25,
+        classroom_programs: [
+          {
+            subject_id: 'typescript',
+            kind: 'engineering',
+            label: 'TypeScript',
+            native_label: 'TypeScript',
+            short_code: 'TS',
+            enabled: true,
+            agent: 'claude',
+            model: 'opus',
+            custom_agent_bin: '',
+            prompt_profile: 'classroom.typescript',
+            prompt_version: 'v1',
+            session_minutes: 30,
+            learning_goal: '',
+            target_weekly_minutes: 90,
+            progress: 0,
+            progress_label: '',
+            language_progress: null,
+          },
+        ],
+        classroom_slots: [classroomSlot(friday)],
+      }),
+      now,
+    );
+    expect(next?.label).toBe('TypeScript');
+    expect(next?.at.getDay()).toBe(5);
+  });
+
+  it('chooses the earliest enabled class and ignores stale or disabled slots', () => {
+    const first = new Date(2026, 6, 28, 8, 30, 0);
+    const stale = new Date(2026, 6, 28, 7, 30, 0);
+    const programs = [
+      {
+        subject_id: 'typescript' as const,
+        kind: 'engineering' as const,
+        label: 'TypeScript',
+        native_label: 'TypeScript',
+        short_code: 'TS',
+        enabled: true,
+        agent: 'claude' as const,
+        model: 'opus' as const,
+        custom_agent_bin: '',
+        prompt_profile: 'classroom.typescript',
+        prompt_version: 'v1',
+        session_minutes: 30,
+        learning_goal: '',
+        target_weekly_minutes: 90,
+        progress: 0,
+        progress_label: '',
+        language_progress: null,
+      },
+    ];
+    const next = nextScheduledClass(
+      state({
+        schedule_hour: 20,
+        classroom_programs: programs,
+        classroom_slots: [
+          classroomSlot(stale),
+          classroomSlot(first, { id: 2 }),
+          classroomSlot(new Date(2026, 6, 28, 8, 15, 0), { id: 3, enabled: false }),
+        ],
+      }),
+      now,
+    );
+    expect(next?.at.getHours()).toBe(8);
+    expect(next?.at.getMinutes()).toBe(30);
+  });
+});

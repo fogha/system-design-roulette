@@ -1,9 +1,14 @@
 pub mod audio;
+pub mod classroom;
 pub mod commands;
 pub mod db;
+pub mod focus;
 pub mod generator;
+pub mod keychain;
 pub mod kiosk;
+pub mod language;
 pub mod mastery;
+pub mod research;
 pub mod roulette;
 pub mod scheduler;
 pub mod session;
@@ -76,28 +81,51 @@ pub fn run() {
             let state = app.state::<AppState>();
             if session::session_owed(&state) {
                 let _ = app.emit("session:owed", true);
+                kiosk::engage(app, &state);
+            }
+            let classroom_slots = {
+                let conn = state.db.0.lock().unwrap();
+                classroom::slot_views(&conn, &state.today(), state.debug_day)
+            };
+            if let Ok(slots) = classroom_slots {
+                let due = slots
+                    .into_iter()
+                    .filter(|slot| slot.owed)
+                    .collect::<Vec<_>>();
+                if !due.is_empty() {
+                    let _ = app.emit("classroom:owed", due);
+                }
             }
         }))
         .plugin(tauri_plugin_opener::init())
         .setup(move |app| {
-            let data_dir = app
-                .path()
-                .app_data_dir()
-                .expect("app data dir resolvable");
+            let data_dir = app.path().app_data_dir().expect("app data dir resolvable");
             std::fs::create_dir_all(&data_dir)?;
             let conn = db::open(&data_dir.join("roulette.db"))?;
             db::seed_concepts(&conn, SEED_CONCEPTS)?;
+            let startup_today = chrono::Local::now().format("%Y-%m-%d").to_string();
+            language::initialize(&conn, &startup_today).map_err(std::io::Error::other)?;
+            classroom::initialize(&conn, &startup_today).map_err(std::io::Error::other)?;
             let codex_bin = resolve_codex_bin(&conn);
             // Primary model for course generation: config 'model' (default opus).
             // Held behind Arc<Mutex> so settings changes apply live.
             let model = std::sync::Arc::new(Mutex::new(
-                db::get_config(&conn, "model").ok().flatten().unwrap_or_else(|| "opus".to_string()),
+                db::get_config(&conn, "model")
+                    .ok()
+                    .flatten()
+                    .unwrap_or_else(|| "opus".to_string()),
             ));
             let agent = std::sync::Arc::new(Mutex::new(
-                db::get_config(&conn, "agent").ok().flatten().unwrap_or_else(|| "claude".to_string()),
+                db::get_config(&conn, "agent")
+                    .ok()
+                    .flatten()
+                    .unwrap_or_else(|| "claude".to_string()),
             ));
             let custom_bin = std::sync::Arc::new(Mutex::new(
-                db::get_config(&conn, "custom_agent_bin").ok().flatten().unwrap_or_default(),
+                db::get_config(&conn, "custom_agent_bin")
+                    .ok()
+                    .flatten()
+                    .unwrap_or_default(),
             ));
             // Live agent-activity feed: generator -> broadcast -> gen:log events.
             let (log_tx, mut log_rx) = tokio::sync::broadcast::channel::<String>(64);
@@ -128,10 +156,11 @@ pub fn run() {
                 timer_paused: AtomicBool::new(false),
                 debug_day,
                 escape_failures: Mutex::new(Vec::new()),
-                exit_quiz_failures: Mutex::new(Vec::new()),
                 prev_muted: Mutex::new(None),
                 frontend_ready: AtomicBool::new(false),
                 gen_notify: tokio::sync::Notify::new(),
+                chat_threads: Mutex::new(std::collections::HashMap::new()),
+                classroom_chat_threads: Mutex::new(std::collections::HashMap::new()),
             });
 
             // Self-heal the launchd plist if it points at a stale binary path
@@ -139,15 +168,15 @@ pub fn run() {
             if !debug_day {
                 let state = app.state::<AppState>();
                 let conn = state.db.0.lock().unwrap();
-                let onboarded = matches!(db::get_config(&conn, "onboarded"), Ok(Some(v)) if v == "1");
-                let paused = matches!(db::get_config(&conn, "schedule_paused"), Ok(Some(v)) if v == "1");
+                let onboarded =
+                    matches!(db::get_config(&conn, "onboarded"), Ok(Some(v)) if v == "1");
+                let paused =
+                    matches!(db::get_config(&conn, "schedule_paused"), Ok(Some(v)) if v == "1");
                 if onboarded && !paused {
-                    let hour: u32 = db::get_config(&conn, "schedule_hour")
-                        .ok().flatten().and_then(|v| v.parse().ok()).unwrap_or(9);
-                    let minute: u32 = db::get_config(&conn, "schedule_minute")
-                        .ok().flatten().and_then(|v| v.parse().ok()).unwrap_or(0);
+                    let times =
+                        classroom::all_schedule_times(&conn).unwrap_or_else(|_| vec![(9, 0)]);
                     drop(conn);
-                    scheduler::ensure_current(hour, minute);
+                    scheduler::ensure_current_many(&times);
                 }
             }
 
@@ -167,6 +196,21 @@ pub fn run() {
                         let _ = handle.emit("session:owed", true);
                         kiosk::engage(&handle, &state);
                     }
+                    let classroom_slots = {
+                        let conn = state.db.0.lock().unwrap();
+                        classroom::slot_views(&conn, &state.today(), state.debug_day)
+                    };
+                    if let Ok(slots) = classroom_slots {
+                        let due = slots
+                            .into_iter()
+                            .filter(|slot| slot.owed)
+                            .collect::<Vec<_>>();
+                        if !due.is_empty() {
+                            // Classroom reminders are deliberately advisory:
+                            // surface them in-app without taking the kiosk lock.
+                            let _ = handle.emit("classroom:owed", due);
+                        }
+                    }
                 }
             });
 
@@ -180,28 +224,39 @@ pub fn run() {
                         let _ = handle.emit("session:owed", true);
                         kiosk::engage(&handle, &state);
                     }
+                    let classroom_slots = {
+                        let conn = state.db.0.lock().unwrap();
+                        classroom::slot_views(&conn, &state.today(), state.debug_day)
+                    };
+                    if let Ok(slots) = classroom_slots {
+                        let due = slots
+                            .into_iter()
+                            .filter(|slot| slot.owed)
+                            .collect::<Vec<_>>();
+                        if !due.is_empty() {
+                            let _ = handle.emit("classroom:owed", due);
+                        }
+                    }
                     // Kick the pregen queue on every triggered launch (wake catch-up).
                     state.gen_notify.notify_one();
                 });
             }
             Ok(())
         })
-        .on_window_event(|window, event| {
-            match event {
-                tauri::WindowEvent::CloseRequested { api, .. } => {
-                    let state = window.app_handle().state::<AppState>();
-                    if state.locked.load(Ordering::SeqCst) {
-                        api.prevent_close();
-                    }
+        .on_window_event(|window, event| match event {
+            tauri::WindowEvent::CloseRequested { api, .. } => {
+                let state = window.app_handle().state::<AppState>();
+                if state.locked.load(Ordering::SeqCst) {
+                    api.prevent_close();
                 }
-                tauri::WindowEvent::Focused(false) => {
-                    let state = window.app_handle().state::<AppState>();
-                    if state.locked.load(Ordering::SeqCst) {
-                        let _ = window.set_focus();
-                    }
-                }
-                _ => {}
             }
+            tauri::WindowEvent::Focused(false) => {
+                let state = window.app_handle().state::<AppState>();
+                if state.locked.load(Ordering::SeqCst) {
+                    let _ = window.set_focus();
+                }
+            }
+            _ => {}
         })
         .invoke_handler(tauri::generate_handler![
             commands::mark_frontend_ready,
@@ -209,9 +264,24 @@ pub fn run() {
             commands::check_agent,
             commands::complete_setup,
             commands::update_schedule,
+            commands::get_curriculum_map,
+            commands::configure_classroom_program,
+            commands::upsert_classroom_slot,
+            commands::delete_classroom_slot,
+            commands::plan_classroom_schedule,
+            commands::start_classroom_session,
+            commands::resume_classroom_session,
+            commands::submit_classroom_engineering_session,
+            commands::configure_language_program,
+            commands::upsert_language_slot,
+            commands::delete_language_slot,
+            commands::start_language_session,
+            commands::get_active_language_session,
+            commands::submit_language_session,
             commands::set_kiosk_level,
             commands::set_model,
             commands::set_agent,
+            commands::set_deepseek_api_key,
             commands::pause_schedule,
             commands::resume_schedule,
             commands::start_session,
@@ -235,6 +305,16 @@ pub fn run() {
             commands::get_dashboard,
             commands::get_past_course,
             commands::open_resources,
+            commands::get_course_exercise,
+            commands::save_exercise_draft,
+            commands::save_exercise_completion,
+            commands::get_course_chat,
+            commands::send_course_message,
+            commands::get_classroom_exercise,
+            commands::save_classroom_exercise_draft,
+            commands::save_classroom_exercise_completion,
+            commands::get_classroom_chat,
+            commands::send_classroom_message,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

@@ -42,7 +42,10 @@
     <div class="hatch-panel">
       <div class="hatch-head mono">
         <span class="bg-tag">BREAK GLASS</span>
-        <span class="hatch-warn">circuit breaker — trips streak to 0, marks today skipped</span>
+        <span class="hatch-warn">
+          circuit breaker — marks today’s enforced session skipped; completed classroom history is
+          preserved
+        </span>
       </div>
       <svg class="phrase-svg" viewBox="0 0 640 28" preserveAspectRatio="xMidYMid meet">
         <text x="320" y="19" text-anchor="middle">{phrase}</text>

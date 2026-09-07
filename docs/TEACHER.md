@@ -10,7 +10,7 @@ Today the agent is stateless: each `claude -p` call knows the topic and nothing
 else. The Teacher inverts this. Every invocation receives a **learner dossier**
 (compact, generated from the knowledge base) and acts in one standing role:
 
-> *You are this student's long-term system design teacher. You have taught them
+> *You are this student's long-term frontend engineering teacher. You have taught them
 > for N days. You know what they have mastered, what they struggle with, and
 > what comes next. Your job is to move them to staff-engineer-level judgment —
 > not to cover topics, but to build durable understanding.*
@@ -19,10 +19,102 @@ The Teacher decides — within guardrails — what kind of day today is, how har
 to push, and what to revisit. The app remains the authority on *enforcement*
 (lock, timer, streak); the Teacher becomes the authority on *pedagogy*.
 
-**Default model: `opus`** (Opus 4.8 via the claude CLI). Configurable in
-settings; automatic downgrade to `sonnet` on failure/timeout, then the existing
-codex → bundled fallback chain. Grading and small calls stay on `sonnet`
-(cheap, latency-sensitive, rubric-bound).
+### Universal first-principles contract
+
+Every generated teaching path uses
+`src-tauri/prompts/first-principles.txt`: primary and classroom courses,
+quizzes, grading feedback, exit remediation, course chat, audio lessons, and
+language enrichment. The sequence is stable across subjects: establish the
+smallest facts and constraints, explain them without circular terminology, use
+an analogy and state its limits, derive the larger mechanism, transfer it to a
+real situation, and correct mistakes from the first missing building block.
+Domain adapters translate that same method into software mechanisms or
+sound/symbol/word/sentence language progression. The contract is present even
+on day one when no learner dossier exists.
+
+### Classroom teacher isolation
+
+`classroom.rs` is the routing boundary for every advisory subject. German,
+Italian, JavaScript/browser internals, TypeScript, frontend architecture, and
+developer tooling each have an immutable subject identity plus their own
+provider, model, prompt profile, prompt version, schedule slots, sessions, and
+progress. A generation call receives a snapshot of that class profile; it
+never mutates `Generator`'s global provider/model and therefore cannot leak
+teacher configuration into a concurrent class.
+
+The six prompt contracts live separately under
+`src-tauri/prompts/classroom/`. Each contract declares the subject and profile
+version and explicitly excludes neighboring domains. Engineering classes
+reuse the focus-local mastery ledger and strict course validator, but run in
+ID-keyed `classroom_sessions`, so several subjects can be completed on one
+date without touching the primary one-row-per-day `sessions` loop.
+Their reader uses the same continuous course/exercise/chat interaction model
+as the primary reader: the autosaved exercise workspace follows the reading
+content, course-grounded chat stays available while the lesson is on screen,
+and retrieval checks follow the exercise. The tutor receives the authoritative
+learner outcome, cumulative artifact, complete course, and structured exercise.
+Every answer must identify an exact course section, pass a deterministic shape
+gate, and return three follow-up prompts; malformed or invalid output gets one
+same-provider/model correction and never crosses to another provider. The UI
+renders full Markdown/code, exposes the grounding section, and offers those
+follow-ups as actions. Chat history stays bounded and session-only, and student
+messages are treated as untrusted context with a 2,000-character limit.
+Course generation has no bundled
+content substitution: the configured provider must return a lesson with five
+validated checks and a structured exercise. Malformed JSON or a missed quality
+gate gets one correction pass through that same provider and model; if the
+corrected lesson still fails, the real error is shown. Engineering courses
+target 3,500–4,500 words and cannot pass below 3,200; per-section depth floors
+prevent a long but padded section from disguising thin mechanisms, production
+transfer, failure analysis, observability, or practice. The editorial rubric
+scores coverage depth separately from mechanism depth and specificity.
+
+German and Italian deliberately do not reuse the frontend-engineering dossier.
+`language.rs` owns their CEFR evidence model with seven strands: listening,
+reading, spoken interaction, spoken production, writing, grammar, and
+vocabulary/pragmatics. A class-specific agent may enrich the teaching material
+in a curated unit, but Rust preserves the scenario, can-do descriptor, phase,
+and assessment questions. Generated material must pass a depth, dialogue,
+phrase, and production-task gate; otherwise the bundled lesson is used.
+The A1 sequence begins from first principles: alphabet and letter names,
+sound-spelling correspondences, basic sentence construction, counting, and
+number construction are explicit curated foundations. Their staged passes
+complete before later scenario units, and enrichment cannot remove the
+first-principles section.
+Calendar milestones guide pacing, but only scenario completion and skill
+evidence can advance a level.
+
+Every classroom slot is advisory. It may surface a reminder, but it never
+engages the kiosk, mutates the primary `sessions` row, or affects the primary
+enforcement decision. Completed classroom work does contribute to the combined
+learning streak and next-course dossier. If the primary session is owed, it
+wins and classroom starts/resumes remain disabled until primary completion or
+skip.
+
+**Default model: `opus`** via the Claude CLI. Configurable in settings. Course
+generation, its one syntax/structural correction when needed, and the final
+quality editor use that exact provider and model. The editor scores mechanism
+depth, specificity, production transfer, dossier adherence, exercise
+alignment, and source discipline. There is no alternate-provider or
+bundled-course substitution for engineering courses or course-grounded
+quizzes. Grading and non-course auxiliary calls remain latency-sensitive.
+
+**Retrieval before generation.** The Teacher does not supply its own sources.
+The app fetches up to five primary documents per lesson (the concept's curated
+sources, plus topic-specific pages discovered via MDN search, restricted to an
+allowlist of specifications, vendor, and maintainer documentation), extracts
+their prose, and injects it as quoted material the course must teach from and
+cite inline. A course must link at least three retrieved documents inline; one
+same-provider correction pass is allowed before rejection. Every reading-list
+URL is verified over the network, and unverifiable links are removed rather
+than shown, so a hallucinated citation costs the learner a link instead of
+misleading them. When retrieval fails outright the lesson still runs, without
+unverified links, and the reason is logged.
+
+**Prose is not requested as JSON.** DeepSeek's JSON mode returns roughly a
+third of the prose it writes in plain markdown, so the course body — and any
+per-section deepening pass for a section under its word floor — is requested as
+markdown, while structured payloads keep the JSON contract.
 
 ## 2. Knowledge base (the learner model)
 
@@ -43,7 +135,7 @@ unseen → introduced → practicing → mastered → maintenance
 | unseen       | never taught                                            | —                                                       |
 | introduced   | course read, first quiz not yet taken                   | session completed                                       |
 | practicing   | quizzed at least once, not yet consistent               | first quiz on the topic                                 |
-| struggling   | repeated misses                                         | same question failed 2×, or topic quiz score < 50%      |
+| struggling   | a quiz exposed a serious misconception                  | topic quiz score < 50%                                   |
 | mastered     | consistent demonstrated understanding                   | ≥ 80% across 2 quiz encounters ≥ 7 days apart           |
 | maintenance  | mastered; only spaced pop-quiz checks                   | automatic after mastered                                |
 | decayed      | maintenance check failed                                | pop-quiz miss on a mastered topic                       |
@@ -77,7 +169,8 @@ MASTERED (11): consistent-hashing, caching-strategies, …
 STRUGGLING (2): consensus-raft (score 40%, notes: "confuses term vs index"),
                 exactly-once-delivery (failed carryover ×2)
 PRACTICING (6): …    DUE FOR REVIEW (3): cap-theorem (last seen 21d ago), …
-RECENT COURSES: [last 5 titles + one-line summaries]
+RECENT COURSES: [last 5 dates + titles]
+RECENT EXIT-CHECK MISCONCEPTIONS: [up to 6 distinct missed objectives + notes]
 PROFILE: weak_areas=consensus, formal consistency models;
          responds well to concrete numbers and failure stories.
 ```
@@ -87,12 +180,16 @@ PROFILE: weak_areas=consensus, formal consistency models;
 The flat least-picked-random wheel becomes a **progressive curriculum** while
 keeping the roulette ritual (the wheel stays; what changes is what's on it).
 
-- Concepts gain `tier` (0–3) and `prereqs` (slugs) in `concepts.json`.
-  Tier 0 = fundamentals; tier 3 = synthesis topics (design Twitter/Uber-style
-  composites, multi-region architectures).
-- **The wheel only shows unlocked concepts**: tier N unlocks when ~70% of its
-  prereq set is `practicing+`. Early days the wheel is small and fundamental;
-  it visibly *grows* over the lifetime of the app — progress you can see.
+- Every selectable concept carries a complete curriculum brief in
+  `concepts.json`: learner outcome, irreducible mechanisms, production
+  scenario, misconceptions, observable evidence, cumulative artifact, vetted
+  primary sources, phase, core/elective status, and cross-track relationships.
+- The visible phase arc is foundations → mechanisms → production → synthesis,
+  followed by electives. Every track has at least a 30-session core path.
+- **The wheel only shows unlocked concepts**: tier 1 unlocks when at least 70%
+  of its prereq set is `practicing+`; tiers 2–3 require every prerequisite.
+  Among equally fresh concepts, core material and the earliest current phase
+  win before tier and debt-aware weighting.
 - Weighting within unlocked: struggling-adjacent and due-for-review-adjacent
   topics get higher weight; the Teacher can also pin tomorrow's topic during
   pre-generation ("they just failed quorum questions twice — next lesson:
@@ -104,21 +201,22 @@ keeping the roulette ritual (the wheel stays; what changes is what's on it).
 
 ## 4. Session types: not every day is a lecture
 
-At pre-generation time the Teacher (not the app) picks tomorrow's session type
-from its dossier, within app-enforced bounds:
+At pre-generation time the Teacher picks between the two shipped session
+types, within app-enforced bounds. The app guarantees a pop-quiz retrieval
+checkpoint after every seven completed sessions when at least six concepts
+have been practiced, never on consecutive days:
 
 | Type            | Cadence (guardrail)            | Shape                                                                 |
 | --------------- | ------------------------------ | --------------------------------------------------------------------- |
 | **lesson**      | default                        | today's flow: quiz on yesterday → roulette → 30-min course             |
-| **pop-quiz**    | ~1 in 5 days, never 2 in a row | no new topic. 10–14 questions sampled across `maintenance` + `due_for_review` + DLQ. Shorter (~15 min). Misses demote mastery. |
-| **design-lab**  | unlocked at tier 2; ~1 in 7    | a project day: one realistic prompt ("design a multi-tenant rate limiter for …") combining ≥3 mastered concepts. User writes a design; Teacher grades against a rubric it generated with the exercise. |
-| **remediation** | when ≥2 concepts `struggling`  | re-teaches a struggling concept **from a different angle** (the Teacher knows what didn't land from its notes), plus targeted drill. |
-| **audio-lesson**| user-requested, day before or at lock-in | the lesson as a NotebookLM-style **two-host dialogue** read aloud while the user multitasks (manual labor, commute prep). Same topic, same timer, same end-of-session quiz — only the delivery changes. See §5a. |
+| **pop-quiz**    | weekly checkpoint plus review-debt overrides; never 2 in a row | no new topic. 12 previously attempted questions, weighted toward `struggling`, `decayed`, and due-for-review concepts. Misses update mastery. |
 
-The session FSM gains these as variants of the existing steps — pop-quiz is
-quiz+review without roulette/course; design-lab is course-reader with a free-
-text editor and a grading pass. Enforcement, timer, and streak semantics are
-identical across types.
+Pop-quiz is quiz+review without roulette/course. Audio is a delivery mode for
+a normal lesson, not a separate session type. Every normal lesson also appends
+up to two due/struggling spaced-retrieval questions. Design-lab and dedicated
+remediation-day variants remain future work; the current Teacher instead uses
+days 7/14/21/30 as cumulative practical-work checkpoints and uses the dossier
+to reteach recorded misconceptions inside later lessons.
 
 ## 5. Elastic days: "one more topic"
 
@@ -139,7 +237,8 @@ After Completion, if the user has time, an **`▲ extend session`** action:
 
 Some days the student wants to *listen*, not read — hands busy, ears free.
 Audio mode keeps the contract intact: the session still locks, the timer still
-runs, the quiz still happens at the end. Only the medium changes.
+runs, and the adaptive exit check still verifies same-day comprehension. The
+next session's quiz tests the course again after spacing. Only the medium changes.
 
 ### Flow
 
@@ -155,9 +254,8 @@ runs, the quiz still happens at the end. Only the medium changes.
 4. Session day: the course-reader becomes an **audio player node**
    (`sdr://broadcast · 2 hosts · 28:40`): play/pause (pauses the TTL), ±15s,
    transcript scrubber (the script doubles as captions), speed 0.8–1.5×.
-   The quiz at the end is generated from the same content, so comprehension is
-   still verified — listening without absorbing fails the quiz and feeds the
-   mastery ledger like any other miss.
+   The adaptive exit check and next-session quiz are generated from the same
+   course, so listening is still followed by retrieval and feedback.
 
 ### Engine: VibeVoice on Apple Silicon
 
@@ -184,15 +282,15 @@ Caveats to design around:
 
 ## 6. Pipeline changes (mapping to today's code)
 
-| Today                                   | Becomes                                                                 |
-| --------------------------------------- | ----------------------------------------------------------------------- |
-| `generate_course(title, category)`      | `teach(dossier, directive)` — directive = session type + topic + angle  |
-| flat `course.txt` prompt                | `teacher_system.txt` (role, standing) + per-type templates (lesson / pop-quiz / design-lab / remediation), all receiving the dossier |
-| quiz from course text only              | quiz prompt also gets mastery context → can mix in 1–2 spiral-review questions from older material |
-| grade → verdicts                        | grade → verdicts **+ teacher_notes + mastery signals** (one call)        |
-| roulette = least-picked random          | unlocked-tier weighted draw + optional Teacher override w/ reason        |
-| `--model sonnet` hardcoded              | `config.model` (default `opus`), per-call-class override, auto-downgrade |
-| pre-gen = tomorrow's course + quiz      | pre-gen = **plan tomorrow** (type + topic + course/quiz as needed) — one nightly "planning" invocation |
+| Pipeline area | Shipped behavior |
+| --- | --- |
+| course generation | `generate_course(title, category, dossier, focus, curriculum)` receives the standing Teacher prompt, full curriculum brief, track context, month outcome, and unified learner dossier |
+| course/quiz output | parsed structured JSON is checked by deterministic gates, then engineering courses receive one same-provider editorial pass |
+| quiz | five fresh, course-grounded questions; malformed or invalid output gets one same-provider correction and never unrelated bundled substitution |
+| grade | verdicts + plain-language feedback + private teacher notes, with the dossier available to the grader |
+| roulette | focus-local prerequisite graph, core/current-phase first, complete foundations for tier 2/3, then debt-aware weighting |
+| model/provider | exact configured provider/model for engineering course, correction, editor, and aligned assessment; errors surface after the allowed same-provider correction |
+| pre-generation | plans lesson vs pop-quiz, then builds the course/quiz required for that day |
 
 Everything stays headless one-shot CLI calls; continuity lives entirely in
 SQLite + the dossier. No daemon-resident agent, no conversation state to lose.
@@ -223,5 +321,5 @@ SQLite + the dossier. No daemon-resident agent, no conversation state to lose.
    `say` first (proves the flow with zero deps), then the VibeVoice/mlx-audio
    provisioned engine as the quality tier.
 
-Each milestone ships independently behind the existing fallback chain — if any
-Teacher call fails, the app degrades to exactly today's behavior.
+Current engineering generation fails visibly after its permitted same-provider
+repair/editor path; it never silently changes provider, topic, or course.

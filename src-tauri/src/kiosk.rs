@@ -154,7 +154,11 @@ pub enum KioskLevel {
 
 pub fn configured_level(state: &AppState) -> KioskLevel {
     let conn = state.db.0.lock().unwrap();
-    match crate::db::get_config(&conn, "kiosk_level").ok().flatten().as_deref() {
+    match crate::db::get_config(&conn, "kiosk_level")
+        .ok()
+        .flatten()
+        .as_deref()
+    {
         Some("advisory") => KioskLevel::Advisory,
         Some("firm") => KioskLevel::Firm,
         _ => KioskLevel::Hard,
@@ -180,6 +184,16 @@ pub fn engage(app: &AppHandle, state: &AppState) {
     let level = configured_level(state);
     log::info!("kiosk engaging at level {level:?}");
     let Some(window) = app.get_webview_window("main") else {
+        state.locked.store(false, Ordering::SeqCst);
+        log::warn!("kiosk engage deferred: main window unavailable");
+        let app = app.clone();
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            let state = app.state::<AppState>();
+            if crate::session::session_owed(&state) && !state.locked.load(Ordering::SeqCst) {
+                engage(&app, &state);
+            }
+        });
         return;
     };
     if level == KioskLevel::Advisory {
@@ -278,11 +292,12 @@ pub fn engage(app: &AppHandle, state: &AppState) {
                     {
                         let w2 = w.clone();
                         let _ = w.run_on_main_thread(move || {
-                            let _ = objc2::exception::catch(std::panic::AssertUnwindSafe(|| unsafe {
-                                if let Ok(ptr) = w2.ns_window() {
-                                    mac::raise_window(ptr as *mut objc2::runtime::AnyObject);
-                                }
-                            }));
+                            let _ =
+                                objc2::exception::catch(std::panic::AssertUnwindSafe(|| unsafe {
+                                    if let Ok(ptr) = w2.ns_window() {
+                                        mac::raise_window(ptr as *mut objc2::runtime::AnyObject);
+                                    }
+                                }));
                         });
                     }
                 }
@@ -309,7 +324,9 @@ pub fn engage(app: &AppHandle, state: &AppState) {
                     break;
                 }
             }
-            let Some(window) = app2.get_webview_window("main") else { continue };
+            let Some(window) = app2.get_webview_window("main") else {
+                continue;
+            };
             #[cfg(target_os = "macos")]
             {
                 let win = window.clone();
@@ -366,12 +383,26 @@ pub fn release(app: &AppHandle, state: &AppState) {
 }
 
 /// Verify the escape phrase (constant-time-ish), enforce attempt lockout.
+fn retain_recent_failures(failures: &mut Vec<i64>, now: i64) -> usize {
+    failures.retain(|timestamp| now - *timestamp < 60);
+    failures.len()
+}
+
+fn escape_phrase_matches(typed: &str, expected: &str) -> bool {
+    let a = typed.trim().as_bytes();
+    let b = expected.trim().as_bytes();
+    let mut diff = a.len() ^ b.len();
+    for i in 0..a.len().min(b.len()) {
+        diff |= (a[i] ^ b[i]) as usize;
+    }
+    diff == 0
+}
+
 pub fn verify_escape(state: &AppState, typed: &str) -> Result<bool, String> {
     let now = chrono::Utc::now().timestamp();
     {
         let mut fails = state.escape_failures.lock().unwrap();
-        fails.retain(|t| now - *t < 60);
-        if fails.len() >= 3 {
+        if retain_recent_failures(&mut fails, now) >= 3 {
             return Err("too many attempts, wait 60 seconds".into());
         }
     }
@@ -382,16 +413,33 @@ pub fn verify_escape(state: &AppState, typed: &str) -> Result<bool, String> {
             .flatten()
             .unwrap_or_default()
     };
-    let a = typed.trim().as_bytes();
-    let b = expected.trim().as_bytes();
-    let mut diff = a.len() ^ b.len();
-    for i in 0..a.len().min(b.len()) {
-        diff |= (a[i] ^ b[i]) as usize;
+    if expected.trim().len() < 40 {
+        return Err("escape phrase is not safely configured".into());
     }
-    if diff == 0 {
+    if escape_phrase_matches(typed, &expected) {
+        state.escape_failures.lock().unwrap().clear();
         Ok(true)
     } else {
         state.escape_failures.lock().unwrap().push(now);
         Ok(false)
+    }
+}
+
+#[cfg(test)]
+mod escape_tests {
+    use super::{escape_phrase_matches, retain_recent_failures};
+
+    #[test]
+    fn phrase_comparison_requires_exact_trimmed_content() {
+        assert!(escape_phrase_matches(" exact phrase ", "exact phrase"));
+        assert!(!escape_phrase_matches("exact phrase!", "exact phrase"));
+        assert!(!escape_phrase_matches("", "exact phrase"));
+    }
+
+    #[test]
+    fn escape_rate_limit_only_counts_the_last_minute() {
+        let mut failures = vec![10, 50, 89, 90];
+        assert_eq!(retain_recent_failures(&mut failures, 100), 3);
+        assert_eq!(failures, vec![50, 89, 90]);
     }
 }

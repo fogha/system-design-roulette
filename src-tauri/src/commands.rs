@@ -2,6 +2,7 @@ use crate::db::{self, Attempt};
 use crate::generator::GradeItem;
 use crate::session::{self, SessionView};
 use crate::state::AppState;
+use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
@@ -31,20 +32,44 @@ pub struct AppStateView {
     pub kiosk_level: String,
     /// Course-generation model: 'opus' | 'sonnet' | 'haiku'.
     pub model: String,
-    /// Primary CLI agent: 'claude' | 'codex' | 'custom'.
+    /// Primary generation provider.
     pub agent: String,
     /// Binary path used when agent == 'custom'.
     pub custom_agent_bin: String,
+    /// Today's chosen learning track, if the session has started with a focus.
+    pub selected_focus: Option<String>,
+    /// Whether a DeepSeek API key is available (env var or Keychain) — the
+    /// key itself never leaves the Rust process.
+    pub deepseek_key_configured: bool,
+    /// Independent, non-blocking language programs. These never reuse or
+    /// mutate the frontend-engineering session row.
+    pub language_programs: Vec<crate::language::LanguageProgramView>,
+    pub language_slots: Vec<crate::language::LanguageSlotView>,
+    pub language_due_count: usize,
+    pub active_language_session: Option<crate::language::ActiveLanguageSessionView>,
+    /// Generic advisory classroom. Every subject owns its schedule, prompt
+    /// profile, generation provider, progress, and same-day sessions.
+    pub classroom_programs: Vec<crate::classroom::ClassroomProgramView>,
+    pub classroom_slots: Vec<crate::classroom::ClassroomSlotView>,
+    pub classroom_due_count: usize,
+    pub active_classroom_sessions: Vec<crate::classroom::ActiveClassroomSessionView>,
 }
 
 fn valid_agent(agent: &str) -> bool {
-    matches!(agent, "claude" | "codex" | "cursor" | "gemini" | "custom")
+    matches!(
+        agent,
+        "claude" | "codex" | "cursor" | "gemini" | "deepseek" | "custom"
+    )
 }
 
 /// Switch the primary CLI agent (and the custom binary path when relevant).
 /// Applies to the next generation; the fallback chain adapts automatically.
 #[tauri::command]
-pub fn set_agent(state: State<'_, AppState>, agent: String, custom_bin: Option<String>) -> CmdResult<()> {
+pub fn set_agent(
+    state: State<'_, AppState>,
+    agent: String,
+    custom_bin: Option<String>,
+) -> CmdResult<()> {
     if !valid_agent(&agent) {
         return Err(format!("unknown agent: {agent}"));
     }
@@ -105,8 +130,12 @@ pub fn set_kiosk_level(state: State<'_, AppState>, level: String) -> CmdResult<(
 /// Called by the webview on boot. Until this fires, the kiosk refuses to
 /// engage (a dead webview has no escape hatch).
 #[tauri::command]
-pub fn mark_frontend_ready(state: State<'_, AppState>) -> CmdResult<()> {
+pub fn mark_frontend_ready(app: AppHandle, state: State<'_, AppState>) -> CmdResult<()> {
     state.frontend_ready.store(true, Ordering::SeqCst);
+    if session::session_owed(&state) {
+        let _ = app.emit("session:owed", true);
+        crate::kiosk::engage(&app, &state);
+    }
     Ok(())
 }
 
@@ -116,20 +145,59 @@ pub fn get_app_state(state: State<'_, AppState>) -> CmdResult<AppStateView> {
         let conn = state.db.0.lock().unwrap();
         (
             matches!(db::get_config(&conn, "onboarded"), Ok(Some(v)) if v == "1"),
-            db::get_config(&conn, "schedule_hour").ok().flatten().and_then(|v| v.parse().ok()).unwrap_or(9),
-            db::get_config(&conn, "schedule_minute").ok().flatten().and_then(|v| v.parse().ok()).unwrap_or(0),
+            db::get_config(&conn, "schedule_hour")
+                .ok()
+                .flatten()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(9),
+            db::get_config(&conn, "schedule_minute")
+                .ok()
+                .flatten()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(0),
         )
     };
     let enforcement_disarmed = std::env::var_os("HOME")
         .map(|h| std::path::Path::new(&h).join("sdr-unlock").exists())
         .unwrap_or(false);
-    let (schedule_paused, kiosk_level) = {
+    let (schedule_paused, kiosk_level, selected_focus) = {
         let conn = state.db.0.lock().unwrap();
+        let today = state.today();
         (
             matches!(db::get_config(&conn, "schedule_paused"), Ok(Some(v)) if v == "1"),
-            db::get_config(&conn, "kiosk_level").ok().flatten().unwrap_or_else(|| "hard".into()),
+            db::get_config(&conn, "kiosk_level")
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| "hard".into()),
+            session::session_focus(&conn, &today)
+                .ok()
+                .flatten()
+                .or_else(|| {
+                    crate::mastery::get_profile(&conn, "preferred_focus")
+                        .ok()
+                        .flatten()
+                        .filter(|focus| crate::focus::is_selectable(focus))
+                }),
         )
     };
+    let (language_programs, language_slots, active_language_session) = {
+        let conn = state.db.0.lock().unwrap();
+        (
+            crate::language::program_views(&conn, &state.today()).map_err(err)?,
+            crate::language::slot_views(&conn, &state.today(), state.debug_day).map_err(err)?,
+            crate::language::active_summary(&conn).map_err(err)?,
+        )
+    };
+    let language_due_count = language_slots.iter().filter(|slot| slot.owed).count();
+    let (classroom_programs, classroom_slots, active_classroom_sessions) = {
+        let conn = state.db.0.lock().unwrap();
+        (
+            crate::classroom::program_views(&conn, &state.today()).map_err(err)?,
+            crate::classroom::slot_views(&conn, &state.today(), state.debug_day).map_err(err)?,
+            crate::classroom::active_sessions(&conn).map_err(err)?,
+        )
+    };
+    let classroom_due_count = classroom_slots.iter().filter(|slot| slot.owed).count();
     Ok(AppStateView {
         onboarded,
         session: session::view(&state),
@@ -144,7 +212,46 @@ pub fn get_app_state(state: State<'_, AppState>) -> CmdResult<AppStateView> {
         model: state.generator.current_model(),
         agent: state.generator.current_agent(),
         custom_agent_bin: state.generator.current_custom_bin(),
+        selected_focus,
+        deepseek_key_configured: deepseek_key_configured(),
+        language_programs,
+        language_slots,
+        language_due_count,
+        active_language_session,
+        classroom_programs,
+        classroom_slots,
+        classroom_due_count,
+        active_classroom_sessions,
     })
+}
+
+fn refresh_os_schedule(state: &AppState) -> CmdResult<()> {
+    if state.debug_day {
+        return Ok(());
+    }
+    let times = {
+        let conn = state.db.0.lock().unwrap();
+        if matches!(db::get_config(&conn, "schedule_paused"), Ok(Some(value)) if value == "1") {
+            return Ok(());
+        }
+        crate::classroom::all_schedule_times(&conn).map_err(err)?
+    };
+    crate::scheduler::install_many(&times)
+}
+
+fn deepseek_key_configured() -> bool {
+    std::env::var("DEEPSEEK_API_KEY")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .is_some()
+        || crate::keychain::has_secret("deepseek")
+}
+
+/// Store (or clear, with an empty string) the DeepSeek API key. Persisted
+/// in the macOS Keychain, not the app database — see `keychain.rs`.
+#[tauri::command]
+pub fn set_deepseek_api_key(key: String) -> CmdResult<()> {
+    crate::keychain::set_secret("deepseek", &key)
 }
 
 /// Pause the daily schedule entirely: launchd agent removed, owed checks
@@ -164,17 +271,11 @@ pub fn pause_schedule(app: AppHandle, state: State<'_, AppState>) -> CmdResult<(
 
 #[tauri::command]
 pub fn resume_schedule(app: AppHandle, state: State<'_, AppState>) -> CmdResult<()> {
-    let (hour, minute) = {
+    {
         let conn = state.db.0.lock().unwrap();
         db::set_config(&conn, "schedule_paused", "0").map_err(err)?;
-        (
-            db::get_config(&conn, "schedule_hour").ok().flatten().and_then(|v| v.parse().ok()).unwrap_or(9),
-            db::get_config(&conn, "schedule_minute").ok().flatten().and_then(|v| v.parse().ok()).unwrap_or(0),
-        )
-    };
-    if !state.debug_day {
-        crate::scheduler::install(hour, minute)?;
     }
+    refresh_os_schedule(&state)?;
     let _ = app.emit("session:state", session::view(&state));
     Ok(())
 }
@@ -189,10 +290,15 @@ pub async fn check_agent(
 ) -> CmdResult<bool> {
     let gen = state.generator.clone();
     let which = agent.unwrap_or_else(|| gen.current_agent());
+    if which == "deepseek" {
+        return Ok(gen.check_deepseek().await);
+    }
     const PING: &str = "reply with exactly: pong";
     let mut cmd = match which.as_str() {
         "codex" => {
-            let bin = gen.codex_bin.clone()
+            let bin = gen
+                .codex_bin
+                .clone()
                 .or_else(|| crate::generator::resolve_on_path("codex"))
                 .unwrap_or_else(|| "codex".into());
             let mut c = tokio::process::Command::new(bin);
@@ -200,13 +306,17 @@ pub async fn check_agent(
             c
         }
         "cursor" => {
-            let Some(bin) = crate::generator::resolve_on_path("cursor-agent") else { return Ok(false); };
+            let Some(bin) = crate::generator::resolve_on_path("cursor-agent") else {
+                return Ok(false);
+            };
             let mut c = tokio::process::Command::new(bin);
             c.args(["-p", "--output-format", "text", PING]);
             c
         }
         "gemini" => {
-            let Some(bin) = crate::generator::resolve_on_path("gemini") else { return Ok(false); };
+            let Some(bin) = crate::generator::resolve_on_path("gemini") else {
+                return Ok(false);
+            };
             let mut c = tokio::process::Command::new(bin);
             c.args(["-p", PING]);
             c
@@ -219,14 +329,22 @@ pub async fn check_agent(
                 return Ok(false);
             }
             let mut toks = spec.split_whitespace();
-            let Some(bin) = toks.next() else { return Ok(false); };
+            let Some(bin) = toks.next() else {
+                return Ok(false);
+            };
             let mut c = tokio::process::Command::new(bin);
             let mut subbed = false;
             for t in toks {
-                if t.contains("{prompt}") { c.arg(t.replace("{prompt}", PING)); subbed = true; }
-                else { c.arg(t); }
+                if t.contains("{prompt}") {
+                    c.arg(t.replace("{prompt}", PING));
+                    subbed = true;
+                } else {
+                    c.arg(t);
+                }
             }
-            if !subbed { c.arg(PING); }
+            if !subbed {
+                c.arg(PING);
+            }
             c
         }
         _ => {
@@ -257,16 +375,26 @@ pub struct SetupInput {
     pub custom_agent_bin: Option<String>,
 }
 
+fn validate_schedule_time(hour: u32, minute: u32) -> CmdResult<()> {
+    if hour > 23 || minute > 59 {
+        Err(format!(
+            "invalid schedule time {hour:02}:{minute:02}; hour must be 0-23 and minute 0-59"
+        ))
+    } else {
+        Ok(())
+    }
+}
+
 #[tauri::command]
 pub async fn complete_setup(
     app: AppHandle,
     state: State<'_, AppState>,
     input: SetupInput,
 ) -> CmdResult<AppStateView> {
+    validate_schedule_time(input.hour, input.minute)?;
     if input.escape_phrase.trim().len() < 40 {
         return Err("escape phrase must be at least 40 characters".into());
     }
-    let today = state.today();
     {
         let conn = state.db.0.lock().unwrap();
         db::set_config(&conn, "schedule_hour", &input.hour.to_string()).map_err(err)?;
@@ -296,12 +424,9 @@ pub async fn complete_setup(
         *state.generator.agent.lock().unwrap() = agent.to_string();
         *state.generator.custom_bin.lock().unwrap() = custom.trim().to_string();
         db::set_config(&conn, "onboarded", "1").map_err(err)?;
-        // Day-1 course generates immediately so the first session is instant.
-        db::jobs::enqueue(&conn, "course", &today).map_err(err)?;
+        // Day-1 content generates after the student picks a focus at session start.
     }
-    if !state.debug_day {
-        crate::scheduler::install(input.hour, input.minute)?;
-    }
+    refresh_os_schedule(&state)?;
     state.gen_notify.notify_one();
     let _ = app.emit("session:state", session::view(&state));
     get_app_state(state)
@@ -309,20 +434,317 @@ pub async fn complete_setup(
 
 #[tauri::command]
 pub fn update_schedule(state: State<'_, AppState>, hour: u32, minute: u32) -> CmdResult<()> {
+    validate_schedule_time(hour, minute)?;
     {
         let conn = state.db.0.lock().unwrap();
         db::set_config(&conn, "schedule_hour", &hour.to_string()).map_err(err)?;
         db::set_config(&conn, "schedule_minute", &minute.to_string()).map_err(err)?;
     }
-    if !state.debug_day {
-        crate::scheduler::install(hour, minute)?;
-    }
-    Ok(())
+    refresh_os_schedule(&state)
 }
 
 #[tauri::command]
-pub fn start_session(app: AppHandle, state: State<'_, AppState>) -> CmdResult<SessionView> {
-    let s = session::start_session(&state).map_err(err)?;
+pub fn get_curriculum_map(
+    state: State<'_, AppState>,
+    focus: String,
+) -> CmdResult<crate::classroom::CurriculumMapView> {
+    let conn = state.db.0.lock().unwrap();
+    crate::classroom::curriculum_map(&conn, &focus).map_err(err)
+}
+
+#[tauri::command]
+pub fn configure_classroom_program(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: crate::classroom::ConfigureClassroomInput,
+) -> CmdResult<crate::classroom::ClassroomProgramView> {
+    {
+        let conn = state.db.0.lock().unwrap();
+        crate::classroom::configure_program(&conn, &input, &state.today()).map_err(err)?;
+    }
+    refresh_os_schedule(&state)?;
+    let view = {
+        let conn = state.db.0.lock().unwrap();
+        crate::classroom::program_view(&conn, &input.subject_id, &state.today()).map_err(err)?
+    };
+    let _ = app.emit("classroom:state", &view);
+    Ok(view)
+}
+
+#[tauri::command]
+pub fn upsert_classroom_slot(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: crate::classroom::UpsertClassroomSlotInput,
+) -> CmdResult<Vec<crate::classroom::ClassroomSlotView>> {
+    {
+        let conn = state.db.0.lock().unwrap();
+        crate::classroom::upsert_slot(&conn, &input).map_err(err)?;
+    }
+    refresh_os_schedule(&state)?;
+    let slots = {
+        let conn = state.db.0.lock().unwrap();
+        crate::classroom::slot_views(&conn, &state.today(), state.debug_day).map_err(err)?
+    };
+    let _ = app.emit("classroom:state", &slots);
+    Ok(slots)
+}
+
+#[tauri::command]
+pub fn delete_classroom_slot(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: i64,
+) -> CmdResult<Vec<crate::classroom::ClassroomSlotView>> {
+    {
+        let conn = state.db.0.lock().unwrap();
+        crate::classroom::delete_slot(&conn, id).map_err(err)?;
+    }
+    refresh_os_schedule(&state)?;
+    let slots = {
+        let conn = state.db.0.lock().unwrap();
+        crate::classroom::slot_views(&conn, &state.today(), state.debug_day).map_err(err)?
+    };
+    let _ = app.emit("classroom:state", &slots);
+    Ok(slots)
+}
+
+/// Preview (`commit: false`) or persist (`commit: true`) a schedule derived
+/// from a learner's stated goal, weekly-minutes target, and availability
+/// windows. Additive to `upsert_classroom_slot` — committing only replaces
+/// this subject's previously *planned* slots, never hand-placed ones.
+#[tauri::command]
+pub fn plan_classroom_schedule(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: crate::classroom::PlanClassroomScheduleInput,
+) -> CmdResult<crate::classroom::ClassroomPlanView> {
+    let commit = input.commit;
+    let plan = {
+        let conn = state.db.0.lock().unwrap();
+        crate::classroom::plan_schedule(&conn, &input, &state.today()).map_err(err)?
+    };
+    if commit {
+        refresh_os_schedule(&state)?;
+        let _ = app.emit("classroom:state", &plan);
+    }
+    Ok(plan)
+}
+
+/// Route a classroom start to the subject's isolated engine. Advisory classes
+/// never engage the kiosk or mutate the primary frontend session row.
+#[tauri::command]
+pub async fn start_classroom_session(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    subject_id: String,
+    slot_id: Option<i64>,
+) -> CmdResult<serde_json::Value> {
+    if session::session_owed(&state) {
+        return Err(
+            "The enforced frontend engineering session is due. Complete or skip it before starting a classroom class."
+                .into(),
+        );
+    }
+    let spec = crate::classroom::subject(subject_id.trim()).map_err(err)?;
+    let value = match spec.kind {
+        crate::classroom::SubjectKind::Language => {
+            let (base, seed, program) = {
+                let conn = state.db.0.lock().unwrap();
+                let base = crate::language::start_classroom_session(
+                    &conn,
+                    spec.id,
+                    slot_id,
+                    &state.today(),
+                )
+                .map_err(err)?;
+                let seed = crate::language::stored_lesson(&conn, base.session_id).map_err(err)?;
+                let program = crate::classroom::program_row(&conn, spec.id).map_err(err)?;
+                (base, seed, program)
+            };
+            let profile = crate::classroom::generation_profile(&program);
+            let contract = crate::classroom::contract_with_goal(&program, spec.prompt);
+            let (generated, _) = state
+                .generator
+                .enrich_classroom_language_lesson(&contract, &profile, &seed)
+                .await;
+            let lesson = {
+                let conn = state.db.0.lock().unwrap();
+                crate::language::replace_stored_lesson(&conn, base.session_id, &generated)
+                    .map_err(err)?
+            };
+            serde_json::json!({ "kind": "language", "lesson": lesson })
+        }
+        crate::classroom::SubjectKind::Engineering => {
+            let lesson =
+                crate::classroom::start_engineering_session(&state, spec.id, slot_id).await?;
+            serde_json::json!({ "kind": "engineering", "lesson": lesson })
+        }
+    };
+    let _ = app.emit("classroom:state", &value);
+    Ok(value)
+}
+
+#[tauri::command]
+pub fn resume_classroom_session(
+    state: State<'_, AppState>,
+    subject_id: String,
+) -> CmdResult<Option<serde_json::Value>> {
+    if session::session_owed(&state) {
+        return Err(
+            "The enforced frontend engineering session is due. Complete or skip it before resuming a classroom class."
+                .into(),
+        );
+    }
+    let spec = crate::classroom::subject(subject_id.trim()).map_err(err)?;
+    match spec.kind {
+        crate::classroom::SubjectKind::Language => {
+            let conn = state.db.0.lock().unwrap();
+            Ok(crate::language::active_session_for(&conn, spec.id)
+                .map_err(err)?
+                .map(|lesson| serde_json::json!({ "kind": "language", "lesson": lesson })))
+        }
+        crate::classroom::SubjectKind::Engineering => {
+            let conn = state.db.0.lock().unwrap();
+            Ok(crate::classroom::active_engineering_session(&conn, spec.id)
+                .map_err(err)?
+                .map(|lesson| serde_json::json!({ "kind": "engineering", "lesson": lesson })))
+        }
+    }
+}
+
+#[tauri::command]
+pub fn submit_classroom_engineering_session(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: crate::classroom::SubmitEngineeringInput,
+) -> CmdResult<crate::classroom::EngineeringSessionResult> {
+    let result = {
+        let conn = state.db.0.lock().unwrap();
+        crate::classroom::submit_engineering_session(&conn, &input, &state.today()).map_err(err)?
+    };
+    let _ = app.emit("classroom:state", &result);
+    Ok(result)
+}
+
+/// Enable or update one independent language program. A program has its own
+/// CEFR ledger and never changes the frontend session's focus or completion.
+#[tauri::command]
+pub fn configure_language_program(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: crate::language::ConfigureProgramInput,
+) -> CmdResult<crate::language::LanguageProgramView> {
+    {
+        let conn = state.db.0.lock().unwrap();
+        crate::language::configure_program(&conn, &input, &state.today()).map_err(err)?;
+    }
+    refresh_os_schedule(&state)?;
+    let view = {
+        let conn = state.db.0.lock().unwrap();
+        crate::language::program_view(&conn, &input.language, &state.today()).map_err(err)?
+    };
+    let _ = app.emit("language:state", &view);
+    Ok(view)
+}
+
+/// Add or edit a non-blocking language reminder slot. Multiple slots can
+/// coexist with the original enforced frontend schedule.
+#[tauri::command]
+pub fn upsert_language_slot(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: crate::language::UpsertSlotInput,
+) -> CmdResult<Vec<crate::language::LanguageSlotView>> {
+    {
+        let conn = state.db.0.lock().unwrap();
+        crate::language::upsert_slot(&conn, &input).map_err(err)?;
+    }
+    refresh_os_schedule(&state)?;
+    let slots = {
+        let conn = state.db.0.lock().unwrap();
+        crate::language::slot_views(&conn, &state.today(), state.debug_day).map_err(err)?
+    };
+    let _ = app.emit("language:state", &slots);
+    Ok(slots)
+}
+
+#[tauri::command]
+pub fn delete_language_slot(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: i64,
+) -> CmdResult<Vec<crate::language::LanguageSlotView>> {
+    {
+        let conn = state.db.0.lock().unwrap();
+        crate::language::delete_slot(&conn, id).map_err(err)?;
+    }
+    refresh_os_schedule(&state)?;
+    let slots = {
+        let conn = state.db.0.lock().unwrap();
+        crate::language::slot_views(&conn, &state.today(), state.debug_day).map_err(err)?
+    };
+    let _ = app.emit("language:state", &slots);
+    Ok(slots)
+}
+
+#[tauri::command]
+pub fn start_language_session(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    language: String,
+    slot_id: Option<i64>,
+) -> CmdResult<crate::language::LanguageLessonView> {
+    if session::session_owed(&state) {
+        return Err(
+            "The enforced frontend engineering session is due. Complete or skip it before starting language practice."
+                .into(),
+        );
+    }
+    let lesson = {
+        let conn = state.db.0.lock().unwrap();
+        crate::language::start_session(&conn, language.trim(), slot_id, &state.today())
+            .map_err(err)?
+    };
+    // Language practice is advisory by design. Do not call kiosk::engage and
+    // do not mutate the frontend session's locked/status fields.
+    let _ = app.emit("language:state", &lesson);
+    Ok(lesson)
+}
+
+#[tauri::command]
+pub fn get_active_language_session(
+    state: State<'_, AppState>,
+) -> CmdResult<Option<crate::language::LanguageLessonView>> {
+    let conn = state.db.0.lock().unwrap();
+    crate::language::active_session(&conn).map_err(err)
+}
+
+#[tauri::command]
+pub fn submit_language_session(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: crate::language::SubmitSessionInput,
+) -> CmdResult<crate::language::LanguageSessionResult> {
+    let result = {
+        let conn = state.db.0.lock().unwrap();
+        crate::language::submit_session(&conn, &input, &state.today()).map_err(err)?
+    };
+    let _ = app.emit("language:state", &result);
+    Ok(result)
+}
+
+#[tauri::command]
+pub fn start_session(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    focus: String,
+) -> CmdResult<SessionView> {
+    let s = session::start_session(&state, Some(focus.trim())).map_err(err)?;
+    {
+        let conn = state.db.0.lock().unwrap();
+        let _ = crate::mastery::set_profile(&conn, "preferred_focus", &s.focus);
+    }
     if s.status == "in_progress" {
         crate::kiosk::engage(&app, &state);
     }
@@ -382,7 +804,11 @@ fn pending_answers(conn: &rusqlite::Connection, date: &str) -> HashMap<i64, Stri
 }
 
 #[tauri::command]
-pub fn submit_answer(state: State<'_, AppState>, question_id: i64, answer: String) -> CmdResult<()> {
+pub fn submit_answer(
+    state: State<'_, AppState>,
+    question_id: i64,
+    answer: String,
+) -> CmdResult<()> {
     let today = state.today();
     let conn = state.db.0.lock().unwrap();
     let mut pending = pending_answers(&conn, &today);
@@ -422,8 +848,11 @@ pub async fn finish_quiz(app: AppHandle, state: State<'_, AppState>) -> CmdResul
     let yesterday = state.yesterday();
     let tomorrow = state.tomorrow();
 
-    let (questions, pending, concept_of) = {
+    let (questions, pending, concept_of, track_focus, dossier) = {
         let conn = state.db.0.lock().unwrap();
+        let track_focus = session::session_focus(&conn, &today)
+            .map_err(err)?
+            .ok_or("session focus not chosen")?;
         let qs = session::questions_for_today(&conn, &today, &yesterday).map_err(err)?;
         let pending = pending_answers(&conn, &today);
         // question_id -> (concept_id, concept_title), for grading context + mastery.
@@ -435,11 +864,18 @@ pub async fn finish_quiz(app: AppHandle, state: State<'_, AppState>) -> CmdResul
             )
             .map_err(err)?;
         let concept_of: HashMap<i64, (i64, String)> = stmt
-            .query_map([], |r| Ok((r.get::<_, i64>(0)?, (r.get::<_, i64>(1)?, r.get::<_, String>(2)?))))
+            .query_map([], |r| {
+                Ok((
+                    r.get::<_, i64>(0)?,
+                    (r.get::<_, i64>(1)?, r.get::<_, String>(2)?),
+                ))
+            })
             .map_err(err)?
             .filter_map(|r| r.ok())
             .collect();
-        (qs, pending, concept_of)
+        let dossier =
+            crate::mastery::build_dossier(&conn, &today, &track_focus).unwrap_or_default();
+        (qs, pending, concept_of, track_focus, dossier)
     };
 
     // Grade free-text via agent in one batch.
@@ -448,13 +884,19 @@ pub async fn finish_quiz(app: AppHandle, state: State<'_, AppState>) -> CmdResul
         .filter(|q| q.kind == "free")
         .map(|q| GradeItem {
             id: q.id,
-            concept: concept_of.get(&q.id).map(|(_, t)| t.clone()).unwrap_or_default(),
+            concept: concept_of
+                .get(&q.id)
+                .map(|(_, t)| t.clone())
+                .unwrap_or_default(),
             question: q.prompt.clone(),
             model_answer: q.correct_answer.clone(),
             user_answer: pending.get(&q.id).cloned().unwrap_or_default(),
         })
         .collect();
-    let verdicts = state.generator.grade(&free_items).await;
+    let verdicts = state
+        .generator
+        .grade(&free_items, &dossier, &track_focus)
+        .await;
     let self_assess = verdicts.is_none();
     let verdict_map: HashMap<i64, (bool, String, String)> = verdicts
         .unwrap_or_default()
@@ -477,7 +919,10 @@ pub async fn finish_quiz(app: AppHandle, state: State<'_, AppState>) -> CmdResul
             } else if let Some((ok, fb, _note)) = verdict_map.get(&q.id) {
                 (Some(*ok), fb.clone())
             } else {
-                (None, "grader unavailable — self-assess against the model answer".into())
+                (
+                    None,
+                    "grader unavailable — self-assess against the model answer".into(),
+                )
             };
             let counted_correct = correct.unwrap_or(true); // self-assess counts as pass, never blocks
             if correct.is_some() {
@@ -513,7 +958,7 @@ pub async fn finish_quiz(app: AppHandle, state: State<'_, AppState>) -> CmdResul
             let failed = correct == Some(false);
             if failed {
                 db::push_carryover(&conn, q.id, &today, &tomorrow).map_err(err)?;
-            } else if q.origin == "carryover" {
+            } else if q.origin == "carryover" && correct == Some(true) {
                 db::clear_carryover(&conn, q.id).map_err(err)?;
             }
             items.push(ReviewItem {
@@ -536,17 +981,28 @@ pub async fn finish_quiz(app: AppHandle, state: State<'_, AppState>) -> CmdResul
         // Mastery transitions: one quiz encounter per concept touched today.
         for (cid, (ok, total)) in &by_concept {
             if *total > 0 {
-                let _ = crate::mastery::record_quiz_outcome(&conn, *cid, &today, *ok as f64 / *total as f64);
+                let _ = crate::mastery::record_quiz_outcome(
+                    &conn,
+                    *cid,
+                    &today,
+                    *ok as f64 / *total as f64,
+                );
             }
         }
-        let mut s = db::get_session(&conn, &today).map_err(err)?.ok_or("no session")?;
+        let mut s = db::get_session(&conn, &today)
+            .map_err(err)?
+            .ok_or("no session")?;
         s.quiz_score = Some(score);
         s.current_step = session::STEP_REVIEW.into();
         db::upsert_session(&conn, &s).map_err(err)?;
         // Clear pending answers.
         db::set_config(&conn, &pending_key(&today), "{}").map_err(err)?;
         let _ = app.emit("session:state", ());
-        return Ok(ReviewData { items, score, self_assess });
+        Ok(ReviewData {
+            items,
+            score,
+            self_assess,
+        })
     }
 }
 
@@ -562,7 +1018,9 @@ pub fn get_review(state: State<'_, AppState>) -> CmdResult<ReviewData> {
     }
     // Reconstruct from questions answered today (carryover rows may already be cleared).
     let mut items = Vec::new();
+    let mut n_graded = 0usize;
     let mut n_correct = 0usize;
+    let mut self_assess = false;
     let mut stmt = conn
         .prepare(
             "SELECT q.id, q.prompt, q.kind, q.correct_answer, q.explanation, q.origin
@@ -585,25 +1043,41 @@ pub fn get_review(state: State<'_, AppState>) -> CmdResult<ReviewData> {
     for row in rows {
         let (id, prompt, kind, correct_answer, explanation, _origin) = row.map_err(err)?;
         if let Some(a) = by_q.get(&id) {
-            if a.correct {
-                n_correct += 1;
+            let ungraded = a
+                .grader_feedback
+                .starts_with("grader unavailable — self-assess");
+            if ungraded {
+                self_assess = true;
+            } else {
+                n_graded += 1;
+                if a.correct {
+                    n_correct += 1;
+                }
             }
             items.push(ReviewItem {
                 question_id: id,
                 prompt,
                 kind,
                 user_answer: a.user_answer.clone(),
-                correct: Some(a.correct),
+                correct: if ungraded { None } else { Some(a.correct) },
                 feedback: a.grader_feedback.clone(),
                 correct_answer,
                 explanation,
-                returns_tomorrow: !a.correct,
+                returns_tomorrow: !ungraded && !a.correct,
             });
         }
     }
-    let score = if items.is_empty() { 1.0 } else { n_correct as f64 / items.len() as f64 };
+    let score = if n_graded == 0 {
+        1.0
+    } else {
+        n_correct as f64 / n_graded as f64
+    };
     let _ = yesterday;
-    Ok(ReviewData { items, score, self_assess: false })
+    Ok(ReviewData {
+        items,
+        score,
+        self_assess,
+    })
 }
 
 #[derive(Serialize)]
@@ -642,14 +1116,25 @@ pub fn finish_review(app: AppHandle, state: State<'_, AppState>) -> CmdResult<Se
 pub fn get_roulette(state: State<'_, AppState>) -> CmdResult<RouletteView> {
     let today = state.today();
     let conn = state.db.0.lock().unwrap();
+    let track_focus = session::session_focus(&conn, &today)
+        .map_err(err)?
+        .ok_or("session focus not chosen")?;
     // Reuse pre-drawn concept if pregen already picked one, else draw now.
     let concept = {
-        let existing = db::get_session(&conn, &today).map_err(err)?.and_then(|s| s.concept_id);
+        let existing = db::get_session(&conn, &today)
+            .map_err(err)?
+            .and_then(|s| s.concept_id);
         match existing {
-            Some(id) => db::get_concept(&conn, id).map_err(err)?.ok_or("concept missing")?,
+            Some(id) => db::get_concept(&conn, id)
+                .map_err(err)?
+                .ok_or("concept missing")?,
             None => {
-                let c = crate::roulette::draw(&conn, &today).map_err(err)?.ok_or("empty pool")?;
-                let mut s = db::get_session(&conn, &today).map_err(err)?.ok_or("no session")?;
+                let c = crate::roulette::draw(&conn, &today, &track_focus)
+                    .map_err(err)?
+                    .ok_or("empty pool")?;
+                let mut s = db::get_session(&conn, &today)
+                    .map_err(err)?
+                    .ok_or("no session")?;
                 s.concept_id = Some(c.id);
                 db::upsert_session(&conn, &s).map_err(err)?;
                 c
@@ -657,7 +1142,7 @@ pub fn get_roulette(state: State<'_, AppState>) -> CmdResult<RouletteView> {
         }
     };
     // Build a wheel pool from UNLOCKED concepts only: chosen + up to 11 others.
-    let (unlocked, locked) = crate::roulette::pool_status(&conn).map_err(err)?;
+    let (unlocked, locked) = crate::roulette::pool_status(&conn, &track_focus).map_err(err)?;
     let pool_unlocked = unlocked.len();
     let pool_total = pool_unlocked + locked.len();
     let mut pool: Vec<String> = unlocked
@@ -680,7 +1165,13 @@ pub fn get_roulette(state: State<'_, AppState>) -> CmdResult<RouletteView> {
 
 #[derive(Serialize)]
 pub struct CourseView {
+    pub course_id: i64,
     pub title: String,
+    pub concept_slug: String,
+    pub curriculum: db::CurriculumBrief,
+    pub prerequisites: Vec<String>,
+    pub session_index: i64,
+    pub why_now: String,
     pub markdown: String,
     pub resources: serde_json::Value,
     pub source: String,
@@ -697,21 +1188,54 @@ pub async fn ensure_course(app: AppHandle, state: State<'_, AppState>) -> CmdRes
     let course = session::ensure_course_for_date(&state, &today)
         .await
         .map_err(|e| e.to_string())?;
-    let concept_title = {
+    let (concept, prerequisites, session_index) = {
         let conn = state.db.0.lock().unwrap();
-        db::get_concept(&conn, course.concept_id)
+        let concept = db::get_concept(&conn, course.concept_id)
             .map_err(err)?
-            .map(|c| c.title)
-            .unwrap_or_default()
+            .ok_or("course concept no longer exists")?;
+        let prerequisites_json: String = conn
+            .query_row(
+                "SELECT prereqs_json FROM concepts WHERE id = ?1",
+                [concept.id],
+                |row| row.get(0),
+            )
+            .map_err(err)?;
+        let session_index: i64 = conn
+            .query_row(
+                "SELECT
+                    (SELECT COUNT(*) FROM sessions
+                     WHERE status = 'completed' AND focus = ?1)
+                  + (SELECT COUNT(*) FROM classroom_sessions
+                     WHERE status = 'completed' AND subject_id = ?1) + 1",
+                [&concept.focus],
+                |row| row.get(0),
+            )
+            .map_err(err)?;
+        (
+            concept,
+            serde_json::from_str(&prerequisites_json).unwrap_or_default(),
+            session_index,
+        )
     };
     let total = state.course_duration_secs();
     let s = {
         let conn = state.db.0.lock().unwrap();
-        db::get_session(&conn, &today).map_err(err)?.ok_or("no session")?
+        db::get_session(&conn, &today)
+            .map_err(err)?
+            .ok_or("no session")?
     };
     let remaining = (total - s.reading_seconds).max(0);
     Ok(CourseView {
-        title: concept_title,
+        course_id: course.id,
+        title: concept.title.clone(),
+        concept_slug: concept.slug,
+        prerequisites,
+        session_index,
+        why_now: format!(
+            "Session {session_index} advances the {} phase: {}",
+            concept.curriculum.phase, concept.curriculum.learner_outcome
+        ),
+        curriculum: concept.curriculum,
         markdown: course.markdown,
         resources: serde_json::from_str(&course.resources_json).unwrap_or(serde_json::json!([])),
         source: course.source,
@@ -726,7 +1250,9 @@ pub fn start_course(app: AppHandle, state: State<'_, AppState>) -> CmdResult<Ses
     let total = state.course_duration_secs();
     let remaining = {
         let conn = state.db.0.lock().unwrap();
-        let s = db::get_session(&conn, &today).map_err(err)?.ok_or("no session")?;
+        let s = db::get_session(&conn, &today)
+            .map_err(err)?
+            .ok_or("no session")?;
         (total - s.reading_seconds).max(0)
     };
     session::set_step(&state, session::STEP_COURSE).map_err(err)?;
@@ -756,11 +1282,16 @@ pub fn finish_course(app: AppHandle, state: State<'_, AppState>) -> CmdResult<Se
 /// missing — ~1 min sonnet call) plus the playback engine. The frontend uses
 /// speechSynthesis unless rendered files exist.
 #[tauri::command]
-pub async fn ensure_audio(app: AppHandle, state: State<'_, AppState>) -> CmdResult<crate::audio::AudioView> {
+pub async fn ensure_audio(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> CmdResult<crate::audio::AudioView> {
     let today = state.today();
     let course = {
         let conn = state.db.0.lock().unwrap();
-        db::course_for_date(&conn, &today).map_err(err)?.ok_or("no course today")?
+        db::course_for_date(&conn, &today)
+            .map_err(err)?
+            .ok_or("no course today")?
     };
     let _ = app.emit("gen:status", "writing audio script from today's course");
     session::ensure_audio_for_course(&state, &course, &today)
@@ -791,91 +1322,434 @@ pub struct ExitQuizQuestion {
     pub choices: Vec<String>,
 }
 
-/// The 3-question exit check for TODAY's course. Generates on demand for
-/// courses created before this feature (small sonnet call). Correct answers
-/// never leave the backend.
+const INITIAL_EXIT_QUESTION_COUNT: usize = 5;
+
+fn exit_round_key(course_id: i64) -> String {
+    format!("exit_quiz_round:{course_id}")
+}
+
+fn exit_count_key(course_id: i64) -> String {
+    format!("exit_quiz_count:{course_id}")
+}
+
+/// Compact record of exactly what the student missed in the round that
+/// just failed — read back by `get_exit_quiz` to target the next round at
+/// those learning objectives instead of resampling the whole course.
+fn exit_failed_areas_key(course_id: i64) -> String {
+    format!("exit_failed_areas:{course_id}")
+}
+
+fn read_failed_areas(
+    conn: &rusqlite::Connection,
+    course_id: i64,
+) -> Vec<crate::generator::FailedArea> {
+    db::get_config(conn, &exit_failed_areas_key(course_id))
+        .ok()
+        .flatten()
+        .and_then(|json| serde_json::from_str(&json).ok())
+        .unwrap_or_default()
+}
+
+fn write_failed_areas(
+    conn: &rusqlite::Connection,
+    course_id: i64,
+    areas: &[crate::generator::FailedArea],
+) -> CmdResult<()> {
+    let json = serde_json::to_string(areas).map_err(err)?;
+    db::set_config(conn, &exit_failed_areas_key(course_id), &json).map_err(err)
+}
+
+fn exit_progress(conn: &rusqlite::Connection, course_id: i64) -> (i64, usize) {
+    let round = db::get_config(conn, &exit_round_key(course_id))
+        .ok()
+        .flatten()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(1);
+    let count = db::get_config(conn, &exit_count_key(course_id))
+        .ok()
+        .flatten()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(INITIAL_EXIT_QUESTION_COUNT);
+    // No floor at INITIAL_EXIT_QUESTION_COUNT here: `get_exit_quiz` may
+    // have persisted a smaller, deliberately-shrunk count when a short
+    // course's bundled pool couldn't cover a full round, and that choice
+    // must stick — re-flooring it back up would recreate the exact
+    // impossible-to-fill round the shrink exists to avoid.
+    (round.max(1), count.max(1))
+}
+
+/// A generated exit-check item is usable as long as it has a real prompt,
+/// at least two choices, and a correct answer that actually appears among
+/// them once whitespace is trimmed. The model is asked for exactly 4
+/// choices, but rejecting anything that drifts from that (rather than
+/// tolerating minor formatting noise) is what used to starve rounds of
+/// otherwise-valid questions and hard-fail the exit check.
+fn is_usable_exit_check(check: &crate::generator::ExitCheck) -> bool {
+    let correct = check.correct_answer.trim();
+    !check.prompt.trim().is_empty()
+        && !correct.is_empty()
+        && check.choices.len() >= 2
+        && check.choices.iter().any(|choice| choice.trim() == correct)
+}
+
+/// Pull filler MCQs from the bundled offline pool for `focus` when the
+/// live agent can't fill out a round after retrying — the exit check must
+/// never block a session the way the rest of generation never does. Draws
+/// from every bundled course for the focus, not just one, since a single
+/// course rarely has enough spare MCQs by itself.
+///
+/// When `failed_areas` is non-empty (a remediation round), bundled
+/// questions whose section/objective/prompt loosely match a missed area
+/// are preferred first — "matching bundled questions where possible" per
+/// the remediation contract — before falling back to the unfiltered pool
+/// so a round is still always fillable.
+fn fallback_exit_checks(
+    focus: &str,
+    needed: usize,
+    seen: &mut std::collections::HashSet<String>,
+    failed_areas: &[crate::generator::FailedArea],
+) -> Vec<crate::generator::ExitCheck> {
+    let to_check = |q: crate::generator::GeneratedQuestion| crate::generator::ExitCheck {
+        prompt: q.prompt,
+        choices: q.choices.unwrap_or_default(),
+        correct_answer: q.correct_answer,
+        explanation: q.explanation,
+        section: q.section,
+        learning_objective: q.learning_objective,
+    };
+    let pool = crate::generator::fallback_mcq_pool(focus);
+    let keywords: Vec<String> = failed_areas
+        .iter()
+        .flat_map(|a| {
+            [
+                a.section.to_lowercase(),
+                a.learning_objective.to_lowercase(),
+            ]
+        })
+        .flat_map(|s| s.split_whitespace().map(str::to_string).collect::<Vec<_>>())
+        .filter(|w| w.len() > 3)
+        .collect();
+    let matches_failed_area = |q: &crate::generator::GeneratedQuestion| {
+        if keywords.is_empty() {
+            return false;
+        }
+        let haystack = format!(
+            "{} {} {}",
+            q.section.to_lowercase(),
+            q.learning_objective.to_lowercase(),
+            q.prompt.to_lowercase()
+        );
+        keywords.iter().any(|kw| haystack.contains(kw.as_str()))
+    };
+
+    let mut out = Vec::new();
+    if !keywords.is_empty() {
+        out.extend(
+            pool.iter()
+                .filter(|q| matches_failed_area(q))
+                .cloned()
+                .filter_map(|q| {
+                    let normalized = q.prompt.trim().to_lowercase();
+                    if normalized.is_empty() || !seen.insert(normalized) {
+                        return None;
+                    }
+                    Some(to_check(q))
+                })
+                .filter(is_usable_exit_check)
+                .take(needed),
+        );
+    }
+    if out.len() < needed {
+        let remaining = needed - out.len();
+        out.extend(
+            pool.into_iter()
+                .filter_map(|q| {
+                    let normalized = q.prompt.trim().to_lowercase();
+                    if normalized.is_empty() || !seen.insert(normalized) {
+                        return None;
+                    }
+                    Some(to_check(q))
+                })
+                .filter(is_usable_exit_check)
+                .take(remaining),
+        );
+    }
+    out
+}
+
+/// Return the current adaptive exit-check round. Missing questions are
+/// generated on demand and never repeat a prompt from an earlier round.
+/// Generation trouble (missing API key, malformed model output, an
+/// unreachable agent) degrades to bundled filler questions rather than
+/// blocking the reader — mirrors the never-blocks guarantee course and
+/// quiz generation already give the rest of the session.
 #[tauri::command]
 pub async fn get_exit_quiz(state: State<'_, AppState>) -> CmdResult<Vec<ExitQuizQuestion>> {
     let today = state.today();
-    let (course, existing) = {
+    let (course, focus, round, target_count, mut exclusions, failed_areas) = {
         let conn = state.db.0.lock().unwrap();
-        let course = db::course_for_date(&conn, &today).map_err(err)?.ok_or("no course today")?;
-        let existing = db::exit_questions_for_course(&conn, course.id).map_err(err)?;
-        (course, existing)
+        let course = db::course_for_date(&conn, &today)
+            .map_err(err)?
+            .ok_or("no course today")?;
+        let focus = db::get_concept(&conn, course.concept_id)
+            .map_err(err)?
+            .map(|concept| concept.focus)
+            .ok_or("course concept missing")?;
+        let (round, target_count) = exit_progress(&conn, course.id);
+        let exclusions = db::all_exit_question_prompts(&conn, course.id).map_err(err)?;
+        let failed_areas = if round > 1 {
+            read_failed_areas(&conn, course.id)
+        } else {
+            Vec::new()
+        };
+        (course, focus, round, target_count, exclusions, failed_areas)
     };
-    let qs = if existing.is_empty() {
-        let generated = state
-            .generator
-            .generate_exit_quiz(&course.markdown)
-            .await
-            .map_err(|e| format!("exit check unavailable: {e}"))?;
+
+    let mut existing = {
         let conn = state.db.0.lock().unwrap();
-        for q in &generated {
+        db::exit_questions_for_course(&conn, course.id, round).map_err(err)?
+    };
+    let mut generation_attempts = 0;
+    while existing.len() < target_count && generation_attempts < 2 {
+        generation_attempts += 1;
+        let needed = target_count - existing.len();
+        let generated = match state
+            .generator
+            .generate_exit_quiz(&course.markdown, &focus, needed, &exclusions, &failed_areas)
+            .await
+        {
+            Ok(checks) => checks,
+            Err(e) => {
+                log::warn!("exit check generation attempt failed, will retry or use filler: {e}");
+                Vec::new()
+            }
+        };
+        let conn = state.db.0.lock().unwrap();
+        let mut seen: std::collections::HashSet<String> = exclusions
+            .iter()
+            .map(|prompt| prompt.trim().to_lowercase())
+            .collect();
+        let mut inserted = 0;
+        for q in generated {
+            if inserted >= needed {
+                break;
+            }
+            let normalized = q.prompt.trim().to_lowercase();
+            if normalized.is_empty() || !seen.insert(normalized) || !is_usable_exit_check(&q) {
+                continue;
+            }
             db::insert_exit_question(
                 &conn,
                 course.id,
+                round,
                 &q.prompt,
                 &serde_json::to_string(&q.choices).map_err(err)?,
                 &q.correct_answer,
                 &q.explanation,
+                &q.section,
+                &q.learning_objective,
             )
             .map_err(err)?;
+            exclusions.push(q.prompt);
+            inserted += 1;
         }
-        db::exit_questions_for_course(&conn, course.id).map_err(err)?
+        existing = db::exit_questions_for_course(&conn, course.id, round).map_err(err)?;
+    }
+
+    if existing.len() < target_count {
+        let mut seen: std::collections::HashSet<String> = exclusions
+            .iter()
+            .map(|prompt| prompt.trim().to_lowercase())
+            .collect();
+        let needed = target_count - existing.len();
+        let filler = fallback_exit_checks(&focus, needed, &mut seen, &failed_areas);
+        if !filler.is_empty() {
+            let conn = state.db.0.lock().unwrap();
+            for q in filler {
+                db::insert_exit_question(
+                    &conn,
+                    course.id,
+                    round,
+                    &q.prompt,
+                    &serde_json::to_string(&q.choices).map_err(err)?,
+                    &q.correct_answer,
+                    &q.explanation,
+                    &q.section,
+                    &q.learning_objective,
+                )
+                .map_err(err)?;
+            }
+            existing = db::exit_questions_for_course(&conn, course.id, round).map_err(err)?;
+        }
+    }
+    // Both the live agent and the entire bundled pool for this focus came
+    // up short of fresh material. Rather than block the reader
+    // indefinitely (there may simply not be `target_count` more distinct
+    // questions to ask about a short course), grade against whatever
+    // could actually be assembled — shrinking the round, never erroring,
+    // as long as there is at least one usable question.
+    let effective_count = if existing.len() < target_count {
+        if existing.is_empty() {
+            return Err(
+                "no exit-check questions are available yet for this course — keep reading a \
+                 little longer, then try again"
+                    .into(),
+            );
+        }
+        let conn = state.db.0.lock().unwrap();
+        db::set_config(
+            &conn,
+            &exit_count_key(course.id),
+            &existing.len().to_string(),
+        )
+        .map_err(err)?;
+        existing.len()
     } else {
-        existing
+        target_count
     };
-    Ok(qs
+
+    Ok(existing
         .into_iter()
-        .take(3)
-        .map(|q| ExitQuizQuestion { id: q.id, prompt: q.prompt, choices: q.choices })
+        .take(effective_count)
+        .map(|q| ExitQuizQuestion {
+            id: q.id,
+            prompt: q.prompt,
+            choices: q.choices,
+        })
         .collect())
+}
+
+#[derive(Serialize)]
+pub struct ExitQuizFeedback {
+    pub question_id: i64,
+    pub prompt: String,
+    pub user_answer: String,
+    pub correct_answer: String,
+    pub explanation: String,
+    pub section: String,
+    pub learning_objective: String,
 }
 
 #[derive(Serialize)]
 pub struct ExitQuizResult {
     pub passed: bool,
     pub correct: Vec<i64>,
-    pub cooldown_seconds: i64,
+    pub incorrect: Vec<ExitQuizFeedback>,
+    pub round: i64,
+    pub next_question_count: usize,
+    /// Human-readable labels of what the next round will target — empty
+    /// when passed, or when a miss carried no section/objective metadata.
+    pub next_focus_areas: Vec<String>,
 }
 
-/// Grade the exit check: all answers correct => the reading TTL unlocks now.
-/// Failures get a 60s cooldown so the gate can't be brute-forced.
+fn grade_exit_round(
+    questions: &[db::ExitQuestion],
+    answers: &HashMap<i64, String>,
+) -> CmdResult<(Vec<i64>, Vec<ExitQuizFeedback>)> {
+    if answers.len() != questions.len()
+        || questions
+            .iter()
+            .any(|question| !answers.contains_key(&question.id))
+        || answers
+            .keys()
+            .any(|id| !questions.iter().any(|question| question.id == *id))
+    {
+        return Err("answer every question in the current exit-check round".into());
+    }
+
+    let mut correct = Vec::new();
+    let mut incorrect = Vec::new();
+    for question in questions {
+        let user_answer = answers.get(&question.id).cloned().unwrap_or_default();
+        if user_answer.trim() == question.correct_answer.trim() {
+            correct.push(question.id);
+        } else {
+            incorrect.push(ExitQuizFeedback {
+                question_id: question.id,
+                prompt: question.prompt.clone(),
+                user_answer,
+                correct_answer: question.correct_answer.clone(),
+                explanation: question.explanation.clone(),
+                section: question.section.clone(),
+                learning_objective: question.learning_objective.clone(),
+            });
+        }
+    }
+    Ok((correct, incorrect))
+}
+
+/// Grade immediately. A perfect round burns the remaining TTL; every miss is
+/// explained, recorded for remediation, and increases the size of the next
+/// fresh round by one.
 #[tauri::command]
 pub fn submit_exit_quiz(
     app: AppHandle,
     state: State<'_, AppState>,
     answers: HashMap<i64, String>,
 ) -> CmdResult<ExitQuizResult> {
-    let now = chrono::Utc::now().timestamp();
-    {
-        let mut fails = state.exit_quiz_failures.lock().unwrap();
-        fails.retain(|t| now - *t < 60);
-        if !fails.is_empty() {
-            let wait = 60 - (now - fails.iter().max().copied().unwrap_or(now));
-            return Ok(ExitQuizResult { passed: false, correct: vec![], cooldown_seconds: wait.max(1) });
-        }
-    }
     let today = state.today();
-    let qs = {
+    let (course_id, round, question_count, questions) = {
         let conn = state.db.0.lock().unwrap();
-        let course = db::course_for_date(&conn, &today).map_err(err)?.ok_or("no course today")?;
-        db::exit_questions_for_course(&conn, course.id).map_err(err)?
+        let course = db::course_for_date(&conn, &today)
+            .map_err(err)?
+            .ok_or("no course today")?;
+        let (round, question_count) = exit_progress(&conn, course.id);
+        let mut questions = db::exit_questions_for_course(&conn, course.id, round).map_err(err)?;
+        questions.truncate(question_count);
+        (course.id, round, question_count, questions)
     };
-    if qs.is_empty() {
+    if questions.len() != question_count {
         return Err("no exit check exists for today".into());
     }
-    let correct: Vec<i64> = qs
+    let (correct, incorrect) = grade_exit_round(&questions, &answers)?;
+    let passed = incorrect.is_empty();
+    let next_question_count = if passed {
+        question_count
+    } else {
+        question_count + incorrect.len()
+    };
+    let next_focus_areas: Vec<String> = incorrect
         .iter()
-        .filter(|q| {
-            answers
-                .get(&q.id)
-                .map(|a| a.trim() == q.correct_answer.trim())
-                .unwrap_or(false)
+        .map(|f| {
+            crate::generator::FailedArea {
+                section: f.section.clone(),
+                learning_objective: f.learning_objective.clone(),
+            }
+            .label()
         })
-        .map(|q| q.id)
         .collect();
-    let passed = correct.len() == qs.len();
+    {
+        // Durable audit trail — every graded answer this round, correct or not.
+        let conn = state.db.0.lock().unwrap();
+        for id in &correct {
+            if let Some(q) = questions.iter().find(|q| q.id == *id) {
+                let _ = db::insert_exit_attempt(
+                    &conn,
+                    course_id,
+                    q.id,
+                    round,
+                    true,
+                    answers.get(&q.id).map(|s| s.as_str()).unwrap_or(""),
+                    &q.section,
+                    &q.learning_objective,
+                    "",
+                );
+            }
+        }
+        for f in &incorrect {
+            let _ = db::insert_exit_attempt(
+                &conn,
+                course_id,
+                f.question_id,
+                round,
+                false,
+                &f.user_answer,
+                &f.section,
+                &f.learning_objective,
+                &f.explanation,
+            );
+        }
+    }
     if passed {
         // Burn the remaining TTL: the running timer sees 0 and fires timer:done.
         let total = state.course_duration_secs();
@@ -888,31 +1762,69 @@ pub fn submit_exit_quiz(
         let _ = app.emit("timer:tick", 0);
         let _ = app.emit("timer:done", true);
     } else {
-        state.exit_quiz_failures.lock().unwrap().push(now);
+        let conn = state.db.0.lock().unwrap();
+        db::set_config(&conn, &exit_round_key(course_id), &(round + 1).to_string()).map_err(err)?;
+        db::set_config(
+            &conn,
+            &exit_count_key(course_id),
+            &next_question_count.to_string(),
+        )
+        .map_err(err)?;
+        // Next round's targeting: only these exact missed objectives, deduped.
+        let mut dedup_seen = std::collections::HashSet::new();
+        let areas: Vec<crate::generator::FailedArea> = incorrect
+            .iter()
+            .map(|f| crate::generator::FailedArea {
+                section: f.section.clone(),
+                learning_objective: f.learning_objective.clone(),
+            })
+            .filter(|a| dedup_seen.insert(a.clone()))
+            .collect();
+        write_failed_areas(&conn, course_id, &areas)?;
     }
-    Ok(ExitQuizResult { passed, correct, cooldown_seconds: if passed { 0 } else { 60 } })
+    Ok(ExitQuizResult {
+        passed,
+        correct,
+        incorrect,
+        round,
+        next_question_count,
+        next_focus_areas,
+    })
 }
 
-/// Voluntary "one more topic": re-opens today's completed session at the
-/// roulette with a fresh concept and a fresh reading timer. Never locks the
+/// Voluntary "one more topic": re-opens today's completed or skipped session
+/// at the roulette with a fresh concept and reading timer. Never locks the
 /// kiosk and never becomes owed — purely user-initiated (TEACHER.md §5).
 #[tauri::command]
-pub fn extend_session(app: AppHandle, state: State<'_, AppState>) -> CmdResult<SessionView> {
+pub fn extend_session(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    focus: String,
+) -> CmdResult<SessionView> {
     let today = state.today();
     let tomorrow = state.tomorrow();
+    let track_focus = focus.trim().to_string();
+    crate::focus::validate_selectable(&track_focus).map_err(err)?;
     {
         let conn = state.db.0.lock().unwrap();
-        let mut s = db::get_session(&conn, &today).map_err(err)?.ok_or("no session")?;
-        if s.status != "completed" {
-            return Err("extend is only available after today's session is complete".into());
+        let mut s = db::get_session(&conn, &today)
+            .map_err(err)?
+            .ok_or("no session")?;
+        if s.status != "completed" && s.status != "skipped" {
+            return Err("another session is only available after today's session ends".into());
         }
         // New spin, new course, new timer; today's earlier course stays archived.
-        let c = crate::roulette::draw(&conn, &today).map_err(err)?.ok_or("empty pool")?;
+        let c = crate::roulette::draw(&conn, &today, &track_focus)
+            .map_err(err)?
+            .ok_or("empty pool")?;
         s.concept_id = Some(c.id);
         s.status = "in_progress".into();
         s.current_step = session::STEP_ROULETTE.into();
         s.reading_seconds = 0;
+        s.completed_at = None;
+        s.focus = track_focus;
         db::upsert_session(&conn, &s).map_err(err)?;
+        db::set_session_focus(&conn, &today, &s.focus).map_err(err)?;
         db::set_config(&conn, &format!("extended:{today}"), "1").map_err(err)?;
         // Appetite tracking for the dossier.
         let n: i64 = crate::mastery::get_profile(&conn, "multi_topic_days")
@@ -921,28 +1833,54 @@ pub fn extend_session(app: AppHandle, state: State<'_, AppState>) -> CmdResult<S
             .and_then(|v| v.parse().ok())
             .unwrap_or(0);
         let _ = crate::mastery::set_profile(&conn, "multi_topic_days", &(n + 1).to_string());
+        let _ = crate::mastery::set_profile(&conn, "preferred_focus", &s.focus);
         // Tomorrow's quiz must also cover the extension course.
         db::jobs::requeue(&conn, "quiz", &tomorrow).map_err(err)?;
     }
     state.reading_remaining.store(0, Ordering::SeqCst);
+    state.clear_chat_threads();
     let v = session::view(&state);
     let _ = app.emit("session:state", v.clone());
     Ok(v)
 }
 
 #[tauri::command]
-pub fn escape_session(app: AppHandle, state: State<'_, AppState>, phrase: String) -> CmdResult<bool> {
+pub fn escape_session(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    phrase: String,
+) -> CmdResult<bool> {
     match crate::kiosk::verify_escape(&state, &phrase)? {
         true => {
             let today = state.today();
             {
                 let conn = state.db.0.lock().unwrap();
-                if let Ok(Some(mut s)) = db::get_session(&conn, &today) {
-                    s.status = "skipped".into();
-                    s.completed_at = Some(session::now_iso());
-                    let _ = db::upsert_session(&conn, &s);
-                }
+                let focus = crate::mastery::get_profile(&conn, "preferred_focus")
+                    .ok()
+                    .flatten()
+                    .filter(|value| crate::focus::is_selectable(value))
+                    .unwrap_or_else(|| "javascript".into());
+                let mut s = db::get_session(&conn, &today)
+                    .ok()
+                    .flatten()
+                    .unwrap_or(db::Session {
+                        date: today.clone(),
+                        concept_id: None,
+                        status: "pending".into(),
+                        current_step: session::STEP_QUIZ.into(),
+                        quiz_score: None,
+                        started_at: None,
+                        completed_at: None,
+                        reading_seconds: 0,
+                        session_type: "lesson".into(),
+                        plan_reason: "emergency skip before session start".into(),
+                        focus,
+                    });
+                s.status = "skipped".into();
+                s.completed_at = Some(session::now_iso());
+                let _ = db::upsert_session(&conn, &s);
             }
+            state.clear_chat_threads();
             crate::kiosk::release(&app, &state);
             let _ = app.emit("session:state", session::view(&state));
             Ok(true)
@@ -954,7 +1892,9 @@ pub fn escape_session(app: AppHandle, state: State<'_, AppState>, phrase: String
 #[tauri::command]
 pub fn get_escape_phrase(state: State<'_, AppState>) -> CmdResult<String> {
     let conn = state.db.0.lock().unwrap();
-    Ok(db::get_config(&conn, "escape_phrase").map_err(err)?.unwrap_or_default())
+    Ok(db::get_config(&conn, "escape_phrase")
+        .map_err(err)?
+        .unwrap_or_default())
 }
 
 #[derive(Serialize)]
@@ -972,21 +1912,40 @@ pub fn get_dashboard(state: State<'_, AppState>) -> CmdResult<DashboardView> {
     let today = state.today();
     let tomorrow = state.tomorrow();
     let conn = state.db.0.lock().unwrap();
+    let track_focus = session::session_focus(&conn, &today)
+        .map_err(err)?
+        .unwrap_or_else(|| "javascript".to_string());
     let history = db::history(&conn, 120).map_err(err)?;
     let streak = db::streak(&conn, &today).map_err(err)?;
-    let carryover_due = db::carryover_count(&conn, &tomorrow).map_err(err)?;
+    let carryover_due = db::carryover_count(&conn, &tomorrow, &track_focus).map_err(err)?;
     let concepts_total: i64 = conn
-        .query_row("SELECT COUNT(*) FROM concepts WHERE active = 1", [], |r| r.get(0))
+        .query_row(
+            "SELECT COUNT(*) FROM concepts WHERE active = 1 AND focus = ?1",
+            params![track_focus],
+            |r| r.get(0),
+        )
         .map_err(err)?;
     let concepts_covered: i64 = conn
-        .query_row("SELECT COUNT(*) FROM concepts WHERE times_picked > 0", [], |r| r.get(0))
+        .query_row(
+            "SELECT COUNT(*) FROM concepts WHERE times_picked > 0 AND focus = ?1",
+            params![track_focus],
+            |r| r.get(0),
+        )
         .map_err(err)?;
-    let mastery = crate::mastery::overview(&conn).map_err(err)?;
-    Ok(DashboardView { history, streak, carryover_due, concepts_total, concepts_covered, mastery })
+    let mastery = crate::mastery::overview(&conn, &track_focus).map_err(err)?;
+    Ok(DashboardView {
+        history,
+        streak,
+        carryover_due,
+        concepts_total,
+        concepts_covered,
+        mastery,
+    })
 }
 
 #[derive(Serialize)]
 pub struct ArchivedCourse {
+    pub course_id: i64,
     pub session_date: String,
     pub title: String,
     pub markdown: String,
@@ -994,7 +1953,10 @@ pub struct ArchivedCourse {
 }
 
 #[tauri::command]
-pub fn get_past_course(state: State<'_, AppState>, date: String) -> CmdResult<Option<ArchivedCourse>> {
+pub fn get_past_course(
+    state: State<'_, AppState>,
+    date: String,
+) -> CmdResult<Option<ArchivedCourse>> {
     let conn = state.db.0.lock().unwrap();
     let Some(course) = db::course_for_date(&conn, &date).map_err(err)? else {
         return Ok(None);
@@ -1004,11 +1966,270 @@ pub fn get_past_course(state: State<'_, AppState>, date: String) -> CmdResult<Op
         .map(|c| c.title)
         .unwrap_or_default();
     Ok(Some(ArchivedCourse {
+        course_id: course.id,
         session_date: course.session_date,
         title,
         markdown: course.markdown,
         resources: serde_json::from_str(&course.resources_json).unwrap_or(serde_json::json!([])),
     }))
+}
+
+/// Structured exercise for a course, with any autosaved draft. Available
+/// regardless of session completion — the exercise workspace is reachable
+/// from the active reader and from archived-course history alike.
+#[derive(Serialize)]
+pub struct ExerciseView {
+    pub course_id: i64,
+    pub title: String,
+    pub instructions: String,
+    pub starter_code: Option<String>,
+    pub deliverable: Option<String>,
+    pub hints: Vec<String>,
+    pub draft: Option<String>,
+    pub completed: bool,
+    pub reflection: String,
+}
+
+#[tauri::command]
+pub fn get_course_exercise(
+    state: State<'_, AppState>,
+    course_id: i64,
+) -> CmdResult<Option<ExerciseView>> {
+    let conn = state.db.0.lock().unwrap();
+    let Some(exercise) = db::get_course_exercise(&conn, course_id).map_err(err)? else {
+        return Ok(None);
+    };
+    let draft = db::get_exercise_draft(&conn, course_id).map_err(err)?;
+    let (completed, reflection) = db::get_exercise_completion(&conn, course_id).map_err(err)?;
+    Ok(Some(ExerciseView {
+        course_id: exercise.course_id,
+        title: exercise.title,
+        instructions: exercise.instructions,
+        starter_code: exercise.starter_code,
+        deliverable: exercise.deliverable,
+        hints: exercise.hints,
+        draft,
+        completed,
+        reflection,
+    }))
+}
+
+/// Debounced on the frontend; the backend just persists whatever draft
+/// text it is given. Never touches the session timer, kiosk lock, or
+/// mastery/completion state.
+#[tauri::command]
+pub fn save_exercise_draft(
+    state: State<'_, AppState>,
+    course_id: i64,
+    draft: String,
+) -> CmdResult<()> {
+    let conn = state.db.0.lock().unwrap();
+    db::save_exercise_draft(&conn, course_id, &draft).map_err(err)
+}
+
+/// Self-certified practice evidence. Completion stays non-blocking, but the
+/// reflection enters the learner dossier so future lessons can build on work
+/// the student actually attempted rather than assuming every exercise was done.
+#[tauri::command]
+pub fn save_exercise_completion(
+    state: State<'_, AppState>,
+    course_id: i64,
+    completed: bool,
+    reflection: String,
+) -> CmdResult<()> {
+    if completed && reflection.split_whitespace().count() < 5 {
+        return Err(
+            "add a short evidence/trade-off reflection before marking this complete".into(),
+        );
+    }
+    let conn = state.db.0.lock().unwrap();
+    db::save_exercise_completion(&conn, course_id, completed, &reflection).map_err(err)
+}
+
+#[tauri::command]
+pub fn get_classroom_exercise(
+    state: State<'_, AppState>,
+    session_id: i64,
+) -> CmdResult<Option<crate::classroom::ClassroomExerciseView>> {
+    let conn = state.db.0.lock().unwrap();
+    crate::classroom::classroom_exercise(&conn, session_id).map_err(err)
+}
+
+#[tauri::command]
+pub fn save_classroom_exercise_draft(
+    state: State<'_, AppState>,
+    session_id: i64,
+    draft: String,
+) -> CmdResult<()> {
+    let conn = state.db.0.lock().unwrap();
+    crate::classroom::save_classroom_exercise_draft(&conn, session_id, &draft).map_err(err)
+}
+
+#[tauri::command]
+pub fn save_classroom_exercise_completion(
+    state: State<'_, AppState>,
+    session_id: i64,
+    completed: bool,
+    reflection: String,
+) -> CmdResult<()> {
+    if completed && reflection.split_whitespace().count() < 5 {
+        return Err(
+            "add a short evidence/trade-off reflection before marking this complete".into(),
+        );
+    }
+    let conn = state.db.0.lock().unwrap();
+    crate::classroom::save_classroom_exercise_completion(&conn, session_id, completed, &reflection)
+        .map_err(err)
+}
+
+#[derive(Serialize, Clone)]
+pub struct ChatMessageView {
+    pub role: String,
+    pub content: String,
+    pub section: Option<String>,
+    pub follow_ups: Vec<String>,
+}
+
+fn chat_view(turns: &[crate::generator::ChatTurn]) -> Vec<ChatMessageView> {
+    turns
+        .iter()
+        .map(|t| ChatMessageView {
+            role: t.role.clone(),
+            content: t.content.clone(),
+            section: t.section.clone(),
+            follow_ups: t.follow_ups.clone(),
+        })
+        .collect()
+}
+
+const MAX_CHAT_MESSAGE_CHARS: usize = 2_000;
+
+fn prepare_chat_message(message: String) -> CmdResult<String> {
+    let message = message.trim().to_string();
+    if message.is_empty() {
+        return Err("message cannot be empty".into());
+    }
+    if message.chars().count() > MAX_CHAT_MESSAGE_CHARS {
+        return Err(format!(
+            "message is too long; keep it under {MAX_CHAT_MESSAGE_CHARS} characters"
+        ));
+    }
+    Ok(message)
+}
+
+/// Current in-memory chat thread for a course. Empty (never an error) when
+/// nothing has been asked yet — the whole thread lives only for the active
+/// app session and is gone on restart, completion, skip, or extension.
+#[tauri::command]
+pub fn get_course_chat(
+    state: State<'_, AppState>,
+    course_id: i64,
+) -> CmdResult<Vec<ChatMessageView>> {
+    let threads = state.chat_threads.lock().unwrap();
+    Ok(threads
+        .get(&course_id)
+        .map(|turns| chat_view(turns))
+        .unwrap_or_default())
+}
+
+/// Ask one bounded, course-grounded question. Never touches the reading
+/// timer, kiosk lock, mastery, or completion state — purely a session-only
+/// side conversation about the course already on screen.
+#[tauri::command]
+pub async fn send_course_message(
+    state: State<'_, AppState>,
+    course_id: i64,
+    message: String,
+) -> CmdResult<Vec<ChatMessageView>> {
+    let message = prepare_chat_message(message)?;
+    let (context, history) = {
+        let conn = state.db.0.lock().unwrap();
+        let course = db::get_course(&conn, course_id)
+            .map_err(err)?
+            .ok_or("course not found")?;
+        let concept = db::get_concept(&conn, course.concept_id)
+            .map_err(err)?
+            .ok_or("course concept not found")?;
+        let exercise = db::get_course_exercise(&conn, course_id)
+            .map_err(err)?
+            .map(|value| serde_json::to_string_pretty(&value))
+            .transpose()
+            .map_err(err)?
+            .unwrap_or_else(|| "(this course has no separate exercise)".into());
+        let history = state
+            .chat_threads
+            .lock()
+            .unwrap()
+            .get(&course_id)
+            .cloned()
+            .unwrap_or_default();
+        (
+            crate::generator::CourseChatContext {
+                title: concept.title,
+                focus: concept.focus,
+                markdown: course.markdown,
+                learner_outcome: concept.curriculum.learner_outcome,
+                cumulative_artifact: concept.curriculum.artifact,
+                exercise,
+            },
+            history,
+        )
+    };
+    let reply = state
+        .generator
+        .answer_course_question(&context, &message, &history)
+        .await
+        .map_err(err)?;
+    let mut threads = state.chat_threads.lock().unwrap();
+    let thread = threads.entry(course_id).or_default();
+    thread.push(crate::generator::ChatTurn::user(message));
+    thread.push(crate::generator::ChatTurn::assistant(reply));
+    Ok(chat_view(thread))
+}
+
+#[tauri::command]
+pub fn get_classroom_chat(
+    state: State<'_, AppState>,
+    session_id: i64,
+) -> CmdResult<Vec<ChatMessageView>> {
+    let threads = state.classroom_chat_threads.lock().unwrap();
+    Ok(threads
+        .get(&session_id)
+        .map(|turns| chat_view(turns))
+        .unwrap_or_default())
+}
+
+#[tauri::command]
+pub async fn send_classroom_message(
+    state: State<'_, AppState>,
+    session_id: i64,
+    message: String,
+) -> CmdResult<Vec<ChatMessageView>> {
+    let message = prepare_chat_message(message)?;
+    let (context, profile, history) = {
+        let conn = state.db.0.lock().unwrap();
+        let context = crate::classroom::engineering_chat_context(&conn, session_id).map_err(err)?;
+        let program = crate::classroom::program_row(&conn, &context.focus).map_err(err)?;
+        let profile = crate::classroom::generation_profile(&program);
+        let history = state
+            .classroom_chat_threads
+            .lock()
+            .unwrap()
+            .get(&session_id)
+            .cloned()
+            .unwrap_or_default();
+        (context, profile, history)
+    };
+    let reply = state
+        .generator
+        .answer_course_question_for(&context, &message, &history, &profile)
+        .await
+        .map_err(err)?;
+    let mut threads = state.classroom_chat_threads.lock().unwrap();
+    let thread = threads.entry(session_id).or_default();
+    thread.push(crate::generator::ChatTurn::user(message));
+    thread.push(crate::generator::ChatTurn::assistant(reply));
+    Ok(chat_view(thread))
 }
 
 /// After the session, open all of today's resource links in the default browser.
@@ -1037,4 +2258,262 @@ pub fn open_resources(app: AppHandle, state: State<'_, AppState>) -> CmdResult<u
         let _ = app.opener().open_url(url, None::<String>);
     }
     Ok(n)
+}
+
+#[cfg(test)]
+mod exit_quiz_tests {
+    use super::*;
+
+    #[test]
+    fn schedule_time_validation_rejects_out_of_range_values() {
+        assert!(validate_schedule_time(23, 59).is_ok());
+        assert!(validate_schedule_time(24, 0).is_err());
+        assert!(validate_schedule_time(8, 60).is_err());
+    }
+
+    fn question(id: i64, correct_answer: &str, explanation: &str) -> db::ExitQuestion {
+        db::ExitQuestion {
+            id,
+            prompt: format!("Question {id}"),
+            choices: vec!["a".into(), "b".into(), "c".into(), "d".into()],
+            correct_answer: correct_answer.into(),
+            explanation: explanation.into(),
+            section: String::new(),
+            learning_objective: String::new(),
+        }
+    }
+
+    #[test]
+    fn grading_returns_explanations_for_each_miss() {
+        let questions = vec![
+            question(1, "a", "A is correct"),
+            question(2, "b", "B is correct"),
+        ];
+        let answers = HashMap::from([(1, "a".to_string()), (2, "c".to_string())]);
+
+        let (correct, incorrect) = grade_exit_round(&questions, &answers).unwrap();
+
+        assert_eq!(correct, vec![1]);
+        assert_eq!(incorrect.len(), 1);
+        assert_eq!(incorrect[0].user_answer, "c");
+        assert_eq!(incorrect[0].correct_answer, "b");
+        assert_eq!(incorrect[0].explanation, "B is correct");
+    }
+
+    #[test]
+    fn grading_rejects_incomplete_rounds() {
+        let questions = vec![
+            question(1, "a", "A is correct"),
+            question(2, "b", "B is correct"),
+        ];
+        let answers = HashMap::from([(1, "a".to_string())]);
+
+        assert!(grade_exit_round(&questions, &answers).is_err());
+    }
+
+    fn check(prompt: &str, choices: &[&str], correct: &str) -> crate::generator::ExitCheck {
+        crate::generator::ExitCheck {
+            prompt: prompt.into(),
+            choices: choices.iter().map(|c| c.to_string()).collect(),
+            correct_answer: correct.into(),
+            explanation: "because".into(),
+            section: String::new(),
+            learning_objective: String::new(),
+        }
+    }
+
+    #[test]
+    fn usable_exit_check_accepts_four_clean_choices() {
+        assert!(is_usable_exit_check(&check(
+            "Q",
+            &["a", "b", "c", "d"],
+            "b"
+        )));
+    }
+
+    #[test]
+    fn usable_exit_check_tolerates_whitespace_drift_in_correct_answer() {
+        // Regression: the model padding "b " while choices has "b" used to
+        // silently drop an otherwise-valid question and starve the round.
+        assert!(is_usable_exit_check(&check(
+            "Q",
+            &["a", "b", "c", "d"],
+            "b "
+        )));
+    }
+
+    #[test]
+    fn usable_exit_check_tolerates_non_four_choice_counts() {
+        // Regression: requiring exactly 4 choices rejected valid 3- or
+        // 5-option MCQs the model returned, even though the correct answer
+        // is unambiguous.
+        assert!(is_usable_exit_check(&check("Q", &["a", "b", "c"], "c")));
+    }
+
+    #[test]
+    fn usable_exit_check_rejects_missing_correct_answer() {
+        assert!(!is_usable_exit_check(&check(
+            "Q",
+            &["a", "b", "c", "d"],
+            "z"
+        )));
+    }
+
+    #[test]
+    fn usable_exit_check_rejects_empty_prompt_or_single_choice() {
+        assert!(!is_usable_exit_check(&check("", &["a", "b"], "a")));
+        assert!(!is_usable_exit_check(&check("Q", &["a"], "a")));
+    }
+
+    static TEST_DB_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+    fn test_conn() -> rusqlite::Connection {
+        let n = TEST_DB_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let dir = std::env::temp_dir().join(format!("sdr-cmd-test-{}-{}", std::process::id(), n));
+        std::fs::create_dir_all(&dir).unwrap();
+        db::open(&dir.join("test.db")).unwrap()
+    }
+
+    #[test]
+    fn exit_progress_honors_a_deliberately_shrunk_count() {
+        // Regression: `count.max(INITIAL_EXIT_QUESTION_COUNT)` used to
+        // re-floor a round that `get_exit_quiz` had shrunk because the
+        // bundled pool ran out of fresh MCQs, recreating the exact
+        // impossible-to-fill round the shrink exists to avoid.
+        let conn = test_conn();
+        db::set_config(&conn, &exit_count_key(1), "2").unwrap();
+        let (_, count) = exit_progress(&conn, 1);
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn exit_progress_defaults_to_initial_count_when_unset() {
+        let conn = test_conn();
+        let (round, count) = exit_progress(&conn, 42);
+        assert_eq!(round, 1);
+        assert_eq!(count, INITIAL_EXIT_QUESTION_COUNT);
+    }
+
+    #[test]
+    fn fallback_exit_checks_skip_already_seen_prompts_and_respect_needed() {
+        let mut seen = std::collections::HashSet::new();
+        let filler = fallback_exit_checks("javascript", 2, &mut seen, &[]);
+        assert!(filler.len() <= 2);
+        assert!(filler.iter().all(is_usable_exit_check));
+
+        // Asking again with the same `seen` set must not repeat a prompt —
+        // this is exactly what keeps a retried round from looping forever.
+        let more = fallback_exit_checks("javascript", 2, &mut seen, &[]);
+        for q in &more {
+            assert!(!filler.iter().any(|f| f.prompt == q.prompt));
+        }
+    }
+
+    #[test]
+    fn fallback_exit_checks_prefer_matching_failed_areas_when_present() {
+        let mut seen = std::collections::HashSet::new();
+        let failed_areas = vec![crate::generator::FailedArea {
+            section: "Core mechanics".into(),
+            learning_objective: "microtasks drain before the next macrotask".into(),
+        }];
+        let filler = fallback_exit_checks("javascript", 1, &mut seen, &failed_areas);
+        // The bundled js-event-loop course has a matching MCQ for this
+        // objective; a real match should win over an arbitrary pool pick.
+        assert!(!filler.is_empty());
+        let picked = &filler[0];
+        assert!(
+            picked.learning_objective.to_lowercase().contains("microtask")
+                || picked.section.to_lowercase().contains("mechanic"),
+            "expected the targeted pick to actually match a failed area, got section={:?} objective={:?}",
+            picked.section,
+            picked.learning_objective
+        );
+    }
+
+    #[test]
+    fn fallback_exit_checks_degrades_gracefully_when_pool_is_smaller_than_needed() {
+        // Regression: provider failure must never trap the reader. Asking
+        // for far more than the bundled pool can supply must return
+        // whatever is available (deduped, usable) instead of panicking or
+        // looping — the caller shrinks the round around whatever comes back.
+        let mut seen = std::collections::HashSet::new();
+        let pool_size = crate::generator::fallback_mcq_pool("javascript").len();
+        let filler = fallback_exit_checks("javascript", pool_size + 50, &mut seen, &[]);
+        assert!(filler.len() <= pool_size);
+        assert!(filler.iter().all(is_usable_exit_check));
+        let mut prompts: Vec<&str> = filler.iter().map(|f| f.prompt.as_str()).collect();
+        let unique_count = {
+            prompts.sort_unstable();
+            prompts.dedup();
+            prompts.len()
+        };
+        assert_eq!(unique_count, filler.len(), "filler must not repeat prompts");
+    }
+
+    #[test]
+    fn submitting_a_failed_round_persists_targeted_failed_areas() {
+        let conn = test_conn();
+        db::seed_concepts(&conn, crate::SEED_CONCEPTS).unwrap();
+        let course_id =
+            db::insert_course(&conn, "2026-01-01", 1, "# course", "[]", "fallback").unwrap();
+        db::insert_exit_question(
+            &conn,
+            course_id,
+            1,
+            "Q1",
+            &serde_json::to_string(&vec!["a", "b"]).unwrap(),
+            "a",
+            "explain",
+            "Core mechanics",
+            "objective one",
+        )
+        .unwrap();
+        let questions = db::exit_questions_for_course(&conn, course_id, 1).unwrap();
+        let answers = HashMap::from([(questions[0].id, "b".to_string())]);
+        let (_, incorrect) = grade_exit_round(&questions, &answers).unwrap();
+        assert_eq!(incorrect.len(), 1);
+
+        let areas = vec![crate::generator::FailedArea {
+            section: incorrect[0].section.clone(),
+            learning_objective: incorrect[0].learning_objective.clone(),
+        }];
+        write_failed_areas(&conn, course_id, &areas).unwrap();
+        let read_back = read_failed_areas(&conn, course_id);
+        assert_eq!(read_back.len(), 1);
+        assert_eq!(read_back[0].learning_objective, "objective one");
+    }
+
+    #[test]
+    fn chat_view_preserves_grounding_and_follow_ups() {
+        let turns = vec![
+            crate::generator::ChatTurn::user("What blocks the loop?".into()),
+            crate::generator::ChatTurn::assistant(crate::generator::ChatReply {
+                answer: "Only synchronous CPU work on the stack.".into(),
+                section: "The precise model".into(),
+                follow_ups: vec![
+                    "Can you trace one blocking task?".into(),
+                    "How would you measure the delay?".into(),
+                    "Where does the exercise expose it?".into(),
+                ],
+            }),
+        ];
+        let view = chat_view(&turns);
+        assert_eq!(view.len(), 2);
+        assert_eq!(view[0].role, "user");
+        assert_eq!(view[0].content, "What blocks the loop?");
+        assert_eq!(view[1].role, "assistant");
+        assert_eq!(view[1].content, "Only synchronous CPU work on the stack.");
+        assert_eq!(view[1].section.as_deref(), Some("The precise model"));
+        assert_eq!(view[1].follow_ups.len(), 3);
+    }
+
+    #[test]
+    fn chat_message_validation_trims_and_caps_input() {
+        assert_eq!(
+            prepare_chat_message("  explain this trace  ".into()).unwrap(),
+            "explain this trace"
+        );
+        assert!(prepare_chat_message(" \n ".into()).is_err());
+        assert!(prepare_chat_message("x".repeat(MAX_CHAT_MESSAGE_CHARS + 1)).is_err());
+    }
 }

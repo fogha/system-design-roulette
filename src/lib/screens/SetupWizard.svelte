@@ -62,7 +62,8 @@
     <header class="boot-head">
       <h1>Bootstrap your training cluster</h1>
       <p class="sub">
-        Configure each service, then deploy to wire them together. No rollback until tomorrow.
+        Configure the shared teacher credentials and primary enforcement service, then use
+        Classroom to enable, schedule, and immediately start each subject.
       </p>
     </header>
 
@@ -98,7 +99,12 @@
         >
           {#snippet children()}
             <div class="meta-label">AGENT_CLI — who powers the teacher</div>
-            <AgentPicker bind:agent bind:customBin />
+            <AgentPicker
+              bind:agent
+              bind:customBin
+              deepseekKeyConfigured={app.state?.deepseek_key_configured ?? false}
+              onKeyChanged={() => app.refresh()}
+            />
             <div class="health">
               <span class="meta-label">HEALTHCHECK — {agent} ping</span>
               <div class="health-row">
@@ -125,7 +131,7 @@
         <!-- 03 · model (claude only) -->
         <section class="stage">
           <span class="step mono">03</span>
-          <NodeCard Icon={Zap} name="course-model" badge="{model}" badgeTone="amber">
+          <NodeCard Icon={Zap} name="course-model" badge={model} badgeTone="amber">
             {#snippet children()}
               <div class="meta-label">COURSE_MODEL — who writes your lessons</div>
               <ModelPicker bind:value={model} />
