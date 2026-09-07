@@ -964,7 +964,6 @@ export const mockApi = {
     subject_id: ClassroomSubjectId;
     learning_goal: string;
     target_weekly_minutes: number;
-    period_weeks: number;
     windows: {
       weekdays: number[];
       start_hour: number;
@@ -1012,7 +1011,6 @@ export const mockApi = {
         slots,
         total_weekly_minutes: totalWeeklyMinutes,
         target_weekly_minutes: input.target_weekly_minutes,
-        period_weeks: input.period_weeks,
         meets_target: meetsTarget,
         program: null,
         schedule: null,
@@ -1047,7 +1045,6 @@ export const mockApi = {
       slots,
       total_weekly_minutes: totalWeeklyMinutes,
       target_weekly_minutes: input.target_weekly_minutes,
-      period_weeks: input.period_weeks,
       meets_target: meetsTarget,
       program: mockClassroomProgram(input.subject_id),
       schedule: mockClassroomSlots.filter((slot) => slot.subject_id === input.subject_id),

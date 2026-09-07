@@ -247,7 +247,6 @@ export interface ClassroomPlanView {
   slots: PlannedSlot[];
   total_weekly_minutes: number;
   target_weekly_minutes: number;
-  period_weeks: number;
   meets_target: boolean;
   program: ClassroomProgramView | null;
   schedule: ClassroomSlotView[] | null;
@@ -594,7 +593,6 @@ const realApi = {
     subject_id: ClassroomSubjectId;
     learning_goal: string;
     target_weekly_minutes: number;
-    period_weeks: number;
     windows: AvailabilityWindow[];
     commit: boolean;
   }) => invoke<ClassroomPlanView>('plan_classroom_schedule', { input }),

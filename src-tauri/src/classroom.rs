@@ -376,6 +376,13 @@ pub fn configure_program(
     if !input.enabled && has_active_session(conn, &input.subject_id)? {
         return Err("finish the active class session before disabling it".into());
     }
+    if spec.kind == SubjectKind::Engineering
+        && (input.start_level.is_some()
+            || input.target_level.is_some()
+            || input.weekly_minutes.is_some())
+    {
+        return Err("language-only settings cannot be applied to an engineering subject".into());
+    }
     conn.execute(
         "UPDATE classroom_programs
          SET enabled = ?2, agent = ?3, model = ?4, custom_agent_bin = ?5,
@@ -506,6 +513,19 @@ pub fn delete_slot(conn: &Connection, id: i64) -> Result<()> {
     if active_engineering + active_language > 0 {
         return Err("finish the active class before deleting this slot".into());
     }
+    // Completed sessions keep their history; only the schedule link is cut.
+    conn.execute(
+        "UPDATE classroom_sessions SET slot_id = NULL
+         WHERE slot_id = ?1 AND status != 'in_progress'",
+        [id],
+    )
+    .map_err(|error| error.to_string())?;
+    conn.execute(
+        "UPDATE language_sessions SET classroom_slot_id = NULL
+         WHERE classroom_slot_id = ?1 AND status != 'in_progress'",
+        [id],
+    )
+    .map_err(|error| error.to_string())?;
     conn.execute("DELETE FROM classroom_schedule_slots WHERE id = ?1", [id])
         .map_err(|error| error.to_string())?;
     Ok(())
@@ -528,8 +548,6 @@ pub struct PlanClassroomScheduleInput {
     #[serde(default)]
     pub learning_goal: String,
     pub target_weekly_minutes: i64,
-    #[serde(default)]
-    pub period_weeks: i64,
     pub windows: Vec<AvailabilityWindowInput>,
     /// false = preview only (no writes); true = persist the plan.
     pub commit: bool,
@@ -547,7 +565,6 @@ pub struct ClassroomPlanView {
     pub slots: Vec<PlannedSlotView>,
     pub total_weekly_minutes: i64,
     pub target_weekly_minutes: i64,
-    pub period_weeks: i64,
     pub meets_target: bool,
     pub program: Option<ClassroomProgramView>,
     pub schedule: Option<Vec<ClassroomSlotView>>,
@@ -689,7 +706,6 @@ pub fn plan_schedule(
         slots,
         total_weekly_minutes,
         target_weekly_minutes: input.target_weekly_minutes,
-        period_weeks: input.period_weeks,
         meets_target,
         program: view_program,
         schedule: view_schedule,
@@ -760,18 +776,24 @@ pub fn slot_due_at(
 }
 
 fn slot_state(conn: &Connection, slot: &SlotRow, today: &str) -> Result<(bool, bool)> {
-    let table = if slot.kind == "language" {
-        ("language_sessions", "classroom_slot_id")
-    } else {
-        ("classroom_sessions", "slot_id")
-    };
-    let sql = format!(
-        "SELECT status FROM {} WHERE {} = ?1 AND session_date = ?2
-         ORDER BY id DESC LIMIT 1",
-        table.0, table.1
-    );
-    conn.query_row(&sql, params![slot.id, today], |row| row.get::<_, String>(0))
+    let status = if slot.kind == "language" {
+        conn.query_row(
+            "SELECT status FROM language_sessions WHERE classroom_slot_id = ?1
+             AND session_date = ?2 ORDER BY id DESC LIMIT 1",
+            params![slot.id, today],
+            |row| row.get::<_, String>(0),
+        )
         .optional()
+    } else {
+        conn.query_row(
+            "SELECT status FROM classroom_sessions WHERE slot_id = ?1
+             AND session_date = ?2 ORDER BY id DESC LIMIT 1",
+            params![slot.id, today],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+    };
+    status
         .map(|status| {
             let in_progress = status.as_deref() == Some("in_progress");
             (status.is_some(), in_progress)
@@ -1416,6 +1438,58 @@ struct EngineeringSessionMeta<'a> {
     slot_id: Option<i64>,
 }
 
+/// Map generated exit questions to stored questions, resolving each
+/// `correct_answer` string to exactly one choice position. Fails closed: a
+/// generated check whose correct answer matches zero or several choices is a
+/// validation error, never a silently mis-graded session.
+fn stored_questions(course: &GeneratedCourse) -> Result<Vec<StoredQuestion>> {
+    let questions = course
+        .exit_questions
+        .iter()
+        .enumerate()
+        .map(|(index, question)| {
+            let matches: Vec<usize> = question
+                .choices
+                .iter()
+                .enumerate()
+                .filter(|(_, choice)| choice.trim() == question.correct_answer.trim())
+                .map(|(position, _)| position)
+                .collect();
+            let correct_index = match matches.as_slice() {
+                [single] => *single,
+                [] => {
+                    return Err(format!(
+                        "classroom course check {} has no matching correct answer",
+                        index + 1
+                    ));
+                }
+                _ => {
+                    return Err(format!(
+                        "classroom course check {} has an ambiguous correct answer",
+                        index + 1
+                    ));
+                }
+            };
+            Ok(StoredQuestion {
+                id: index + 1,
+                prompt: question.prompt.clone(),
+                choices: question.choices.clone(),
+                correct_index,
+                explanation: question.explanation.clone(),
+                section: question.section.clone(),
+                learning_objective: question.learning_objective.clone(),
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    if questions.len() != 5 {
+        return Err(format!(
+            "classroom course produced {} validated checks; expected 5",
+            questions.len()
+        ));
+    }
+    Ok(questions)
+}
+
 fn insert_engineering_session(
     state: &AppState,
     program: &ProgramRow,
@@ -1423,30 +1497,7 @@ fn insert_engineering_session(
     course: GeneratedCourse,
     source: String,
 ) -> Result<EngineeringLessonView> {
-    let questions = course
-        .exit_questions
-        .iter()
-        .enumerate()
-        .map(|(index, question)| StoredQuestion {
-            id: index + 1,
-            prompt: question.prompt.clone(),
-            choices: question.choices.clone(),
-            correct_index: question
-                .choices
-                .iter()
-                .position(|choice| choice.trim() == question.correct_answer.trim())
-                .unwrap_or(0),
-            explanation: question.explanation.clone(),
-            section: question.section.clone(),
-            learning_objective: question.learning_objective.clone(),
-        })
-        .collect::<Vec<_>>();
-    if questions.len() != 5 {
-        return Err(format!(
-            "classroom course produced {} validated checks; expected 5",
-            questions.len()
-        ));
-    }
+    let questions = stored_questions(&course)?;
     let stored = StoredEngineeringLesson {
         concept_id: meta.concept_id,
         concept_title: meta.concept_title.into(),
@@ -1677,4 +1728,101 @@ pub fn classroom_date(date: &str) -> NaiveDate {
 
 pub fn focus_is_classroom_subject(subject_id: &str) -> bool {
     focus::is_selectable(subject_id) && subject(subject_id).is_ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::generator::ExitCheck;
+
+    fn question(correct_answer: &str, choices: &[&str]) -> ExitCheck {
+        ExitCheck {
+            prompt: "what is it?".into(),
+            choices: choices.iter().map(|choice| choice.to_string()).collect(),
+            correct_answer: correct_answer.into(),
+            explanation: "because".into(),
+            section: "## Core mechanics".into(),
+            learning_objective: "explain the mechanism".into(),
+        }
+    }
+
+    fn course(questions: Vec<ExitCheck>) -> GeneratedCourse {
+        GeneratedCourse {
+            title: "test".into(),
+            markdown: String::new(),
+            resources: vec![],
+            key_takeaways: vec![],
+            exit_questions: questions,
+            exercise: None,
+        }
+    }
+
+    #[test]
+    fn stored_questions_resolve_the_correct_choice_position() {
+        let stored = stored_questions(&course(vec![
+            question("b", &["a", "b", "c"]),
+            question("c", &["a", "b", "c"]),
+            question("a", &["a", "b", "c"]),
+            question("b", &["a", "b", "c"]),
+            question("a", &["a", "b", "c"]),
+        ]))
+        .expect("matching answers must map");
+        let positions: Vec<usize> = stored.iter().map(|q| q.correct_index).collect();
+        assert_eq!(positions, vec![1, 2, 0, 1, 0]);
+    }
+
+    #[test]
+    fn stored_questions_trim_before_matching() {
+        let stored = stored_questions(&course(vec![
+            question(" b ", &["a", "b", "c"]),
+            question("c", &["a", "b", "c"]),
+            question("a", &["a", "b", "c"]),
+            question("b", &["a", "b", "c"]),
+            question("a", &["a", "b", "c"]),
+        ]))
+        .expect("whitespace-padded answers must match");
+        assert_eq!(stored[0].correct_index, 1);
+    }
+
+    #[test]
+    fn stored_questions_fail_closed_when_no_choice_matches() {
+        let error = stored_questions(&course(vec![
+            question("z", &["a", "b", "c"]),
+            question("b", &["a", "b", "c"]),
+            question("a", &["a", "b", "c"]),
+            question("b", &["a", "b", "c"]),
+            question("a", &["a", "b", "c"]),
+        ]))
+        .expect_err("unmatched answer must be a validation error");
+        assert!(
+            error.contains("check 1 has no matching correct answer"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn stored_questions_fail_closed_when_answer_is_ambiguous() {
+        let error = stored_questions(&course(vec![
+            question("b", &["a", "b", "b"]),
+            question("b", &["a", "b", "c"]),
+            question("a", &["a", "b", "c"]),
+            question("b", &["a", "b", "c"]),
+            question("a", &["a", "b", "c"]),
+        ]))
+        .expect_err("duplicated choice must be a validation error");
+        assert!(
+            error.contains("check 1 has an ambiguous correct answer"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn stored_questions_require_exactly_five() {
+        let error = stored_questions(&course(vec![
+            question("b", &["a", "b", "c"]),
+            question("a", &["a", "b", "c"]),
+        ]))
+        .expect_err("four checks are not a classroom course");
+        assert!(error.contains("expected 5"), "{error}");
+    }
 }

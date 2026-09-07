@@ -64,7 +64,6 @@
   let planningSubject = $state<ClassroomSubjectId | null>(null);
   let planGoal = $state('');
   let planTargetMinutes = $state(150);
-  let planPeriodWeeks = $state(6);
   let planWindows = $state<PlanWindowDraft[]>([]);
   let planPreview = $state<ClassroomPlanView | null>(null);
   let planError = $state('');
@@ -181,7 +180,6 @@
     planGoal = program.learning_goal;
     planTargetMinutes =
       program.target_weekly_minutes || program.language_progress?.weekly_minutes || 150;
-    planPeriodWeeks = 6;
     planWindows = [{ weekdays: [1, 2, 3, 4, 5], start: '07:00', end: '08:00' }];
     planPreview = null;
     planError = '';
@@ -226,7 +224,6 @@
         subject_id: planningSubject,
         learning_goal: planGoal,
         target_weekly_minutes: planTargetMinutes,
-        period_weeks: planPeriodWeeks,
         windows: windowsPayload(),
         commit: false,
       });
@@ -247,7 +244,6 @@
         subject_id: planningSubject,
         learning_goal: planGoal,
         target_weekly_minutes: planTargetMinutes,
-        period_weeks: planPeriodWeeks,
         windows: windowsPayload(),
         commit: true,
       });
@@ -558,10 +554,6 @@
                     <span>target minutes / week</span>
                     <input type="number" min="0" max="2100" step="15" bind:value={planTargetMinutes} />
                   </label>
-                  <label>
-                    <span>over how many weeks</span>
-                    <input type="number" min="1" max="52" bind:value={planPeriodWeeks} />
-                  </label>
                 </div>
                 <fieldset class="windows-field">
                   <legend>when are you available</legend>
@@ -624,9 +616,6 @@
                         {planPreview.meets_target
                           ? 'meets your target'
                           : `short of your ${planPreview.target_weekly_minutes} min/week target`}
-                      {/if}
-                      {#if planPreview.period_weeks > 0}
-                        · repeats weekly across the {planPreview.period_weeks}-week plan
                       {/if}
                     </p>
                     <ul class="preview-slots">

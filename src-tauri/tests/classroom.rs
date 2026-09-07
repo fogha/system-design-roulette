@@ -25,6 +25,7 @@ fn test_db() -> rusqlite::Connection {
 }
 
 fn configure(conn: &rusqlite::Connection, subject_id: &str, agent: &str) {
+    let is_language = subject_id == "german" || subject_id == "italian";
     classroom::configure_program(
         conn,
         &ConfigureClassroomInput {
@@ -34,9 +35,9 @@ fn configure(conn: &rusqlite::Connection, subject_id: &str, agent: &str) {
             model: "sonnet".into(),
             custom_agent_bin: String::new(),
             session_minutes: 30,
-            start_level: Some("A1".into()),
-            target_level: Some("A2".into()),
-            weekly_minutes: Some(210),
+            start_level: is_language.then(|| "A1".into()),
+            target_level: is_language.then(|| "A2".into()),
+            weekly_minutes: is_language.then_some(210),
         },
         "2026-07-21",
     )
@@ -342,6 +343,52 @@ fn generic_language_slot_routes_to_cefr_engine_without_consuming_primary() {
 }
 
 #[test]
+fn deleting_a_slot_cuts_the_link_on_history_without_losing_it() {
+    let conn = test_db();
+    configure(&conn, "german", "claude");
+    let slot = classroom::upsert_slot(
+        &conn,
+        &UpsertClassroomSlotInput {
+            id: None,
+            subject_id: "german".into(),
+            hour: 8,
+            minute: 0,
+            weekdays: vec![3],
+            enabled: true,
+        },
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO language_sessions
+            (slot_id, classroom_slot_id, language, session_date, level, unit_slug, phase,
+             status, lesson_json, response_json, started_at, completed_at)
+         VALUES (NULL, ?1, 'german', '2026-07-20', 'A1', 'alphabet', 1,
+                 'completed', '{}', '{}', 'now', 'now')",
+        [slot],
+    )
+    .unwrap();
+    classroom::delete_slot(&conn, slot).unwrap();
+    let linked: Option<i64> = conn
+        .query_row(
+            "SELECT classroom_slot_id FROM language_sessions
+             WHERE language = 'german' AND session_date = '2026-07-20'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(linked, None);
+    let kept: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM language_sessions
+             WHERE language = 'german' AND session_date = '2026-07-20'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(kept, 1);
+}
+
+#[test]
 fn language_classes_can_be_paused_independently_on_the_same_day() {
     let conn = test_db();
     configure(&conn, "german", "claude");
@@ -458,7 +505,7 @@ fn planning_a_schedule_previews_without_writing_when_not_committed() {
             subject_id: "german".into(),
             learning_goal: "conversational travel German".into(),
             target_weekly_minutes: 90,
-            period_weeks: 6,
+
             windows: vec![window(vec![1, 3, 5], (7, 0), (8, 0))],
             commit: false,
         },
@@ -502,7 +549,7 @@ fn committing_a_plan_preserves_manual_slots_and_replaces_only_planned_ones() {
             subject_id: "german".into(),
             learning_goal: "conversational travel German".into(),
             target_weekly_minutes: 90,
-            period_weeks: 6,
+
             windows: vec![window(vec![1, 3, 5], (7, 0), (8, 0))],
             commit: true,
         },
@@ -526,7 +573,7 @@ fn committing_a_plan_preserves_manual_slots_and_replaces_only_planned_ones() {
             subject_id: "german".into(),
             learning_goal: "conversational travel German".into(),
             target_weekly_minutes: 60,
-            period_weeks: 4,
+
             windows: vec![window(vec![2, 4], (18, 0), (19, 0))],
             commit: true,
         },
@@ -559,7 +606,7 @@ fn hand_editing_a_planned_slot_claims_it_so_replanning_leaves_it_alone() {
             subject_id: "javascript".into(),
             learning_goal: String::new(),
             target_weekly_minutes: 30,
-            period_weeks: 4,
+
             windows: vec![window(vec![1], (7, 0), (8, 0))],
             commit: true,
         },
@@ -592,7 +639,7 @@ fn hand_editing_a_planned_slot_claims_it_so_replanning_leaves_it_alone() {
             subject_id: "javascript".into(),
             learning_goal: String::new(),
             target_weekly_minutes: 30,
-            period_weeks: 4,
+
             windows: vec![window(vec![3], (12, 0), (13, 0))],
             commit: true,
         },
@@ -619,7 +666,7 @@ fn plan_schedule_rejects_empty_windows_and_inverted_times() {
             subject_id: "german".into(),
             learning_goal: String::new(),
             target_weekly_minutes: 60,
-            period_weeks: 4,
+
             windows: vec![],
             commit: false,
         },
@@ -636,7 +683,7 @@ fn plan_schedule_rejects_empty_windows_and_inverted_times() {
             subject_id: "german".into(),
             learning_goal: String::new(),
             target_weekly_minutes: 60,
-            period_weeks: 4,
+
             windows: vec![window(vec![1], (9, 0), (8, 0))],
             commit: false,
         },
