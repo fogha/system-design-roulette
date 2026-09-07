@@ -41,14 +41,10 @@ pub struct AppStateView {
     /// Whether a DeepSeek API key is available (env var or Keychain) — the
     /// key itself never leaves the Rust process.
     pub deepseek_key_configured: bool,
-    /// Independent, non-blocking language programs. These never reuse or
-    /// mutate the frontend-engineering session row.
-    pub language_programs: Vec<crate::language::LanguageProgramView>,
-    pub language_slots: Vec<crate::language::LanguageSlotView>,
-    pub language_due_count: usize,
-    pub active_language_session: Option<crate::language::ActiveLanguageSessionView>,
     /// Generic advisory classroom. Every subject owns its schedule, prompt
     /// profile, generation provider, progress, and same-day sessions.
+    /// Languages are classroom subjects too; their CEFR engine lives behind
+    /// the same panel.
     pub classroom_programs: Vec<crate::classroom::ClassroomProgramView>,
     pub classroom_slots: Vec<crate::classroom::ClassroomSlotView>,
     pub classroom_due_count: usize,
@@ -180,15 +176,6 @@ pub fn get_app_state(state: State<'_, AppState>) -> CmdResult<AppStateView> {
                 }),
         )
     };
-    let (language_programs, language_slots, active_language_session) = {
-        let conn = state.db.0.lock().unwrap();
-        (
-            crate::language::program_views(&conn, &state.today()).map_err(err)?,
-            crate::language::slot_views(&conn, &state.today(), state.debug_day).map_err(err)?,
-            crate::language::active_summary(&conn).map_err(err)?,
-        )
-    };
-    let language_due_count = language_slots.iter().filter(|slot| slot.owed).count();
     let (classroom_programs, classroom_slots, active_classroom_sessions) = {
         let conn = state.db.0.lock().unwrap();
         (
@@ -214,10 +201,6 @@ pub fn get_app_state(state: State<'_, AppState>) -> CmdResult<AppStateView> {
         custom_agent_bin: state.generator.current_custom_bin(),
         selected_focus,
         deepseek_key_configured: deepseek_key_configured(),
-        language_programs,
-        language_slots,
-        language_due_count,
-        active_language_session,
         classroom_programs,
         classroom_slots,
         classroom_due_count,
@@ -632,99 +615,6 @@ pub fn submit_classroom_engineering_session(
     Ok(result)
 }
 
-/// Enable or update one independent language program. A program has its own
-/// CEFR ledger and never changes the frontend session's focus or completion.
-#[tauri::command]
-pub fn configure_language_program(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    input: crate::language::ConfigureProgramInput,
-) -> CmdResult<crate::language::LanguageProgramView> {
-    {
-        let conn = state.db.0.lock().unwrap();
-        crate::language::configure_program(&conn, &input, &state.today()).map_err(err)?;
-    }
-    refresh_os_schedule(&state)?;
-    let view = {
-        let conn = state.db.0.lock().unwrap();
-        crate::language::program_view(&conn, &input.language, &state.today()).map_err(err)?
-    };
-    let _ = app.emit("language:state", &view);
-    Ok(view)
-}
-
-/// Add or edit a non-blocking language reminder slot. Multiple slots can
-/// coexist with the original enforced frontend schedule.
-#[tauri::command]
-pub fn upsert_language_slot(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    input: crate::language::UpsertSlotInput,
-) -> CmdResult<Vec<crate::language::LanguageSlotView>> {
-    {
-        let conn = state.db.0.lock().unwrap();
-        crate::language::upsert_slot(&conn, &input).map_err(err)?;
-    }
-    refresh_os_schedule(&state)?;
-    let slots = {
-        let conn = state.db.0.lock().unwrap();
-        crate::language::slot_views(&conn, &state.today(), state.debug_day).map_err(err)?
-    };
-    let _ = app.emit("language:state", &slots);
-    Ok(slots)
-}
-
-#[tauri::command]
-pub fn delete_language_slot(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    id: i64,
-) -> CmdResult<Vec<crate::language::LanguageSlotView>> {
-    {
-        let conn = state.db.0.lock().unwrap();
-        crate::language::delete_slot(&conn, id).map_err(err)?;
-    }
-    refresh_os_schedule(&state)?;
-    let slots = {
-        let conn = state.db.0.lock().unwrap();
-        crate::language::slot_views(&conn, &state.today(), state.debug_day).map_err(err)?
-    };
-    let _ = app.emit("language:state", &slots);
-    Ok(slots)
-}
-
-#[tauri::command]
-pub fn start_language_session(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    language: String,
-    slot_id: Option<i64>,
-) -> CmdResult<crate::language::LanguageLessonView> {
-    if session::session_owed(&state) {
-        return Err(
-            "The enforced frontend engineering session is due. Complete or skip it before starting language practice."
-                .into(),
-        );
-    }
-    let lesson = {
-        let conn = state.db.0.lock().unwrap();
-        crate::language::start_session(&conn, language.trim(), slot_id, &state.today(), false)
-            .map_err(err)?
-    };
-    // Language practice is advisory by design. Do not call kiosk::engage and
-    // do not mutate the frontend session's locked/status fields.
-    let _ = app.emit("language:state", &lesson);
-    Ok(lesson)
-}
-
-#[tauri::command]
-pub fn get_active_language_session(
-    state: State<'_, AppState>,
-) -> CmdResult<Option<crate::language::LanguageLessonView>> {
-    let conn = state.db.0.lock().unwrap();
-    crate::language::active_session(&conn).map_err(err)
-}
-
 #[tauri::command]
 pub fn submit_language_session(
     app: AppHandle,
@@ -735,7 +625,7 @@ pub fn submit_language_session(
         let conn = state.db.0.lock().unwrap();
         crate::language::submit_session(&conn, &input, &state.today()).map_err(err)?
     };
-    let _ = app.emit("language:state", &result);
+    let _ = app.emit("classroom:state", &result);
     Ok(result)
 }
 

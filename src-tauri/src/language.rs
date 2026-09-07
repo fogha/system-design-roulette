@@ -1,4 +1,4 @@
-use chrono::{Datelike, Duration, Local, NaiveDate, NaiveDateTime, Timelike, Weekday};
+use chrono::{Duration, Local, NaiveDate};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -428,13 +428,6 @@ fn capitalize(value: &str) -> String {
     }
 }
 
-pub fn program_views(conn: &Connection, today: &str) -> Result<Vec<LanguageProgramView>> {
-    LANGUAGES
-        .iter()
-        .map(|language| program_view(conn, language, today))
-        .collect()
-}
-
 pub fn program_view(conn: &Connection, language: &str, today: &str) -> Result<LanguageProgramView> {
     let row = program_row(conn, language)?;
     let curriculum = curriculum(language)?;
@@ -611,256 +604,6 @@ pub fn configure_program(
     )
     .map_err(|error| error.to_string())?;
     Ok(())
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct UpsertSlotInput {
-    pub id: Option<i64>,
-    pub language: String,
-    pub hour: u32,
-    pub minute: u32,
-    pub weekdays: Vec<u8>,
-    pub enabled: bool,
-}
-
-pub fn upsert_slot(conn: &Connection, input: &UpsertSlotInput) -> Result<i64> {
-    if !valid_language(&input.language) {
-        return Err(format!("unsupported language: {}", input.language));
-    }
-    if input.hour > 23 || input.minute > 59 {
-        return Err("schedule time is invalid".into());
-    }
-    let mut weekdays = input.weekdays.clone();
-    weekdays.sort_unstable();
-    weekdays.dedup();
-    if weekdays.is_empty() || weekdays.iter().any(|day| !(1..=7).contains(day)) {
-        return Err("select at least one valid weekday".into());
-    }
-    let weekdays_json = serde_json::to_string(&weekdays).map_err(|error| error.to_string())?;
-    if let Some(id) = input.id {
-        let changed = conn
-            .execute(
-                "UPDATE language_schedule_slots
-                 SET language = ?2, hour = ?3, minute = ?4, weekdays_json = ?5, enabled = ?6
-                 WHERE id = ?1",
-                params![
-                    id,
-                    input.language,
-                    input.hour,
-                    input.minute,
-                    weekdays_json,
-                    i64::from(input.enabled)
-                ],
-            )
-            .map_err(|error| error.to_string())?;
-        if changed == 0 {
-            return Err("language schedule slot was not found".into());
-        }
-        Ok(id)
-    } else {
-        conn.execute(
-            "INSERT INTO language_schedule_slots
-                (language, hour, minute, weekdays_json, enabled, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![
-                input.language,
-                input.hour,
-                input.minute,
-                weekdays_json,
-                i64::from(input.enabled),
-                now_iso()
-            ],
-        )
-        .map_err(|error| {
-            if error.to_string().contains("UNIQUE constraint failed") {
-                "that language already has a slot at this time".to_string()
-            } else {
-                error.to_string()
-            }
-        })?;
-        Ok(conn.last_insert_rowid())
-    }
-}
-
-pub fn delete_slot(conn: &Connection, id: i64) -> Result<()> {
-    let active: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM language_sessions
-             WHERE slot_id = ?1 AND status = 'in_progress'",
-            [id],
-            |row| row.get(0),
-        )
-        .map_err(|error| error.to_string())?;
-    if active > 0 {
-        return Err("finish the active session before deleting its slot".into());
-    }
-    conn.execute("DELETE FROM language_schedule_slots WHERE id = ?1", [id])
-        .map_err(|error| error.to_string())?;
-    Ok(())
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct LanguageSlotView {
-    pub id: i64,
-    pub language: String,
-    pub label: String,
-    pub hour: u32,
-    pub minute: u32,
-    pub weekdays: Vec<u8>,
-    pub enabled: bool,
-    pub owed: bool,
-    pub next_fire_at: String,
-    pub in_progress: bool,
-}
-
-#[derive(Debug, Clone)]
-struct SlotRow {
-    id: i64,
-    language: String,
-    hour: u32,
-    minute: u32,
-    weekdays: Vec<u8>,
-    enabled: bool,
-    program_enabled: bool,
-}
-
-fn slot_rows(conn: &Connection) -> Result<Vec<SlotRow>> {
-    let mut stmt = conn
-        .prepare(
-            "SELECT s.id, s.language, s.hour, s.minute, s.weekdays_json, s.enabled, p.enabled
-             FROM language_schedule_slots s
-             JOIN language_programs p ON p.language = s.language
-             ORDER BY s.hour, s.minute, s.id",
-        )
-        .map_err(|error| error.to_string())?;
-    let rows = stmt
-        .query_map([], |row| {
-            let weekdays_json: String = row.get(4)?;
-            Ok(SlotRow {
-                id: row.get(0)?,
-                language: row.get(1)?,
-                hour: row.get::<_, i64>(2)? as u32,
-                minute: row.get::<_, i64>(3)? as u32,
-                weekdays: serde_json::from_str(&weekdays_json).unwrap_or_default(),
-                enabled: row.get::<_, i64>(5)? != 0,
-                program_enabled: row.get::<_, i64>(6)? != 0,
-            })
-        })
-        .map_err(|error| error.to_string())?;
-    rows.collect::<std::result::Result<Vec<_>, _>>()
-        .map_err(|error| error.to_string())
-}
-
-fn weekday_number(weekday: Weekday) -> u8 {
-    weekday.number_from_monday() as u8
-}
-
-pub fn slot_due_at(
-    hour: u32,
-    minute: u32,
-    weekdays: &[u8],
-    now: NaiveDateTime,
-    consumed_today: bool,
-) -> bool {
-    weekdays.contains(&weekday_number(now.weekday()))
-        && !consumed_today
-        && (now.hour(), now.minute()) >= (hour, minute)
-}
-
-fn slot_session_state(conn: &Connection, slot_id: i64, today: &str) -> Result<(bool, bool)> {
-    conn.query_row(
-        "SELECT status FROM language_sessions
-         WHERE slot_id = ?1 AND session_date = ?2
-         ORDER BY id DESC LIMIT 1",
-        params![slot_id, today],
-        |row| row.get::<_, String>(0),
-    )
-    .optional()
-    .map(|status| {
-        let in_progress = status.as_deref() == Some("in_progress");
-        (status.is_some(), in_progress)
-    })
-    .map_err(|error| error.to_string())
-}
-
-fn next_fire_at(slot: &SlotRow, now: NaiveDateTime, consumed_today: bool) -> String {
-    for offset in 0..=8 {
-        let date = now.date() + Duration::days(offset);
-        if !slot.weekdays.contains(&weekday_number(date.weekday())) {
-            continue;
-        }
-        let Some(candidate) = date.and_hms_opt(slot.hour, slot.minute, 0) else {
-            continue;
-        };
-        if (offset == 0 && consumed_today) || candidate <= now {
-            continue;
-        }
-        return candidate.format("%Y-%m-%dT%H:%M:%S").to_string();
-    }
-    now.format("%Y-%m-%dT%H:%M:%S").to_string()
-}
-
-pub fn slot_views(
-    conn: &Connection,
-    today: &str,
-    debug_day: bool,
-) -> Result<Vec<LanguageSlotView>> {
-    let paused = matches!(
-        crate::db::get_config(conn, "schedule_paused"),
-        Ok(Some(value)) if value == "1"
-    );
-    let now = Local::now().naive_local();
-    slot_rows(conn)?
-        .into_iter()
-        .map(|slot| {
-            let (consumed, in_progress) = slot_session_state(conn, slot.id, today)?;
-            let available = slot.enabled && slot.program_enabled && !paused;
-            let owed = available
-                && !consumed
-                && (debug_day || slot_due_at(slot.hour, slot.minute, &slot.weekdays, now, false));
-            let label = curriculum(&slot.language)?.label.clone();
-            let next_fire = next_fire_at(&slot, now, consumed);
-            Ok(LanguageSlotView {
-                id: slot.id,
-                language: slot.language,
-                label,
-                hour: slot.hour,
-                minute: slot.minute,
-                weekdays: slot.weekdays.clone(),
-                enabled: slot.enabled,
-                owed,
-                next_fire_at: next_fire,
-                in_progress,
-            })
-        })
-        .collect()
-}
-
-pub fn schedule_times(conn: &Connection) -> Result<Vec<(u32, u32)>> {
-    let mut times = slot_rows(conn)?
-        .into_iter()
-        .filter(|slot| slot.enabled && slot.program_enabled)
-        .map(|slot| (slot.hour, slot.minute))
-        .collect::<Vec<_>>();
-    times.sort_unstable();
-    times.dedup();
-    Ok(times)
-}
-
-pub fn all_schedule_times(conn: &Connection) -> Result<Vec<(u32, u32)>> {
-    let primary_hour = crate::db::get_config(conn, "schedule_hour")
-        .map_err(|error| error.to_string())?
-        .and_then(|value| value.parse().ok())
-        .unwrap_or(9);
-    let primary_minute = crate::db::get_config(conn, "schedule_minute")
-        .map_err(|error| error.to_string())?
-        .and_then(|value| value.parse().ok())
-        .unwrap_or(0);
-    let mut times = vec![(primary_hour, primary_minute)];
-    times.extend(schedule_times(conn)?);
-    times.sort_unstable();
-    times.dedup();
-    Ok(times)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1357,10 +1100,6 @@ fn read_session(
     .transpose()
 }
 
-pub fn active_session(conn: &Connection) -> Result<Option<LanguageLessonView>> {
-    read_session(conn, "s.status = 'in_progress' AND ?1 = 1", &1_i64)
-}
-
 pub fn active_session_for(conn: &Connection, language: &str) -> Result<Option<LanguageLessonView>> {
     read_session(
         conn,
@@ -1376,18 +1115,6 @@ pub struct ActiveLanguageSessionView {
     pub label: String,
     pub level: String,
     pub title: String,
-}
-
-pub fn active_summary(conn: &Connection) -> Result<Option<ActiveLanguageSessionView>> {
-    Ok(
-        active_session(conn)?.map(|session| ActiveLanguageSessionView {
-            session_id: session.session_id,
-            language: session.language,
-            label: session.label,
-            level: session.level,
-            title: session.title,
-        }),
-    )
 }
 
 pub fn active_summaries(conn: &Connection) -> Result<Vec<ActiveLanguageSessionView>> {
@@ -1411,7 +1138,6 @@ pub fn active_summaries(conn: &Connection) -> Result<Vec<ActiveLanguageSessionVi
 pub fn start_session(
     conn: &Connection,
     language: &str,
-    slot_id: Option<i64>,
     today: &str,
     revisit: bool,
 ) -> Result<LanguageLessonView> {
@@ -1425,30 +1151,6 @@ pub fn start_session(
     if let Some(active) = active_session_for(conn, language)? {
         return Ok(active);
     }
-    if let Some(id) = slot_id {
-        let slot_language: Option<String> = conn
-            .query_row(
-                "SELECT language FROM language_schedule_slots WHERE id = ?1",
-                [id],
-                |row| row.get(0),
-            )
-            .optional()
-            .map_err(|error| error.to_string())?;
-        if slot_language.as_deref() != Some(language) {
-            return Err("schedule slot does not belong to this language".into());
-        }
-        let consumed: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM language_sessions
-                 WHERE slot_id = ?1 AND session_date = ?2",
-                params![id, today],
-                |row| row.get(0),
-            )
-            .map_err(|error| error.to_string())?;
-        if consumed > 0 {
-            return Err("this language slot is already complete for today".into());
-        }
-    }
     let curriculum = curriculum(language)?;
     let level = level_spec(curriculum, &program.current_level)?;
     let (unit, phase) = select_unit(conn, language, level, revisit)?;
@@ -1460,7 +1162,7 @@ pub fn start_session(
              lesson_json, started_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'in_progress', ?7, ?8)",
         params![
-            slot_id,
+            None::<i64>,
             language,
             today,
             program.current_level,
@@ -1525,7 +1227,7 @@ pub fn start_classroom_session(
             return Err("this class slot is already complete for today".into());
         }
     }
-    let lesson = start_session(conn, language, None, today, revisit)?;
+    let lesson = start_session(conn, language, today, revisit)?;
     if let Some(id) = classroom_slot_id {
         conn.execute(
             "UPDATE language_sessions

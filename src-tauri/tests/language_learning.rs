@@ -1,7 +1,6 @@
+use system_design_roulette_lib::classroom;
 use system_design_roulette_lib::db::{self, Session};
-use system_design_roulette_lib::language::{
-    self, ConfigureProgramInput, SubmitSessionInput, UpsertSlotInput,
-};
+use system_design_roulette_lib::language::{self, ConfigureProgramInput, SubmitSessionInput};
 
 static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
@@ -89,7 +88,7 @@ fn a1_completes_alphabet_and_counting_foundations_before_later_scenarios() {
 
     for day in 21..=23 {
         let today = format!("2026-07-{day}");
-        let lesson = language::start_session(&conn, "german", None, &today, false).unwrap();
+        let lesson = language::start_session(&conn, "german", &today, false).unwrap();
         assert_eq!(lesson.unit_slug, "de-a1-greetings-introductions");
         assert!(lesson.markdown.contains("## First principles foundation"));
         assert!(lesson
@@ -99,7 +98,7 @@ fn a1_completes_alphabet_and_counting_foundations_before_later_scenarios() {
         pass_session(&conn, lesson.session_id, &today);
     }
 
-    let numbers = language::start_session(&conn, "german", None, "2026-07-24", false).unwrap();
+    let numbers = language::start_session(&conn, "german", "2026-07-24", false).unwrap();
     assert_eq!(numbers.unit_slug, "de-a1-numbers-personal-info");
     assert!(numbers
         .markdown
@@ -126,7 +125,7 @@ fn italian_a1_starts_with_alphabet_and_sound_spelling() {
     )
     .unwrap();
 
-    let lesson = language::start_session(&conn, "italian", None, "2026-07-21", false).unwrap();
+    let lesson = language::start_session(&conn, "italian", "2026-07-21", false).unwrap();
     assert_eq!(lesson.unit_slug, "it-a1-greetings");
     assert!(lesson
         .markdown
@@ -170,25 +169,22 @@ fn opening_an_existing_database_adds_language_tables_without_touching_old_data()
 }
 
 #[test]
-fn language_slots_extend_the_os_schedule_without_replacing_frontend_time() {
+fn legacy_language_slots_migrate_into_the_classroom_schedule() {
     let conn = test_db();
     enable_german(&conn);
+    // Simulate a pre-classroom install that owns legacy language slots.
     for (hour, minute) in [(7, 30), (12, 15)] {
-        language::upsert_slot(
-            &conn,
-            &UpsertSlotInput {
-                id: None,
-                language: "german".into(),
-                hour,
-                minute,
-                weekdays: vec![1, 2, 3, 4, 5, 6],
-                enabled: true,
-            },
+        conn.execute(
+            "INSERT INTO language_schedule_slots
+                (language, hour, minute, weekdays_json, enabled, created_at)
+             VALUES ('german', ?1, ?2, '[1,2,3,4,5,6]', 1, 'now')",
+            rusqlite::params![hour, minute],
         )
         .unwrap();
     }
+    classroom::initialize(&conn, "2026-07-21").unwrap();
     assert_eq!(
-        language::all_schedule_times(&conn).unwrap(),
+        classroom::all_schedule_times(&conn).unwrap(),
         vec![(7, 30), (12, 15), (19, 0)]
     );
 }
@@ -197,11 +193,12 @@ fn language_slots_extend_the_os_schedule_without_replacing_frontend_time() {
 fn frontend_completion_does_not_consume_or_mutate_language_practice() {
     let conn = test_db();
     enable_german(&conn);
-    let slot_id = language::upsert_slot(
+    classroom::initialize(&conn, "2026-07-21").unwrap();
+    let slot_id = classroom::upsert_slot(
         &conn,
-        &UpsertSlotInput {
+        &classroom::UpsertClassroomSlotInput {
             id: None,
-            language: "german".into(),
+            subject_id: "german".into(),
             hour: 7,
             minute: 30,
             weekdays: vec![1, 2, 3, 4, 5, 6, 7],
@@ -224,11 +221,12 @@ fn frontend_completion_does_not_consume_or_mutate_language_practice() {
     };
     db::upsert_session(&conn, &frontend).unwrap();
 
-    let slots = language::slot_views(&conn, "2026-07-21", true).unwrap();
+    let slots = classroom::slot_views(&conn, "2026-07-21", true).unwrap();
     assert!(slots.iter().any(|slot| slot.id == slot_id && slot.owed));
 
     let lesson =
-        language::start_session(&conn, "german", Some(slot_id), "2026-07-21", false).unwrap();
+        language::start_classroom_session(&conn, "german", Some(slot_id), "2026-07-21", false)
+            .unwrap();
     assert_eq!(lesson.language, "german");
     assert_eq!(lesson.level, "A1");
     assert_eq!(lesson.unit_slug, "de-a1-greetings-introductions");
@@ -244,7 +242,7 @@ fn frontend_completion_does_not_consume_or_mutate_language_practice() {
 fn passed_language_session_records_skill_and_unit_evidence() {
     let conn = test_db();
     enable_german(&conn);
-    let lesson = language::start_session(&conn, "german", None, "2026-07-21", false).unwrap();
+    let lesson = language::start_session(&conn, "german", "2026-07-21", false).unwrap();
     let answers = correct_answers(&conn, lesson.session_id);
     let result = language::submit_session(
         &conn,
@@ -268,7 +266,9 @@ fn passed_language_session_records_skill_and_unit_evidence() {
         .skills
         .iter()
         .any(|skill| skill.id == "listening" && skill.encounters > 0));
-    assert!(language::active_session(&conn).unwrap().is_none());
+    assert!(language::active_session_for(&conn, "german")
+        .unwrap()
+        .is_none());
 }
 
 #[test]
@@ -296,7 +296,7 @@ fn cefr_level_advances_only_after_unit_and_skill_gate_evidence() {
         )
         .unwrap();
     }
-    let lesson = language::start_session(&conn, "german", None, "2026-07-21", false).unwrap();
+    let lesson = language::start_session(&conn, "german", "2026-07-21", false).unwrap();
     let result = language::submit_session(
         &conn,
         &SubmitSessionInput {
@@ -321,21 +321,21 @@ fn due_calculation_honors_weekdays_time_and_completion() {
         .unwrap()
         .and_hms_opt(8, 0, 0)
         .unwrap();
-    assert!(language::slot_due_at(
+    assert!(classroom::slot_due_at(
         7,
         30,
         &[1, 2, 3, 4, 5],
         monday,
         false
     ));
-    assert!(!language::slot_due_at(
+    assert!(!classroom::slot_due_at(
         9,
         0,
         &[1, 2, 3, 4, 5],
         monday,
         false
     ));
-    assert!(!language::slot_due_at(
+    assert!(!classroom::slot_due_at(
         7,
         30,
         &[1, 2, 3, 4, 5],
@@ -394,7 +394,7 @@ fn completed_level_units_are_never_reserved_automatically() {
     complete_level(&conn, "german", "A1");
     // Every unit complete + skills below the gate => targeted remediation on
     // the weakest unit, never a fresh rotation through completed units.
-    let remediation = language::start_session(&conn, "german", None, "2026-07-22", false).unwrap();
+    let remediation = language::start_session(&conn, "german", "2026-07-22", false).unwrap();
     assert_eq!(remediation.level, "A1");
     assert!(
         remediation.phase > 3,
@@ -415,7 +415,7 @@ fn completed_level_units_are_never_reserved_automatically() {
         "2026-07-22",
     )
     .unwrap();
-    let again = language::start_session(&conn, "german", None, "2026-07-23", false).unwrap();
+    let again = language::start_session(&conn, "german", "2026-07-23", false).unwrap();
     assert!(
         again.phase > 3,
         "completed units are never started from phase 1 again"
@@ -432,9 +432,9 @@ fn a_finished_top_level_rejects_new_sessions_but_allows_revisit() {
     )
     .unwrap();
     complete_level(&conn, "german", "B2");
-    let error = language::start_session(&conn, "german", None, "2026-07-22", false).unwrap_err();
+    let error = language::start_session(&conn, "german", "2026-07-22", false).unwrap_err();
     assert!(error.contains("complete"), "{error}");
-    let revisit = language::start_session(&conn, "german", None, "2026-07-22", true).unwrap();
+    let revisit = language::start_session(&conn, "german", "2026-07-22", true).unwrap();
     assert_eq!(revisit.level, "B2");
     assert!(revisit.phase > 27);
 }
