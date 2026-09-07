@@ -1296,7 +1296,10 @@ impl Generator {
     }
 
     /// Fetch the primary documentation for one lesson before any provider call.
-    async fn research_for(&self, request: &CourseRequest<'_>) -> Vec<crate::research::ResearchSource> {
+    async fn research_for(
+        &self,
+        request: &CourseRequest<'_>,
+    ) -> Vec<crate::research::ResearchSource> {
         let topic = crate::research::course_topic(request.title, request.category);
         let sources = self
             .researcher
@@ -1358,7 +1361,10 @@ impl Generator {
                 title: source.title.clone(),
                 url: source.url.clone(),
                 kind: "docs".into(),
-                why: format!("Primary source from {} used to write this lesson.", source.host),
+                why: format!(
+                    "Primary source from {} used to write this lesson.",
+                    source.host
+                ),
             });
         }
         reading_list
@@ -2067,7 +2073,9 @@ CURATED_LESSON:
                  them. Return the requested object as bare JSON without markdown fences."
             ),
             Wire::Json => {
-                format!("{prompt}\n\nReturn the requested object as bare JSON without markdown fences.")
+                format!(
+                    "{prompt}\n\nReturn the requested object as bare JSON without markdown fences."
+                )
             }
         };
         let mut body = serde_json::json!({
@@ -3293,7 +3301,10 @@ esac
     async fn grounding_publishes_retrieved_links_and_drops_invented_ones() {
         let generator = test_generator();
         let sources = vec![
-            retrieved("https://developer.mozilla.org/en-US/docs/Web/API/Navigation_API", "developer.mozilla.org"),
+            retrieved(
+                "https://developer.mozilla.org/en-US/docs/Web/API/Navigation_API",
+                "developer.mozilla.org",
+            ),
             retrieved("https://web.dev/articles/vitals", "web.dev"),
         ];
         for source in &sources {
@@ -3376,7 +3387,10 @@ esac
 
         let generator = test_generator();
         let sources = vec![
-            retrieved("https://developer.mozilla.org/en-US/docs/Web/API/Navigation_API", "developer.mozilla.org"),
+            retrieved(
+                "https://developer.mozilla.org/en-US/docs/Web/API/Navigation_API",
+                "developer.mozilla.org",
+            ),
             retrieved("https://web.dev/articles/vitals", "web.dev"),
             retrieved("https://v8.dev/blog/hidden-classes", "v8.dev"),
         ];

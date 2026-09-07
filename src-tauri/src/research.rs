@@ -74,9 +74,9 @@ pub fn host_of(url: &str) -> Option<String> {
 /// as a primary source.
 pub fn is_credible_source(url: &str) -> bool {
     host_of(url).is_some_and(|host| {
-        CREDIBLE_SOURCE_HOSTS.iter().any(|allowed| {
-            host == *allowed || host.ends_with(&format!(".{allowed}"))
-        })
+        CREDIBLE_SOURCE_HOSTS
+            .iter()
+            .any(|allowed| host == *allowed || host.ends_with(&format!(".{allowed}")))
     })
 }
 
@@ -227,18 +227,8 @@ pub fn extract_readable(html: &str) -> (Option<String>, String) {
 
     let mut body = html.to_string();
     for tag in [
-        "script",
-        "style",
-        "noscript",
-        "svg",
-        "nav",
-        "header",
-        "footer",
-        "aside",
-        "form",
-        "template",
-        "iframe",
-        "button",
+        "script", "style", "noscript", "svg", "nav", "header", "footer", "aside", "form",
+        "template", "iframe", "button",
     ] {
         body = strip_element(&body, tag);
     }
@@ -286,7 +276,11 @@ fn first_words(text: &str, limit: usize) -> String {
         out.push('\n');
     }
     if out.is_empty() {
-        out = text.split_whitespace().take(limit).collect::<Vec<_>>().join(" ");
+        out = text
+            .split_whitespace()
+            .take(limit)
+            .collect::<Vec<_>>()
+            .join(" ");
     }
     out.trim().to_string()
 }
@@ -493,7 +487,12 @@ impl Researcher {
         candidates.sort_by_key(|url| std::cmp::Reverse(path_specificity(url)));
         // Site roots teach nothing and can be enormous — the HTML standard's
         // single-page edition is over 10 MB. Skip them once real pages exist.
-        if candidates.iter().filter(|url| path_specificity(url) > 0).count() >= limit {
+        if candidates
+            .iter()
+            .filter(|url| path_specificity(url) > 0)
+            .count()
+            >= limit
+        {
             candidates.retain(|url| path_specificity(url) > 0);
         }
         // A small surplus absorbs individual fetch failures without pulling in
@@ -695,7 +694,9 @@ mod tests {
             "https://developer.mozilla.org/en-US/docs/Web/API/Navigation_API"
         ));
         assert!(is_credible_source("https://hacks.mozilla.org/2026/01/post"));
-        assert!(is_credible_source("https://html.spec.whatwg.org/multipage/"));
+        assert!(is_credible_source(
+            "https://html.spec.whatwg.org/multipage/"
+        ));
         assert!(!is_credible_source(
             "https://developer.mozilla.org.attacker.example/docs"
         ));
@@ -765,7 +766,10 @@ mod tests {
     #[test]
     fn topic_string_keeps_category_terms_that_disambiguate_a_search() {
         assert_eq!(
-            course_topic("Event loop: macrotasks, microtasks, and rendering", "runtime"),
+            course_topic(
+                "Event loop: macrotasks, microtasks, and rendering",
+                "runtime"
+            ),
             "Event loop macrotasks, microtasks, and rendering runtime"
         );
     }

@@ -54,7 +54,10 @@ async fn curated_primary_sources_are_reachable_and_readable() {
 
     println!("retrieved {} source(s) for {topic}", sources.len());
     for source in &sources {
-        println!("  {:>6} words  {}  {}", source.words, source.host, source.url);
+        println!(
+            "  {:>6} words  {}  {}",
+            source.words, source.host, source.url
+        );
     }
     assert!(
         sources.len() >= 2,
