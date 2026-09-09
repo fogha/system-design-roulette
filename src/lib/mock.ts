@@ -1,3 +1,5 @@
+import { previewEnrollmentOptions, previewEnrollmentDraft, savePreviewEnrollmentDraft } from './enrollment-preview';
+import type { SaveEnrollmentDraft } from './contracts/enrollment';
 import { COURSES, courseDefinition } from './catalog';
 import seedConcepts from '../../src-tauri/seed/concepts.json';
 /**
@@ -765,6 +767,9 @@ const REVIEW: ReviewData = {
 };
 
 export const mockApi = {
+  getEnrollmentOptions: async (courseId: ClassroomSubjectId) => previewEnrollmentOptions(courseId),
+  getEnrollmentDraft: async (courseId: ClassroomSubjectId) => previewEnrollmentDraft(courseId),
+  saveEnrollmentDraft: async (input: SaveEnrollmentDraft) => savePreviewEnrollmentDraft(input),
   getCatalog: async () => [...COURSES],
   getAppState: async () => appState(),
   checkAgent: async () => true,

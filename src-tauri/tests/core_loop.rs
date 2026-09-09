@@ -1372,6 +1372,12 @@ fn migration_moves_classroom_exercise_columns_into_the_unified_table() {
         // An install from before the unified exercise table: drafts keyed by
         // course only, classroom work stored as columns on classroom_sessions.
         let conn = rusqlite::Connection::open(&path).unwrap();
+        // The draft has a real parent document; orphan detection is covered
+        // separately by the migration integrity tests.
+        conn.execute_batch(include_str!("fixtures/upgrades/original-main.sql"))
+            .unwrap();
+        conn.execute_batch("INSERT INTO concepts (id, slug, title, category) VALUES (7, 'retained', 'Retained', 'fundamentals');
+            INSERT INTO courses (id, session_date, concept_id, markdown, source, generated_at) VALUES (7, '2026-07-21', 7, '# Retained', 'fallback', 'now');").unwrap();
         conn.execute_batch(
             "CREATE TABLE exercise_drafts (
                  course_id INTEGER PRIMARY KEY,

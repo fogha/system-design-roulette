@@ -11,6 +11,30 @@ use tauri::{AppHandle, Emitter, State};
 type CmdResult<T> = Result<T, String>;
 
 #[tauri::command]
+pub fn get_enrollment_options(
+    course_id: String,
+) -> CmdResult<crate::domain::enrollment::EnrollmentOptions> {
+    crate::domain::enrollment::options(&course_id).map_err(err)
+}
+
+#[tauri::command]
+pub fn get_enrollment_draft(
+    state: State<'_, AppState>,
+    course_id: String,
+) -> CmdResult<Option<crate::domain::enrollment::EnrollmentDraft>> {
+    crate::domain::enrollment::draft_for_course(&state.db.0.lock().unwrap(), &course_id)
+        .map_err(err)
+}
+
+#[tauri::command]
+pub fn save_enrollment_draft(
+    state: State<'_, AppState>,
+    input: crate::domain::enrollment::SaveEnrollmentDraft,
+) -> CmdResult<crate::domain::enrollment::EnrollmentDraft> {
+    crate::domain::enrollment::save_draft(&state.db.0.lock().unwrap(), &input).map_err(err)
+}
+
+#[tauri::command]
 pub fn get_catalog() -> CmdResult<Vec<crate::catalog::CourseDefinition>> {
     crate::catalog::validate()?;
     Ok(crate::catalog::COURSES.to_vec())

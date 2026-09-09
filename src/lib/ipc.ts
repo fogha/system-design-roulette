@@ -1,3 +1,4 @@
+import type { EnrollmentOptions, EnrollmentDraft, SaveEnrollmentDraft } from './contracts/enrollment';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
@@ -514,6 +515,9 @@ export const isTauri =
   typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
 const realApi = {
+  getEnrollmentOptions: (courseId: ClassroomSubjectId) => invoke<EnrollmentOptions>('get_enrollment_options', { courseId }),
+  getEnrollmentDraft: (courseId: ClassroomSubjectId) => invoke<EnrollmentDraft | null>('get_enrollment_draft', { courseId }),
+  saveEnrollmentDraft: (input: SaveEnrollmentDraft) => invoke<EnrollmentDraft>('save_enrollment_draft', { input }),
   getCatalog: () => invoke<CourseDefinition[]>('get_catalog'),
   markFrontendReady: () => invoke<void>('mark_frontend_ready'),
   getAppState: () => invoke<AppStateView>('get_app_state'),

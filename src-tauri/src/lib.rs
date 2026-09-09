@@ -3,6 +3,7 @@ pub mod catalog;
 pub mod classroom;
 pub mod commands;
 pub mod db;
+pub mod domain;
 pub mod focus;
 pub mod generator;
 pub mod keychain;
@@ -14,6 +15,7 @@ pub mod roulette;
 pub mod scheduler;
 pub mod session;
 pub mod state;
+pub mod storage;
 
 use state::AppState;
 use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
@@ -262,6 +264,9 @@ pub fn run() {
             commands::mark_frontend_ready,
             commands::get_app_state,
             commands::get_catalog,
+            commands::get_enrollment_options,
+            commands::get_enrollment_draft,
+            commands::save_enrollment_draft,
             commands::check_agent,
             commands::complete_setup,
             commands::update_schedule,
