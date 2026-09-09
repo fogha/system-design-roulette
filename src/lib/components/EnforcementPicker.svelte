@@ -76,7 +76,7 @@
     align-items: flex-start;
     background: var(--bg);
     border: 1px solid var(--node-border);
-    border-radius: 7px;
+    border-radius: var(--radius-control);
     padding: 8px 11px;
     cursor: pointer;
     text-align: left;
@@ -134,7 +134,7 @@
     color: var(--bad-fg);
     background: var(--bad-bg);
     border: 1px dashed var(--led-err);
-    border-radius: 7px;
+    border-radius: var(--radius-control);
     padding: 9px 12px;
   }
 </style>

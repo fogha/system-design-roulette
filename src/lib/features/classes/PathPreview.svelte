@@ -1,13 +1,15 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import type { PathRecommendation } from '../../contracts/placement';
   import NodeCard from '../../components/NodeCard.svelte';
   import FlowStage from '../../components/FlowStage.svelte';
   import { Compass, Route, Flag, ArrowLeft } from 'lucide-svelte';
-  let { path, onclose, onfoundations }: { path: PathRecommendation; onclose: () => void; onfoundations: () => void } = $props();
+  let { path, onclose, onfoundations, onaccept, accepting = false, error = '', acceptedRevision }: { path: PathRecommendation; onclose: () => void; onfoundations: () => void; onaccept?: () => void; accepting?: boolean; error?: string; acceptedRevision?: number } = $props();
+  $effect(() => { path.id; void tick().then(() => document.getElementById('desk-content')?.scrollTo(0, 0)); });
 </script>
 <section class="path" aria-label="Suggested learning path">
-  <button class="ghost mono-ghost" onclick={onclose}><ArrowLeft size={13} /> Change starting point</button>
-  <header><p class="eyebrow mono">PERSONAL PATH · PREVIEW</p><h2>Begin at {path.entry_label}</h2><p>{path.explanation}</p></header>
+  <button class="ghost mono-ghost" onclick={onclose} disabled={accepting}><ArrowLeft size={13} /> {acceptedRevision ? 'Back to classes' : 'Change starting point'}</button>
+  <header><p class="eyebrow mono">PERSONAL PATH · {acceptedRevision ? `ACCEPTED REVISION ${acceptedRevision}` : 'PREVIEW'}</p><h2>Begin at {path.entry_label}</h2><p>{path.explanation}</p></header>
   <FlowStage number="01"><NodeCard Icon={Compass} name="starting-point" badge={path.route} badgeTone="violet"><p class="start">{path.entry_label}</p>
     {#if path.criteria.length}<p>{path.criteria.filter((c) => c.verdict === 'passed').length} of {path.criteria.length} sampled criteria demonstrated. These are entry samples, separate from lesson completion and mastery.</p>{/if}
     <p class="muted"><strong>Still unassessed:</strong> {path.unknown_areas.join('; ')}</p>
@@ -17,9 +19,10 @@
     {#if path.earlier_topics.length}<details><summary>Earlier material available to revisit · {path.earlier_topics.length}</summary><ul>{#each path.earlier_topics as item}<li><strong>{item.label}</strong><span>{item.reason}</span></li>{/each}</ul></details>{/if}
   </NodeCard></FlowStage>
   <FlowStage number="03" last><NodeCard Icon={Flag} name="required-outcome" badge="retained" badgeTone="teal"><p>{path.required_outcome}</p><p class="muted">The course's final assessment or capstone remains required. A starting preference or short diagnostic does not complete the goal.</p></NodeCard></FlowStage>
-  <footer><p>Path activation is still being connected. This preview does not change an existing class or its study history.</p><div class="actions"><button class="ghost mono-ghost" onclick={onclose}>Adjust setup</button><button class="ghost mono-ghost" onclick={onfoundations}>Include foundations</button></div></footer>
+  <footer><p>{acceptedRevision ? 'This accepted path guides future lessons. Saved lessons and their original results remain in your history.' : 'Accepting enables this class and guides its next lesson. Existing work and schedules are preserved. You can add study times from Schedule.'}</p>{#if error}<p class="activation-error" role="alert">{error}</p>{/if}<div class="actions"><button class="ghost mono-ghost" onclick={onclose} disabled={accepting}>{acceptedRevision ? 'Back to classes' : 'Adjust setup'}</button><button class="ghost mono-ghost" onclick={onfoundations} disabled={accepting}>{acceptedRevision ? 'Revise starting point' : 'Include foundations'}</button>{#if onaccept}<button class="cta mono-cta" onclick={onaccept} disabled={accepting}>{accepting ? 'Activating…' : 'Accept path & activate class'}</button>{/if}</div></footer>
 </section>
 <style>
+  .activation-error { color: var(--led-err); }
   .path { width: min(820px, 100%); margin: auto; padding: 26px 28px 48px; }
   header { margin: 24px 0; } h2 { font: 30px var(--font-display); margin: 8px 0; }
   header p, p, li { font-size: 13px; line-height: 1.65; }

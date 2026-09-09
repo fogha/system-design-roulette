@@ -4,6 +4,8 @@ import type { AssessmentRoundId } from './contracts/assessments';
 import { previewEnrollmentOptions, previewEnrollmentDraft, savePreviewEnrollmentDraft } from './enrollment-preview';
 import { getPreviewPlacement, startPreviewPlacement, savePreviewPlacement, submitPreviewPlacement, continuePreviewPlacement, finishPreviewPlacement, recommendPreviewPath } from './placement-preview';
 import type { SaveEnrollmentDraft } from './contracts/enrollment';
+import type { AcceptedPath, AcceptPath } from './contracts/classes';
+import { acceptPreviewClassPath, previewClassPath, previewPathSummary } from './class-preview';
 import { COURSES, courseDefinition } from './catalog';
 import seedConcepts from '../../src-tauri/seed/concepts.json';
 /**
@@ -590,13 +592,29 @@ Use **Lei** and the third-person verb with unfamiliar adults; **tu** belongs wit
   };
 }
 
+const restoredPaths = new Map<ClassroomSubjectId, string>();
+function applyPreviewPath(path: AcceptedPath | null) {
+  if (!path) return;
+  const id = path.recommendation.course.course_id;
+  if (restoredPaths.get(id) === path.reference.path_revision_id) return;
+  const { tutor, pace, goal } = path.configuration;
+  Object.assign(mockClassroomSettings[id], { enabled: true, agent: tutor.provider, model: tutor.model, customBin: tutor.custom_agent_bin ?? '', sessionMinutes: pace.session_minutes, learningGoal: goal.note, targetWeeklyMinutes: pace.weekly_minutes ?? mockClassroomSettings[id].targetWeeklyMinutes });
+  if ((id === 'german' || id === 'italian') && goal.kind === 'language_level') {
+    const settings = mockLanguageSettings[id];
+    Object.assign(settings, { enabled: true, currentLevel: path.recommendation.entry_point, targetLevel: goal.target_level, sessionMinutes: pace.session_minutes, weeklyMinutes: pace.weekly_minutes ?? settings.weeklyMinutes });
+  }
+  restoredPaths.set(id, path.reference.path_revision_id);
+}
 function mockClassroomProgram(subjectId: ClassroomSubjectId): ClassroomProgramView {
+  const acceptedPath = previewClassPath(subjectId);
+  applyPreviewPath(acceptedPath);
   const catalog = CLASSROOM_CATALOG.find((item) => item.id === subjectId)!;
   const settings = mockClassroomSettings[subjectId];
   const languageProgress =
     catalog.kind === 'language' ? mockLanguageProgram(subjectId as LanguageId) : null;
   return {
     subject_id: subjectId,
+    accepted_path: previewPathSummary(acceptedPath),
     kind: catalog.kind,
     label: catalog.label,
     native_label: catalog.native,
@@ -788,7 +806,19 @@ function savePreviewQuiz() {
 let previewFreeOnly = true;
 
 export const mockApi = {
-  getEnrollmentOptions: async (courseId: ClassroomSubjectId) => previewEnrollmentOptions(courseId),
+  getEnrollmentOptions: async (courseId: ClassroomSubjectId) => {
+    const options = previewEnrollmentOptions(courseId);
+    const path = previewClassPath(courseId);
+    if (path) options.default_configuration = structuredClone(path.configuration);
+    return options;
+  },
+  getClassPath: async (courseId: ClassroomSubjectId) => previewClassPath(courseId),
+  acceptClassPath: async (input: AcceptPath) => {
+    const path = await acceptPreviewClassPath(input);
+    applyPreviewPath(previewClassPath(path.recommendation.course.course_id));
+    mockEmit('classroom:state', previewPathSummary(path));
+    return path;
+  },
   getPlacementCheck: getPreviewPlacement,
   startPlacementCheck: startPreviewPlacement,
   savePlacementResponse: savePreviewPlacement,

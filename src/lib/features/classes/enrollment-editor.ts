@@ -141,6 +141,10 @@ export function createEnrollmentEditor(courseId: ClassroomSubjectId, api: Enroll
 
   return {
     load, edit, flush, resolve,
+    accepted() {
+      clearTimeout(timer); clearCache(); initialized = false; conflict = false; conflictBase = null;
+      state = { options: null, draft: null, configuration: null, status: 'loading', error: '' }; emit();
+    },
     subscribe(listener: (state: EnrollmentEditorState) => void) {
       listeners.add(listener); listener(structuredClone(state));
       return () => { listeners.delete(listener); };

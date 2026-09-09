@@ -41,7 +41,7 @@
   ];
   const LEVELS: CefrLevel[] = ['A1', 'A2', 'B1', 'B2'];
   const levelOptions = LEVELS.map((value) => ({ value, label: value }));
-  let { mode = 'classes', onsetup }: { mode?: 'classes' | 'schedule'; onsetup?: (id: ClassroomSubjectId) => void } = $props();
+  let { mode = 'classes', onsetup, onpath }: { mode?: 'classes' | 'schedule'; onsetup?: (id: ClassroomSubjectId) => void; onpath?: (id: ClassroomSubjectId) => void } = $props();
   let query = $state('');
   let courseSearch = $state<HTMLInputElement>();
   let filter = $state<'all' | 'active' | 'paused' | 'completed'>('all');
@@ -318,7 +318,7 @@
         <div>
           <span class="eyebrow mono">COURSE CATALOG</span>
           <p>
-            Explore a course and its curriculum, then enable a class to start learning.
+            Explore a course and its curriculum, then accept a starting path to activate your class.
             Each class keeps its own schedule, teacher preferences and progress.
           </p>
         </div>
@@ -365,6 +365,7 @@
               </details>
             {/if}
 
+            {#if program.accepted_path}<p class="accepted-entry"><span class="mono">PATH {program.accepted_path.revision}</span> Start at {program.accepted_path.entry_label} · {program.accepted_path.route}{#if program.accepted_path.refreshers} · {program.accepted_path.refreshers} prerequisite refreshers{/if}</p>{/if}
             <div class="progress-copy">
               <span>{program.progress_label}</span>
               <span class="mono">{Math.round(program.progress * 100)}%</span>
@@ -481,7 +482,8 @@
                   <Settings2 size={12} /> Class settings
                 </button>
                 {#if mode === 'classes' && onsetup}
-                  <button class="text-action" type="button" onclick={() => onsetup?.(program.subject_id)}>Starting preferences</button>
+                  {#if program.accepted_path && onpath}<button class="text-action" type="button" onclick={() => onpath?.(program.subject_id)}>Personal path</button>{/if}
+                  <button class="text-action" type="button" onclick={() => onsetup?.(program.subject_id)}>{program.accepted_path ? 'Revise starting point' : 'Set starting point'}</button>
                 {/if}
                 {#if mode === 'classes' && program.kind === 'engineering'}
                   <button
@@ -524,7 +526,7 @@
                 />
                 <label class="number-field">
                   <span>session minutes</span>
-                  <input type="number" min="15" max="90" bind:value={draftMinutes} />
+                  <input type="number" min="10" max="120" bind:value={draftMinutes} />
                 </label>
                 {#if program.kind === 'language'}
                   <div class="language-fields">
@@ -532,7 +534,7 @@
                     <Dropdown label="Target level" bind:value={draftTarget} options={levelOptions} />
                     <label>
                       <span>weekly minutes</span>
-                      <input type="number" min="60" max="2100" step="30" bind:value={draftWeekly} />
+                      <input type="number" min="10" max="10080" step="30" bind:value={draftWeekly} />
                     </label>
                   </div>
                 {/if}
@@ -683,14 +685,16 @@
 </section>
 
 <style>
+  .accepted-entry { color: var(--muted); font-size: 11px; line-height: 1.6; border-left: 2px solid var(--violet); padding-left: 9px; }
+  .accepted-entry span { color: var(--violet-fg); font-size: 9px; margin-right: 7px; }
   .catalog-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
-  .catalog-search { display: flex; align-items: center; gap: 8px; color: var(--faint); border: 1px solid var(--node-border); border-radius: 5px; padding: 6px 9px; background: var(--bg); }
+  .catalog-search { display: flex; align-items: center; gap: 8px; color: var(--faint); border: 1px solid var(--node-border); border-radius: var(--radius-control); padding: 6px 9px; background: var(--bg); }
   .catalog-search:focus-within { border-color: var(--accent); }
   .catalog-search input { min-width: 0; width: 150px; border: 0; background: transparent; color: var(--fg); font: 11px var(--font-mono); outline: none; }
   .clear-search { display: grid; place-items: center; border: 0; padding: 2px; background: none; color: var(--muted); cursor: pointer; }
   .class-tools { width: 100%; display: flex; flex-wrap: wrap; gap: 6px; border-top: 1px dashed var(--node-divider); padding-top: 10px; margin-top: 4px; }
   .class-filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; }
-  .class-filters button { border: 1px solid var(--border); background: var(--bg); color: var(--muted); border-radius: 5px; padding: 7px 10px; font: 11px var(--font-mono); cursor: pointer; }
+  .class-filters button { border: 1px solid var(--border); background: var(--bg); color: var(--muted); border-radius: var(--radius-control); padding: 7px 10px; font: 11px var(--font-mono); cursor: pointer; }
   .class-filters button.chosen { color: var(--violet-fg); border-color: var(--violet); background: var(--surface-2); }
   .empty-classes { color: var(--muted); font-size: 13px; grid-column: 1 / -1; }
   .classroom-panel {
@@ -698,7 +702,7 @@
     margin: 18px auto 24px;
     flex: 0 0 auto;
     border: 1px solid var(--node-border);
-    border-radius: 10px;
+    border-radius: var(--radius-panel);
     background: var(--node-bg);
     overflow: hidden;
   }
@@ -728,7 +732,7 @@
     width: 30px;
     height: 30px;
     border: 1px solid var(--node-border);
-    border-radius: 7px;
+    border-radius: var(--radius-control);
     display: grid;
     place-items: center;
     color: var(--accent);
@@ -760,7 +764,7 @@
   .class-card {
     position: relative;
     border: 1px solid var(--node-border);
-    border-radius: 9px;
+    border-radius: var(--radius-panel);
     padding: 13px;
     background: var(--bg);
     min-width: 0;
@@ -772,12 +776,12 @@
   .course-about summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
   .class-card.enabled { border-color: color-mix(in srgb, var(--accent) 30%, var(--node-border)); }
   .class-card.due { box-shadow: inset 3px 0 0 var(--amber); }
-  .class-head { gap: 9px; padding: 9px 12px; margin: -13px -13px 13px; border-bottom: 1px solid var(--node-divider); background: var(--node-bg); border-radius: 8px 8px 0 0; }
+  .class-head { gap: 9px; padding: 9px 12px; margin: -13px -13px 13px; border-bottom: 1px solid var(--node-divider); background: var(--node-bg); border-radius: var(--radius-panel) var(--radius-panel) 0 0; }
   .class-identity { flex: 1; min-width: 0; }
   .class-identity strong, .class-identity small { display: block; }
   .class-identity strong { font: 12px/1.5 var(--font-mono); color: var(--fg); }
   .class-identity small { color: var(--faint); font: 9px var(--font-mono); margin-top: 2px; }
-  .class-state { color: var(--muted); font-size: 9px; letter-spacing: 0.4px; border-radius: 3px; background: var(--surface-2); padding: 2px 6px; }
+  .class-state { color: var(--muted); font-size: 9px; letter-spacing: 0.4px; border-radius: var(--radius-detail); background: var(--surface-2); padding: 2px 6px; }
   .class-state.online { color: var(--ok-fg); background: var(--ok-bg); }
   .class-state.complete { color: var(--violet-fg); background: var(--violet-bg); }
   .progress-copy { justify-content: space-between; color: var(--muted); font-size: 11px; margin: 13px 0 5px; }
@@ -798,7 +802,7 @@
     border: 1px solid var(--accent);
     background: var(--accent);
     color: var(--bg);
-    border-radius: 6px;
+    border-radius: var(--radius-control);
     min-height: 32px;
     padding: 6px 10px;
     cursor: pointer;
@@ -808,7 +812,7 @@
   }
   .resume-button { width: 100%; margin: 3px 0 8px; text-align: left; }
   .slot-list { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 4px; }
-  .slot-list li { display: flex; border: 1px solid var(--node-border); border-radius: 5px; min-height: 30px; }
+  .slot-list li { display: flex; border: 1px solid var(--node-border); border-radius: var(--radius-control); min-height: 30px; }
   .slot-list li.owed { border-color: var(--amber); }
   .slot-main {
     flex: 1;
@@ -838,7 +842,7 @@
   .text-action, .power-button {
     min-height: 30px;
     border: 1px solid var(--node-border);
-    border-radius: 5px;
+    border-radius: var(--radius-control);
     background: transparent;
     color: var(--muted);
     padding: 5px 8px;
@@ -867,7 +871,7 @@
   .number-field { margin: 12px 0; max-width: 150px; }
   .number-field input, .language-fields input {
     border: 1px solid var(--node-border);
-    border-radius: 5px;
+    border-radius: var(--radius-control);
     background: var(--bg);
     color: var(--text);
     min-height: 32px;
@@ -884,7 +888,7 @@
     min-width: 32px;
     min-height: 32px;
     border: 1px solid var(--node-border);
-    border-radius: 5px;
+    border-radius: var(--radius-control);
     background: var(--bg);
     color: var(--muted);
     cursor: pointer;
@@ -900,7 +904,7 @@
   }
   .goal-field textarea {
     border: 1px solid var(--node-border);
-    border-radius: 5px;
+    border-radius: var(--radius-control);
     background: var(--bg);
     color: var(--text);
     padding: 7px;
@@ -917,7 +921,7 @@
   .plan-numbers label { display: grid; gap: 5px; color: var(--muted); font-size: 11px; }
   .plan-numbers input {
     border: 1px solid var(--node-border);
-    border-radius: 5px;
+    border-radius: var(--radius-control);
     background: var(--bg);
     color: var(--text);
     min-height: 32px;
@@ -935,7 +939,7 @@
     min-width: 28px;
     min-height: 28px;
     border: 1px solid var(--node-border);
-    border-radius: 5px;
+    border-radius: var(--radius-control);
     background: transparent;
     color: var(--faint);
     cursor: pointer;
@@ -945,7 +949,7 @@
   .ghost-action {
     min-height: 32px;
     border: 1px solid var(--node-border);
-    border-radius: 6px;
+    border-radius: var(--radius-control);
     background: transparent;
     color: var(--muted);
     padding: 6px 10px;
@@ -964,7 +968,7 @@
     color: var(--muted);
     font-size: 11px;
     border: 1px solid var(--node-border);
-    border-radius: 5px;
+    border-radius: var(--radius-control);
     padding: 5px 8px;
   }
   @media (max-width: 760px) {

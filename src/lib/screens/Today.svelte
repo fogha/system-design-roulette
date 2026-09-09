@@ -106,6 +106,6 @@
   .class-link > span:first-child { color: var(--accent); font-size: 10px; }
   .class-link > span:nth-child(2) { flex: 1; }
   .class-link small { color: var(--muted); display: block; font-size: 10px; margin-top: 4px; }
-  .recovery { color: var(--bad-fg); border: 1px dashed var(--led-err); background: var(--bad-bg); padding: 9px 12px; border-radius: 6px; font-size: 11px; }
+  .recovery { color: var(--bad-fg); border: 1px dashed var(--led-err); background: var(--bad-bg); padding: 9px 12px; border-radius: var(--radius-control); font-size: 11px; }
   @media (max-width: 620px) { .today { padding: 22px 18px; } .overview { grid-template-columns: 1fr; } .idle-center { padding: 18px 0 25px; } h1 { font-size: 28px; } .study-row { flex-wrap: wrap; } }
 </style>

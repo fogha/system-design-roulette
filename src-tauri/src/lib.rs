@@ -270,6 +270,8 @@ pub fn run() {
             commands::check_agent,
             commands::agents::list_agent_runners,
             commands::agents::get_runner_models,
+            commands::classes::get_class_path,
+            commands::classes::accept_class_path,
             commands::agents::get_runner_configuration,
             commands::agents::save_runner_configuration,
             commands::agents::set_runner_key,

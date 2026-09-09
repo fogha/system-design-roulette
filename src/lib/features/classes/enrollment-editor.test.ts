@@ -23,6 +23,21 @@ function fixture() {
 afterEach(() => vi.useRealTimers());
 
 describe('starting-preference editor persistence', () => {
+  it('opens a fresh draft after acceptance without saving into the frozen draft on unmount', async () => {
+    const { api, storage, options } = fixture();
+    const editor = createEnrollmentEditor('bash-scripting', api, storage);
+    let state!: EnrollmentEditorState;
+    editor.subscribe(value => { state = value; });
+    await editor.load(); await editor.flush();
+    editor.accepted();
+    expect(await editor.flush()).toBe(false);
+    expect(api.saveEnrollmentDraft).toHaveBeenCalledTimes(1);
+    api.getEnrollmentDraft.mockResolvedValueOnce(null);
+    options.default_configuration.entry = { route: 'manual', entry_point: 'production', familiar_competencies: [] };
+    await editor.load();
+    expect(state.draft).toBeNull();
+    expect(state.configuration?.entry).toEqual(options.default_configuration.entry);
+  });
   it('serializes edits made during a save and retains the newest values after leaving the screen', async () => {
     vi.useFakeTimers();
     const fixtureData = fixture();

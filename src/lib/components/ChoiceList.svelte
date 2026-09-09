@@ -25,12 +25,12 @@
 </div>
 <style>
   .choices { display: flex; flex-direction: column; gap: 10px; }
-  .choice { display: flex; align-items: flex-start; gap: 12px; width: 100%; min-width: 0; text-align: left; background: var(--bg); color: var(--fg); border: 1px solid var(--node-border); border-radius: 7px; padding: 12px 14px; font: 14px/1.5 var(--font-body); cursor: pointer; }
+  .choice { display: flex; align-items: flex-start; gap: 12px; width: 100%; min-width: 0; text-align: left; background: var(--bg); color: var(--fg); border: 1px solid var(--node-border); border-radius: var(--radius-control); padding: 12px 14px; font: 14px/1.5 var(--font-body); cursor: pointer; }
   .choice:hover { border-color: var(--muted); }
   .choice.selected { border-color: var(--violet); background: var(--surface-2); }
   .choice:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
   .choice:disabled { cursor: default; opacity: .65; }
-  .key { font-size: 11px; color: var(--muted); border: 1px solid var(--node-border); border-radius: 3px; padding: 1px 7px; flex-shrink: 0; }
+  .key { font-size: 11px; color: var(--muted); border: 1px solid var(--node-border); border-radius: var(--radius-detail); padding: 1px 7px; flex-shrink: 0; }
   .selected .key { color: var(--teal-fg); border-color: var(--teal); }
   .choice :global(.md) { flex: 1; min-width: 0; }
 </style>

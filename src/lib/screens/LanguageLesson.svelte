@@ -307,7 +307,7 @@
     color: var(--muted);
     background: transparent;
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-control);
     padding: 6px 10px;
     font: 10px var(--font-mono);
     cursor: pointer;
@@ -337,7 +337,7 @@
     color: var(--accent);
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-panel);
     font-size: 11px;
   }
   .lesson-identity h1 {
@@ -363,7 +363,7 @@
     padding: 4px 6px;
     color: var(--faint);
     border: 1px solid var(--border);
-    border-radius: 4px;
+    border-radius: var(--radius-detail);
   }
   .evidence-status span.ready {
     color: var(--ok-fg);
@@ -390,7 +390,7 @@
     padding: 14px 16px;
     color: var(--warn-fg);
     background: var(--warn-bg);
-    border-radius: 8px;
+    border-radius: var(--radius-panel);
   }
   .mission p {
     margin: 4px 0;
@@ -412,7 +412,7 @@
     color: var(--fg);
     background: var(--node-bg);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-panel);
   }
   .audio-console > div {
     display: flex;
@@ -440,7 +440,7 @@
     color: var(--accent-fg);
     background: var(--accent);
     border: 0;
-    border-radius: 6px;
+    border-radius: var(--radius-control);
     font: 9px var(--font-mono);
     text-transform: uppercase;
     cursor: pointer;
@@ -452,7 +452,7 @@
     color: var(--fg);
     background: var(--bg);
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--radius-panel);
     user-select: text;
   }
   .practice-pane {
@@ -479,7 +479,7 @@
     margin: 0;
     padding: 13px;
     border: 1px solid var(--border);
-    border-radius: 9px;
+    border-radius: var(--radius-panel);
     background: var(--bg);
   }
   fieldset.correct {
@@ -522,7 +522,7 @@
     padding: 6px 8px;
     color: var(--muted);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-control);
     cursor: pointer;
     font-size: 10px;
   }
@@ -554,7 +554,7 @@
     padding: 8px 9px;
     color: var(--bad-fg);
     background: var(--bad-bg);
-    border-radius: 5px;
+    border-radius: var(--radius-control);
     font-size: 9px;
   }
   .correction.good {
@@ -568,7 +568,7 @@
     margin-top: 12px;
     padding: 14px;
     border: 1px solid var(--border);
-    border-radius: 9px;
+    border-radius: var(--radius-panel);
     background: var(--bg);
   }
   .production-head {
@@ -604,7 +604,7 @@
     gap: 8px;
     padding: 7px 9px;
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-control);
     font-size: 10px;
     cursor: pointer;
   }
@@ -624,7 +624,7 @@
     color: var(--accent-fg);
     background: var(--accent);
     border: 0;
-    border-radius: 7px;
+    border-radius: var(--radius-control);
     font: 10px var(--font-mono);
     text-transform: uppercase;
     cursor: pointer;
@@ -648,7 +648,7 @@
     color: var(--bad-fg);
     background: var(--bad-bg);
     border: 1px solid var(--led-err);
-    border-radius: 9px;
+    border-radius: var(--radius-panel);
   }
   .result-card.passed {
     color: var(--ok-fg);

@@ -34,7 +34,7 @@
   .brand img { width: 36px; height: 36px; }
   .brand small { display: block; margin-top: 6px; font-size: 8px; color: var(--faint); letter-spacing: 1.3px; }
   nav { display: flex; flex-wrap: wrap; gap: 7px; }
-  nav button { display: flex; align-items: center; gap: 9px; border: 1px solid var(--node-border); border-radius: 5px; background: var(--node-bg); color: var(--muted); font: 11px var(--font-mono); padding: 9px 11px; cursor: pointer; }
+  nav button { display: flex; align-items: center; gap: 9px; border: 1px solid var(--node-border); border-radius: var(--radius-control); background: var(--node-bg); color: var(--muted); font: 11px var(--font-mono); padding: 9px 11px; cursor: pointer; }
   nav button:hover { border-color: var(--muted); color: var(--fg); }
   nav button.selected { border-color: var(--violet); background: var(--surface-2); color: var(--violet-fg); }
   .route-index { color: var(--faint); font-size: 9px; }

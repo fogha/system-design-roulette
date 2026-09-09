@@ -180,7 +180,7 @@
     font-size: 11px;
     color: var(--faint);
     border: 1px solid var(--node-border);
-    border-radius: 5px;
+    border-radius: var(--radius-control);
     padding: 3px 0;
     background: var(--bg);
   }
@@ -228,7 +228,7 @@
   .break-glass {
     background: #1f1316;
     border: 1px dashed #793030;
-    border-radius: 8px;
+    border-radius: var(--radius-panel);
     padding: 12px 14px;
     display: flex;
     gap: 14px;
@@ -239,7 +239,7 @@
     font-size: 10px;
     color: var(--led-err);
     border: 1px solid #793030;
-    border-radius: 4px;
+    border-radius: var(--radius-detail);
     padding: 6px 8px;
     text-align: center;
     line-height: 1.5;
@@ -263,7 +263,7 @@
     color: #d8b0a8;
     background: var(--bg);
     border: 1px solid #3a2228;
-    border-radius: 6px;
+    border-radius: var(--radius-control);
     padding: 8px 12px;
   }
   .bg-input:focus {

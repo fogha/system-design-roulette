@@ -1,4 +1,5 @@
 pub mod agents;
+pub mod classes;
 use crate::db::{self, Attempt};
 use crate::domain::{
     assessments::{self, Owner, ResponseStatus, Round, RoundId},
@@ -18,9 +19,17 @@ pub mod placement;
 
 #[tauri::command]
 pub fn get_enrollment_options(
+    state: State<'_, AppState>,
     course_id: String,
 ) -> CmdResult<crate::domain::enrollment::EnrollmentOptions> {
-    crate::domain::enrollment::options(&course_id).map_err(err)
+    let mut options = crate::domain::enrollment::options(&course_id).map_err(err)?;
+    if let Some(configuration) =
+        crate::domain::classes::current_configuration(&state.db.0.lock().unwrap(), &course_id)
+            .map_err(err)?
+    {
+        options.default_configuration = configuration;
+    }
+    Ok(options)
 }
 
 #[tauri::command]

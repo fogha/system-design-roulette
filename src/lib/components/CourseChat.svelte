@@ -317,7 +317,7 @@
     font-size: 13px;
     line-height: 1.55;
     padding: 9px 12px;
-    border-radius: 10px;
+    border-radius: var(--radius-panel);
     max-width: 92%;
   }
   .bubble.user {
@@ -357,7 +357,7 @@
     font-size: 11.5px;
     color: var(--bad-fg);
     background: var(--bad-bg);
-    border-radius: 8px;
+    border-radius: var(--radius-panel);
     padding: 8px 10px;
   }
   .chat-error .small {
@@ -381,7 +381,7 @@
     max-width: 94%;
     padding: 7px 10px;
     border: 1px solid var(--border);
-    border-radius: 999px;
+    border-radius: var(--radius-detail);
     background: transparent;
     color: var(--muted);
     font: inherit;

@@ -552,7 +552,15 @@ pub fn recommend(
     revision: u32,
 ) -> Result<Recommendation> {
     let tx = conn.unchecked_transaction()?;
-    let draft = checked_draft(&tx, id, revision)?;
+    recommend_in_transaction(&tx, id, revision)
+}
+
+pub(crate) fn recommend_in_transaction(
+    conn: &Connection,
+    id: &EnrollmentDraftId,
+    revision: u32,
+) -> Result<Recommendation> {
+    let draft = checked_draft(conn, id, revision)?;
     let options = enrollment::options(&draft.course.course_id)?;
     let (_, snapshot) = enrollment::course_snapshot(&draft.course.course_id)?;
     let mut start = 0;
@@ -566,7 +574,7 @@ pub fn recommend(
             ("manual", "Your declared starting point sets this provisional route. Earlier material remains available; this choice does not award grades or mastery.")
         },
         EntryChoice::Diagnostic => {
-            let attempt = latest(&tx,id)?;
+            let attempt = latest(conn,id)?;
             let frozen = context(&attempt)?;
             if attempt.status != "completed" { return Err(invalid("finish the diagnostic or choose another entry route before reviewing the path")); }
             if !matches_draft(&draft,&frozen)? { return Err(invalid("the setup, goal or diagnostic bank changed; complete a new check or choose a manual starting point")); }

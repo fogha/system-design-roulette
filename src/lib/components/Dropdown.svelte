@@ -164,7 +164,7 @@
 <style>
   .dropdown { display: grid; gap: 7px; min-width: 0; width: 100%; }
   label { color: var(--muted); font: 11px/1.5 var(--font-mono); cursor: pointer; }
-  .dropdown-trigger { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-width: 0; min-height: 38px; padding: 9px 11px; border: 1px solid var(--node-border); border-radius: 6px; background: var(--bg); color: var(--fg); font: 12px/1.5 var(--font-mono); text-align: left; cursor: pointer; }
+  .dropdown-trigger { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-width: 0; min-height: 38px; padding: 9px 11px; border: 1px solid var(--node-border); border-radius: var(--radius-control); background: var(--bg); color: var(--fg); font: 12px/1.5 var(--font-mono); text-align: left; cursor: pointer; }
   .dropdown-trigger > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   .dropdown-trigger :global(svg) { flex: 0 0 auto; color: var(--muted); transition: transform 120ms ease; }
   .dropdown-trigger.open :global(svg) { transform: rotate(180deg); color: var(--accent); }
@@ -172,8 +172,8 @@
   .dropdown-trigger:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
   .dropdown-trigger:disabled { opacity: 0.45; cursor: not-allowed; }
   .placeholder { color: var(--muted); }
-  .dropdown-menu { position: fixed; z-index: 120; overflow-y: auto; overscroll-behavior: contain; padding: 5px; border: 1px solid var(--node-border); border-radius: 7px; background: var(--node-bg); box-shadow: 0 12px 30px #0006, 0 2px 6px #0005; color: var(--fg); font: 12px/1.5 var(--font-mono); scrollbar-width: thin; scrollbar-color: var(--node-border) transparent; }
-  .dropdown-option { display: flex; align-items: center; gap: 14px; min-height: 36px; padding: 8px 10px; border: 1px solid transparent; border-radius: 4px; cursor: pointer; }
+  .dropdown-menu { position: fixed; z-index: 120; overflow-y: auto; overscroll-behavior: contain; padding: 5px; border: 1px solid var(--node-border); border-radius: var(--radius-control); background: var(--node-bg); box-shadow: 0 12px 30px #0006, 0 2px 6px #0005; color: var(--fg); font: 12px/1.5 var(--font-mono); scrollbar-width: thin; scrollbar-color: var(--node-border) transparent; }
+  .dropdown-option { display: flex; align-items: center; gap: 14px; min-height: 36px; padding: 8px 10px; border: 1px solid transparent; border-radius: var(--radius-control); cursor: pointer; }
   .dropdown-option.highlighted { background: var(--surface-2); border-color: var(--violet); color: var(--violet-fg); }
   .dropdown-option.chosen .option-check { color: var(--led-ok); }
   .dropdown-option[aria-disabled='true'] { opacity: 0.4; cursor: not-allowed; }

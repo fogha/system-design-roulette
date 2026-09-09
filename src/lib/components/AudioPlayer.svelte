@@ -228,7 +228,7 @@
     gap: 14px;
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--radius-panel);
     padding: 8px 14px;
     margin: 14px 24px 0;
   }
@@ -241,7 +241,7 @@
     background: var(--bg);
     border: 1px solid var(--border);
     color: var(--fg);
-    border-radius: 6px;
+    border-radius: var(--radius-control);
     font-size: 12px;
     padding: 5px 10px;
     cursor: pointer;

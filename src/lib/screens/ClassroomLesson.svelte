@@ -228,7 +228,7 @@
   .back-button {
     justify-self: start;
     border: 1px solid var(--node-border);
-    border-radius: 6px;
+    border-radius: var(--radius-control);
     background: transparent;
     color: var(--muted);
     min-height: 34px;
@@ -245,7 +245,7 @@
     display: grid;
     place-items: center;
     border: 1px solid var(--accent);
-    border-radius: 7px;
+    border-radius: var(--radius-control);
     color: var(--accent);
     flex: none;
   }
@@ -258,7 +258,7 @@
     min-height: 32px;
     padding: 6px 9px;
     border: 1px solid var(--node-border);
-    border-radius: 6px;
+    border-radius: var(--radius-control);
     background: transparent;
     color: var(--muted);
     display: inline-flex;
@@ -271,16 +271,16 @@
   .reading-layout { flex: 1; min-height: 0; overflow-y: auto; }
   .reading-pane { width: min(100%, 920px); margin: 0 auto; padding: 28px clamp(24px, 5vw, 72px) 64px; }
   .exercise-end { margin-top: 40px; border-top: 1px solid var(--node-border); }
-  .practice-pane { margin-top: 12px; border-top: 1px solid var(--node-border); border-radius: 8px; padding: 24px; background: var(--surface); }
+  .practice-pane { margin-top: 12px; border-top: 1px solid var(--node-border); border-radius: var(--radius-panel); padding: 24px; background: var(--surface); }
   .practice-pane h2, .sources h2 { font-size: 16px; margin: 6px 0; }
   .practice-intro { color: var(--muted); font-size: 11px; line-height: 1.5; }
-  .sources { margin-top: 28px; border: 1px solid var(--node-border); border-radius: 8px; padding: 16px; }
+  .sources { margin-top: 28px; border: 1px solid var(--node-border); border-radius: var(--radius-panel); padding: 16px; }
   .sources p { color: var(--muted); font-size: 12px; line-height: 1.6; }
   .sources ul { padding-left: 18px; }
   .sources a { color: var(--accent); display: inline-flex; gap: 5px; align-items: center; }
   .source-host { color: var(--faint); font-size: 9px; margin-left: 6px; text-transform: lowercase; }
   .question-list { display: grid; gap: 10px; margin-top: 16px; }
-  fieldset { border: 1px solid var(--node-border); border-radius: 7px; padding: 11px; min-width: 0; }
+  fieldset { border: 1px solid var(--node-border); border-radius: var(--radius-control); padding: 11px; min-width: 0; }
   fieldset.correct { border-color: var(--green); }
   fieldset.incorrect { border-color: var(--red); }
   legend { padding: 0 5px; font-size: 11px; line-height: 1.45; }
@@ -296,23 +296,23 @@
     line-height: 1.4;
     cursor: pointer;
     padding: 5px;
-    border-radius: 4px;
+    border-radius: var(--radius-detail);
   }
   .choice-list label:hover { background: var(--surface-2); }
   .choice-list input { margin-top: 2px; accent-color: var(--accent); }
   .correction { margin-top: 9px; border-top: 1px solid var(--node-border); padding-top: 8px; font-size: 10px; }
   .correction p { margin: 4px 0 0; color: var(--muted); line-height: 1.5; }
-  .result-card { display: flex; gap: 9px; border: 1px solid var(--amber); border-radius: 7px; padding: 10px; margin-top: 13px; color: var(--amber); }
+  .result-card { display: flex; gap: 9px; border: 1px solid var(--amber); border-radius: var(--radius-control); padding: 10px; margin-top: 13px; color: var(--amber); }
   .result-card.passed { border-color: var(--green); color: var(--green); }
   .result-card p { margin: 3px 0 0; color: var(--muted); font-size: 9px; }
   .reflection-field { display: grid; gap: 6px; margin-top: 14px; color: var(--muted); font-size: 10px; }
-  .reflection-field textarea { min-height: 92px; resize: vertical; background: var(--bg); color: var(--text); border: 1px solid var(--node-border); border-radius: 6px; padding: 9px; }
+  .reflection-field textarea { min-height: 92px; resize: vertical; background: var(--bg); color: var(--text); border: 1px solid var(--node-border); border-radius: var(--radius-control); padding: 9px; }
   .submit-button {
     width: 100%;
     min-height: 38px;
     margin-top: 12px;
     border: 1px solid var(--accent);
-    border-radius: 6px;
+    border-radius: var(--radius-control);
     background: var(--accent);
     color: var(--bg);
     display: flex;

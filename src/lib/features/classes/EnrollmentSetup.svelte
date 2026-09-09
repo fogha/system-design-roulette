@@ -7,12 +7,14 @@
   import type { EnrollmentEditorState } from './enrollment-editor';
   import NodeCard from '../../components/NodeCard.svelte';
   import Dropdown from '../../components/Dropdown.svelte';
-  import { api, type AgentId } from '../../ipc';
+  import { api } from '../../ipc';
+  import RunnerSetup from '../runners/RunnerSetup.svelte';
+  import { app } from '../../stores.svelte';
   import type { PathRecommendation } from '../../contracts/placement';
   import PlacementCheck from './PlacementCheck.svelte';
   import PathPreview from './PathPreview.svelte';
   import FlowStage from '../../components/FlowStage.svelte';
-  import { ArrowLeft, Check, Compass, ListStart, Layers, BookOpen, Clock, Bot, Save } from 'lucide-svelte';
+  import { ArrowLeft, Check, Compass, ListStart, Layers, BookOpen, Clock, Save } from 'lucide-svelte';
 
   let { courseId, onclose }: { courseId: ClassroomSubjectId; onclose: () => void } = $props();
   const course = $derived(courseDefinition(courseId)!);
@@ -25,20 +27,12 @@
   let path = $state<PathRecommendation | null>(null);
   let opening = $state(false);
   let operationError = $state('');
+  let accepting = $state(false);
   const routes = [
     { id: 'foundations', title: 'Start from the foundations', description: 'Build up from the introductory topics at your own pace.', icon: Layers },
     { id: 'diagnostic', title: 'Help me find my level', description: 'Use a short, optional check to help identify a starting point and gaps.', icon: Compass },
     { id: 'manual', title: 'Choose my starting point', description: 'Pick a course stage and tell us which topics already feel familiar.', icon: ListStart },
   ] as const;
-  const providers: { value: AgentId; label: string }[] = [
-    { value: 'claude', label: 'Claude' }, { value: 'codex', label: 'Codex' },
-    { value: 'cursor', label: 'Cursor' }, { value: 'gemini', label: 'Gemini' },
-    { value: 'custom', label: 'Custom CLI' },
-    { value: 'anthropic', label: 'Anthropic API' }, { value: 'openai', label: 'OpenAI API' },
-    { value: 'google', label: 'Google Gemini API' }, { value: 'openrouter', label: 'OpenRouter' },
-    { value: 'groq', label: 'Groq API' }, { value: 'mistral', label: 'Mistral API' },
-    { value: 'deepseek', label: 'DeepSeek API' }, { value: 'ollama', label: 'Ollama · local' },
-  ];
   const entryOptions = $derived(view.options?.entry_points.map((point) => ({ value: point.id, label: point.label })) ?? []);
   const familiarity = $derived(view.options?.familiarity_options.filter((option) => option.label.toLowerCase().includes(search.toLowerCase())) ?? []);
 
@@ -82,12 +76,22 @@
     finally { opening = false; }
   }
   async function includeFoundations() { path = null; choose('foundations'); await openNext(false); }
+  async function accept() {
+    if (!path || accepting) return;
+    accepting = true; operationError = '';
+    try {
+      await api.acceptClassPath({ draft_id: path.draft_id, expected_revision: path.draft_revision, recommendation_id: path.id });
+      editor.accepted();
+      await app.refresh(); onclose();
+    } catch (error) { operationError = String(error); }
+    finally { accepting = false; }
+  }
 </script>
 
 {#if checking && view.draft}
   <PlacementCheck draft={view.draft} onclose={() => (checking = false)} onrecommend={() => openNext(false)} />
 {:else if path}
-  <PathPreview {path} onclose={() => (path = null)} onfoundations={includeFoundations} />
+  <PathPreview {path} onclose={() => (path = null)} onfoundations={includeFoundations} onaccept={accept} {accepting} error={operationError} />
 {:else}
 <section class="enrollment" aria-labelledby="enrollment-title">
   <button class="back-link" onclick={close} disabled={closing}><ArrowLeft size={15} /> Classes</button>
@@ -100,7 +104,7 @@
   {#if view.status === 'loading'}
     <p role="status">Loading your course setup…</p>
   {:else if configuration && view.options}
-    <p class="notice">Review a provisional path from your preferences or a short check. Activating that path in an existing class is still being connected.</p>
+    <p class="notice">Review your path, then accept it to enable this class. Starting preferences and diagnostic samples remain separate from completed lessons and mastery.</p>
     <FlowStage number="01"><NodeCard Icon={BookOpen} name={course.title} badge={course.version} badgeTone="violet">
     <div class="course-context">
       <p>{course.outcome}</p>
@@ -161,18 +165,10 @@
       </fieldset>
     </div>
     </NodeCard></FlowStage>
-    <FlowStage number="04" last><NodeCard Icon={Bot} name="tutor-backend" badge={configuration.tutor.provider} badgeTone="violet">
-    <details class="tutor-options">
-      <summary>Tutor preference <span>{configuration.tutor.provider} · {configuration.tutor.model}</span></summary>
-      <div class="form-grid">
-        <div class="field"><Dropdown label="Provider" bind:value={configuration.tutor.provider} options={providers} onchange={changed} /></div>
-        <label class="field"><span>Model ID for this provider</span><input bind:value={configuration.tutor.model} oninput={changed} /></label>
-        {#if configuration.tutor.provider === 'custom'}
-          <label class="field"><span>Executable path</span><input value={configuration.tutor.custom_agent_bin ?? ''} oninput={(event) => { if (configuration) { configuration.tutor.custom_agent_bin = event.currentTarget.value; changed(); } }} /></label>
-        {/if}
-      </div>
-    </details>
-    </NodeCard></FlowStage>
+    <FlowStage number="04" last><RunnerSetup bind:agent={() => configuration?.tutor.provider ?? 'claude', value => { if (configuration) configuration.tutor.provider = value as import('../../ipc').AgentId; }} bind:model={configuration.tutor.model}
+      bind:customBin={() => configuration?.tutor.custom_agent_bin ?? '', value => { if (configuration) configuration.tutor.custom_agent_bin = value; }}
+      onchange={changed} selectionHint="Saved with your draft. Applied to this class when you accept its path." />
+    </FlowStage>
   {/if}
 
   {#if operationError}<p class="save-error" role="alert">{operationError}</p>{/if}
@@ -217,7 +213,7 @@
   fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
   legend { font: 10px var(--font-mono); letter-spacing: 1px; text-transform: uppercase; color: var(--muted); margin-bottom: 14px; }
   .route-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-  .route-grid label { display: flex; flex-direction: column; gap: 9px; padding: 12px; border: 1px solid var(--border); border-radius: 7px; cursor: pointer; background: var(--bg); }
+  .route-grid label { display: flex; flex-direction: column; gap: 9px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-control); cursor: pointer; background: var(--bg); }
   .route-grid label.selected { border-color: var(--violet); background: var(--surface-2); }
   .route-top { display: flex; justify-content: space-between; color: var(--accent); }
   .route-grid strong { font: 11px/1.55 var(--font-mono); letter-spacing: 0.5px; text-transform: uppercase; }
@@ -228,7 +224,7 @@
   .entry-options + .notice { margin: 14px 0 0; }
   .field { display: flex; flex-direction: column; gap: 7px; margin-bottom: 15px; font-size: 13px; min-width: 0; }
   .field small { color: var(--muted); font-weight: 400; margin-left: 5px; }
-  .field input, textarea { border: 1px solid var(--border); background: var(--bg); color: var(--fg); padding: 10px 12px; border-radius: 7px; font: inherit; width: 100%; }
+  .field input, textarea { border: 1px solid var(--border); background: var(--bg); color: var(--fg); padding: 10px 12px; border-radius: var(--radius-control); font: inherit; width: 100%; }
   textarea { resize: vertical; }
   .manual-entry > .field { max-width: 430px; }
   .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
@@ -237,10 +233,9 @@
   .search { margin-top: 15px; }
   .familiar-list { max-height: 270px; overflow-y: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 5px 16px; }
   .familiar-list label { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; padding: 5px; }
-  .tutor-options > .form-grid { margin-top: 18px; }
   footer { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; justify-content: space-between; margin-top: 28px; }
   .save-status { font: 10px var(--font-mono); color: var(--muted); display: flex; gap: 6px; align-items: center; }
-  .save-error { margin-top: 18px; padding: 14px; border-radius: 6px; border: 1px dashed var(--led-err); color: var(--bad-fg); background: var(--bad-bg); font-size: 13px; }
+  .save-error { margin-top: 18px; padding: 14px; border-radius: var(--radius-control); border: 1px dashed var(--led-err); color: var(--bad-fg); background: var(--bad-bg); font-size: 13px; }
   .error-actions { display: flex; flex-wrap: wrap; gap: 10px; }
   :is(button, input, textarea, summary):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
   @media (max-width: 620px) { .route-grid { grid-template-columns: 1fr; } .route-grid label { gap: 5px; } }

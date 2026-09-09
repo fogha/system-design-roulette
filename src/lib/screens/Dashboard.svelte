@@ -274,7 +274,7 @@
   .hm-cell {
     width: 13px;
     height: 13px;
-    border-radius: 3px;
+    border-radius: var(--radius-detail);
     background: var(--surface);
   }
   .hm-cell.done {
@@ -310,7 +310,7 @@
   .ms-cell {
     width: 13px;
     height: 13px;
-    border-radius: 3px;
+    border-radius: var(--radius-detail);
     background: var(--surface);
     display: inline-block;
   }
@@ -379,7 +379,7 @@
   .reader-card {
     background: var(--bg);
     color: var(--fg);
-    border-radius: 14px;
+    border-radius: var(--radius-panel);
     padding: 32px;
     max-width: 72ch;
   }

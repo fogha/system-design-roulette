@@ -490,6 +490,50 @@ continue to own teaching behavior. Validation and platform limits are recorded i
 [the runner implementation record](AGENT_BACKEND_PORT.md). The outstanding P0–P9
 class/path/session work above is unchanged.
 
+### Accepted-path activation and runner consistency
+
+The path preview can now activate a class. Acceptance revalidates the exact draft
+revision and recommendation within an immediate transaction, stores an immutable
+path revision, enables the existing subject adapter and marks the draft accepted.
+Retries return the original revision, including after a subsequent reassessment.
+There is still one class per course; revising its entry does not recreate it.
+
+Engineering selection respects the accepted entry phase, carries prerequisite
+advice into course generation and preserves bypassed topics as unassessed. Language
+selection uses the accepted band for future work. Existing sessions retain their
+payload and path reference, and submitting an older lesson cannot overwrite the
+newly chosen language cursor. Selecting a higher band no longer creates reached
+milestones for bands without completed work. Settings changes update mutable class
+configuration and status without rewriting accepted path history.
+
+Enrollment now uses the same runner library and active tutor selector as Settings
+and class settings. Migration v5 removes the legacy six-runner/Claude-model
+restriction from classroom preferences; it preserves program, slot and session
+records and supports all CLI, API and local runner IDs. Migrations v1–v4 remain
+unchanged. The browser preview implements acceptance/revision persistence using
+the same wire contracts; its bundled example lessons remain explicitly labelled
+as preview content, not generated lessons for the accepted phase.
+
+The corner-style correction centralizes subtle rounded geometry: 6 px controls,
+8 px panels and 4 px compact details, shared across both themes. Fonts are bundled
+with their OFL notices to remove the external stylesheet from desktop startup.
+The new [logo exploration](branding/LOGO_EXPLORATION.md) is a review candidate;
+installed app icons have not been replaced by an unreviewed raster concept.
+
+Validation: 197 Rust tests pass with six live/external tests ignored; 51 frontend
+tests pass. Svelte checks report no errors/warnings, strict Clippy passes and the
+packaged macOS build succeeds. Native UI verification covers diagnostic acceptance,
+manual revision, saved-model selection and the matching rounded controls; see
+[desktop verification](DESKTOP_ASSESSMENT_QA.md).
+
+This increment uses the existing language and engineering session adapters.
+Shared session identities/FSM, full engine cutover, occurrence/focus ownership,
+direct voluntary study of individual bypassed topics, complete practical/capstone
+assessment, path-versus-full-course coverage views and Linux/Windows runtime gates
+remain required work. Class-path activation currently supports advisory focus;
+unsupported policies are rejected rather than silently accepted. A retained course
+outcome is not a claim that the final assessment runtime is already complete.
+
 Runner design iteration: separate a collapsible runner/model library from the
 active tutor selector. Provider editors open individually; catalogues use search
 and five-result pages; local models use Installed/Browse/Downloads tabs. Persist

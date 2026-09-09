@@ -304,7 +304,7 @@
   .starter-code {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--radius-panel);
     padding: 14px 16px;
     font-size: 12.5px;
     line-height: 1.6;
@@ -340,7 +340,7 @@
     margin: 22px 0;
     padding: 16px;
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--radius-panel);
     background: color-mix(in srgb, var(--surface) 82%, transparent);
   }
   .evidence-block.complete {

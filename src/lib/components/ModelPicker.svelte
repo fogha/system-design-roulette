@@ -3,7 +3,7 @@
   import { api } from '$lib/ipc';
   import { shortlistOptions } from '$lib/features/runners/model-list';
   import Dropdown from './Dropdown.svelte';
-  let { value = $bindable('default'), agent = 'claude', revision = 0, disabled = false, onconfigure }: { value?: string; agent?: string; revision?: number; disabled?: boolean; onconfigure?: () => void } = $props();
+  let { value = $bindable('default'), agent = 'claude', revision = 0, disabled = false, onconfigure, onchange }: { value?: string; agent?: string; revision?: number; disabled?: boolean; onconfigure?: () => void; onchange?: () => void } = $props();
   let models = $state<string[]>([]); let query = $state(''); let loading = $state(false); let error = $state('');
   let sequence = 0;
   const options = $derived(shortlistOptions(models, value).filter(m => m.label.toLowerCase().includes(query.toLowerCase())));
@@ -18,7 +18,7 @@
 
 <div class="model-picker">
   {#if models.length > 8}<input {disabled} aria-label="Search saved models" placeholder="Find a saved model…" bind:value={query} />{/if}
-  <Dropdown label="Model" {value} {options} disabled={loading || disabled} onchange={selected => value = selected} placeholder={loading ? 'Loading saved models…' : value} />
+  <Dropdown label="Model" {value} {options} disabled={loading || disabled} onchange={selected => { value = selected; onchange?.(); }} placeholder={loading ? 'Loading saved models…' : value} />
   <div class="foot"><span>{models.length} saved {models.length === 1 ? 'model' : 'models'}</span>{#if onconfigure}<button type="button" onclick={onconfigure}>Manage models ↗</button>{/if}</div>
   {#if query && !options.length}<p role="status">No saved models match.</p>{/if}
   {#if error}<p class="error" role="status">{error}</p>{/if}
@@ -27,6 +27,6 @@
   .model-picker { display: grid; gap: 7px; min-width: 0; align-content: start; }
   .foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; color: var(--muted); font: 9px/1.5 var(--font-mono); }
   button { border: 0; background: transparent; color: var(--accent); font-size: 10px; padding: 0; cursor: pointer; }
-  input { background: var(--bg); border: 1px solid var(--node-border); border-radius: 4px; color: var(--text); padding: 8px; width: 100%; font-size: 11px; }
+  input { background: var(--bg); border: 1px solid var(--node-border); border-radius: var(--radius-control); color: var(--text); padding: 8px; width: 100%; font-size: 11px; }
   p { font-size: 11px; color: var(--muted); margin: 0; overflow-wrap: anywhere; } .error { color: var(--led-err); }
 </style>

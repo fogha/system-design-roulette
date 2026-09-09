@@ -2,8 +2,8 @@
  * this storage is separate from the native learner database. */
 import banks from '../../src-tauri/seed/diagnostics.json';
 import concepts from '../../src-tauri/seed/concepts.json';
-import { COURSES, courseDefinition } from './catalog';
-import { previewEnrollmentDraft, previewEnrollmentOptions } from './enrollment-preview';
+import { courseDefinition } from './catalog';
+import { findPreviewEnrollmentDraft, previewEnrollmentOptions } from './enrollment-preview';
 import type { EnrollmentDraft, EnrollmentDraftId } from './contracts/enrollment';
 import type { AssessmentResponse, AssessmentRoundId } from './contracts/assessments';
 import type { AssessmentAttemptId, CriterionResult, DiagnosticView, PathRecommendation, PathTopic } from './contracts/placement';
@@ -14,7 +14,7 @@ interface Attempt { id: AssessmentAttemptId; draft: EnrollmentDraft; bank: Bank;
 const memory = new Map<string, Attempt[]>();
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 function draft(id: EnrollmentDraftId, revision?: number) {
-  const value = COURSES.map((course) => previewEnrollmentDraft(course.id)).find((draft) => draft?.id === id);
+  const value = findPreviewEnrollmentDraft(id);
   if (!value) throw new Error('Enrollment draft not found.');
   if (revision !== undefined && (value.revision !== revision || value.status !== 'draft' || !same(value.course, previewEnrollmentOptions(value.course.course_id).course))) throw new Error('Setup or curriculum changed; save and reload the current draft.');
   return value;

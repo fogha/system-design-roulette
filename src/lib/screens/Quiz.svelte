@@ -205,7 +205,7 @@
     padding: 24px;
   }
   .progress-track {
-    border-radius: 3px;
+    border-radius: var(--radius-detail);
     overflow: hidden;
   }
   .spacer {
@@ -216,7 +216,7 @@
     color: var(--violet-fg);
     background: var(--violet-bg);
     border: 1px dashed var(--violet);
-    border-radius: 6px;
+    border-radius: var(--radius-control);
     padding: 7px 12px;
     margin-bottom: 14px;
     align-self: flex-start;
@@ -225,7 +225,7 @@
     font-size: 11px;
     color: var(--warn-fg);
     background: var(--warn-bg);
-    border-radius: 5px;
+    border-radius: var(--radius-control);
     padding: 6px 10px;
     margin-bottom: 12px;
     display: inline-block;
@@ -247,7 +247,7 @@
     background: var(--bg);
     border: 1px solid var(--node-border);
     color: var(--fg);
-    border-radius: 8px;
+    border-radius: var(--radius-panel);
     padding: 12px 14px;
     font-family: var(--font-body);
     font-size: 14px;
@@ -270,7 +270,7 @@
     font-size: 11px;
     color: var(--faint);
     border: 1px solid var(--node-border);
-    border-radius: 4px;
+    border-radius: var(--radius-detail);
     padding: 1px 7px;
     flex-shrink: 0;
     margin-top: 2px;

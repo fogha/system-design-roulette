@@ -66,6 +66,15 @@ const MIGRATIONS: &[Migration] = &[
             Ok(())
         },
     },
+    Migration {
+        version: 5,
+        name: "class_tutors",
+        sources: &[include_str!("005_class_tutors.sql")],
+        apply: |conn| {
+            conn.execute_batch(include_str!("005_class_tutors.sql"))?;
+            Ok(())
+        },
+    },
 ];
 
 pub fn enable_foreign_keys(conn: &Connection) -> Result<()> {
@@ -271,6 +280,71 @@ fn run(conn: &Connection, database: &Path, migrations: &[Migration]) -> Result<(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn v4_class_tutor_upgrade_retains_dependents_and_accepts_every_runner() {
+        let directory = std::env::temp_dir().join(format!(
+            "principia-tutor-upgrade-{:032x}",
+            rand::random::<u128>()
+        ));
+        fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("learner.db");
+        let conn = Connection::open(&path).unwrap();
+        run(&conn, &path, &MIGRATIONS[..4]).unwrap();
+        crate::language::initialize(&conn, "2026-09-09").unwrap();
+        crate::classroom::initialize(&conn).unwrap();
+        conn.execute_batch("INSERT INTO classroom_schedule_slots(id,subject_id,hour,minute,created_at) VALUES(42,'linux-bash',18,30,'original');
+            INSERT INTO classroom_sessions(id,subject_id,slot_id,session_date,title,payload_json,prompt_version,started_at,exercise_draft) VALUES(51,'linux-bash',42,'2026-09-09','Saved work','{\"original\":true}','v1','original','learner script');").unwrap();
+        let original: String = conn.query_row("SELECT json_group_array(json_object('id',subject_id,'agent',agent,'model',model,'updated',updated_at)) FROM classroom_programs", [], |r| r.get(0)).unwrap();
+        run(&conn, &path, MIGRATIONS).unwrap();
+        let current: String = conn.query_row("SELECT json_group_array(json_object('id',subject_id,'agent',agent,'model',model,'updated',updated_at)) FROM classroom_programs", [], |r| r.get(0)).unwrap();
+        assert_eq!(original, current);
+        assert_eq!(
+            conn.query_row(
+                "SELECT slot_id,exercise_draft,payload_json FROM classroom_sessions WHERE id=51",
+                [],
+                |r| Ok((
+                    r.get::<_, i64>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, String>(2)?
+                ))
+            )
+            .unwrap(),
+            (42, "learner script".into(), "{\"original\":true}".into())
+        );
+        for runner in crate::agents::RunnerId::ALL {
+            for id in [runner.id(), runner.legacy_id()] {
+                conn.execute(
+                    "UPDATE classroom_programs SET agent=?1,model=?2 WHERE subject_id='linux-bash'",
+                    params![id, crate::agents::default_model(runner)],
+                )
+                .unwrap();
+            }
+        }
+        integrity_check(&conn, true).unwrap();
+        let backup: String = conn
+            .query_row(
+                "SELECT backup_path FROM schema_migrations WHERE version=5",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        let old = Connection::open(backup).unwrap();
+        assert_eq!(
+            old.pragma_query_value(None, "user_version", |r| r.get::<_, u32>(0))
+                .unwrap(),
+            4
+        );
+        assert_eq!(
+            old.query_row(
+                "SELECT COUNT(*) FROM classroom_sessions WHERE id=51",
+                [],
+                |r| r.get::<_, i64>(0)
+            )
+            .unwrap(),
+            1
+        );
+    }
 
     fn fail_after_writes(conn: &Connection) -> Result<()> {
         conn.execute_batch("CREATE TABLE partial_upgrade(id INTEGER PRIMARY KEY); INSERT INTO config VALUES ('partial-write', 'must roll back'); INSERT INTO absent_table VALUES (1);")?;

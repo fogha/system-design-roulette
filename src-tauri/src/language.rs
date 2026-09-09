@@ -484,13 +484,20 @@ pub fn program_view(conn: &Connection, language: &str, today: &str) -> Result<La
         .all(|skill| skill.encounters > 0 && skill.score >= 0.60);
     let milestones = LEVELS
         .iter()
-        .map(|level| MilestoneView {
-            level: (*level).to_string(),
-            target_date: format_date(start + Duration::days(target_offset_days(level))),
-            reached: level_index(&row.current_level) > level_index(level)
-                || (*level == "B2" && completed_steps >= required_steps && current_gate_ready),
+        .map(|level| {
+            let (completed, required) =
+                level_progress(conn, language, level_spec(curriculum, level)?)?;
+            Ok(MilestoneView {
+                level: (*level).to_string(),
+                target_date: format_date(start + Duration::days(target_offset_days(level))),
+                // An accepted starting band is a cursor, never evidence that
+                // the skipped bands were completed in this app.
+                reached: required > 0
+                    && completed >= required
+                    && (level_index(&row.current_level) > level_index(level) || current_gate_ready),
+            })
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>>>()?;
     let target_date = format_date(start + Duration::days(target_offset_days(&row.target_level)));
     let target_days = target_offset_days(&row.target_level).max(1);
     let app_cadence_weekly =
@@ -578,14 +585,21 @@ pub fn configure_program(
     if !valid_level(&input.start_level) || !valid_level(&input.target_level) {
         return Err("language level must be A1, A2, B1, or B2".into());
     }
-    if level_index(&input.target_level) < level_index(&input.start_level) {
+    let accepted_path =
+        crate::domain::classes::current_path(conn, &input.language).map_err(|e| e.to_string())?;
+    let starting_level = accepted_path
+        .as_ref()
+        .map_or(input.start_level.as_str(), |p| {
+            p.recommendation.entry_point.as_str()
+        });
+    if level_index(&input.target_level) < level_index(starting_level) {
         return Err("target level cannot be below the starting level".into());
     }
-    if !(60..=2_100).contains(&input.weekly_minutes) {
-        return Err("weekly practice must be between 60 and 2100 minutes".into());
+    if !(10..=10_080).contains(&input.weekly_minutes) {
+        return Err("weekly practice must be between 10 and 10080 minutes".into());
     }
-    if !(15..=90).contains(&input.session_minutes) {
-        return Err("session length must be between 15 and 90 minutes".into());
+    if !(10..=120).contains(&input.session_minutes) {
+        return Err("session length must be between 10 and 120 minutes".into());
     }
     let active: i64 = conn
         .query_row(
@@ -606,7 +620,7 @@ pub fn configure_program(
         )
         .map_err(|error| error.to_string())?;
     let existing = program_row(conn, &input.language)?;
-    if encounters > 0 && input.start_level != existing.start_level {
+    if (encounters > 0 || accepted_path.is_some()) && input.start_level != existing.start_level {
         return Err(
             "the starting level cannot change after study begins; existing progress is preserved"
                 .into(),
@@ -615,7 +629,7 @@ pub fn configure_program(
     if encounters > 0 && level_index(&input.target_level) < level_index(&existing.current_level) {
         return Err("target level cannot be below the demonstrated current level".into());
     }
-    let current_level = if encounters == 0 {
+    let current_level = if encounters == 0 && accepted_path.is_none() {
         input.start_level.clone()
     } else {
         existing.current_level
@@ -664,6 +678,8 @@ pub(crate) struct StoredQuestion {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct StoredLesson {
+    #[serde(default)]
+    pub(crate) path: Option<crate::domain::classes::PathReference>,
     pub(crate) title: String,
     pub(crate) scenario: String,
     pub(crate) can_do: String,
@@ -987,6 +1003,7 @@ fn build_lesson(language: &str, level: &str, unit: &UnitSpec, phase: i64) -> Sto
         .collect::<Vec<_>>()
         .join(" ");
     StoredLesson {
+        path: None,
         title: unit.title.clone(),
         scenario: unit.scenario.clone(),
         can_do: unit.can_do.clone(),
@@ -1241,7 +1258,10 @@ pub fn start_session(
     let curriculum = curriculum(language)?;
     let level = level_spec(curriculum, &program.current_level)?;
     let (unit, phase) = select_unit(conn, language, level, revisit)?;
-    let stored = build_lesson(language, &program.current_level, &unit, phase);
+    let mut stored = build_lesson(language, &program.current_level, &unit, phase);
+    stored.path = crate::domain::classes::current_path(conn, language)
+        .map_err(|e| e.to_string())?
+        .map(|p| p.reference);
     let lesson_json = serde_json::to_string(&stored).map_err(|error| error.to_string())?;
     conn.execute(
         "INSERT INTO language_sessions
@@ -1471,6 +1491,11 @@ fn maybe_advance_level(
     current_level: &str,
 ) -> Result<Option<String>> {
     let program = program_row(conn, language)?;
+    // A lesson resumed from an earlier path keeps its evidence, but cannot move
+    // the cursor chosen by a subsequently accepted path.
+    if program.current_level != current_level {
+        return Ok(None);
+    }
     if level_index(current_level) >= level_index(&program.target_level) {
         return Ok(None);
     }

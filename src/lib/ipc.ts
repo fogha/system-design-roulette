@@ -1,3 +1,4 @@
+import type { AcceptedPath, AcceptPath, PathSummary } from './contracts/classes';
 import type { RunnerConfiguration } from './contracts/agents';
 import type { AgentCall, AgentPolicy, HealthCheck, RunnerInfo, ModelCatalog, LocalStatus, LocalPull } from './contracts/agents';
 import type { EnrollmentOptions, EnrollmentDraft, EnrollmentDraftId, SaveEnrollmentDraft } from './contracts/enrollment';
@@ -131,6 +132,7 @@ export interface LanguageSessionResult {
 }
 
 export interface ClassroomProgramView {
+  accepted_path?: PathSummary | null;
   subject_id: ClassroomSubjectId;
   kind: ClassroomKind;
   label: string;
@@ -534,6 +536,8 @@ const realApi = {
   submitPlacementRound: (draftId: EnrollmentDraftId, roundId: AssessmentRoundId, expectedRevision: number) => invoke<DiagnosticView>('submit_placement_round', { draftId, roundId, expectedRevision }),
   continuePlacementCheck: (draftId: EnrollmentDraftId, roundId: AssessmentRoundId) => invoke<DiagnosticView>('continue_placement_check', { draftId, roundId }),
   finishPlacementCheck: (draftId: EnrollmentDraftId, roundId: AssessmentRoundId) => invoke<DiagnosticView>('finish_placement_check', { draftId, roundId }),
+  getClassPath: (courseId: ClassroomSubjectId) => invoke<AcceptedPath | null>('get_class_path', { courseId }),
+  acceptClassPath: (input: AcceptPath) => invoke<AcceptedPath>('accept_class_path', { input }),
   getPathRecommendation: (draftId: EnrollmentDraftId, expectedRevision: number) => invoke<PathRecommendation>('get_path_recommendation', { draftId, expectedRevision }),
   getCatalog: () => invoke<CourseDefinition[]>('get_catalog'),
   markFrontendReady: () => invoke<void>('mark_frontend_ready'),

@@ -482,10 +482,10 @@
     cursor: pointer;
   }
   .font-ctl button:first-child {
-    border-radius: 5px 0 0 5px;
+    border-radius: var(--radius-control) 0 0 var(--radius-control);
   }
   .font-ctl button:last-child {
-    border-radius: 0 5px 5px 0;
+    border-radius: 0 var(--radius-control) var(--radius-control) 0;
   }
   .font-ctl button:hover {
     color: var(--fg);
@@ -514,7 +514,7 @@
     font-size: 10px;
     color: var(--muted);
     border: 1px solid var(--border);
-    border-radius: 4px;
+    border-radius: var(--radius-detail);
     padding: 3px 8px;
     letter-spacing: 0.5px;
   }
@@ -572,7 +572,7 @@
     color: var(--fg);
     border-left-color: var(--accent);
     background: var(--surface);
-    border-radius: 0 6px 6px 0;
+    border-radius: 0 var(--radius-control) var(--radius-control) 0;
   }
   .toc-check {
     font-size: 10px;
@@ -642,7 +642,7 @@
     background: var(--bg);
     border: 1px solid var(--border);
     border-top: 3px solid var(--accent);
-    border-radius: 12px;
+    border-radius: var(--radius-panel);
     padding: 18px 22px 22px;
     box-shadow: 0 18px 60px rgba(0, 0, 0, 0.4);
   }
@@ -657,7 +657,7 @@
   .exit-tag {
     color: var(--accent);
     border: 1px solid var(--accent);
-    border-radius: 4px;
+    border-radius: var(--radius-detail);
     padding: 2px 7px;
     letter-spacing: 1px;
     font-size: 9px;
@@ -699,7 +699,7 @@
     background: var(--surface);
     border: 1px solid var(--border);
     color: var(--fg);
-    border-radius: 7px;
+    border-radius: var(--radius-control);
     padding: 8px 12px;
     font-family: var(--font-body);
     font-size: 13px;
@@ -751,7 +751,7 @@
     padding: 12px;
     border: 1px solid var(--border);
     border-left: 3px solid var(--bad-fg);
-    border-radius: 7px;
+    border-radius: var(--radius-control);
     background: var(--surface);
   }
   .answer-line {

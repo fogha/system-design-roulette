@@ -7,8 +7,8 @@
   import Dropdown from '$lib/components/Dropdown.svelte';
   import ModelPicker from '$lib/components/ModelPicker.svelte';
   import RunnerLibrary from './RunnerLibrary.svelte';
-  let { agent = $bindable('claude'), model = $bindable('opus'), customBin = $bindable(''), allowKeyEditing = true, onUse, onKeyChanged, initiallyExpanded = false }: {
-    agent?: string; model?: string; customBin?: string; allowKeyEditing?: boolean; onUse?: () => Promise<void>; onKeyChanged?: () => void | Promise<void>; initiallyExpanded?: boolean;
+  let { agent = $bindable('claude'), model = $bindable('opus'), customBin = $bindable(''), allowKeyEditing = true, onUse, onKeyChanged, onchange, initiallyExpanded = false, selectionHint = 'Applied when you save this setup.' }: {
+    agent?: string; model?: string; customBin?: string; allowKeyEditing?: boolean; onUse?: () => Promise<void>; onKeyChanged?: () => void | Promise<void>; onchange?: () => void; initiallyExpanded?: boolean; selectionHint?: string;
   } = $props();
   let runners = $state<RunnerInfo[]>([]); let loading = $state(true); let expanded = $state(false); let editing = $state('claude');
   let libraryHeader: HTMLDivElement | undefined;
@@ -20,7 +20,7 @@
   $effect(() => { void agent; void model; void customBin; untrack(() => { result = null; saved = false; }); });
   async function refresh() { runners = await api.listAgentRunners(); revision++; }
   onMount(() => { expanded = initiallyExpanded; void (async () => { try { await refresh(); editing = agent; applied = { agent, model, command: customBin }; } catch (e) { error = String(e); } finally { loading = false; } })(); });
-  async function configurationChanged() { await refresh(); if (editing === 'custom' && agent === 'custom') customBin = (await api.getRunnerConfiguration('custom')).custom_command; await onKeyChanged?.(); }
+  async function configurationChanged() { await refresh(); if (editing === 'custom' && agent === 'custom') { customBin = (await api.getRunnerConfiguration('custom')).custom_command; onchange?.(); } await onKeyChanged?.(); }
   async function configure() { editing = agent; expanded = true; await tick(); libraryHeader?.scrollIntoView({ block: 'start', behavior: 'smooth' }); }
   async function choose(provider: string) {
     busy = 'selection'; error = '';
@@ -30,6 +30,7 @@
       agent = provider;
       model = runner?.saved_model && setup.models.includes(runner.saved_model) ? runner.saved_model : setup.models[0] || runner?.default_model || 'default';
       if (provider === 'custom') customBin = setup.custom_command;
+      onchange?.();
     } catch (e) { error = String(e); } finally { busy = ''; }
   }
   async function commandForSelection() {
@@ -58,11 +59,11 @@
   </NodeCard>
   <NodeCard Icon={Zap} name="active-tutor" badge={picked?.label ?? agent} badgeTone="violet">
     <div class="active-head"><strong>Active tutor</strong><p>Choose the runner and saved model to use for study.</p></div>
-    <div class="selection"><Dropdown label="Runner" value={agent} {options} disabled={loading || !!busy} onchange={choose} />{#key agent}<ModelPicker {agent} bind:value={model} {revision} disabled={!!busy} onconfigure={configure} />{/key}</div>
+    <div class="selection"><Dropdown label="Runner" value={agent} {options} disabled={loading || !!busy} onchange={choose} />{#key agent}<ModelPicker {agent} bind:value={model} {revision} disabled={!!busy} onconfigure={configure} {onchange} />{/key}</div>
     {#if agent === 'custom'}<p class="hint">Uses the command saved in the runner library.</p>{/if}
     {#if picked && !picked.available}<p class="hint">{picked.detail}</p>{/if}
     {#if pending}<p class="pending mono" role="status">Selection not applied yet</p>{/if}
-    <div class="actions">{#if onUse}<button type="button" class="action mono" disabled={!!busy || loading} onclick={use}>{busy === 'save' ? 'Applying…' : saved ? 'Active tutor saved ✓' : 'Use for study'}</button>{:else}<span class="hint">Applied when you save this setup.</span>{/if}<button type="button" class="secondary mono" disabled={!!busy || loading} onclick={test}>{busy === 'test' ? 'Testing…' : 'Test connection'}</button></div>
+    <div class="actions">{#if onUse}<button type="button" class="action mono" disabled={!!busy || loading} onclick={use}>{busy === 'save' ? 'Applying…' : saved ? 'Active tutor saved ✓' : 'Use for study'}</button>{:else}<span class="hint">{selectionHint}</span>{/if}<button type="button" class="secondary mono" disabled={!!busy || loading} onclick={test}>{busy === 'test' ? 'Testing…' : 'Test connection'}</button></div>
     {#if result}<div class="test-result" class:ok={result.ok} role="status"><span class="mono">{result.runner} · {result.model} · {(result.duration_ms/1000).toFixed(1)}s</span><p>{result.detail}</p></div>{/if}
     {#if error}<p class="error" role="alert">{error}</p>{/if}
   </NodeCard>

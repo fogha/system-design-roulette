@@ -32,3 +32,12 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+# Bundled fonts
+
+Fraunces, Inter and JetBrains Mono are distributed under the SIL Open Font
+License 1.1. Their original copyright notices and license texts are included in
+`static/fonts/*-OFL.txt`, alongside the unmodified WOFF2 subsets. These fonts are
+bundled so the desktop interface does not need an external font stylesheet at
+startup. Source packages are `@fontsource-variable/fraunces`,
+`@fontsource-variable/inter` and `@fontsource-variable/jetbrains-mono`, version
+5.3.0. Package integrity values are recorded in `static/fonts/sources.json`.

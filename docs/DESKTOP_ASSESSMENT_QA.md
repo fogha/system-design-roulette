@@ -72,3 +72,38 @@ tests are ignored, Svelte has zero errors/warnings, strict Clippy and the packag
 macOS build pass. All nine authored banks and all three recommendation routes are
 covered by domain/preview tests. This does not establish calibrated placement,
 active-class path acceptance, practical assessment or Linux/Windows operation.
+
+## Accepted paths and revised class tutors
+
+The isolated profile was upgraded from v4 to v5 using the packaged macOS app.
+The pre-upgrade backup was retained; SQLite integrity returned `ok` and the
+foreign-key check returned no violations. Production data was not opened.
+
+- Linux Bash restored its completed diagnostic and proposed Practical application
+  with 3 of 6 sampled criteria and five prerequisite refreshers. Accept path enabled
+  the class and displayed Path 1 while keeping coverage at 0 of 18 concepts.
+- Revise starting point opened a fresh draft seeded from the accepted choices.
+  The native custom dropdown selected Core mechanisms; the shared runner selector
+  selected OpenRouter and its saved `openrouter/free` model without entering a key
+  or making a provider request. The two-model shortlist remained accessible.
+- Accepting the revision kept the same class and displayed Path 2 with the new
+  tutor. The first diagnostic/path remained stored. Acceptance created no lessons,
+  mastery or completion credit: the QA profile still had zero classroom/language
+  sessions and its original single mastery row from the earlier assessment fixture.
+- Settings and enrollment were visually checked at 1100 × 760. Primary, secondary,
+  library and dropdown controls share subtle rounded corners with the panels.
+
+The first rebuilt launch showed a blank native window before rendering.
+The external Google Fonts stylesheet has since been replaced with bundled fonts;
+this removes an external resource from the startup path. The final packaged build
+rendered on the first observation after a fresh launch and restored Linux Bash
+Path 2 with its OpenRouter model. This does not establish timing guarantees for
+every machine or eliminate every possible startup delay.
+
+Automated checks cover all nine course acceptances, all seven engineering entry
+selectors, stale recommendations, rollback on injected write failure, duplicate
+acceptance, immutable prior revisions, settings rollback and language reassessment
+during an active lesson. 197 Rust and 51 frontend tests pass, six external Rust
+tests remain ignored, Svelte has zero errors/warnings and strict Clippy passes.
+This is still a bridge to existing session adapters, not the completed shared
+learning runtime or a cross-platform release qualification.

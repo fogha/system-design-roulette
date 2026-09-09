@@ -307,8 +307,7 @@ fn validate(input: &SaveEnrollmentDraft, options: &EnrollmentOptions) -> Result<
         ));
     }
     if crate::agents::RunnerId::parse(&config.tutor.provider).is_none()
-        || config.tutor.model.trim().is_empty()
-        || config.tutor.model.len() > 200
+        || !crate::agents::valid_model(&config.tutor.model)
     {
         return Err(DbError::Invalid(
             "choose a supported provider and a nonempty provider-specific model ID".into(),

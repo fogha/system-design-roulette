@@ -169,7 +169,7 @@
   .md.compact :global(pre) {
     margin: 0.75em 0;
     padding: 12px 14px;
-    border-radius: 7px;
+    border-radius: var(--radius-control);
     line-height: 1.55;
     max-width: 100%;
   }
@@ -208,12 +208,12 @@
     font-size: 0.88em;
     background: var(--surface);
     padding: 2px 6px;
-    border-radius: 5px;
+    border-radius: var(--radius-control);
   }
   .md :global(pre) {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--radius-panel);
     padding: 16px;
     overflow-x: auto;
   }
@@ -224,14 +224,14 @@
   .md :global(.code-frame) {
     margin: 1em 0;
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--radius-panel);
     background: var(--surface);
     overflow: hidden;
     max-width: 100%;
   }
   .md.compact :global(.code-frame) {
     margin: 0.75em 0;
-    border-radius: 7px;
+    border-radius: var(--radius-control);
   }
   .md :global(.code-label) {
     display: block;
@@ -286,7 +286,7 @@
     padding: 14px;
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--radius-panel);
     overflow-x: auto;
   }
   .md :global(.mermaid-block svg) {
@@ -303,7 +303,7 @@
     white-space: pre-wrap;
     background: var(--bg);
     border: 1px solid var(--border);
-    border-radius: 7px;
+    border-radius: var(--radius-control);
     padding: 10px;
     margin: 0;
   }

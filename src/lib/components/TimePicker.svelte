@@ -98,7 +98,7 @@
     gap: 6px;
     background: var(--bg);
     border: 1px solid var(--node-border);
-    border-radius: 8px;
+    border-radius: var(--radius-panel);
     padding: 6px 10px;
   }
   .tp.compact { gap: 3px; padding: 3px 6px; }
@@ -117,7 +117,7 @@
     color: var(--fg);
     background: var(--surface);
     border: 1px solid transparent;
-    border-radius: 6px;
+    border-radius: var(--radius-control);
     padding: 2px 9px;
     cursor: ns-resize;
     outline: none;

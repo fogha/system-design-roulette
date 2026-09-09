@@ -83,7 +83,7 @@
     gap: 6px;
     background: rgba(31, 19, 22, 0.92);
     border: 1px dashed #793030;
-    border-radius: 999px;
+    border-radius: var(--radius-detail);
     color: #d8918e;
     font-size: 10px;
     letter-spacing: 1px;
@@ -99,7 +99,7 @@
   .hatch-panel {
     background: #1f1316;
     border: 1px dashed #793030;
-    border-radius: 10px;
+    border-radius: var(--radius-panel);
     padding: 14px;
     display: flex;
     flex-direction: column;
@@ -114,7 +114,7 @@
     font-size: 9px;
     color: var(--led-err);
     border: 1px solid #793030;
-    border-radius: 4px;
+    border-radius: var(--radius-detail);
     padding: 3px 6px;
     letter-spacing: 1px;
     white-space: nowrap;

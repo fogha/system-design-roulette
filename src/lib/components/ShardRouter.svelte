@@ -192,7 +192,7 @@
     position: relative;
     background: var(--node-bg);
     border: 1px solid var(--node-border);
-    border-radius: 8px;
+    border-radius: var(--radius-panel);
     padding: 9px 12px 10px;
     transition: border-color 0.12s ease, background 0.12s ease, opacity 0.45s ease, transform 0.3s ease;
     min-height: 62px;

@@ -191,6 +191,7 @@ pub struct ClassroomProgramView {
     /// explicit revisit is served.
     pub completed: bool,
     pub language_progress: Option<language::LanguageProgramView>,
+    pub accepted_path: Option<crate::domain::classes::PathSummary>,
 }
 
 pub fn program_views(conn: &Connection, today: &str) -> Result<Vec<ClassroomProgramView>> {
@@ -266,6 +267,9 @@ pub fn program_view(
         progress_label,
         completed,
         language_progress,
+        accepted_path: crate::domain::classes::current_path(conn, subject_id)
+            .map_err(|e| e.to_string())?
+            .map(|path| path.summary()),
     })
 }
 
@@ -299,6 +303,9 @@ pub fn configure_program(
     input: &ConfigureClassroomInput,
     today: &str,
 ) -> Result<()> {
+    let transaction =
+        rusqlite::Transaction::new_unchecked(conn, rusqlite::TransactionBehavior::Immediate)
+            .map_err(|e| e.to_string())?;
     let spec = subject(&input.subject_id)?;
     if !valid_agent(&input.agent) || !valid_model(&input.model) {
         return Err("class agent or model is invalid".into());
@@ -307,17 +314,14 @@ pub fn configure_program(
         if input.custom_agent_bin.trim().is_empty() {
             return Err("custom class agent needs a binary command".into());
         }
-        let binary = input
-            .custom_agent_bin
-            .split_whitespace()
-            .next()
-            .unwrap_or_default();
-        if !std::path::Path::new(binary).exists() {
-            return Err(format!("custom class agent binary not found: {binary}"));
+        let words = crate::agents::process::command_words(&input.custom_agent_bin)
+            .map_err(|e| e.to_string())?;
+        if crate::agents::process::resolve(&words[0]).is_none() {
+            return Err(format!("custom class agent binary not found: {}", words[0]));
         }
     }
-    if !(15..=90).contains(&input.session_minutes) {
-        return Err("class session length must be between 15 and 90 minutes".into());
+    if !(10..=120).contains(&input.session_minutes) {
+        return Err("class session length must be between 10 and 120 minutes".into());
     }
     if !input.enabled && has_active_session(conn, &input.subject_id)? {
         return Err("finish the active class session before disabling it".into());
@@ -360,6 +364,8 @@ pub fn configure_program(
             today,
         )?;
     }
+    crate::domain::classes::sync_configuration(conn, spec.id, today).map_err(|e| e.to_string())?;
+    transaction.commit().map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -652,6 +658,8 @@ pub fn plan_schedule(
             )
             .map_err(|error| error.to_string())?;
         }
+        crate::domain::classes::sync_configuration(conn, spec.id, today)
+            .map_err(|e| e.to_string())?;
         let schedule = slot_views(conn, today, false)?
             .into_iter()
             .filter(|view| view.subject_id == input.subject_id)
@@ -1002,6 +1010,8 @@ struct StoredEngineeringLesson {
     questions: Vec<StoredQuestion>,
     exercise: Option<Exercise>,
     source: String,
+    #[serde(default)]
+    path: Option<crate::domain::classes::PathReference>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1264,7 +1274,7 @@ pub async fn start_engineering_session(
     slot_id: Option<i64>,
     revisit: bool,
 ) -> Result<EngineeringLessonView> {
-    let (program, concept, dossier, contract) = {
+    let (program, concept, dossier, contract, path) = {
         let conn = state.db.0.lock().unwrap();
         let spec = subject(subject_id)?;
         if spec.kind != SubjectKind::Engineering {
@@ -1305,7 +1315,7 @@ pub async fn start_engineering_session(
             let drawn = if revisit {
                 roulette::draw_completed(&conn, &state.today(), subject_id)
             } else {
-                roulette::draw(&conn, &state.today(), subject_id)
+                crate::domain::classes::next_concept(&conn, subject_id, &state.today())
             }
             .map_err(|error| error.to_string())?;
             drawn.ok_or_else(|| {
@@ -1321,10 +1331,21 @@ pub async fn start_engineering_session(
         };
         let dossier =
             mastery::build_dossier(&conn, &state.today(), subject_id).map_err(|e| e.to_string())?;
-        (program, concept, dossier, spec.prompt)
+        (
+            program,
+            concept,
+            dossier,
+            spec.prompt,
+            crate::domain::classes::current_path(&conn, subject_id).map_err(|e| e.to_string())?,
+        )
     };
     let generation_profile = generation_profile(&program);
-    let contract = contract_with_goal(&program, contract);
+    let mut contract = contract_with_goal(&program, contract);
+    if let Some(path) = &path {
+        contract.push_str(&format!("\nACCEPTED PERSONAL PATH: {} ({}) · revision {}. {}\nEarlier material is optional, with no completion or mastery credit. Check relevant prerequisites inside this lesson and offer concise refreshers instead of restarting the course. The required outcome remains: {}.\nPrerequisite advice: {}",
+            path.recommendation.entry_label, path.recommendation.route, path.revision, path.recommendation.explanation, path.recommendation.required_outcome,
+            serde_json::to_string(&path.recommendation.refreshers).map_err(|e| e.to_string())?));
+    }
     let (course, source) = state
         .generator
         .generate_classroom_course(
@@ -1348,6 +1369,7 @@ pub async fn start_engineering_session(
             concept_title: &concept.title,
             category: &concept.category,
             slot_id,
+            path: path.map(|p| p.reference),
         },
         course,
         source,
@@ -1355,6 +1377,7 @@ pub async fn start_engineering_session(
 }
 
 struct EngineeringSessionMeta<'a> {
+    path: Option<crate::domain::classes::PathReference>,
     concept_id: i64,
     concept_title: &'a str,
     category: &'a str,
@@ -1431,6 +1454,7 @@ fn insert_engineering_session(
         questions,
         exercise: course.exercise,
         source: source.clone(),
+        path: meta.path,
     };
     let payload_json = serde_json::to_string(&stored).map_err(|error| error.to_string())?;
     let conn = state.db.0.lock().unwrap();

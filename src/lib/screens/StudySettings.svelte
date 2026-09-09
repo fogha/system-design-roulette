@@ -47,8 +47,8 @@
   p { font-size: 13px; color: var(--muted); margin: 0; }
   header p { max-width: 56ch; }
   button.cta { margin-top: 18px; }
-  .recovery { display: flex; align-items: flex-start; gap: 14px; border: 1px dashed #793030; border-radius: 6px; padding: 12px; background: #1f1316; }
-  .recovery-tag { border: 1px solid #793030; border-radius: 4px; font-size: 9px; color: var(--led-err); padding: 5px 7px; margin-top: 4px; }
+  .recovery { display: flex; align-items: flex-start; gap: 14px; border: 1px dashed #793030; border-radius: var(--radius-control); padding: 12px; background: #1f1316; }
+  .recovery-tag { border: 1px solid #793030; border-radius: var(--radius-detail); font-size: 9px; color: var(--led-err); padding: 5px 7px; margin-top: 4px; }
   .recovery p + p { font-size: 10px; margin-top: 9px; }
   @media (max-width: 620px) { .settings-page { padding: 26px 16px; } .recovery { flex-direction: column; gap: 8px; } }
 </style>

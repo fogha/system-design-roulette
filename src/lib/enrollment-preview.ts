@@ -3,6 +3,8 @@ import { COURSE_FINGERPRINTS } from './catalog.generated';
 import type { ClassroomSubjectId, LanguageStrand } from './ipc';
 import type { EnrollmentDraft, EnrollmentDraftId, EnrollmentOptions, SaveEnrollmentDraft } from './contracts/enrollment';
 import concepts from '../../src-tauri/seed/concepts.json';
+import { COURSES } from './catalog';
+import { previewClassRecords } from './class-preview-store';
 
 const languageStrands: LanguageStrand[] = ['listening', 'reading', 'spoken_interaction', 'spoken_production', 'writing', 'grammar', 'vocabulary_pragmatics'];
 const drafts = new Map<ClassroomSubjectId, EnrollmentDraft>();
@@ -31,10 +33,17 @@ export function previewEnrollmentDraft(courseId: ClassroomSubjectId): Enrollment
   if (!courseDefinition(courseId)) throw new Error('Unknown course');
   if (typeof localStorage !== 'undefined') {
     const stored = localStorage.getItem(key(courseId));
-    if (stored) return JSON.parse(stored) as EnrollmentDraft;
+    if (stored) {
+      const draft = JSON.parse(stored) as EnrollmentDraft;
+      return draft.status === 'draft' && !previewClassRecords().some(r => r.draft.id === draft.id) ? draft : null;
+    }
   }
   const draft = drafts.get(courseId);
-  return draft ? structuredClone(draft) : null;
+  return draft && !previewClassRecords().some(r => r.draft.id === draft.id) ? structuredClone(draft) : null;
+}
+
+export function findPreviewEnrollmentDraft(id: EnrollmentDraftId): EnrollmentDraft | null {
+  return previewClassRecords().find(r => r.draft.id === id)?.draft ?? COURSES.map(c => previewEnrollmentDraft(c.id)).find(d => d?.id === id) ?? null;
 }
 
 function canonical(value: unknown): unknown {
@@ -64,7 +73,7 @@ export function savePreviewEnrollmentDraft(input: SaveEnrollmentDraft): Enrollme
   }
   const { session_minutes: minutes, weekly_minutes: weekly } = config.pace;
   if (!Number.isInteger(minutes) || minutes < 10 || minutes > 120 || (weekly !== null && (!Number.isInteger(weekly) || weekly < minutes || weekly > 10080))) throw new Error('Choose a valid study pace.');
-  if (!['claude', 'codex', 'cursor', 'gemini', 'deepseek', 'custom', 'anthropic', 'openai', 'google', 'openrouter', 'groq', 'mistral', 'ollama'].includes(config.tutor.provider) || !config.tutor.model.trim() || byteLength(config.tutor.model) > 200 || (config.tutor.provider === 'custom' && !config.tutor.custom_agent_bin?.trim())) throw new Error('Choose a provider and its model.');
+  if (!['claude', 'codex', 'cursor', 'gemini', 'deepseek', 'custom', 'anthropic', 'openai', 'google', 'openrouter', 'groq', 'mistral', 'ollama'].includes(config.tutor.provider) || !config.tutor.model || byteLength(config.tutor.model) > 160 || /[\s\x00-\x1f\x7f]/u.test(config.tutor.model) || (config.tutor.provider === 'custom' && !config.tutor.custom_agent_bin?.trim())) throw new Error('Choose a provider and its model.');
   if (config.tutor.custom_agent_bin !== null && (byteLength(config.tutor.custom_agent_bin) > 4096 || config.tutor.custom_agent_bin.includes('\0'))) throw new Error('Invalid custom executable path.');
   const existing = previewEnrollmentDraft(input.course.course_id);
   if (input.id && (!existing || input.id !== existing.id)) throw new Error('Enrollment draft not found.');
