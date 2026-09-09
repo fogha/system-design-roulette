@@ -5,7 +5,29 @@
     "category": "fundamentals",
     "tier": 0,
     "prereqs": [],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "foundations",
+      "core": true,
+      "learner_outcome": "Distinguish availability from consistency guarantees during an actual network partition.",
+      "mechanisms": [
+        "partitioned communication",
+        "linearizable histories",
+        "per-request availability"
+      ],
+      "production_scenario": "A two-region inventory service loses its replication link during checkout.",
+      "misconceptions": [
+        "CAP does not mean permanently choosing any two features independently of failures."
+      ],
+      "evidence": "Trace accepted and rejected operations on both sides of the partition.",
+      "artifact": "A partition timeline with explicit inventory correctness and availability decisions.",
+      "primary_sources": [
+        "https://etcd.io/docs/v3.5/learning/api_guarantees/",
+        "https://sre.google/sre-book/managing-critical-state/",
+        "https://www.postgresql.org/docs/current/warm-standby.html"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "consistency-models",
@@ -13,7 +35,29 @@
     "category": "fundamentals",
     "tier": 0,
     "prereqs": [],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "foundations",
+      "core": true,
+      "learner_outcome": "Compare observed read histories and select a consistency guarantee for each operation.",
+      "mechanisms": [
+        "real-time ordering",
+        "session guarantees",
+        "eventual convergence"
+      ],
+      "production_scenario": "Profile edits appear old after a user switches to another region.",
+      "misconceptions": [
+        "A replicated database does not automatically provide read-your-writes across every client route."
+      ],
+      "evidence": "Classify three read histories and identify the violated guarantee.",
+      "artifact": "An annotated request history and a client routing consistency policy.",
+      "primary_sources": [
+        "https://etcd.io/docs/v3.5/learning/api_guarantees/",
+        "https://www.postgresql.org/docs/current/transaction-iso.html",
+        "https://www.postgresql.org/docs/current/warm-standby.html"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "load-balancing",
@@ -21,7 +65,29 @@
     "category": "fundamentals",
     "tier": 0,
     "prereqs": [],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "foundations",
+      "core": true,
+      "learner_outcome": "Choose connection or request routing from workload and health-check evidence.",
+      "mechanisms": [
+        "L4 connections",
+        "L7 requests",
+        "weighted health-aware routing"
+      ],
+      "production_scenario": "Long-lived streaming clients leave one backend overloaded while peers remain idle.",
+      "misconceptions": [
+        "Round robin does not imply equal work when requests have different costs."
+      ],
+      "evidence": "Replay mixed request durations and compare maximum backend queue depth.",
+      "artifact": "A load distribution table with a justified health-check configuration.",
+      "primary_sources": [
+        "https://sre.google/sre-book/load-balancing-datacenter/",
+        "https://sre.google/sre-book/load-balancing-frontend/",
+        "https://kubernetes.io/docs/concepts/services-networking/service/"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "horizontal-vertical-scaling",
@@ -29,7 +95,29 @@
     "category": "fundamentals",
     "tier": 0,
     "prereqs": [],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "foundations",
+      "core": true,
+      "learner_outcome": "Locate the bottleneck before choosing a larger machine or additional replicas.",
+      "mechanisms": [
+        "resource saturation",
+        "partitionable work",
+        "coordination overhead"
+      ],
+      "production_scenario": "An image API adds replicas but the shared database still saturates.",
+      "misconceptions": [
+        "Adding machines does not remove a shared serial bottleneck."
+      ],
+      "evidence": "Estimate throughput bounds before and after two proposed capacity changes.",
+      "artifact": "A resource budget and a scaling decision with measurable stop conditions.",
+      "primary_sources": [
+        "https://sre.google/sre-book/handling-overload/",
+        "https://sre.google/sre-book/load-balancing-datacenter/",
+        "https://sre.google/sre-book/service-level-objectives/"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "latency-numbers",
@@ -37,7 +125,29 @@
     "category": "fundamentals",
     "tier": 0,
     "prereqs": [],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "foundations",
+      "core": true,
+      "learner_outcome": "Estimate end-to-end latency and capacity using explicit measurements and assumptions.",
+      "mechanisms": [
+        "critical path",
+        "tail latency",
+        "concurrency and throughput"
+      ],
+      "production_scenario": "A checkout endpoint must meet a latency objective during a traffic burst.",
+      "misconceptions": [
+        "Adding average component times does not predict the tail of parallel requests."
+      ],
+      "evidence": "Calculate optimistic and pessimistic budgets and validate one assumption experimentally.",
+      "artifact": "A latency worksheet identifying dominant costs and uncertain measurements.",
+      "primary_sources": [
+        "https://sre.google/sre-book/service-level-objectives/",
+        "https://sre.google/sre-book/monitoring-distributed-systems/",
+        "https://sre.google/sre-book/handling-overload/"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "stateless-stateful",
@@ -45,7 +155,29 @@
     "category": "fundamentals",
     "tier": 0,
     "prereqs": [],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "foundations",
+      "core": true,
+      "learner_outcome": "Place durable and session state deliberately so request routing survives process loss.",
+      "mechanisms": [
+        "ephemeral process memory",
+        "external session state",
+        "durable ownership"
+      ],
+      "production_scenario": "A deployment drains a server holding every active shopping cart.",
+      "misconceptions": [
+        "A stateless API still depends on state somewhere in the system."
+      ],
+      "evidence": "Kill a simulated worker and explain which user state survives.",
+      "artifact": "A state ownership diagram and a restart recovery demonstration.",
+      "primary_sources": [
+        "https://kubernetes.io/docs/concepts/services-networking/service/",
+        "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/",
+        "https://www.postgresql.org/docs/current/warm-standby.html"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "idempotency",
@@ -53,7 +185,29 @@
     "category": "fundamentals",
     "tier": 0,
     "prereqs": [],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "foundations",
+      "core": true,
+      "learner_outcome": "Design retried operations that preserve one intended business effect under duplication.",
+      "mechanisms": [
+        "request identity",
+        "stored response replay",
+        "atomic uniqueness"
+      ],
+      "production_scenario": "A checkout client retries after payment succeeded but its response timed out.",
+      "misconceptions": [
+        "A retry token alone is insufficient without atomic association to the effect."
+      ],
+      "evidence": "Replay duplicate requests including the same token with different payloads.",
+      "artifact": "An idempotency record schema and a duplicate-request test transcript.",
+      "primary_sources": [
+        "https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/",
+        "https://www.rfc-editor.org/rfc/rfc9110.html",
+        "https://www.postgresql.org/docs/current/transaction-iso.html"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "clock-skew",
@@ -63,7 +217,29 @@
     "prereqs": [
       "consistency-models"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "mechanisms",
+      "core": true,
+      "learner_outcome": "Separate wall-clock display from ordering and elapsed-time measurements across machines.",
+      "mechanisms": [
+        "clock offsets",
+        "monotonic durations",
+        "logical ordering"
+      ],
+      "production_scenario": "Two workers disagree about whether a lease expired during a clock correction.",
+      "misconceptions": [
+        "Increasing timestamps from different hosts do not prove causal ordering."
+      ],
+      "evidence": "Construct an offset timeline that breaks a wall-clock ordering assumption.",
+      "artifact": "A clock-failure trace and explicit timestamp semantics for service events.",
+      "primary_sources": [
+        "https://www.rfc-editor.org/rfc/rfc5905.html",
+        "https://sre.google/sre-book/managing-critical-state/",
+        "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "consensus-raft",
@@ -75,7 +251,29 @@
       "consistency-models",
       "quorums"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "production",
+      "core": true,
+      "learner_outcome": "Explain how a replicated log remains safe across leader replacement and partitions.",
+      "mechanisms": [
+        "terms and elections",
+        "majority log commitment",
+        "state-machine application"
+      ],
+      "production_scenario": "A metadata leader crashes after accepting a write but before replying.",
+      "misconceptions": [
+        "A new leader cannot safely commit arbitrary local entries without quorum rules."
+      ],
+      "evidence": "Trace terms and commit indexes through one failed leader transition.",
+      "artifact": "A three-node log timeline showing committed and discarded entries.",
+      "primary_sources": [
+        "https://raft.github.io/raft.pdf",
+        "https://sre.google/sre-book/managing-critical-state/",
+        "https://etcd.io/docs/v3.5/learning/api_guarantees/"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "quorums",
@@ -86,7 +284,29 @@
       "cap-theorem",
       "consistency-models"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "mechanisms",
+      "core": true,
+      "learner_outcome": "Evaluate quorum overlap alongside versioning, failure handling and consistency guarantees.",
+      "mechanisms": [
+        "read/write intersections",
+        "stale replica versions",
+        "membership changes"
+      ],
+      "production_scenario": "A replicated cart store serves stale values despite overlapping replica counts.",
+      "misconceptions": [
+        "R plus W greater than N alone does not establish linearizability in every implementation."
+      ],
+      "evidence": "Compare read results under stale versions and a changing replica set.",
+      "artifact": "A quorum experiment matrix with assumptions stated beside each claim.",
+      "primary_sources": [
+        "https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf",
+        "https://etcd.io/docs/v3.5/learning/api_guarantees/",
+        "https://sre.google/sre-book/managing-critical-state/"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "consistent-hashing",
@@ -96,7 +316,29 @@
     "prereqs": [
       "horizontal-vertical-scaling"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "mechanisms",
+      "core": true,
+      "learner_outcome": "Measure key movement and load balance when a hash ring changes membership.",
+      "mechanisms": [
+        "ring successor lookup",
+        "virtual nodes",
+        "weighted ownership"
+      ],
+      "production_scenario": "A cache expansion causes a miss storm and uneven node memory usage.",
+      "misconceptions": [
+        "Balanced key counts do not imply balanced traffic for hot keys."
+      ],
+      "evidence": "Compare moved keys and busiest-node traffic for modulo and ring assignment.",
+      "artifact": "A deterministic ring simulator with membership-change and skew reports.",
+      "primary_sources": [
+        "https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf",
+        "https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec/",
+        "https://aws.amazon.com/builders-library/caching-challenges-and-strategies/"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "sharding",
@@ -107,7 +349,29 @@
       "indexes",
       "horizontal-vertical-scaling"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "mechanisms",
+      "core": true,
+      "learner_outcome": "Choose a partition key by testing query locality, growth and skew.",
+      "mechanisms": [
+        "hash partitions",
+        "range partitions",
+        "resharding boundaries"
+      ],
+      "production_scenario": "A tenant-based split concentrates one large customer's writes on one shard.",
+      "misconceptions": [
+        "More shards do not split an indivisible hot key automatically."
+      ],
+      "evidence": "Run representative queries against two partition maps and count fan-out.",
+      "artifact": "A shard-key decision record and a migration sketch with rollback.",
+      "primary_sources": [
+        "https://www.postgresql.org/docs/current/ddl-partitioning.html",
+        "https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf",
+        "https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec/"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "replication",
@@ -117,7 +381,29 @@
     "prereqs": [
       "consistency-models"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "mechanisms",
+      "core": true,
+      "learner_outcome": "Match durability and read behavior to replication mode and failover policy.",
+      "mechanisms": [
+        "asynchronous replay",
+        "synchronous acknowledgment",
+        "leader promotion"
+      ],
+      "production_scenario": "A primary fails after acknowledging a write that a replica has not replayed.",
+      "misconceptions": [
+        "Acknowledgment does not always mean every replica has persisted the write."
+      ],
+      "evidence": "Trace acknowledged writes through failure under two replication settings.",
+      "artifact": "A replication topology and a documented data-loss boundary.",
+      "primary_sources": [
+        "https://www.postgresql.org/docs/current/warm-standby.html",
+        "https://redis.io/docs/latest/operate/oss_and_stack/management/replication/",
+        "https://www.postgresql.org/docs/current/wal-intro.html"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "lsm-trees",
@@ -127,7 +413,29 @@
     "prereqs": [
       "indexes"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "mechanisms",
+      "core": true,
+      "learner_outcome": "Relate storage-engine design to measured read, write and space amplification.",
+      "mechanisms": [
+        "memtables and sorted runs",
+        "compaction",
+        "bloom filters"
+      ],
+      "production_scenario": "An ingestion service develops latency spikes while background compaction runs.",
+      "misconceptions": [
+        "Write-optimized does not mean writes have no deferred maintenance cost."
+      ],
+      "evidence": "Compare ingestion and lookup costs as immutable run count grows.",
+      "artifact": "A storage-engine comparison worksheet with a compaction budget.",
+      "primary_sources": [
+        "https://github.com/facebook/rocksdb/wiki/Leveled-Compaction",
+        "https://github.com/facebook/rocksdb/wiki/RocksDB-Overview",
+        "https://www.postgresql.org/docs/current/indexes.html"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "indexes",
@@ -135,7 +443,29 @@
     "category": "storage",
     "tier": 0,
     "prereqs": [],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "foundations",
+      "core": true,
+      "learner_outcome": "Select indexes by measuring query plans and the extra cost of writes.",
+      "mechanisms": [
+        "B-tree access paths",
+        "selectivity",
+        "composite key order"
+      ],
+      "production_scenario": "A reporting query stays slow after an index is added to the wrong leading column.",
+      "misconceptions": [
+        "An index is not always cheaper than scanning most table rows."
+      ],
+      "evidence": "Compare query plans before and after an index and measure insert overhead.",
+      "artifact": "A reproducible SQL workload with explained index decisions.",
+      "primary_sources": [
+        "https://www.postgresql.org/docs/current/indexes.html",
+        "https://www.postgresql.org/docs/current/using-explain.html",
+        "https://www.postgresql.org/docs/current/ddl-partitioning.html"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "sql-vs-nosql",
@@ -143,7 +473,29 @@
     "category": "storage",
     "tier": 0,
     "prereqs": [],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "foundations",
+      "core": true,
+      "learner_outcome": "Choose a datastore from required invariants, access patterns and operational constraints.",
+      "mechanisms": [
+        "relational constraints",
+        "document/key access",
+        "transaction boundaries"
+      ],
+      "production_scenario": "An order service needs joins for reporting and strict inventory updates.",
+      "misconceptions": [
+        "SQL and NoSQL labels do not determine every consistency or scaling property."
+      ],
+      "evidence": "Map each workload requirement to a concrete supported operation or limitation.",
+      "artifact": "A datastore decision matrix including rejected alternatives and migration risks.",
+      "primary_sources": [
+        "https://www.postgresql.org/docs/current/transaction-iso.html",
+        "https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf",
+        "https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "transactions-isolation",
@@ -153,7 +505,29 @@
     "prereqs": [
       "sql-vs-nosql"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "mechanisms",
+      "core": true,
+      "learner_outcome": "Reproduce concurrency anomalies and choose isolation or locking for an invariant.",
+      "mechanisms": [
+        "snapshot visibility",
+        "write skew",
+        "serialization retries"
+      ],
+      "production_scenario": "Two booking transactions each observe the final seat as available.",
+      "misconceptions": [
+        "A transaction boundary alone does not prevent all concurrent anomalies."
+      ],
+      "evidence": "Interleave two SQL sessions and prove whether overbooking remains possible.",
+      "artifact": "A concurrency test transcript and a retry-aware reservation transaction.",
+      "primary_sources": [
+        "https://www.postgresql.org/docs/current/transaction-iso.html",
+        "https://www.postgresql.org/docs/current/explicit-locking.html",
+        "https://www.postgresql.org/docs/current/wal-intro.html"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "distributed-transactions",
@@ -164,7 +538,29 @@
       "transactions-isolation",
       "idempotency"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "production",
+      "core": true,
+      "learner_outcome": "Compare atomic commit and compensation when one business operation spans services.",
+      "mechanisms": [
+        "prepare/commit protocol",
+        "compensating actions",
+        "uncertain outcomes"
+      ],
+      "production_scenario": "An order reserves stock but payment fails after a network timeout.",
+      "misconceptions": [
+        "A saga compensation is a business action rather than a universal rollback."
+      ],
+      "evidence": "Trace crash points and name the durable recovery action at each point.",
+      "artifact": "A transaction state table and a compensation contract for checkout.",
+      "primary_sources": [
+        "https://www.postgresql.org/docs/current/sql-prepare-transaction.html",
+        "https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/",
+        "https://debezium.io/documentation/reference/stable/transformations/outbox-event-router.html"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "object-storage",
@@ -175,7 +571,29 @@
       "replication",
       "consistent-hashing"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "production",
+      "core": true,
+      "learner_outcome": "Design object identity, metadata and upload recovery around documented storage guarantees.",
+      "mechanisms": [
+        "object keys",
+        "multipart upload",
+        "versioned replacement"
+      ],
+      "production_scenario": "A media upload finishes after its metadata transaction times out.",
+      "misconceptions": [
+        "Object storage is not a local filesystem with arbitrary rename semantics."
+      ],
+      "evidence": "Trace incomplete uploads and verify metadata never advertises missing content.",
+      "artifact": "An upload state machine with cleanup rules and version handling.",
+      "primary_sources": [
+        "https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html",
+        "https://docs.aws.amazon.com/AmazonS3/latest/userguide/Introduction.html",
+        "https://docs.aws.amazon.com/AmazonS3/latest/userguide/Versioning.html"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "time-series-db",
@@ -186,7 +604,29 @@
       "lsm-trees",
       "sharding"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "production",
+      "core": true,
+      "learner_outcome": "Design metric storage that controls cardinality and supports bounded time-range reads.",
+      "mechanisms": [
+        "time partitioning",
+        "label cardinality",
+        "retention and aggregation"
+      ],
+      "production_scenario": "A telemetry service runs out of memory after user IDs become metric labels.",
+      "misconceptions": [
+        "A timestamp column alone does not solve metric retention or cardinality growth."
+      ],
+      "evidence": "Estimate series count and scan size before and after removing a label.",
+      "artifact": "A metric schema and retention budget with cardinality guardrails.",
+      "primary_sources": [
+        "https://prometheus.io/docs/practices/naming/",
+        "https://prometheus.io/docs/practices/histograms/",
+        "https://www.postgresql.org/docs/current/ddl-partitioning.html"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "data-warehouse",
@@ -197,7 +637,29 @@
       "sql-vs-nosql",
       "indexes"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "production",
+      "core": true,
+      "learner_outcome": "Choose partitioning and clustering from analytical access patterns and freshness needs.",
+      "mechanisms": [
+        "column-oriented scans",
+        "partition pruning",
+        "batch ingestion"
+      ],
+      "production_scenario": "Daily revenue reports scan years of data to answer one week's question.",
+      "misconceptions": [
+        "Warehouse performance cannot be inferred from row count without bytes scanned."
+      ],
+      "evidence": "Compare query bytes and ingestion latency for two physical layouts.",
+      "artifact": "An analytical model and a partition-pruning experiment with cost assumptions.",
+      "primary_sources": [
+        "https://cloud.google.com/bigquery/docs/partitioned-tables",
+        "https://cloud.google.com/bigquery/docs/clustered-tables",
+        "https://sre.google/sre-book/data-processing-pipelines/"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "cdc",
@@ -208,7 +670,29 @@
       "replication",
       "message-queues"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "production",
+      "core": true,
+      "learner_outcome": "Explain how change streams support downstream views without losing source ordering context.",
+      "mechanisms": [
+        "write-ahead log positions",
+        "initial snapshots",
+        "replay offsets"
+      ],
+      "production_scenario": "A search index misses updates while transitioning from its initial snapshot.",
+      "misconceptions": [
+        "CDC does not automatically make downstream consumers exactly-once or schema-proof."
+      ],
+      "evidence": "Trace snapshot overlap, duplicate changes and a consumer restart.",
+      "artifact": "A change-stream checkpoint contract and a replay reconciliation procedure.",
+      "primary_sources": [
+        "https://www.postgresql.org/docs/current/logical-replication.html",
+        "https://debezium.io/documentation/reference/stable/transformations/outbox-event-router.html",
+        "https://kafka.apache.org/41/design/design/"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "caching-strategies",
@@ -216,7 +700,29 @@
     "category": "caching",
     "tier": 0,
     "prereqs": [],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "foundations",
+      "core": true,
+      "learner_outcome": "Select a cache policy by stating freshness, durability and origin-load requirements.",
+      "mechanisms": [
+        "cache-aside",
+        "write-through",
+        "write-back"
+      ],
+      "production_scenario": "A product detail API returns an outdated price after a successful edit.",
+      "misconceptions": [
+        "Writing the database and cache separately does not make them atomic."
+      ],
+      "evidence": "Simulate read/update interleavings and identify stale or lost results.",
+      "artifact": "A cache policy table and a reproducible stale-read trace.",
+      "primary_sources": [
+        "https://aws.amazon.com/builders-library/caching-challenges-and-strategies/",
+        "https://www.rfc-editor.org/rfc/rfc9111.html",
+        "https://redis.io/docs/latest/develop/reference/eviction/"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "cache-invalidation",
@@ -226,7 +732,29 @@
     "prereqs": [
       "caching-strategies"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "mechanisms",
+      "core": true,
+      "learner_outcome": "Design invalidation behavior that bounds staleness under races and missed notifications.",
+      "mechanisms": [
+        "TTL expiry",
+        "versioned keys",
+        "invalidate/refill races"
+      ],
+      "production_scenario": "A delayed cache fill reinstalls an old profile just after invalidation.",
+      "misconceptions": [
+        "Deleting a key does not prevent an older in-flight read from writing it back."
+      ],
+      "evidence": "Replay the stale-fill race and compare TTL and versioned-key fixes.",
+      "artifact": "An invalidation timeline with an explicit acceptable staleness budget.",
+      "primary_sources": [
+        "https://aws.amazon.com/builders-library/caching-challenges-and-strategies/",
+        "https://www.rfc-editor.org/rfc/rfc9111.html",
+        "https://redis.io/docs/latest/develop/reference/eviction/"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "redis-internals",
@@ -236,7 +764,29 @@
     "prereqs": [
       "caching-strategies"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "mechanisms",
+      "core": true,
+      "learner_outcome": "Connect Redis data structures, persistence and eviction to workload behavior.",
+      "mechanisms": [
+        "single-command atomicity",
+        "persistence snapshots/logs",
+        "memory eviction"
+      ],
+      "production_scenario": "A session cache evicts active sessions when a new workload fills memory.",
+      "misconceptions": [
+        "In-memory storage does not imply identical durability or latency under every configuration."
+      ],
+      "evidence": "Compare recovery expectations and eviction results for two configurations.",
+      "artifact": "A Redis workload configuration with memory and recovery acceptance checks.",
+      "primary_sources": [
+        "https://redis.io/docs/latest/develop/reference/eviction/",
+        "https://redis.io/docs/latest/operate/oss_and_stack/management/persistence/",
+        "https://redis.io/docs/latest/develop/programmability/eval-intro/"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "cdn",
@@ -247,7 +797,29 @@
       "caching-strategies",
       "load-balancing"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "mechanisms",
+      "core": true,
+      "learner_outcome": "Choose edge caching rules that preserve identity, freshness and origin capacity.",
+      "mechanisms": [
+        "cache keys",
+        "validators",
+        "origin revalidation"
+      ],
+      "production_scenario": "An edge cache accidentally shares a personalized response between users.",
+      "misconceptions": [
+        "A CDN cannot safely cache every successful response under the URL alone."
+      ],
+      "evidence": "Derive cache keys for public and personalized routes and test revalidation.",
+      "artifact": "An edge caching contract with private-data exclusions and expiry rules.",
+      "primary_sources": [
+        "https://www.rfc-editor.org/rfc/rfc9111.html",
+        "https://www.rfc-editor.org/rfc/rfc9110.html",
+        "https://sre.google/sre-book/load-balancing-frontend/"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "kafka-internals",
@@ -258,7 +830,29 @@
       "message-queues",
       "replication"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "production",
+      "core": true,
+      "learner_outcome": "Trace durable partition logs, consumer offsets and replication through failure.",
+      "mechanisms": [
+        "partition ordering",
+        "replicated log acknowledgment",
+        "consumer groups"
+      ],
+      "production_scenario": "A consumer processes a record then crashes before committing its offset.",
+      "misconceptions": [
+        "Kafka ordering is per partition rather than one global order for a topic."
+      ],
+      "evidence": "Trace duplicate processing after restart and compare acknowledgment settings.",
+      "artifact": "A partition/consumer diagram with a recovery and offset test transcript.",
+      "primary_sources": [
+        "https://kafka.apache.org/41/design/design/",
+        "https://sre.google/sre-book/data-processing-pipelines/",
+        "https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "message-queues",
@@ -266,7 +860,29 @@
     "category": "messaging",
     "tier": 0,
     "prereqs": [],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "foundations",
+      "core": true,
+      "learner_outcome": "Choose queue acknowledgment and retry behavior from the cost of losing or duplicating work.",
+      "mechanisms": [
+        "visibility/acknowledgment",
+        "redelivery",
+        "poison-message isolation"
+      ],
+      "production_scenario": "An email worker crashes between sending a message and acknowledging it.",
+      "misconceptions": [
+        "A queue does not make an external side effect exactly-once by itself."
+      ],
+      "evidence": "Simulate crashes before and after the side effect and inspect redelivery.",
+      "artifact": "A worker state machine and bounded retry/dead-letter handling rules.",
+      "primary_sources": [
+        "https://kafka.apache.org/41/design/design/",
+        "https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/",
+        "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "exactly-once-delivery",
@@ -277,7 +893,29 @@
       "message-queues",
       "idempotency"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "mechanisms",
+      "core": true,
+      "learner_outcome": "Separate message delivery claims from atomic processing of business effects.",
+      "mechanisms": [
+        "deduplication keys",
+        "transactional boundaries",
+        "offset/effect coupling"
+      ],
+      "production_scenario": "A redelivered event charges an account twice despite reliable transport.",
+      "misconceptions": [
+        "Exactly-once transport is not a blanket guarantee for external payment effects."
+      ],
+      "evidence": "Replay a duplicate event at each crash point around the database commit.",
+      "artifact": "An effect ledger schema and an idempotent consumer test suite.",
+      "primary_sources": [
+        "https://kafka.apache.org/41/design/design/",
+        "https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/",
+        "https://www.postgresql.org/docs/current/transaction-iso.html"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "event-sourcing",
@@ -288,7 +926,29 @@
       "message-queues",
       "transactions-isolation"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "production",
+      "core": true,
+      "learner_outcome": "Model an append-only business history and rebuild views with compatible event versions.",
+      "mechanisms": [
+        "immutable domain events",
+        "projections",
+        "schema evolution"
+      ],
+      "production_scenario": "A balance projection must be rebuilt after correcting projection logic.",
+      "misconceptions": [
+        "An event log is not automatically a good domain model or an audit policy."
+      ],
+      "evidence": "Replay old and new event versions and compare reconstructed balances.",
+      "artifact": "A versioned event contract and a projection rebuild transcript.",
+      "primary_sources": [
+        "https://kafka.apache.org/41/design/design/",
+        "https://debezium.io/documentation/reference/stable/transformations/outbox-event-router.html",
+        "https://www.postgresql.org/docs/current/logical-replication.html"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "outbox-pattern",
@@ -299,7 +959,29 @@
       "transactions-isolation",
       "exactly-once-delivery"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "production",
+      "core": true,
+      "learner_outcome": "Make local state changes and eventual publication recoverable across relay failures.",
+      "mechanisms": [
+        "transactional outbox insert",
+        "relay checkpoints",
+        "consumer deduplication"
+      ],
+      "production_scenario": "An order commits but its event publication fails during a broker outage.",
+      "misconceptions": [
+        "The outbox removes a dual-write gap but can still publish duplicates."
+      ],
+      "evidence": "Crash the relay around publication and verify no committed order is forgotten.",
+      "artifact": "An outbox schema with replay tests and a consumer deduplication rule.",
+      "primary_sources": [
+        "https://debezium.io/documentation/reference/stable/transformations/outbox-event-router.html",
+        "https://www.postgresql.org/docs/current/transaction-iso.html",
+        "https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "stream-processing",
@@ -310,7 +992,29 @@
       "kafka-internals",
       "clock-skew"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "production",
+      "core": true,
+      "learner_outcome": "Define event-time windows and correction behavior for delayed and repeated events.",
+      "mechanisms": [
+        "event versus processing time",
+        "watermarks",
+        "windowed aggregation"
+      ],
+      "production_scenario": "A regional outage delivers purchase events after their reporting window closed.",
+      "misconceptions": [
+        "A watermark is a completeness estimate rather than proof no late event exists."
+      ],
+      "evidence": "Feed out-of-order events and explain emitted totals and later corrections.",
+      "artifact": "A windowing policy and an event trace with expected aggregate revisions.",
+      "primary_sources": [
+        "https://kafka.apache.org/41/streams/core-concepts/",
+        "https://sre.google/sre-book/data-processing-pipelines/",
+        "https://www.rfc-editor.org/rfc/rfc5905.html"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "backpressure",
@@ -320,7 +1024,29 @@
     "prereqs": [
       "message-queues"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "mechanisms",
+      "core": true,
+      "learner_outcome": "Bound queued work and propagate overload without growing memory indefinitely.",
+      "mechanisms": [
+        "bounded queues",
+        "producer throttling",
+        "load shedding"
+      ],
+      "production_scenario": "A slow downstream writer causes the upstream API to accumulate requests.",
+      "misconceptions": [
+        "Buffering more work delays failure when sustained arrival exceeds service capacity."
+      ],
+      "evidence": "Graph queue depth under sustained overload and compare two admission limits.",
+      "artifact": "A bounded worker prototype with queue, rejection and latency measurements.",
+      "primary_sources": [
+        "https://sre.google/sre-book/handling-overload/",
+        "https://sre.google/sre-book/addressing-cascading-failures/",
+        "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "circuit-breakers",
@@ -330,7 +1056,29 @@
     "prereqs": [
       "stateless-stateful"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "mechanisms",
+      "core": true,
+      "learner_outcome": "Protect callers from repeated dependency failures while allowing controlled recovery probes.",
+      "mechanisms": [
+        "closed/open/half-open states",
+        "failure thresholds",
+        "timeout budgets"
+      ],
+      "production_scenario": "A failing recommendation dependency consumes every checkout worker thread.",
+      "misconceptions": [
+        "A circuit breaker does not replace timeouts or guarantee the dependency recovers."
+      ],
+      "evidence": "Inject failures and show the transition from rejection to bounded probing.",
+      "artifact": "A breaker state diagram with timeout and recovery test cases.",
+      "primary_sources": [
+        "https://sre.google/sre-book/addressing-cascading-failures/",
+        "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/",
+        "https://sre.google/sre-book/handling-overload/"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "rate-limiting",
@@ -340,7 +1088,29 @@
     "prereqs": [
       "api-design"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "mechanisms",
+      "core": true,
+      "learner_outcome": "Choose a request admission algorithm that bounds burst and sustained load.",
+      "mechanisms": [
+        "token refill",
+        "fixed/sliding windows",
+        "atomic distributed counters"
+      ],
+      "production_scenario": "A client sends bursts around minute boundaries and overwhelms a shared API.",
+      "misconceptions": [
+        "Equal average rates do not imply equal permitted bursts."
+      ],
+      "evidence": "Replay boundary bursts and compare accepted requests under two algorithms.",
+      "artifact": "A deterministic limiter simulator and an endpoint failure-policy decision.",
+      "primary_sources": [
+        "https://www.rfc-editor.org/rfc/rfc6585.html",
+        "https://redis.io/docs/latest/develop/programmability/eval-intro/",
+        "https://sre.google/sre-book/handling-overload/"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "graceful-degradation",
@@ -351,7 +1121,29 @@
       "circuit-breakers",
       "caching-strategies"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "production",
+      "core": true,
+      "learner_outcome": "Preserve essential user operations by shedding optional work under dependency failure.",
+      "mechanisms": [
+        "priority classes",
+        "partial responses",
+        "bounded fallback"
+      ],
+      "production_scenario": "A recommendation outage should not prevent customers from paying for existing carts.",
+      "misconceptions": [
+        "Returning partial data is only safe when clients understand its missing guarantees."
+      ],
+      "evidence": "Disable each optional dependency and verify checkout invariants still hold.",
+      "artifact": "A degradation matrix with user-visible behavior and recovery tests.",
+      "primary_sources": [
+        "https://sre.google/sre-book/addressing-cascading-failures/",
+        "https://sre.google/sre-book/handling-overload/",
+        "https://sre.google/sre-book/service-level-objectives/"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "chaos-engineering",
@@ -362,7 +1154,29 @@
       "circuit-breakers",
       "observability"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "production",
+      "core": true,
+      "learner_outcome": "Form a falsifiable resilience hypothesis and bound an experiment's impact.",
+      "mechanisms": [
+        "steady-state measures",
+        "controlled fault injection",
+        "abort thresholds"
+      ],
+      "production_scenario": "A team wants evidence that one unavailable replica does not break reads.",
+      "misconceptions": [
+        "Randomly breaking production is not a substitute for a scoped hypothesis."
+      ],
+      "evidence": "Run a local fault scenario and compare measured behavior with the hypothesis.",
+      "artifact": "An experiment record with safeguards, observations and a follow-up fix.",
+      "primary_sources": [
+        "https://sre.google/sre-book/testing-reliability/",
+        "https://sre.google/sre-book/addressing-cascading-failures/",
+        "https://sre.google/sre-book/monitoring-distributed-systems/"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "disaster-recovery",
@@ -373,7 +1187,29 @@
       "replication",
       "deployments"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "production",
+      "core": true,
+      "learner_outcome": "Derive backup and restore procedures from explicit recovery-time and data-loss objectives.",
+      "mechanisms": [
+        "point-in-time recovery",
+        "restore validation",
+        "dependency ordering"
+      ],
+      "production_scenario": "A database operator must recover from accidental deletion that replication already copied.",
+      "misconceptions": [
+        "Replication is not a backup against destructive logical changes."
+      ],
+      "evidence": "Restore a small dataset to a chosen point and verify application invariants.",
+      "artifact": "A timed recovery runbook with restored-data checks and measured gaps.",
+      "primary_sources": [
+        "https://www.postgresql.org/docs/current/continuous-archiving.html",
+        "https://sre.google/sre-book/data-integrity/",
+        "https://www.postgresql.org/docs/current/warm-standby.html"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "hot-partitions",
@@ -384,7 +1220,29 @@
       "sharding",
       "caching-strategies"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "production",
+      "core": true,
+      "learner_outcome": "Identify workload skew and distinguish hot keys from poor partition distribution.",
+      "mechanisms": [
+        "heavy-hitter keys",
+        "adaptive partitioning",
+        "read replication"
+      ],
+      "production_scenario": "A celebrity account dominates one otherwise evenly sized feed shard.",
+      "misconceptions": [
+        "Hashing keys evenly does not distribute one key's requests across owners."
+      ],
+      "evidence": "Compare uniform and skewed traffic against the same partition map.",
+      "artifact": "A skew report and a split/cache plan with consistency implications.",
+      "primary_sources": [
+        "https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf",
+        "https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec/",
+        "https://aws.amazon.com/builders-library/caching-challenges-and-strategies/"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "thundering-herd",
@@ -395,7 +1253,29 @@
       "cache-invalidation",
       "backpressure"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "production",
+      "core": true,
+      "learner_outcome": "Prevent synchronized expiry and retries from multiplying origin load.",
+      "mechanisms": [
+        "request coalescing",
+        "jittered expiration",
+        "stale-while-revalidate"
+      ],
+      "production_scenario": "Many workers refill the same popular key immediately after cache expiry.",
+      "misconceptions": [
+        "A larger cache alone does not prevent simultaneous misses on one key."
+      ],
+      "evidence": "Plot origin calls during expiry with and without coalesced refresh.",
+      "artifact": "A cache-refresh prototype with burst and failure traces.",
+      "primary_sources": [
+        "https://aws.amazon.com/builders-library/caching-challenges-and-strategies/",
+        "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/",
+        "https://www.rfc-editor.org/rfc/rfc9111.html"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "api-design",
@@ -403,7 +1283,29 @@
     "category": "architecture",
     "tier": 0,
     "prereqs": [],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "foundations",
+      "core": true,
+      "learner_outcome": "Define resource operations with explicit errors, retry semantics and pagination behavior.",
+      "mechanisms": [
+        "HTTP method semantics",
+        "status contracts",
+        "cursor pagination"
+      ],
+      "production_scenario": "Clients cannot tell whether a timed-out creation request succeeded.",
+      "misconceptions": [
+        "An HTTP verb by itself does not establish a complete business contract."
+      ],
+      "evidence": "Exercise create, retry, validation failure and pagination while data changes.",
+      "artifact": "An API contract with request/response examples and invariant tests.",
+      "primary_sources": [
+        "https://www.rfc-editor.org/rfc/rfc9110.html",
+        "https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/",
+        "https://www.rfc-editor.org/rfc/rfc6585.html"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "api-versioning",
@@ -413,7 +1315,29 @@
     "prereqs": [
       "api-design"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "mechanisms",
+      "core": true,
+      "learner_outcome": "Evolve an API while preserving known client contracts and a bounded retirement path.",
+      "mechanisms": [
+        "additive compatibility",
+        "tolerant readers",
+        "deprecation telemetry"
+      ],
+      "production_scenario": "A renamed response field breaks an older mobile client that updates slowly.",
+      "misconceptions": [
+        "A version prefix does not remove the need to define compatibility."
+      ],
+      "evidence": "Run old-client fixtures against a changed schema and identify breaking cases.",
+      "artifact": "A version change proposal with compatibility tests and retirement criteria.",
+      "primary_sources": [
+        "https://www.rfc-editor.org/rfc/rfc9110.html",
+        "https://sre.google/sre-book/release-engineering/",
+        "https://sre.google/sre-book/testing-reliability/"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "microservices-monolith",
@@ -424,7 +1348,29 @@
       "api-design",
       "stateless-stateful"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "mechanisms",
+      "core": true,
+      "learner_outcome": "Choose service boundaries from data ownership and operational coupling rather than team fashion.",
+      "mechanisms": [
+        "transaction boundaries",
+        "independent deployment",
+        "synchronous coupling"
+      ],
+      "production_scenario": "A simple purchase requires six deployments and fails when any service slows.",
+      "misconceptions": [
+        "Splitting processes does not automatically produce independently changeable components."
+      ],
+      "evidence": "Map a business change to required deployments and cross-service transactions.",
+      "artifact": "A boundary decision record comparing a modular monolith and service split.",
+      "primary_sources": [
+        "https://kubernetes.io/docs/concepts/services-networking/service/",
+        "https://sre.google/sre-book/addressing-cascading-failures/",
+        "https://www.postgresql.org/docs/current/sql-prepare-transaction.html"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "service-mesh",
@@ -435,7 +1381,29 @@
       "microservices-monolith",
       "load-balancing"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "production",
+      "core": true,
+      "learner_outcome": "Explain which transport concerns a mesh can handle and which remain application responsibilities.",
+      "mechanisms": [
+        "sidecar/proxy routing",
+        "mutual TLS",
+        "retry amplification"
+      ],
+      "production_scenario": "Proxy retries multiply application retries during a partial regional failure.",
+      "misconceptions": [
+        "A service mesh cannot infer business idempotency or fix an invalid retry policy."
+      ],
+      "evidence": "Trace attempts across proxy and application layers under one failed request.",
+      "artifact": "A transport policy with retry budgets, identity boundaries and failure tests.",
+      "primary_sources": [
+        "https://kubernetes.io/docs/concepts/services-networking/service/",
+        "https://www.rfc-editor.org/rfc/rfc8446.html",
+        "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "api-gateway",
@@ -446,7 +1414,29 @@
       "api-design",
       "load-balancing"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "mechanisms",
+      "core": true,
+      "learner_outcome": "Assign gateway responsibilities without creating opaque business logic or a single bottleneck.",
+      "mechanisms": [
+        "request routing",
+        "identity forwarding",
+        "admission control"
+      ],
+      "production_scenario": "Several services interpret the same user identity differently behind a gateway.",
+      "misconceptions": [
+        "Authenticating at the edge does not remove downstream authorization checks."
+      ],
+      "evidence": "Trace identity and failure responses across the edge and one service.",
+      "artifact": "A gateway contract with trust boundaries and capacity protection rules.",
+      "primary_sources": [
+        "https://www.rfc-editor.org/rfc/rfc9110.html",
+        "https://www.rfc-editor.org/rfc/rfc9700.html",
+        "https://sre.google/sre-book/load-balancing-frontend/"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "websockets-realtime",
@@ -457,7 +1447,29 @@
       "api-design",
       "stateless-stateful"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "mechanisms",
+      "core": true,
+      "learner_outcome": "Design connection recovery and message continuity separately from the live transport.",
+      "mechanisms": [
+        "connection lifecycle",
+        "heartbeats",
+        "reconnect cursors"
+      ],
+      "production_scenario": "A mobile chat client reconnects after missing several server messages.",
+      "misconceptions": [
+        "A persistent connection does not itself provide durable delivery or history."
+      ],
+      "evidence": "Disconnect and reconnect a client and detect missing and repeated messages.",
+      "artifact": "A real-time protocol with replay cursor and backpressure behavior.",
+      "primary_sources": [
+        "https://www.rfc-editor.org/rfc/rfc6455.html",
+        "https://kafka.apache.org/41/design/design/",
+        "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "serverless",
@@ -467,7 +1479,29 @@
     "prereqs": [
       "stateless-stateful"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "mechanisms",
+      "core": true,
+      "learner_outcome": "Evaluate function execution limits, retries and external state for an asynchronous workload.",
+      "mechanisms": [
+        "ephemeral execution",
+        "concurrency limits",
+        "duplicate invocation"
+      ],
+      "production_scenario": "An image-processing function runs twice after the first attempt times out.",
+      "misconceptions": [
+        "Managed execution does not eliminate duplicate work or downstream capacity limits."
+      ],
+      "evidence": "Replay duplicate invocations and calculate pressure on the storage dependency.",
+      "artifact": "A function contract with idempotency keys and concurrency budget.",
+      "primary_sources": [
+        "https://docs.aws.amazon.com/lambda/latest/dg/best-practices.html",
+        "https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/",
+        "https://sre.google/sre-book/handling-overload/"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "feature-flags",
@@ -477,7 +1511,29 @@
     "prereqs": [
       "deployments"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "production",
+      "core": true,
+      "learner_outcome": "Use flags to control rollout while keeping compatibility and rollback behavior explicit.",
+      "mechanisms": [
+        "targeting rules",
+        "stable cohorts",
+        "flag lifecycle"
+      ],
+      "production_scenario": "A disabled feature leaves data that older application code cannot read.",
+      "misconceptions": [
+        "Switching off a UI flag does not undo writes made by the feature."
+      ],
+      "evidence": "Exercise enabled/disabled clients against both schema versions.",
+      "artifact": "A rollout matrix with cleanup ownership and a tested rollback boundary.",
+      "primary_sources": [
+        "https://sre.google/sre-book/release-engineering/",
+        "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/",
+        "https://sre.google/sre-book/testing-reliability/"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "auth-systems",
@@ -488,7 +1544,29 @@
       "api-design",
       "stateless-stateful"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "mechanisms",
+      "core": true,
+      "learner_outcome": "Separate identity proof, session lifecycle and authorization at resource boundaries.",
+      "mechanisms": [
+        "token validation",
+        "session revocation",
+        "scoped authorization"
+      ],
+      "production_scenario": "A valid login token lets one tenant read another tenant's records.",
+      "misconceptions": [
+        "Authentication success does not authorize every resource operation."
+      ],
+      "evidence": "Test expired, wrong-audience and cross-tenant requests against a policy.",
+      "artifact": "An authentication flow and an authorization test matrix.",
+      "primary_sources": [
+        "https://www.rfc-editor.org/rfc/rfc9700.html",
+        "https://www.rfc-editor.org/rfc/rfc9110.html",
+        "https://www.rfc-editor.org/rfc/rfc8446.html"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "secrets-management",
@@ -498,7 +1576,29 @@
     "prereqs": [
       "auth-systems"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "production",
+      "core": true,
+      "learner_outcome": "Design secret delivery, rotation and revocation with explicit trust and failure boundaries.",
+      "mechanisms": [
+        "least privilege",
+        "versioned rotation",
+        "credential lifetime"
+      ],
+      "production_scenario": "A database password rotates while long-lived workers still hold the old value.",
+      "misconceptions": [
+        "Encoding a secret is not encryption or access control."
+      ],
+      "evidence": "Trace rotation with overlapping versions and verify old access is removed.",
+      "artifact": "A secret inventory and a rehearsed rotation/revocation runbook.",
+      "primary_sources": [
+        "https://kubernetes.io/docs/concepts/configuration/secret/",
+        "https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html",
+        "https://www.rfc-editor.org/rfc/rfc9700.html"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "ddos-protection",
@@ -509,7 +1609,29 @@
       "rate-limiting",
       "cdn"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "production",
+      "core": true,
+      "learner_outcome": "Layer admission controls to preserve service capacity under different traffic attacks.",
+      "mechanisms": [
+        "edge filtering",
+        "per-identity quotas",
+        "dependency load limits"
+      ],
+      "production_scenario": "A flood of expensive anonymous queries bypasses a simple per-IP limit.",
+      "misconceptions": [
+        "One rate limit cannot distinguish every legitimate burst from distributed abuse."
+      ],
+      "evidence": "Model requests, bandwidth and query cost for two attack patterns.",
+      "artifact": "A layered capacity defense with thresholds and legitimate-user tests.",
+      "primary_sources": [
+        "https://sre.google/sre-book/load-balancing-frontend/",
+        "https://sre.google/sre-book/handling-overload/",
+        "https://www.rfc-editor.org/rfc/rfc6585.html"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "encryption-rest-transit",
@@ -519,7 +1641,29 @@
     "prereqs": [
       "auth-systems"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "mechanisms",
+      "core": true,
+      "learner_outcome": "State what transport and storage encryption protect and where plaintext remains exposed.",
+      "mechanisms": [
+        "TLS peer verification",
+        "envelope encryption",
+        "key rotation"
+      ],
+      "production_scenario": "Encrypted backups are copied to storage accessible by an overly broad service role.",
+      "misconceptions": [
+        "Encryption does not compensate for granting an attacker decryption permissions."
+      ],
+      "evidence": "Trace data and key access through requests, storage and backup restore.",
+      "artifact": "A data-flow threat model and a key-access policy.",
+      "primary_sources": [
+        "https://www.rfc-editor.org/rfc/rfc8446.html",
+        "https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html",
+        "https://kubernetes.io/docs/concepts/configuration/secret/"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "observability",
@@ -527,7 +1671,29 @@
     "category": "operations",
     "tier": 0,
     "prereqs": [],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "foundations",
+      "core": true,
+      "learner_outcome": "Choose telemetry that can answer concrete questions about user-visible failures.",
+      "mechanisms": [
+        "request metrics",
+        "structured event logs",
+        "correlated traces"
+      ],
+      "production_scenario": "Users report slow requests while host CPU dashboards remain normal.",
+      "misconceptions": [
+        "Collecting more telemetry does not guarantee useful incident questions can be answered."
+      ],
+      "evidence": "Diagnose one synthetic failure using a minimal set of correlated signals.",
+      "artifact": "An instrumentation plan tied to three falsifiable failure hypotheses.",
+      "primary_sources": [
+        "https://sre.google/sre-book/monitoring-distributed-systems/",
+        "https://opentelemetry.io/docs/concepts/signals/traces/",
+        "https://prometheus.io/docs/practices/naming/"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "slo-sli",
@@ -537,7 +1703,29 @@
     "prereqs": [
       "observability"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "mechanisms",
+      "core": true,
+      "learner_outcome": "Define user-centered reliability indicators and evaluate an error budget over a window.",
+      "mechanisms": [
+        "good/total events",
+        "latency thresholds",
+        "budget burn"
+      ],
+      "production_scenario": "An API reports high uptime while many successful responses arrive too late.",
+      "misconceptions": [
+        "Host uptime is not necessarily a meaningful measure of user success."
+      ],
+      "evidence": "Compute an SLI and remaining budget from a labeled request sample.",
+      "artifact": "A service objective with exclusions, windows and alerting rationale.",
+      "primary_sources": [
+        "https://sre.google/sre-book/service-level-objectives/",
+        "https://sre.google/sre-book/monitoring-distributed-systems/",
+        "https://prometheus.io/docs/practices/histograms/"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "deployments",
@@ -548,7 +1736,29 @@
       "observability",
       "load-balancing"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "mechanisms",
+      "core": true,
+      "learner_outcome": "Design a release sequence that detects harm and supports a compatible rollback.",
+      "mechanisms": [
+        "rolling replacement",
+        "canary comparison",
+        "schema expand/contract"
+      ],
+      "production_scenario": "A rollback fails because the new release removed a column old code needs.",
+      "misconceptions": [
+        "Replacing application binaries alone does not reverse a data migration."
+      ],
+      "evidence": "Exercise mixed-version reads and writes before promoting a canary.",
+      "artifact": "A deployment checklist with stop metrics and tested compatibility boundaries.",
+      "primary_sources": [
+        "https://sre.google/sre-book/release-engineering/",
+        "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/",
+        "https://sre.google/sre-book/testing-reliability/"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "capacity-planning",
@@ -559,7 +1769,29 @@
       "latency-numbers",
       "observability"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "mechanisms",
+      "core": true,
+      "learner_outcome": "Forecast capacity from workload shape, utilization and failure headroom assumptions.",
+      "mechanisms": [
+        "service demand",
+        "peak concurrency",
+        "N-minus-one capacity"
+      ],
+      "production_scenario": "A service meets average traffic but fails when one replica is drained.",
+      "misconceptions": [
+        "Average daily request volume is not enough to size peak capacity."
+      ],
+      "evidence": "Calculate headroom and validate the tightest assumption with a load sample.",
+      "artifact": "A capacity worksheet covering peak load and one failed node.",
+      "primary_sources": [
+        "https://sre.google/sre-book/handling-overload/",
+        "https://sre.google/sre-book/service-level-objectives/",
+        "https://sre.google/sre-book/load-balancing-datacenter/"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "distributed-tracing",
@@ -570,7 +1802,29 @@
       "observability",
       "microservices-monolith"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "production",
+      "core": true,
+      "learner_outcome": "Reconstruct request causality while accounting for async work and incomplete sampling.",
+      "mechanisms": [
+        "trace/span identity",
+        "context propagation",
+        "sampling"
+      ],
+      "production_scenario": "A request queues background work whose later failure is invisible in the parent trace.",
+      "misconceptions": [
+        "A missing span does not prove the corresponding operation never ran."
+      ],
+      "evidence": "Follow propagated context across a queue and identify sampling gaps.",
+      "artifact": "A traced request diagram with instrumentation and data-redaction rules.",
+      "primary_sources": [
+        "https://opentelemetry.io/docs/concepts/signals/traces/",
+        "https://opentelemetry.io/docs/concepts/context-propagation/",
+        "https://sre.google/sre-book/monitoring-distributed-systems/"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "incident-response",
@@ -581,7 +1835,29 @@
       "slo-sli",
       "observability"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "production",
+      "core": true,
+      "learner_outcome": "Coordinate mitigation and communication while preserving evidence for later analysis.",
+      "mechanisms": [
+        "incident roles",
+        "timeline updates",
+        "reversible mitigation"
+      ],
+      "production_scenario": "Several responders change production simultaneously and obscure the original failure.",
+      "misconceptions": [
+        "An incident needs service restoration before a perfect root-cause explanation."
+      ],
+      "evidence": "Run a tabletop incident and document decisions with observed effects.",
+      "artifact": "A concise incident timeline, mitigation record and follow-up owners.",
+      "primary_sources": [
+        "https://sre.google/sre-book/managing-incidents/",
+        "https://sre.google/sre-book/monitoring-distributed-systems/",
+        "https://sre.google/sre-book/addressing-cascading-failures/"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "design-url-shortener",
@@ -593,7 +1869,29 @@
       "caching-strategies",
       "sharding"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "production",
+      "core": true,
+      "learner_outcome": "Integrate identifier allocation, durable redirects and abuse controls into a constrained design.",
+      "mechanisms": [
+        "key generation",
+        "redirect caching",
+        "write/read separation"
+      ],
+      "production_scenario": "A popular campaign creates a hot redirect while users keep creating short links.",
+      "misconceptions": [
+        "Short identifiers still need collision, expiry and ownership policies."
+      ],
+      "evidence": "Estimate load and trace create, redirect, duplicate and expired-link requests.",
+      "artifact": "A URL shortener design with a small executable lookup model.",
+      "primary_sources": [
+        "https://www.rfc-editor.org/rfc/rfc9110.html",
+        "https://aws.amazon.com/builders-library/caching-challenges-and-strategies/",
+        "https://www.postgresql.org/docs/current/functions-sequence.html"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "design-rate-limiter",
@@ -604,7 +1902,29 @@
       "rate-limiting",
       "redis-internals"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "production",
+      "core": false,
+      "learner_outcome": "Design a distributed limiter whose admission accuracy and failure policy are explicit.",
+      "mechanisms": [
+        "atomic bucket updates",
+        "regional budgets",
+        "retry responses"
+      ],
+      "production_scenario": "A multi-region API must cap expensive requests despite a regional store outage.",
+      "misconceptions": [
+        "A globally exact limit may cost coordination latency or reduced availability."
+      ],
+      "evidence": "Simulate concurrent callers and quantify permitted overshoot during failure.",
+      "artifact": "A limiter prototype and an accuracy/availability tradeoff report.",
+      "primary_sources": [
+        "https://www.rfc-editor.org/rfc/rfc6585.html",
+        "https://redis.io/docs/latest/develop/programmability/eval-intro/",
+        "https://etcd.io/docs/v3.5/learning/api_guarantees/"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "design-news-feed",
@@ -617,7 +1937,29 @@
       "sharding",
       "hot-partitions"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "synthesis",
+      "core": false,
+      "learner_outcome": "Choose fan-out and retrieval strategies for unequal publishing and reading workloads.",
+      "mechanisms": [
+        "fan-out on write/read",
+        "ranked materialized views",
+        "hot publishers"
+      ],
+      "production_scenario": "A celebrity post creates a large write burst while ordinary users need fresh feeds.",
+      "misconceptions": [
+        "One fan-out strategy is not optimal for every publisher's audience size."
+      ],
+      "evidence": "Estimate work for ordinary and celebrity posts and trace delayed delivery.",
+      "artifact": "A feed architecture with backlog controls and a freshness objective.",
+      "primary_sources": [
+        "https://kafka.apache.org/41/design/design/",
+        "https://aws.amazon.com/builders-library/caching-challenges-and-strategies/",
+        "https://sre.google/sre-book/handling-overload/"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "design-chat",
@@ -629,7 +1971,29 @@
       "message-queues",
       "sharding"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "synthesis",
+      "core": false,
+      "learner_outcome": "Integrate persistent messages, live connections and reconnect behavior into a chat system.",
+      "mechanisms": [
+        "conversation ordering",
+        "durable history",
+        "delivery acknowledgments"
+      ],
+      "production_scenario": "A user switches devices while one connection is offline and messages are retried.",
+      "misconceptions": [
+        "Online presence does not prove a message was durably delivered or read."
+      ],
+      "evidence": "Trace one conversation through disconnects, duplicates and a server restart.",
+      "artifact": "A chat protocol and storage schema with recovery transcripts.",
+      "primary_sources": [
+        "https://www.rfc-editor.org/rfc/rfc6455.html",
+        "https://kafka.apache.org/41/design/design/",
+        "https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "design-notifications",
@@ -641,7 +2005,29 @@
       "rate-limiting",
       "idempotency"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "synthesis",
+      "core": false,
+      "learner_outcome": "Build a notification pipeline that respects preferences, quotas and duplicate effects.",
+      "mechanisms": [
+        "channel fan-out",
+        "deduplication",
+        "bounded retry scheduling"
+      ],
+      "production_scenario": "A provider outage creates a backlog of reminders that may become irrelevant.",
+      "misconceptions": [
+        "Retrying every notification indefinitely can send stale messages and amplify outages."
+      ],
+      "evidence": "Replay a provider outage and verify expiration, preference and retry rules.",
+      "artifact": "A notification state machine and a backlog recovery simulation.",
+      "primary_sources": [
+        "https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/",
+        "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/",
+        "https://kafka.apache.org/41/design/design/"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "design-search-autocomplete",
@@ -653,7 +2039,29 @@
       "latency-numbers",
       "sharding"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "synthesis",
+      "core": false,
+      "learner_outcome": "Design prefix suggestions with bounded latency and a measurable freshness policy.",
+      "mechanisms": [
+        "prefix indexing",
+        "top-k retrieval",
+        "cached query results"
+      ],
+      "production_scenario": "A trending query changes quickly while millions of clients type prefixes.",
+      "misconceptions": [
+        "Caching popular prefixes alone does not define ranking or update correctness."
+      ],
+      "evidence": "Measure lookup work for prefix lengths and trace a ranking update.",
+      "artifact": "A prefix-search prototype with a latency and freshness evaluation.",
+      "primary_sources": [
+        "https://www.postgresql.org/docs/current/indexes.html",
+        "https://aws.amazon.com/builders-library/caching-challenges-and-strategies/",
+        "https://sre.google/sre-book/service-level-objectives/"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "design-video-streaming",
@@ -665,7 +2073,29 @@
       "object-storage",
       "message-queues"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "synthesis",
+      "core": false,
+      "learner_outcome": "Separate ingestion, transformation and playback while budgeting bandwidth and recovery.",
+      "mechanisms": [
+        "segmented playback",
+        "asynchronous transcoding",
+        "edge caching"
+      ],
+      "production_scenario": "A newly uploaded video is partially processed during a regional playback spike.",
+      "misconceptions": [
+        "Uploading one large file does not produce adaptive playback variants automatically."
+      ],
+      "evidence": "Trace upload failure and playback variant selection under bandwidth changes.",
+      "artifact": "A media pipeline design with readiness states and delivery cost estimates.",
+      "primary_sources": [
+        "https://www.rfc-editor.org/rfc/rfc8216.html",
+        "https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html",
+        "https://www.rfc-editor.org/rfc/rfc9111.html"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "design-ride-sharing",
@@ -677,7 +2107,29 @@
       "sharding",
       "consistent-hashing"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "synthesis",
+      "core": false,
+      "learner_outcome": "Model location freshness, candidate lookup and exclusive assignment under concurrent requests.",
+      "mechanisms": [
+        "spatial partitioning",
+        "stale positions",
+        "conditional assignment"
+      ],
+      "production_scenario": "Two nearby riders attempt to claim the same driver at once.",
+      "misconceptions": [
+        "The nearest reported driver may have moved or already accepted another trip."
+      ],
+      "evidence": "Simulate competing assignments and delayed position updates.",
+      "artifact": "A dispatch state machine with invariant tests and a locality budget.",
+      "primary_sources": [
+        "https://www.postgresql.org/docs/current/transaction-iso.html",
+        "https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/",
+        "https://www.rfc-editor.org/rfc/rfc6455.html"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "design-payment-system",
@@ -689,7 +2141,29 @@
       "idempotency",
       "exactly-once-delivery"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "synthesis",
+      "core": false,
+      "learner_outcome": "Preserve payment invariants through retries, uncertain provider outcomes and reconciliation.",
+      "mechanisms": [
+        "ledger entries",
+        "idempotent intent",
+        "reconciliation"
+      ],
+      "production_scenario": "A payment provider times out after charging while the order remains pending.",
+      "misconceptions": [
+        "A timeout does not mean payment failed or can safely be repeated as a new intent."
+      ],
+      "evidence": "Trace duplicate callbacks and ambiguous outcomes without double charging.",
+      "artifact": "A payment state machine and reconciliation table with balanced ledger examples.",
+      "primary_sources": [
+        "https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/",
+        "https://www.postgresql.org/docs/current/transaction-iso.html",
+        "https://debezium.io/documentation/reference/stable/transformations/outbox-event-router.html"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "design-distributed-lock",
@@ -701,7 +2175,29 @@
       "clock-skew",
       "quorums"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "synthesis",
+      "core": false,
+      "learner_outcome": "Evaluate whether leases plus fencing can protect a resource during pauses and failover.",
+      "mechanisms": [
+        "lease expiry",
+        "monotonically increasing fencing tokens",
+        "stale holders"
+      ],
+      "production_scenario": "A paused worker resumes after its lease expired and writes over a new owner's work.",
+      "misconceptions": [
+        "Mutual exclusion at lease acquisition does not stop a stale process from writing later."
+      ],
+      "evidence": "Simulate a paused holder and show the protected store rejecting a stale token.",
+      "artifact": "A lease protocol trace with fencing checks and failure assumptions.",
+      "primary_sources": [
+        "https://etcd.io/docs/v3.5/learning/api_guarantees/",
+        "https://sre.google/sre-book/managing-critical-state/",
+        "https://www.rfc-editor.org/rfc/rfc5905.html"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "design-web-crawler",
@@ -713,7 +2209,29 @@
       "rate-limiting",
       "caching-strategies"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "production",
+      "core": false,
+      "learner_outcome": "Coordinate a crawl frontier while respecting host limits and duplicate URLs.",
+      "mechanisms": [
+        "URL normalization",
+        "per-host scheduling",
+        "bounded frontier queues"
+      ],
+      "production_scenario": "A crawler discovers an infinite calendar and overwhelms one small site.",
+      "misconceptions": [
+        "Fetching each discovered URL immediately is not a safe scheduling policy."
+      ],
+      "evidence": "Run a local fake-site crawl with cycles, delays and robots exclusions.",
+      "artifact": "A crawler scheduler simulation with fairness and stopping-rule reports.",
+      "primary_sources": [
+        "https://www.rfc-editor.org/rfc/rfc9309.html",
+        "https://www.rfc-editor.org/rfc/rfc9110.html",
+        "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "design-kv-store",
@@ -726,7 +2244,29 @@
       "quorums",
       "lsm-trees"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "synthesis",
+      "core": true,
+      "learner_outcome": "Combine partitioning, replication and storage into a testable key-value service model.",
+      "mechanisms": [
+        "replica placement",
+        "versioned reads/writes",
+        "log recovery"
+      ],
+      "production_scenario": "A storage node leaves during a write while another node rejoins with stale data.",
+      "misconceptions": [
+        "Combining familiar components does not automatically define a consistency guarantee."
+      ],
+      "evidence": "Trace reads and writes through node loss and recovery against stated invariants.",
+      "artifact": "A key-value model with failure traces and a consistency specification.",
+      "primary_sources": [
+        "https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf",
+        "https://etcd.io/docs/v3.5/learning/api_guarantees/",
+        "https://github.com/facebook/rocksdb/wiki/RocksDB-Overview"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "design-unique-id",
@@ -737,7 +2277,29 @@
       "clock-skew",
       "sharding"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "production",
+      "core": false,
+      "learner_outcome": "Choose identifiers by evaluating uniqueness scope, ordering and clock-failure behavior.",
+      "mechanisms": [
+        "random identifiers",
+        "sequence allocation",
+        "timestamp/worker bits"
+      ],
+      "production_scenario": "A worker restarts with a reused identity while the system clock moves backward.",
+      "misconceptions": [
+        "A timestamp alone is neither globally unique nor a reliable total order."
+      ],
+      "evidence": "Generate IDs across simulated restarts and check collision/order assumptions.",
+      "artifact": "An identifier prototype with clock and worker-reuse tests.",
+      "primary_sources": [
+        "https://www.postgresql.org/docs/current/datatype-uuid.html",
+        "https://www.postgresql.org/docs/current/functions-sequence.html",
+        "https://www.rfc-editor.org/rfc/rfc5905.html"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "design-metrics-system",
@@ -749,7 +2311,29 @@
       "observability",
       "stream-processing"
     ],
-    "focus": "system-design"
+    "focus": "system-design",
+    "curriculum": {
+      "phase": "synthesis",
+      "core": false,
+      "learner_outcome": "Integrate telemetry ingestion, storage and querying with explicit loss and cost budgets.",
+      "mechanisms": [
+        "batch ingestion",
+        "cardinality limits",
+        "rollups and retention"
+      ],
+      "production_scenario": "A fleet reconnects after an outage and floods the metrics pipeline with old samples.",
+      "misconceptions": [
+        "Keeping every label and raw sample forever is not a neutral default."
+      ],
+      "evidence": "Replay burst ingestion and estimate series growth and query scan cost.",
+      "artifact": "A metrics pipeline design with cardinality controls and retention calculations.",
+      "primary_sources": [
+        "https://prometheus.io/docs/practices/naming/",
+        "https://prometheus.io/docs/practices/histograms/",
+        "https://sre.google/sre-book/data-processing-pipelines/"
+      ],
+      "related_concepts": []
+    }
   },
   {
     "slug": "js-event-loop",
@@ -6768,6 +8352,1183 @@
       "primary_sources": [
         "https://nodejs.org/api/",
         "https://github.com/analysis-tools-dev/static-analysis"
+      ],
+      "related_concepts": []
+    }
+  },
+  {
+    "slug": "lb-terminal-model",
+    "title": "The terminal, the shell and command execution",
+    "category": "terminal-foundations",
+    "tier": 0,
+    "prereqs": [],
+    "focus": "linux-bash",
+    "curriculum": {
+      "phase": "foundations",
+      "core": true,
+      "learner_outcome": "Distinguish the terminal, Bash and child commands using observable process behavior.",
+      "mechanisms": [
+        "prompt versus command output",
+        "builtins and executables",
+        "exit status"
+      ],
+      "production_scenario": "A newcomer mistakes a printed prompt for text they must execute.",
+      "misconceptions": [
+        "The terminal window and the shell program are not the same component."
+      ],
+      "evidence": "Identify the current shell and resolve three commands without installing software.",
+      "artifact": "An annotated first-session transcript explaining command resolution and exit status.",
+      "primary_sources": [
+        "https://www.gnu.org/software/bash/manual/html_node/What-is-a-shell_003f.html",
+        "https://www.gnu.org/software/bash/manual/html_node/Executing-Commands.html",
+        "https://www.gnu.org/software/bash/manual/html_node/Bash-Builtins.html"
+      ],
+      "related_concepts": []
+    }
+  },
+  {
+    "slug": "lb-navigation",
+    "title": "Paths, directories and working-directory state",
+    "category": "terminal-foundations",
+    "tier": 0,
+    "prereqs": [
+      "lb-terminal-model"
+    ],
+    "focus": "linux-bash",
+    "curriculum": {
+      "phase": "foundations",
+      "core": true,
+      "learner_outcome": "Navigate a fixture tree using absolute and relative paths without losing context.",
+      "mechanisms": [
+        "working directory",
+        "path components",
+        "home-directory expansion"
+      ],
+      "production_scenario": "A support engineer needs a log in a nested directory with spaces.",
+      "misconceptions": [
+        "A relative path is interpreted from the current directory, not the script's location."
+      ],
+      "evidence": "Reach the same fixture by two paths and explain each component.",
+      "artifact": "A directory map and a repeatable navigation transcript.",
+      "primary_sources": [
+        "https://www.gnu.org/software/coreutils/manual/html_node/pwd-invocation.html",
+        "https://www.gnu.org/software/coreutils/manual/html_node/File-name-manipulation.html",
+        "https://www.gnu.org/software/bash/manual/html_node/Shell-Expansions.html"
+      ],
+      "related_concepts": []
+    }
+  },
+  {
+    "slug": "lb-file-operations",
+    "title": "Inspecting, copying and moving files deliberately",
+    "category": "terminal-foundations",
+    "tier": 0,
+    "prereqs": [
+      "lb-navigation"
+    ],
+    "focus": "linux-bash",
+    "curriculum": {
+      "phase": "foundations",
+      "core": true,
+      "learner_outcome": "Manipulate fixture files while predicting source, destination and overwrite behavior.",
+      "mechanisms": [
+        "file versus directory operands",
+        "copy semantics",
+        "explicit destination paths"
+      ],
+      "production_scenario": "A release folder contains similarly named files and an existing backup.",
+      "misconceptions": [
+        "Moving or copying with an existing destination can change the resulting path."
+      ],
+      "evidence": "Copy and rename fixture files and verify resulting contents and names.",
+      "artifact": "A before/after inventory with commands restricted to the lab directory.",
+      "primary_sources": [
+        "https://www.gnu.org/software/coreutils/manual/html_node/cp-invocation.html",
+        "https://www.gnu.org/software/coreutils/manual/html_node/mv-invocation.html",
+        "https://www.gnu.org/software/coreutils/manual/html_node/ls-invocation.html"
+      ],
+      "related_concepts": []
+    }
+  },
+  {
+    "slug": "lb-quoting",
+    "title": "Quoting, expansion and filename boundaries",
+    "category": "terminal-foundations",
+    "tier": 0,
+    "prereqs": [
+      "lb-file-operations"
+    ],
+    "focus": "linux-bash",
+    "curriculum": {
+      "phase": "foundations",
+      "core": true,
+      "learner_outcome": "Preserve literal data and argument boundaries when filenames contain spaces or glob characters.",
+      "mechanisms": [
+        "single/double quotes",
+        "word splitting",
+        "pathname expansion"
+      ],
+      "production_scenario": "A file named quarterly report is accidentally passed as two operands.",
+      "misconceptions": [
+        "Double quoting still permits parameter and command substitution, unlike single quoting."
+      ],
+      "evidence": "Print argument counts for quoted and unquoted inputs including literal glob characters.",
+      "artifact": "An argument-boundary transcript with explanations for each observed expansion.",
+      "primary_sources": [
+        "https://www.gnu.org/software/bash/manual/html_node/Quoting.html",
+        "https://www.gnu.org/software/bash/manual/html_node/Shell-Expansions.html",
+        "https://www.gnu.org/software/coreutils/manual/html_node/printf-invocation.html"
+      ],
+      "related_concepts": []
+    }
+  },
+  {
+    "slug": "lb-help",
+    "title": "Finding trustworthy command documentation",
+    "category": "terminal-foundations",
+    "tier": 0,
+    "prereqs": [
+      "lb-terminal-model"
+    ],
+    "focus": "linux-bash",
+    "curriculum": {
+      "phase": "foundations",
+      "core": true,
+      "learner_outcome": "Choose builtin help, manual pages or GNU documentation for the exact command environment.",
+      "mechanisms": [
+        "command resolution",
+        "builtin help",
+        "implementation/version identification"
+      ],
+      "production_scenario": "Instructions for a different platform's command flags fail in a Linux lab.",
+      "misconceptions": [
+        "A command name does not guarantee identical flags on GNU and BSD implementations."
+      ],
+      "evidence": "Resolve a builtin and external command then locate their applicable options.",
+      "artifact": "A documentation notebook recording tool versions and verified option meanings.",
+      "primary_sources": [
+        "https://www.gnu.org/software/bash/manual/html_node/Bash-Builtins.html",
+        "https://www.gnu.org/software/bash/manual/html_node/Executing-Commands.html",
+        "https://www.gnu.org/software/bash/manual/html_node/What-is-a-shell_003f.html"
+      ],
+      "related_concepts": []
+    }
+  },
+  {
+    "slug": "lb-streams",
+    "title": "Standard streams, redirection and exit status",
+    "category": "terminal-foundations",
+    "tier": 0,
+    "prereqs": [
+      "lb-quoting"
+    ],
+    "focus": "linux-bash",
+    "curriculum": {
+      "phase": "foundations",
+      "core": true,
+      "learner_outcome": "Separate command data, diagnostics and success status in a reproducible terminal workflow.",
+      "mechanisms": [
+        "stdin/stdout/stderr",
+        "redirection order",
+        "exit codes"
+      ],
+      "production_scenario": "A report generator mixes diagnostic errors into its machine-readable output.",
+      "misconceptions": [
+        "Redirecting stdout alone does not capture stderr or prove the command succeeded."
+      ],
+      "evidence": "Capture output and errors separately from a deliberately failing fixture command.",
+      "artifact": "A stream-routing diagram and files demonstrating success and failure paths.",
+      "primary_sources": [
+        "https://www.gnu.org/software/bash/manual/html_node/Redirections.html",
+        "https://www.gnu.org/software/bash/manual/html_node/Exit-Status.html",
+        "https://www.gnu.org/software/coreutils/manual/html_node/cat-invocation.html"
+      ],
+      "related_concepts": []
+    }
+  },
+  {
+    "slug": "lb-pipelines",
+    "title": "Pipelines and visible failure propagation",
+    "category": "shell-mechanisms",
+    "tier": 1,
+    "prereqs": [
+      "lb-streams"
+    ],
+    "focus": "linux-bash",
+    "curriculum": {
+      "phase": "mechanisms",
+      "core": true,
+      "learner_outcome": "Compose commands while inspecting pipeline statuses and preserving useful diagnostics.",
+      "mechanisms": [
+        "pipe connections",
+        "last-command status",
+        "pipefail and PIPESTATUS"
+      ],
+      "production_scenario": "A failed data reader is hidden because the final counting command succeeds.",
+      "misconceptions": [
+        "Successful output from the final command does not prove every pipeline stage succeeded."
+      ],
+      "evidence": "Compare a failing pipeline's status with pipefail off and on.",
+      "artifact": "A pipeline transcript with per-stage statuses captured immediately.",
+      "primary_sources": [
+        "https://www.gnu.org/software/bash/manual/html_node/Pipelines.html",
+        "https://www.gnu.org/software/bash/manual/html_node/The-Set-Builtin.html",
+        "https://www.gnu.org/software/bash/manual/html_node/Exit-Status.html"
+      ],
+      "related_concepts": []
+    }
+  },
+  {
+    "slug": "lb-text-inspection",
+    "title": "Inspecting and counting large text safely",
+    "category": "shell-mechanisms",
+    "tier": 1,
+    "prereqs": [
+      "lb-pipelines"
+    ],
+    "focus": "linux-bash",
+    "curriculum": {
+      "phase": "mechanisms",
+      "core": true,
+      "learner_outcome": "Sample and summarize text without confusing byte, line and record counts.",
+      "mechanisms": [
+        "head/tail sampling",
+        "newline-delimited records",
+        "byte versus character counts"
+      ],
+      "production_scenario": "A support ticket includes a long log with a missing final newline.",
+      "misconceptions": [
+        "Line count and record count are not identical for every file format."
+      ],
+      "evidence": "Compare counts and boundary samples for complete and unterminated fixture logs.",
+      "artifact": "A log-inspection worksheet with explained counting discrepancies.",
+      "primary_sources": [
+        "https://www.gnu.org/software/coreutils/manual/html_node/head-invocation.html",
+        "https://www.gnu.org/software/coreutils/manual/html_node/tail-invocation.html",
+        "https://www.gnu.org/software/coreutils/manual/html_node/wc-invocation.html"
+      ],
+      "related_concepts": []
+    }
+  },
+  {
+    "slug": "lb-search",
+    "title": "Finding files and matching text",
+    "category": "shell-mechanisms",
+    "tier": 1,
+    "prereqs": [
+      "lb-quoting",
+      "lb-text-inspection"
+    ],
+    "focus": "linux-bash",
+    "curriculum": {
+      "phase": "mechanisms",
+      "core": true,
+      "learner_outcome": "Separate filename selection from content matching and state the pattern language used.",
+      "mechanisms": [
+        "find predicates",
+        "literal versus regular-expression matches",
+        "filename safety"
+      ],
+      "production_scenario": "A repository contains spaces in names and text with regex metacharacters.",
+      "misconceptions": [
+        "A shell glob and a regular expression are interpreted by different programs."
+      ],
+      "evidence": "Find chosen files and compare literal and regex matches against fixtures.",
+      "artifact": "A search recipe with expected matches and no accidental filename splitting.",
+      "primary_sources": [
+        "https://www.gnu.org/software/findutils/manual/html_node/Starting-points.html",
+        "https://www.gnu.org/software/findutils/manual/html_node/Safe-File-Name-Handling.html",
+        "https://www.gnu.org/software/grep/manual/html_node/Regular-Expressions.html"
+      ],
+      "related_concepts": []
+    }
+  },
+  {
+    "slug": "lb-text-transforms",
+    "title": "Sorting, selecting fields and summarizing records",
+    "category": "shell-mechanisms",
+    "tier": 1,
+    "prereqs": [
+      "lb-text-inspection"
+    ],
+    "focus": "linux-bash",
+    "curriculum": {
+      "phase": "mechanisms",
+      "core": true,
+      "learner_outcome": "Build a text summary while stating delimiter, locale and ordering assumptions.",
+      "mechanisms": [
+        "sort order",
+        "adjacent duplicate grouping",
+        "field extraction"
+      ],
+      "production_scenario": "A daily access log needs counts by service from tab-separated records.",
+      "misconceptions": [
+        "uniq groups adjacent repeats rather than all equal lines anywhere in a file."
+      ],
+      "evidence": "Explain different counts before and after sorting a shuffled fixture.",
+      "artifact": "A deterministic summary pipeline and its expected-output file.",
+      "primary_sources": [
+        "https://www.gnu.org/software/coreutils/manual/html_node/sort-invocation.html",
+        "https://www.gnu.org/software/coreutils/manual/html_node/uniq-invocation.html",
+        "https://www.gnu.org/software/gawk/manual/html_node/Fields.html"
+      ],
+      "related_concepts": []
+    }
+  },
+  {
+    "slug": "lb-permissions",
+    "title": "Users, groups and permission bits",
+    "category": "shell-mechanisms",
+    "tier": 1,
+    "prereqs": [
+      "lb-file-operations",
+      "lb-help"
+    ],
+    "focus": "linux-bash",
+    "curriculum": {
+      "phase": "mechanisms",
+      "core": true,
+      "learner_outcome": "Explain file and directory access using owner, group and permission bits.",
+      "mechanisms": [
+        "read/write/execute meanings",
+        "directory traversal",
+        "mode changes"
+      ],
+      "production_scenario": "A colleague can list a directory but cannot open a nested file.",
+      "misconceptions": [
+        "Directory execute permission means traversal, not running a directory as a program."
+      ],
+      "evidence": "Predict access in a lab permission matrix and inspect the resulting modes.",
+      "artifact": "A permission worksheet with least-privilege changes to owned fixtures.",
+      "primary_sources": [
+        "https://www.gnu.org/software/coreutils/manual/html_node/File-permissions.html",
+        "https://www.gnu.org/software/coreutils/manual/html_node/chmod-invocation.html",
+        "https://www.gnu.org/software/coreutils/manual/html_node/id-invocation.html"
+      ],
+      "related_concepts": []
+    }
+  },
+  {
+    "slug": "lb-processes",
+    "title": "Processes, jobs and signals",
+    "category": "reliable-operations",
+    "tier": 2,
+    "prereqs": [
+      "lb-pipelines"
+    ],
+    "focus": "linux-bash",
+    "curriculum": {
+      "phase": "production",
+      "core": true,
+      "learner_outcome": "Inspect and stop a lab child process while distinguishing shell jobs from system processes.",
+      "mechanisms": [
+        "process IDs",
+        "foreground/background jobs",
+        "graceful signals"
+      ],
+      "production_scenario": "A long-running command holds the terminal and must be stopped cleanly.",
+      "misconceptions": [
+        "A shell job number and a process ID are different identifiers."
+      ],
+      "evidence": "Start a harmless sleep process, inspect it and terminate only that recorded child.",
+      "artifact": "A process lifecycle transcript showing jobs, PID and termination status.",
+      "primary_sources": [
+        "https://www.gnu.org/software/bash/manual/html_node/Job-Control-Basics.html",
+        "https://www.gnu.org/software/bash/manual/html_node/Signals.html",
+        "https://man7.org/linux/man-pages/man1/ps.1.html"
+      ],
+      "related_concepts": []
+    }
+  },
+  {
+    "slug": "lb-environment",
+    "title": "Environment variables, PATH and startup files",
+    "category": "reliable-operations",
+    "tier": 2,
+    "prereqs": [
+      "lb-terminal-model",
+      "lb-quoting"
+    ],
+    "focus": "linux-bash",
+    "curriculum": {
+      "phase": "production",
+      "core": true,
+      "learner_outcome": "Explain variable inheritance and command lookup without changing global machine settings.",
+      "mechanisms": [
+        "exported environment",
+        "PATH search order",
+        "shell startup modes"
+      ],
+      "production_scenario": "A command works interactively but is missing in a scheduled shell.",
+      "misconceptions": [
+        "A local shell variable is not automatically exported to child processes."
+      ],
+      "evidence": "Compare child environments and resolve a fixture command under a temporary PATH.",
+      "artifact": "An environment-difference report with a local reproducibility recipe.",
+      "primary_sources": [
+        "https://www.gnu.org/software/bash/manual/html_node/Environment.html",
+        "https://www.gnu.org/software/bash/manual/html_node/Bash-Startup-Files.html",
+        "https://www.gnu.org/software/bash/manual/html_node/Executing-Commands.html"
+      ],
+      "related_concepts": []
+    }
+  },
+  {
+    "slug": "lb-storage",
+    "title": "Disk usage, links and space investigation",
+    "category": "reliable-operations",
+    "tier": 2,
+    "prereqs": [
+      "lb-file-operations",
+      "lb-permissions"
+    ],
+    "focus": "linux-bash",
+    "curriculum": {
+      "phase": "production",
+      "core": true,
+      "learner_outcome": "Investigate apparent disk usage while distinguishing filesystem capacity from directory totals.",
+      "mechanisms": [
+        "filesystem free space",
+        "allocated blocks",
+        "link identity"
+      ],
+      "production_scenario": "An operator sees different totals from directory usage and filesystem free-space reports.",
+      "misconceptions": [
+        "du and df answer different questions and need not show equal totals."
+      ],
+      "evidence": "Compare fixture logical sizes, allocated usage and filesystem capacity outputs.",
+      "artifact": "A disk-investigation transcript with explanations and no system cleanup commands.",
+      "primary_sources": [
+        "https://www.gnu.org/software/coreutils/manual/html_node/du-invocation.html",
+        "https://www.gnu.org/software/coreutils/manual/html_node/df-invocation.html",
+        "https://www.gnu.org/software/coreutils/manual/html_node/ls-invocation.html"
+      ],
+      "related_concepts": []
+    }
+  },
+  {
+    "slug": "lb-archives",
+    "title": "Archiving, listing and verifying fixture data",
+    "category": "reliable-operations",
+    "tier": 2,
+    "prereqs": [
+      "lb-file-operations",
+      "lb-search"
+    ],
+    "focus": "linux-bash",
+    "curriculum": {
+      "phase": "production",
+      "core": true,
+      "learner_outcome": "Create and inspect an archive and validate contents before extracting into an empty lab directory.",
+      "mechanisms": [
+        "archive member paths",
+        "listing before extraction",
+        "content checksums"
+      ],
+      "production_scenario": "A handoff archive must preserve a small project without surprising destination paths.",
+      "misconceptions": [
+        "An archive filename or extension does not establish safe member paths or integrity."
+      ],
+      "evidence": "List members, extract owned fixtures into a fresh directory and compare checksums.",
+      "artifact": "A verified fixture archive with a manifest and inspection transcript.",
+      "primary_sources": [
+        "https://www.gnu.org/software/tar/manual/html_node/create.html",
+        "https://www.gnu.org/software/tar/manual/html_node/list.html",
+        "https://www.gnu.org/software/coreutils/manual/html_node/sha2-utilities.html"
+      ],
+      "related_concepts": []
+    }
+  },
+  {
+    "slug": "lb-log-investigation",
+    "title": "Investigating a service incident from local logs",
+    "category": "reliable-operations",
+    "tier": 2,
+    "prereqs": [
+      "lb-search",
+      "lb-text-transforms",
+      "lb-processes"
+    ],
+    "focus": "linux-bash",
+    "curriculum": {
+      "phase": "production",
+      "core": true,
+      "learner_outcome": "Form and test a service-failure hypothesis using a supplied log and process snapshot.",
+      "mechanisms": [
+        "timestamp filtering",
+        "record grouping",
+        "corroborating process evidence"
+      ],
+      "production_scenario": "A fixture service has intermittent failures but aggregate request volume looks normal.",
+      "misconceptions": [
+        "A temporal correlation in logs does not by itself prove causation."
+      ],
+      "evidence": "Locate the failure interval and compare two plausible explanations against fixtures.",
+      "artifact": "An incident note linking every claim to a command and observed output.",
+      "primary_sources": [
+        "https://www.gnu.org/software/grep/manual/html_node/Regular-Expressions.html",
+        "https://www.gnu.org/software/gawk/manual/html_node/Records.html",
+        "https://man7.org/linux/man-pages/man5/proc.5.html"
+      ],
+      "related_concepts": []
+    }
+  },
+  {
+    "slug": "lb-operations-lab",
+    "title": "A repeatable terminal operations investigation",
+    "category": "practical-synthesis",
+    "tier": 3,
+    "prereqs": [
+      "lb-log-investigation",
+      "lb-storage",
+      "lb-archives",
+      "lb-environment"
+    ],
+    "focus": "linux-bash",
+    "curriculum": {
+      "phase": "synthesis",
+      "core": true,
+      "learner_outcome": "Combine terminal skills into an auditable investigation that another learner can reproduce.",
+      "mechanisms": [
+        "controlled workspace",
+        "evidence capture",
+        "environment declaration"
+      ],
+      "production_scenario": "A teammate needs a portable diagnosis of a failing fixture application.",
+      "misconceptions": [
+        "A successful one-off command is not necessarily a reproducible workflow."
+      ],
+      "evidence": "Reproduce the diagnosis from a fresh fixture copy using only recorded commands.",
+      "artifact": "A terminal investigation notebook with inputs, outputs and remaining uncertainties.",
+      "primary_sources": [
+        "https://www.gnu.org/software/bash/manual/html_node/Environment.html",
+        "https://man7.org/linux/man-pages/man5/proc.5.html",
+        "https://www.gnu.org/software/findutils/manual/html_node/Safe-File-Name-Handling.html"
+      ],
+      "related_concepts": []
+    }
+  },
+  {
+    "slug": "lb-capstone",
+    "title": "Linux Bash capstone: diagnose and hand off",
+    "category": "practical-synthesis",
+    "tier": 3,
+    "prereqs": [
+      "lb-operations-lab"
+    ],
+    "focus": "linux-bash",
+    "curriculum": {
+      "phase": "synthesis",
+      "core": true,
+      "learner_outcome": "Diagnose a supplied filesystem and log problem and hand off verifiable evidence.",
+      "mechanisms": [
+        "hypothesis testing",
+        "precise file selection",
+        "least-privilege handling"
+      ],
+      "production_scenario": "A simulated release bundle has incorrect paths, permissions and a suspicious log interval.",
+      "misconceptions": [
+        "Fixing the visible symptom does not demonstrate the underlying cause was understood."
+      ],
+      "evidence": "Identify each injected defect and show a fresh verification after proposed changes.",
+      "artifact": "A final diagnosis bundle containing evidence, minimal repairs and a handoff note.",
+      "primary_sources": [
+        "https://www.gnu.org/software/coreutils/manual/html_node/File-permissions.html",
+        "https://www.gnu.org/software/findutils/manual/html_node/Safe-File-Name-Handling.html",
+        "https://www.gnu.org/software/tar/manual/html_node/list.html"
+      ],
+      "related_concepts": []
+    }
+  },
+  {
+    "slug": "bs-script-contract",
+    "title": "Scripts, interpreters and a command-line contract",
+    "category": "scripting-foundations",
+    "tier": 0,
+    "prereqs": [],
+    "focus": "bash-scripting",
+    "curriculum": {
+      "phase": "foundations",
+      "core": true,
+      "learner_outcome": "Write a Bash entry point with explicit inputs, outputs and interpreter assumptions.",
+      "mechanisms": [
+        "shebang selection",
+        "executable mode",
+        "process exit contract"
+      ],
+      "production_scenario": "An automation script runs differently when invoked by sh and by Bash.",
+      "misconceptions": [
+        "A .sh extension does not select the interpreter or make a file executable."
+      ],
+      "evidence": "Invoke a fixture script through Bash and as an executable and explain the requirements.",
+      "artifact": "A script README and a minimal CLI with documented exit behavior.",
+      "primary_sources": [
+        "https://www.gnu.org/software/bash/manual/html_node/Executing-Commands.html",
+        "https://www.gnu.org/software/bash/manual/html_node/Exit-Status.html",
+        "https://www.gnu.org/software/coreutils/manual/html_node/File-permissions.html"
+      ],
+      "related_concepts": []
+    }
+  },
+  {
+    "slug": "bs-variables",
+    "title": "Variables, parameter expansion and safe defaults",
+    "category": "scripting-foundations",
+    "tier": 0,
+    "prereqs": [
+      "bs-script-contract"
+    ],
+    "focus": "bash-scripting",
+    "curriculum": {
+      "phase": "foundations",
+      "core": true,
+      "learner_outcome": "Use quoted variables and parameter expansion to define missing and empty input behavior.",
+      "mechanisms": [
+        "unset versus empty",
+        "default/required expansions",
+        "assignment context"
+      ],
+      "production_scenario": "An automation receives an empty output-directory setting from its environment.",
+      "misconceptions": [
+        "Unset and empty are not interchangeable for every parameter-expansion operator."
+      ],
+      "evidence": "Exercise unset, empty, spaced and ordinary values and compare outputs.",
+      "artifact": "A configuration fixture script with an explicit input-case table.",
+      "primary_sources": [
+        "https://www.gnu.org/software/bash/manual/html_node/Shell-Parameters.html",
+        "https://www.gnu.org/software/bash/manual/html_node/Shell-Expansions.html",
+        "https://www.gnu.org/software/bash/manual/html_node/Quoting.html"
+      ],
+      "related_concepts": []
+    }
+  },
+  {
+    "slug": "bs-arguments",
+    "title": "Arguments, quoted arrays and option boundaries",
+    "category": "scripting-foundations",
+    "tier": 0,
+    "prereqs": [
+      "bs-variables"
+    ],
+    "focus": "bash-scripting",
+    "curriculum": {
+      "phase": "foundations",
+      "core": true,
+      "learner_outcome": "Forward arguments without splitting values or interpreting filenames as options.",
+      "mechanisms": [
+        "positional parameters",
+        "quoted argument forwarding",
+        "end-of-options markers"
+      ],
+      "production_scenario": "A batch tool receives a filename containing spaces and a leading hyphen.",
+      "misconceptions": [
+        "Reconstructing arguments as one string does not preserve their original boundaries."
+      ],
+      "evidence": "Pass empty, spaced and leading-hyphen arguments through a wrapper unchanged.",
+      "artifact": "An argument-preserving wrapper and a reproducible boundary test transcript.",
+      "primary_sources": [
+        "https://www.gnu.org/software/bash/manual/html_node/Shell-Parameters.html",
+        "https://www.gnu.org/software/bash/manual/html_node/Quoting.html",
+        "https://www.gnu.org/software/bash/manual/html_node/Arrays.html"
+      ],
+      "related_concepts": [
+        "lb-quoting"
+      ]
+    }
+  },
+  {
+    "slug": "bs-status",
+    "title": "Exit codes, conditionals and explicit error paths",
+    "category": "scripting-foundations",
+    "tier": 0,
+    "prereqs": [
+      "bs-script-contract",
+      "bs-variables"
+    ],
+    "focus": "bash-scripting",
+    "curriculum": {
+      "phase": "foundations",
+      "core": true,
+      "learner_outcome": "Branch on command status while separating expected absence from operational failure.",
+      "mechanisms": [
+        "zero/nonzero status",
+        "conditional command lists",
+        "distinct failure codes"
+      ],
+      "production_scenario": "A lookup script treats a missing record and an unreadable input as the same result.",
+      "misconceptions": [
+        "Nonzero status is not always an exceptional failure that should abort the script."
+      ],
+      "evidence": "Exercise successful lookup, no match and invalid input with distinct outcomes.",
+      "artifact": "A small lookup CLI with documented status and diagnostic contracts.",
+      "primary_sources": [
+        "https://www.gnu.org/software/bash/manual/html_node/Exit-Status.html",
+        "https://www.gnu.org/software/bash/manual/html_node/Conditional-Constructs.html",
+        "https://www.gnu.org/software/bash/manual/html_node/Lists.html"
+      ],
+      "related_concepts": []
+    }
+  },
+  {
+    "slug": "bs-loops",
+    "title": "Loops and record-safe input processing",
+    "category": "scripting-foundations",
+    "tier": 0,
+    "prereqs": [
+      "bs-arguments",
+      "bs-status"
+    ],
+    "focus": "bash-scripting",
+    "curriculum": {
+      "phase": "foundations",
+      "core": true,
+      "learner_outcome": "Process line records without accidental splitting or losing the final unterminated record.",
+      "mechanisms": [
+        "while/read loops",
+        "IFS handling",
+        "EOF status"
+      ],
+      "production_scenario": "A file list includes blank lines, backslashes and a final line without newline.",
+      "misconceptions": [
+        "Looping over command-substitution output does not preserve arbitrary line records."
+      ],
+      "evidence": "Process the supplied edge-case input and compare exact recorded values.",
+      "artifact": "A record-reading function and fixtures for empty and unterminated inputs.",
+      "primary_sources": [
+        "https://www.gnu.org/software/bash/manual/html_node/Looping-Constructs.html",
+        "https://www.gnu.org/software/bash/manual/html_node/Bash-Builtins.html",
+        "https://www.gnu.org/software/bash/manual/html_node/Quoting.html"
+      ],
+      "related_concepts": []
+    }
+  },
+  {
+    "slug": "bs-functions",
+    "title": "Functions, local scope and reusable commands",
+    "category": "shell-mechanisms",
+    "tier": 1,
+    "prereqs": [
+      "bs-loops"
+    ],
+    "focus": "bash-scripting",
+    "curriculum": {
+      "phase": "mechanisms",
+      "core": true,
+      "learner_outcome": "Extract reusable Bash functions with explicit arguments, scope and status contracts.",
+      "mechanisms": [
+        "local variables",
+        "function exit status",
+        "stdout as data"
+      ],
+      "production_scenario": "A helper modifies a caller's variable and corrupts a later report.",
+      "misconceptions": [
+        "A function's printed text and numeric exit status are separate output channels."
+      ],
+      "evidence": "Call a helper repeatedly and prove caller variables and data remain predictable.",
+      "artifact": "A small function library with interface examples and scope checks.",
+      "primary_sources": [
+        "https://www.gnu.org/software/bash/manual/html_node/Shell-Functions.html",
+        "https://www.gnu.org/software/bash/manual/html_node/Exit-Status.html",
+        "https://www.gnu.org/software/bash/manual/html_node/Bourne-Shell-Builtins.html"
+      ],
+      "related_concepts": []
+    }
+  },
+  {
+    "slug": "bs-arrays",
+    "title": "Arrays and command construction without eval",
+    "category": "shell-mechanisms",
+    "tier": 1,
+    "prereqs": [
+      "bs-arguments",
+      "bs-functions"
+    ],
+    "focus": "bash-scripting",
+    "curriculum": {
+      "phase": "mechanisms",
+      "core": true,
+      "learner_outcome": "Construct argument vectors with Bash arrays instead of evaluating assembled command text.",
+      "mechanisms": [
+        "indexed arrays",
+        "quoted array expansion",
+        "data/code separation"
+      ],
+      "production_scenario": "A wrapper needs optional flags and filenames containing punctuation or spaces.",
+      "misconceptions": [
+        "Joining arguments into a string and evaluating it is not equivalent to an argument vector."
+      ],
+      "evidence": "Print each constructed argument and preserve empty and literal metacharacter values.",
+      "artifact": "An array-based command builder with an exact argument-vector fixture.",
+      "primary_sources": [
+        "https://www.gnu.org/software/bash/manual/html_node/Arrays.html",
+        "https://www.gnu.org/software/bash/manual/html_node/Quoting.html",
+        "https://www.shellcheck.net/wiki/SC2086"
+      ],
+      "related_concepts": []
+    }
+  },
+  {
+    "slug": "bs-options",
+    "title": "Parsing flags and validating a script interface",
+    "category": "shell-mechanisms",
+    "tier": 1,
+    "prereqs": [
+      "bs-arguments",
+      "bs-status"
+    ],
+    "focus": "bash-scripting",
+    "curriculum": {
+      "phase": "mechanisms",
+      "core": true,
+      "learner_outcome": "Parse short options and validate required operands before performing side effects.",
+      "mechanisms": [
+        "getopts state",
+        "usage diagnostics",
+        "operand validation"
+      ],
+      "production_scenario": "A scheduled report is launched with an unknown flag and a missing input file.",
+      "misconceptions": [
+        "Parsing a flag does not validate that its value is usable."
+      ],
+      "evidence": "Test valid options, unknown flags, missing values and the end-of-options marker.",
+      "artifact": "A CLI parser with a usage message and acceptance-case table.",
+      "primary_sources": [
+        "https://www.gnu.org/software/bash/manual/html_node/Bourne-Shell-Builtins.html",
+        "https://www.gnu.org/software/bash/manual/html_node/Shell-Parameters.html",
+        "https://www.gnu.org/software/bash/manual/html_node/Bash-Conditional-Expressions.html"
+      ],
+      "related_concepts": []
+    }
+  },
+  {
+    "slug": "bs-text-data",
+    "title": "Text transformations with explicit record formats",
+    "category": "shell-mechanisms",
+    "tier": 1,
+    "prereqs": [
+      "bs-loops",
+      "bs-functions"
+    ],
+    "focus": "bash-scripting",
+    "curriculum": {
+      "phase": "mechanisms",
+      "core": true,
+      "learner_outcome": "Choose Bash or a text-processing tool based on the input's actual record grammar.",
+      "mechanisms": [
+        "delimiter contracts",
+        "field selection",
+        "streaming aggregation"
+      ],
+      "production_scenario": "A report consumes tab-separated fixture records with missing optional fields.",
+      "misconceptions": [
+        "Splitting arbitrary CSV on commas does not implement CSV quoting rules."
+      ],
+      "evidence": "Validate field counts and reject malformed rows with useful diagnostics.",
+      "artifact": "A TSV summary tool with valid and malformed input fixtures.",
+      "primary_sources": [
+        "https://www.gnu.org/software/gawk/manual/html_node/Records.html",
+        "https://www.gnu.org/software/gawk/manual/html_node/Fields.html",
+        "https://www.gnu.org/software/coreutils/manual/html_node/cut-invocation.html"
+      ],
+      "related_concepts": []
+    }
+  },
+  {
+    "slug": "bs-error-handling",
+    "title": "Failure propagation and the limits of strict mode",
+    "category": "shell-mechanisms",
+    "tier": 1,
+    "prereqs": [
+      "bs-status",
+      "bs-functions",
+      "bs-arrays"
+    ],
+    "focus": "bash-scripting",
+    "curriculum": {
+      "phase": "mechanisms",
+      "core": true,
+      "learner_outcome": "Use explicit checks where errexit, pipelines or substitutions can hide failures.",
+      "mechanisms": [
+        "errexit contexts",
+        "pipefail",
+        "command-substitution status"
+      ],
+      "production_scenario": "A backup automation reports success after a failed pipeline stage.",
+      "misconceptions": [
+        "set -e is not a universal exception system and behaves differently inside conditionals."
+      ],
+      "evidence": "Demonstrate a masked failure then repair it with an explicit checked contract.",
+      "artifact": "An error-propagation table and a script that preserves the original failure code.",
+      "primary_sources": [
+        "https://www.gnu.org/software/bash/manual/html_node/The-Set-Builtin.html",
+        "https://www.gnu.org/software/bash/manual/html_node/Pipelines.html",
+        "https://www.gnu.org/software/bash/manual/html_node/Exit-Status.html"
+      ],
+      "related_concepts": [
+        "lb-pipelines"
+      ]
+    }
+  },
+  {
+    "slug": "bs-temp-cleanup",
+    "title": "Temporary workspaces, traps and cleanup",
+    "category": "reliable-operations",
+    "tier": 2,
+    "prereqs": [
+      "bs-error-handling",
+      "bs-functions"
+    ],
+    "focus": "bash-scripting",
+    "curriculum": {
+      "phase": "production",
+      "core": true,
+      "learner_outcome": "Scope temporary artifacts and cleanup handlers to resources created by the script.",
+      "mechanisms": [
+        "mktemp allocation",
+        "EXIT/signal traps",
+        "exit-status preservation"
+      ],
+      "production_scenario": "An interrupted transformation leaves temporary output files beside a shared report.",
+      "misconceptions": [
+        "Predictable temporary names and broad cleanup globs are unsafe ownership models."
+      ],
+      "evidence": "Interrupt a fixture run and verify its owned workspace is cleaned without masking status.",
+      "artifact": "A cleanup helper with success, failure and interruption transcripts.",
+      "primary_sources": [
+        "https://www.gnu.org/software/coreutils/manual/html_node/mktemp-invocation.html",
+        "https://www.gnu.org/software/bash/manual/html_node/Bourne-Shell-Builtins.html",
+        "https://www.gnu.org/software/bash/manual/html_node/Signals.html"
+      ],
+      "related_concepts": []
+    }
+  },
+  {
+    "slug": "bs-atomic-output",
+    "title": "Publishing output only after successful validation",
+    "category": "reliable-operations",
+    "tier": 2,
+    "prereqs": [
+      "bs-temp-cleanup",
+      "bs-text-data"
+    ],
+    "focus": "bash-scripting",
+    "curriculum": {
+      "phase": "production",
+      "core": true,
+      "learner_outcome": "Prevent partial reports by validating staged output before an atomic local rename.",
+      "mechanisms": [
+        "same-filesystem staging",
+        "output validation",
+        "replacement semantics"
+      ],
+      "production_scenario": "A scheduled reader opens a report while the writer is still producing it.",
+      "misconceptions": [
+        "Writing directly to the final path exposes partial content despite eventual success."
+      ],
+      "evidence": "Fail generation halfway and verify the previous complete output remains readable.",
+      "artifact": "A staged report publisher with failure injection and old-output preservation tests.",
+      "primary_sources": [
+        "https://www.gnu.org/software/coreutils/manual/html_node/mv-invocation.html",
+        "https://www.gnu.org/software/coreutils/manual/html_node/mktemp-invocation.html",
+        "https://www.gnu.org/software/bash/manual/html_node/Exit-Status.html"
+      ],
+      "related_concepts": []
+    }
+  },
+  {
+    "slug": "bs-idempotent-automation",
+    "title": "Repeatable automation and explicit checkpoints",
+    "category": "reliable-operations",
+    "tier": 2,
+    "prereqs": [
+      "bs-atomic-output",
+      "bs-options"
+    ],
+    "focus": "bash-scripting",
+    "curriculum": {
+      "phase": "production",
+      "core": true,
+      "learner_outcome": "Make reruns converge on the intended result without duplicating effects.",
+      "mechanisms": [
+        "desired-state checks",
+        "checkpoints",
+        "bounded retry conditions"
+      ],
+      "production_scenario": "A batch job restarts after publishing half its requested fixture reports.",
+      "misconceptions": [
+        "Retrying an arbitrary command is not always safe or idempotent."
+      ],
+      "evidence": "Run the automation twice and resume a partial run while comparing final manifests.",
+      "artifact": "A resumable fixture processor with repeated-run evidence and checkpoint rules.",
+      "primary_sources": [
+        "https://www.gnu.org/software/bash/manual/html_node/Bash-Conditional-Expressions.html",
+        "https://www.gnu.org/software/coreutils/manual/html_node/sha2-utilities.html",
+        "https://www.gnu.org/software/bash/manual/html_node/Exit-Status.html"
+      ],
+      "related_concepts": []
+    }
+  },
+  {
+    "slug": "bs-debug-testing",
+    "title": "Debugging and testing Bash behavior",
+    "category": "reliable-operations",
+    "tier": 2,
+    "prereqs": [
+      "bs-error-handling",
+      "bs-options"
+    ],
+    "focus": "bash-scripting",
+    "curriculum": {
+      "phase": "production",
+      "core": true,
+      "learner_outcome": "Test script behavior at its CLI boundary and use tracing without leaking sensitive inputs.",
+      "mechanisms": [
+        "syntax checking",
+        "fixture assertions",
+        "scoped execution tracing"
+      ],
+      "production_scenario": "A script works for one filename but fails on empty and spaced operands.",
+      "misconceptions": [
+        "Syntax checking cannot prove runtime behavior or correct argument handling."
+      ],
+      "evidence": "Run a matrix of exit status, stdout, stderr and filesystem assertions.",
+      "artifact": "A Bash test harness with deterministic fixtures and a documented debugging method.",
+      "primary_sources": [
+        "https://www.gnu.org/software/bash/manual/html_node/The-Set-Builtin.html",
+        "https://www.gnu.org/software/bash/manual/html_node/Quoting.html",
+        "https://www.shellcheck.net/wiki/SC2086"
+      ],
+      "related_concepts": []
+    }
+  },
+  {
+    "slug": "bs-portability",
+    "title": "Linux environments and Bash portability boundaries",
+    "category": "reliable-operations",
+    "tier": 2,
+    "prereqs": [
+      "bs-debug-testing",
+      "bs-arrays"
+    ],
+    "focus": "bash-scripting",
+    "curriculum": {
+      "phase": "production",
+      "core": true,
+      "learner_outcome": "Declare Bash and GNU dependencies and detect unsupported execution environments clearly.",
+      "mechanisms": [
+        "Bash versus POSIX shell",
+        "tool feature checks",
+        "locale dependence"
+      ],
+      "production_scenario": "A script uses Bash arrays and GNU flags but is launched on an incompatible shell.",
+      "misconceptions": [
+        "Bash availability does not imply all external tools implement GNU options."
+      ],
+      "evidence": "Check declared prerequisites and compare deterministic output under controlled locale.",
+      "artifact": "An environment contract and clear preflight failure cases.",
+      "primary_sources": [
+        "https://www.gnu.org/software/bash/manual/html_node/Environment.html",
+        "https://www.gnu.org/software/bash/manual/html_node/Executing-Commands.html",
+        "https://www.gnu.org/software/coreutils/manual/html_node/sort-invocation.html"
+      ],
+      "related_concepts": []
+    }
+  },
+  {
+    "slug": "bs-job-control",
+    "title": "Bounded background work and child status collection",
+    "category": "practical-synthesis",
+    "tier": 3,
+    "prereqs": [
+      "bs-temp-cleanup",
+      "bs-debug-testing"
+    ],
+    "focus": "bash-scripting",
+    "curriculum": {
+      "phase": "synthesis",
+      "core": true,
+      "learner_outcome": "Run bounded parallel fixture work while collecting each child result and cleaning owned processes.",
+      "mechanisms": [
+        "background PIDs",
+        "wait status",
+        "concurrency bounds"
+      ],
+      "production_scenario": "A batch script starts hundreds of workers and ignores failures from early children.",
+      "misconceptions": [
+        "The status of the final wait is not automatically an aggregate of every child result."
+      ],
+      "evidence": "Limit active workers and inject one failure while accounting for every child.",
+      "artifact": "A bounded worker driver with per-item outcomes and interruption cleanup evidence.",
+      "primary_sources": [
+        "https://www.gnu.org/software/bash/manual/html_node/Job-Control-Basics.html",
+        "https://www.gnu.org/software/bash/manual/html_node/Bash-Builtins.html",
+        "https://www.gnu.org/software/bash/manual/html_node/Signals.html"
+      ],
+      "related_concepts": []
+    }
+  },
+  {
+    "slug": "bs-automation-lab",
+    "title": "Reliable report automation from untrusted filenames",
+    "category": "practical-synthesis",
+    "tier": 3,
+    "prereqs": [
+      "bs-idempotent-automation",
+      "bs-portability",
+      "bs-job-control"
+    ],
+    "focus": "bash-scripting",
+    "curriculum": {
+      "phase": "synthesis",
+      "core": true,
+      "learner_outcome": "Integrate input validation, argument safety and reliable publication into a report workflow.",
+      "mechanisms": [
+        "CLI contracts",
+        "failure injection",
+        "staged output"
+      ],
+      "production_scenario": "A teammate schedules a report against fixture files with deliberately awkward names.",
+      "misconceptions": [
+        "A happy-path demonstration alone does not establish reliability for scheduled automation."
+      ],
+      "evidence": "Run normal, malformed-input, interrupted and repeated cases with exact expected outcomes.",
+      "artifact": "A report automation package containing implementation, fixtures and test results.",
+      "primary_sources": [
+        "https://www.gnu.org/software/bash/manual/html_node/Quoting.html",
+        "https://www.gnu.org/software/coreutils/manual/html_node/mktemp-invocation.html",
+        "https://www.gnu.org/software/bash/manual/html_node/The-Set-Builtin.html"
+      ],
+      "related_concepts": []
+    }
+  },
+  {
+    "slug": "bs-capstone",
+    "title": "Bash Scripting capstone: a tested automation tool",
+    "category": "practical-synthesis",
+    "tier": 3,
+    "prereqs": [
+      "bs-automation-lab"
+    ],
+    "focus": "bash-scripting",
+    "curriculum": {
+      "phase": "synthesis",
+      "core": true,
+      "learner_outcome": "Deliver a documented automation tool whose failure and recovery behavior is demonstrated.",
+      "mechanisms": [
+        "interface design",
+        "invariant checks",
+        "reproducible verification"
+      ],
+      "production_scenario": "A small team needs a maintainable batch tool with predictable operational behavior.",
+      "misconceptions": [
+        "Passing a few checks does not replace documenting unsupported inputs and assumptions."
+      ],
+      "evidence": "Demonstrate the tool from a clean lab and explain each deliberate failure result.",
+      "artifact": "A versioned script, README, fixture suite and a concise design reflection.",
+      "primary_sources": [
+        "https://www.gnu.org/software/bash/manual/html_node/Shell-Functions.html",
+        "https://www.gnu.org/software/bash/manual/html_node/Exit-Status.html",
+        "https://www.shellcheck.net/wiki/SC2086"
       ],
       "related_concepts": []
     }

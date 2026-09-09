@@ -125,7 +125,7 @@ fn restarting_does_not_recreate_a_deleted_imported_language_schedule() {
 fn classroom_seeds_every_subject_with_an_isolated_prompt_contract() {
     let conn = test_db();
     let programs = classroom::program_views(&conn, "2026-07-21").unwrap();
-    assert_eq!(programs.len(), 6);
+    assert_eq!(programs.len(), 9);
     assert_eq!(programs.len(), SUBJECTS.len());
     classroom::prompt_contracts_are_isolated().unwrap();
     for program in programs {
@@ -841,7 +841,7 @@ fn additive_classroom_migration_preserves_existing_config() {
             row.get(0)
         })
         .unwrap();
-    assert_eq!(count, 6);
+    assert_eq!(count, 9);
 }
 
 #[test]

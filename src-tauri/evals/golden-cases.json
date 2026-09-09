@@ -30,5 +30,29 @@
   {
     "slug": "dt-webpack-vite-rspack-migration",
     "dossier": "Day 28. Bundler graphs and deterministic CI are practiced. The learner needs a measured migration and rollback artifact for a large monorepo."
+  },
+  {
+    "slug": "cap-theorem",
+    "dossier": "The learner is new to distributed systems and equates availability with a host being powered on. Use a concrete partition timeline and avoid unexplained consistency vocabulary."
+  },
+  {
+    "slug": "design-kv-store",
+    "dossier": "The learner knows replication and hash rings but has not stated how concurrent versions and node failure affect returned values. Require a falsifiable consistency contract."
+  },
+  {
+    "slug": "lb-quoting",
+    "dossier": "The learner can navigate directories but has only used filenames without spaces. Teach argument boundaries before introducing any file-changing operations in the lab."
+  },
+  {
+    "slug": "lb-log-investigation",
+    "dossier": "The learner already uses pipelines and permissions but mistakes temporal correlation for proof. Require command evidence and comparison of two hypotheses from supplied logs."
+  },
+  {
+    "slug": "bs-error-handling",
+    "dossier": "The learner uses functions and arrays but assumes set -e catches every failure. Require a conditional-context example and preservation of the original exit status."
+  },
+  {
+    "slug": "bs-capstone",
+    "dossier": "The learner has practiced automation and recovery. Require concrete tests for empty input, unusual filenames, interruption and repeat execution before claiming the tool is reliable."
   }
 ]

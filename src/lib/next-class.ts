@@ -1,3 +1,4 @@
+import { courseDefinition } from './catalog';
 import type { AppStateView } from './ipc';
 
 export interface NextClass {
@@ -31,15 +32,17 @@ function primaryCandidate(state: AppStateView, now: Date): Candidate | null {
   ) {
     return null;
   }
+  const focus = state.session.status === 'in_progress' ? state.session.focus : state.selected_focus;
+  const label = courseDefinition(focus)?.label ?? 'Daily study';
   if (state.owed) {
-    return { at: new Date(now), label: 'Frontend engineering', due: true };
+    return { at: new Date(now), label, due: true };
   }
   const at = new Date(now);
   at.setHours(state.schedule_hour, state.schedule_minute, 0, 0);
   const primaryHandledToday =
     state.session.date === localDateKey(now) && state.session.status !== 'pending';
   if (at <= now || primaryHandledToday) at.setDate(at.getDate() + 1);
-  return { at, label: 'Frontend engineering', due: false };
+  return { at, label, due: false };
 }
 
 export function nextScheduledClass(state: AppStateView | null, now: Date): NextClass | null {

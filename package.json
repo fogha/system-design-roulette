@@ -8,10 +8,12 @@
     "build": "vite build",
     "test": "vitest run",
     "preview": "vite preview",
-    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "check": "npm run catalog:check && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "bundle:mac": "npm run tauri build -- --bundles app && bash scripts/bundle-dmg.sh",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "catalog:generate": "node scripts/generate-catalog.mjs",
+    "catalog:check": "node scripts/generate-catalog.mjs --check"
   },
   "license": "MIT",
   "dependencies": {

@@ -70,7 +70,7 @@ describe('next scheduled class', () => {
 
   it('shows an owed primary session as due now', () => {
     const next = nextScheduledClass(state({ owed: true }), now);
-    expect(next?.label).toBe('Frontend engineering');
+    expect(next?.label).toBe('JavaScript & Browser');
     expect(next?.due).toBe(true);
     expect(formatClassCountdown(next, now)).toBe('due now');
   });
@@ -120,7 +120,7 @@ describe('next scheduled class', () => {
       }),
       now,
     );
-    expect(next?.label).toBe('Frontend engineering + TypeScript');
+    expect(next?.label).toBe('JavaScript & Browser + TypeScript');
   });
 
   it('ignores an invalid primary time and keeps valid weekday classroom data', () => {

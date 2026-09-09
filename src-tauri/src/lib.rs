@@ -1,4 +1,5 @@
 pub mod audio;
+pub mod catalog;
 pub mod classroom;
 pub mod commands;
 pub mod db;
@@ -260,6 +261,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::mark_frontend_ready,
             commands::get_app_state,
+            commands::get_catalog,
             commands::check_agent,
             commands::complete_setup,
             commands::update_schedule,

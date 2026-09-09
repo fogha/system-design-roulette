@@ -1,14 +1,11 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
-export type FocusArea =
-  | 'javascript'
-  | 'typescript'
-  | 'frontend-architecture'
-  | 'developer-tooling';
+import type { CourseDefinition } from './catalog';
+import type { FocusArea, LanguageId, ClassroomSubjectId } from './catalog.generated';
+export type { FocusArea, LanguageId, ClassroomSubjectId } from './catalog.generated';
+export type { CourseDefinition } from './catalog';
 
-export type LanguageId = 'german' | 'italian';
-export type ClassroomSubjectId = LanguageId | FocusArea;
 export type ClassroomKind = 'language' | 'engineering';
 export type AgentId = 'claude' | 'codex' | 'cursor' | 'gemini' | 'deepseek' | 'custom';
 export type ModelId = 'opus' | 'sonnet' | 'haiku';
@@ -517,6 +514,7 @@ export const isTauri =
   typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
 const realApi = {
+  getCatalog: () => invoke<CourseDefinition[]>('get_catalog'),
   markFrontendReady: () => invoke<void>('mark_frontend_ready'),
   getAppState: () => invoke<AppStateView>('get_app_state'),
   checkAgent: (agent?: string, customBin?: string) =>

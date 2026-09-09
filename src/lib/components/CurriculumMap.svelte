@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { courseDefinition } from '../catalog';
   import type { CurriculumMapView, CurriculumPhase } from '../ipc';
   import { CheckCircle2, Circle, Clock3, Link2, X } from 'lucide-svelte';
 
@@ -10,13 +11,16 @@
     onclose: () => void;
   } = $props();
 
-  const phases: { id: CurriculumPhase; label: string }[] = [
-    { id: 'foundations', label: 'Foundations' },
-    { id: 'mechanisms', label: 'Mechanisms' },
-    { id: 'production', label: 'Production' },
-    { id: 'synthesis', label: 'Synthesis' },
-    { id: 'elective', label: 'Electives' },
-  ];
+  const phases = $derived([
+    ...(courseDefinition(map.focus)?.entry_points ?? []).map((entry) => ({
+      id: entry.id as CurriculumPhase, label: entry.label,
+    })),
+    { id: 'elective' as CurriculumPhase, label: 'Electives' },
+  ].filter((phase) => map.concepts.some((concept) => concept.phase === phase.id)));
+  const coreCount = $derived(map.concepts.filter((concept) => concept.core).length);
+  function prerequisiteTitles(slugs: string[]) {
+    return slugs.map((slug) => map.concepts.find((concept) => concept.slug === slug)?.title ?? slug).join('; ');
+  }
 
   function conceptsFor(phase: CurriculumPhase) {
     return map.concepts.filter((concept) => concept.phase === phase);
@@ -30,7 +34,7 @@
 <section class="curriculum-map" aria-labelledby="curriculum-map-title">
   <header>
     <div>
-      <span class="eyebrow mono">30-SESSION CURRICULUM · {map.completed_sessions} COMPLETE</span>
+      <span class="eyebrow mono">{coreCount} CORE TOPICS · {map.completed_sessions} SESSIONS COMPLETED</span>
       <h3 id="curriculum-map-title">{map.label} learning map</h3>
       <p>{map.month_outcome}</p>
     </div>
@@ -68,7 +72,7 @@
                 <span class="meta mono">
                   {concept.mastery_state}
                   {#if concept.prerequisites.length}
-                    · <Link2 size={10} /> {concept.prerequisites.join(', ')}
+                    · <Link2 size={10} /> {prerequisiteTitles(concept.prerequisites)}
                   {/if}
                 </span>
               </div>
@@ -83,8 +87,8 @@
 <style>
   .curriculum-map {
     grid-column: 1 / -1;
-    border: 1px solid rgba(62, 207, 142, 0.22);
-    background: rgba(5, 13, 24, 0.96);
+    border: 1px solid var(--border);
+    background: var(--surface);
     padding: 16px;
   }
   header {
@@ -96,60 +100,61 @@
   }
   h3 {
     margin: 4px 0 6px;
-    color: var(--text-primary, #eef4ff);
+    color: var(--fg);
     font-size: 18px;
   }
   header p {
     margin: 0;
     max-width: 920px;
-    color: var(--text-secondary, #99a8bd);
+    color: var(--muted);
     line-height: 1.55;
-    font-size: 12px;
+    font-size: 14px;
   }
   .eyebrow,
   .meta,
   .phase-head span,
   .you-are-here {
-    font-size: 9px;
+    font-size: 11px;
     letter-spacing: 0.08em;
     text-transform: uppercase;
   }
   .eyebrow,
   .you-are-here {
-    color: #3ecf8e;
+    color: var(--ok-fg);
   }
   .close {
     display: grid;
     place-items: center;
-    width: 28px;
-    height: 28px;
-    border: 1px solid rgba(139, 159, 184, 0.25);
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--border);
     background: transparent;
-    color: #9aacbf;
+    color: var(--muted);
   }
+  .close:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
   .phase-grid {
     display: grid;
-    grid-template-columns: repeat(5, minmax(210px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
     gap: 10px;
-    overflow-x: auto;
+
     padding-bottom: 6px;
   }
   .phase {
-    border: 1px solid rgba(139, 159, 184, 0.16);
-    background: rgba(10, 21, 36, 0.72);
+    border: 1px solid var(--border);
+    background: var(--surface-2);
     padding: 10px;
   }
   .phase.current {
-    border-color: rgba(62, 207, 142, 0.52);
+    border-color: var(--ok-fg);
   }
   .phase-head {
     display: flex;
     justify-content: space-between;
-    color: #dce7f4;
-    font-size: 12px;
+    color: var(--fg);
+    font-size: 14px;
   }
   .phase-head span {
-    color: #7890a9;
+    color: var(--muted);
   }
   .you-are-here {
     display: block;
@@ -167,38 +172,41 @@
     grid-template-columns: 16px 1fr;
     gap: 6px;
     padding: 8px;
-    border-left: 2px solid rgba(139, 159, 184, 0.22);
-    background: rgba(4, 11, 20, 0.58);
+    border-left: 2px solid var(--border);
+    background: var(--surface);
   }
   li.complete {
-    border-left-color: #3ecf8e;
+    border-left-color: var(--ok-fg);
   }
   li.elective {
     border-left-style: dashed;
   }
   .state {
-    color: #73869c;
+    color: var(--muted);
     padding-top: 1px;
   }
   li.complete .state {
-    color: #3ecf8e;
+    color: var(--ok-fg);
   }
   li strong {
     display: block;
-    color: #d6e1ed;
-    font-size: 10px;
+    color: var(--fg);
+    font-size: 14px;
     line-height: 1.35;
   }
   li p {
-    color: #8799ae;
-    font-size: 9px;
+    color: var(--muted);
+    font-size: 11px;
     line-height: 1.45;
     margin: 4px 0 6px;
   }
   .meta {
-    color: #657a91;
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
+    color: var(--muted);
+    display: block;
+    text-transform: none;
+    letter-spacing: normal;
+    font-family: var(--font-body);
+    font-size: 12px;
+    line-height: 1.5;
   }
 </style>

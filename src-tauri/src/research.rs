@@ -12,41 +12,6 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-/// Hosts whose documentation is authoritative enough to teach from. Matched on
-/// the host or any subdomain of it, so `hacks.mozilla.org` matches
-/// `mozilla.org` but `mozilla.org.evil.com` does not.
-const CREDIBLE_SOURCE_HOSTS: [&str; 28] = [
-    "developer.mozilla.org",
-    "mozilla.org",
-    "web.dev",
-    "developer.chrome.com",
-    "chromestatus.com",
-    "v8.dev",
-    "webkit.org",
-    "html.spec.whatwg.org",
-    "dom.spec.whatwg.org",
-    "spec.whatwg.org",
-    "w3.org",
-    "tc39.es",
-    "ecma-international.org",
-    "drafts.csswg.org",
-    "rfc-editor.org",
-    "ietf.org",
-    "nodejs.org",
-    "typescriptlang.org",
-    "react.dev",
-    "svelte.dev",
-    "vuejs.org",
-    "angular.dev",
-    "vite.dev",
-    "vitest.dev",
-    "esbuild.github.io",
-    "rust-lang.org",
-    "github.com",
-    // Where `normalize_fetch_url` sends GitHub blob URLs.
-    "raw.githubusercontent.com",
-];
-
 /// Upper bound on bytes we will read from one document before extraction.
 const MAX_DOCUMENT_BYTES: usize = 600_000;
 /// Words of readable prose kept per source when building the prompt block.
@@ -74,10 +39,31 @@ pub fn host_of(url: &str) -> Option<String> {
 /// as a primary source.
 pub fn is_credible_source(url: &str) -> bool {
     host_of(url).is_some_and(|host| {
-        CREDIBLE_SOURCE_HOSTS
+        crate::catalog::COURSES
             .iter()
+            .flat_map(|course| course.source_hosts)
             .any(|allowed| host == *allowed || host.ends_with(&format!(".{allowed}")))
     })
+}
+
+/// Apply the selected course's policy before retrieving teaching material.
+/// The general citation validator still recognizes the catalog-wide union.
+pub fn is_source_for(focus: &str, url: &str) -> bool {
+    crate::catalog::course(focus).is_some_and(|course| {
+        host_of(url).is_some_and(|host| {
+            course
+                .source_hosts
+                .iter()
+                .any(|allowed| host == *allowed || host.ends_with(&format!(".{allowed}")))
+        })
+    })
+}
+
+/// Discovery follows the subject's source policy. Systems and shell lessons
+/// use their authored primary references instead of unrelated browser results.
+pub fn uses_mdn_discovery(focus: &str) -> bool {
+    crate::catalog::course(focus)
+        .is_some_and(|course| course.source_hosts.contains(&"developer.mozilla.org"))
 }
 
 /// GitHub's blob viewer is mostly application shell; the raw file is the actual
@@ -468,13 +454,19 @@ impl Researcher {
 
     /// Retrieve the teaching material for one lesson: the concept's curated
     /// primary sources first, then discovered documentation to fill the gap.
-    pub async fn gather(&self, topic: &str, seeds: &[String], limit: usize) -> Vec<ResearchSource> {
+    pub async fn gather(
+        &self,
+        focus: &str,
+        topic: &str,
+        seeds: &[String],
+        limit: usize,
+    ) -> Vec<ResearchSource> {
         let mut candidates: Vec<String> = seeds
             .iter()
             .map(|seed| seed.trim().to_string())
-            .filter(|seed| is_credible_source(seed))
+            .filter(|seed| is_source_for(focus, seed))
             .collect();
-        if candidates.len() < limit {
+        if candidates.len() < limit && uses_mdn_discovery(focus) {
             for discovered in self.discover_mdn(topic, limit).await {
                 if !candidates.contains(&discovered) {
                     candidates.push(discovered);
@@ -687,6 +679,34 @@ pub fn cited_source_count(markdown: &str, sources: &[ResearchSource]) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn course_source_policies_do_not_route_shell_or_systems_lessons_to_mdn() {
+        for focus in ["system-design", "linux-bash", "bash-scripting", "unknown"] {
+            assert!(!uses_mdn_discovery(focus));
+            assert!(!is_source_for(
+                focus,
+                "https://developer.mozilla.org/en-US/docs/Web/API"
+            ));
+        }
+        assert!(uses_mdn_discovery("javascript"));
+        assert!(is_source_for(
+            "linux-bash",
+            "https://www.gnu.org/software/bash/manual/html_node/Quoting.html"
+        ));
+        assert!(is_source_for(
+            "system-design",
+            "https://www.postgresql.org/docs/current/transaction-iso.html"
+        ));
+        assert!(!is_source_for(
+            "linux-bash",
+            "https://gnu.org.evil.example/manual"
+        ));
+        assert!(!is_source_for(
+            "javascript",
+            "https://www.gnu.org/software/bash/manual/html_node/Quoting.html"
+        ));
+    }
 
     #[test]
     fn allowlist_matches_hosts_and_subdomains_but_not_lookalikes() {

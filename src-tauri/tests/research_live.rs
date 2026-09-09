@@ -49,7 +49,7 @@ async fn curated_primary_sources_are_reachable_and_readable() {
     let topic = research::course_topic(&concept.title, &concept.category);
     let researcher = research::Researcher::new();
     let sources = researcher
-        .gather(&topic, &concept.brief.primary_sources, 5)
+        .gather(&concept.focus, &topic, &concept.brief.primary_sources, 5)
         .await;
 
     println!("retrieved {} source(s) for {topic}", sources.len());
@@ -65,6 +65,34 @@ async fn curated_primary_sources_are_reachable_and_readable() {
     );
     let block = research::format_source_material(&sources);
     assert!(block.contains("RETRIEVED SOURCE MATERIAL"));
+}
+
+#[tokio::test]
+#[ignore = "hits primary documentation over the live network; no provider calls"]
+async fn systems_and_shell_courses_retrieve_subject_specific_readable_sources() {
+    let researcher = research::Researcher::new();
+    for slug in ["cap-theorem", "lb-quoting", "bs-error-handling"] {
+        let concept = seed_brief(slug);
+        let topic = research::course_topic(&concept.title, &concept.category);
+        let sources = researcher
+            .gather(&concept.focus, &topic, &concept.brief.primary_sources, 3)
+            .await;
+        println!(
+            "{}: {} readable primary sources",
+            concept.focus,
+            sources.len()
+        );
+        assert!(
+            sources.len() >= 2,
+            "{} needs at least two readable primary references",
+            concept.focus
+        );
+        for source in sources {
+            assert!(research::is_source_for(&concept.focus, &source.url));
+            assert!(!source.host.contains("mozilla"));
+            assert!(source.words >= 120);
+        }
+    }
 }
 
 /// The full path: fetch documentation, generate through the configured

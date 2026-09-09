@@ -7,97 +7,7 @@ use std::collections::HashMap;
 
 type Result<T> = std::result::Result<T, String>;
 
-pub const JAVASCRIPT_PROMPT: &str = include_str!("../prompts/classroom/javascript.txt");
-pub const TYPESCRIPT_PROMPT: &str = include_str!("../prompts/classroom/typescript.txt");
-pub const FRONTEND_ARCHITECTURE_PROMPT: &str =
-    include_str!("../prompts/classroom/frontend-architecture.txt");
-pub const DEVELOPER_TOOLING_PROMPT: &str =
-    include_str!("../prompts/classroom/developer-tooling.txt");
-pub const GERMAN_PROMPT: &str = include_str!("../prompts/classroom/german.txt");
-pub const ITALIAN_PROMPT: &str = include_str!("../prompts/classroom/italian.txt");
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SubjectKind {
-    Engineering,
-    Language,
-}
-
-impl SubjectKind {
-    fn as_str(self) -> &'static str {
-        match self {
-            Self::Engineering => "engineering",
-            Self::Language => "language",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct SubjectSpec {
-    pub id: &'static str,
-    pub kind: SubjectKind,
-    pub label: &'static str,
-    pub native_label: &'static str,
-    pub short_code: &'static str,
-    pub prompt_profile: &'static str,
-    pub prompt: &'static str,
-}
-
-pub const SUBJECTS: &[SubjectSpec] = &[
-    SubjectSpec {
-        id: "german",
-        kind: SubjectKind::Language,
-        label: "German",
-        native_label: "Deutsch",
-        short_code: "DE",
-        prompt_profile: "classroom.german",
-        prompt: GERMAN_PROMPT,
-    },
-    SubjectSpec {
-        id: "italian",
-        kind: SubjectKind::Language,
-        label: "Italian",
-        native_label: "Italiano",
-        short_code: "IT",
-        prompt_profile: "classroom.italian",
-        prompt: ITALIAN_PROMPT,
-    },
-    SubjectSpec {
-        id: "javascript",
-        kind: SubjectKind::Engineering,
-        label: "JavaScript & browser",
-        native_label: "runtime · platform",
-        short_code: "JS",
-        prompt_profile: "classroom.javascript",
-        prompt: JAVASCRIPT_PROMPT,
-    },
-    SubjectSpec {
-        id: "typescript",
-        kind: SubjectKind::Engineering,
-        label: "TypeScript",
-        native_label: "types · contracts",
-        short_code: "TS",
-        prompt_profile: "classroom.typescript",
-        prompt: TYPESCRIPT_PROMPT,
-    },
-    SubjectSpec {
-        id: "frontend-architecture",
-        kind: SubjectKind::Engineering,
-        label: "Frontend architecture",
-        native_label: "boundaries · scale",
-        short_code: "FA",
-        prompt_profile: "classroom.frontend-architecture",
-        prompt: FRONTEND_ARCHITECTURE_PROMPT,
-    },
-    SubjectSpec {
-        id: "developer-tooling",
-        kind: SubjectKind::Engineering,
-        label: "Developer tooling",
-        native_label: "compilers · DX",
-        short_code: "DT",
-        prompt_profile: "classroom.developer-tooling",
-        prompt: DEVELOPER_TOOLING_PROMPT,
-    },
-];
+pub use crate::catalog::{CourseDefinition as SubjectSpec, SubjectKind, COURSES as SUBJECTS};
 
 pub fn subject(subject_id: &str) -> Result<&'static SubjectSpec> {
     SUBJECTS
@@ -107,6 +17,7 @@ pub fn subject(subject_id: &str) -> Result<&'static SubjectSpec> {
 }
 
 pub fn initialize(conn: &Connection) -> Result<()> {
+    crate::catalog::validate()?;
     let global_agent = db::get_config(conn, "agent")
         .map_err(|error| error.to_string())?
         .unwrap_or_else(|| "claude".into());
@@ -148,6 +59,20 @@ pub fn initialize(conn: &Connection) -> Result<()> {
                 spec.prompt_profile,
                 minutes,
                 language::now_iso(),
+            ],
+        )
+        .map_err(|error| error.to_string())?;
+        // Refresh catalog metadata while retaining enrollment preferences.
+        conn.execute(
+            "UPDATE classroom_programs SET label = ?2, native_label = ?3,
+            short_code = ?4, prompt_profile = ?5, prompt_version = ?6 WHERE subject_id = ?1",
+            params![
+                spec.id,
+                spec.label,
+                spec.native_label,
+                spec.short_code,
+                spec.prompt_profile,
+                spec.version
             ],
         )
         .map_err(|error| error.to_string())?;

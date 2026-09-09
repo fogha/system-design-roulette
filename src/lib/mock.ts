@@ -1,3 +1,5 @@
+import { COURSES, courseDefinition } from './catalog';
+import seedConcepts from '../../src-tauri/seed/concepts.json';
 /**
  * Demo-mode API: used automatically when the frontend runs outside Tauri
  * (plain `vite dev` in a browser). Lets you develop and screenshot every
@@ -31,6 +33,24 @@ import type {
   RouletteView,
   SessionView,
 } from './ipc';
+
+// References and course metadata share the native authoring inputs. Browser
+// demos should never label an event-loop lesson as Bash or System Design.
+interface ReferenceLesson {
+  slug: string;
+  title: string;
+  markdown: string;
+  resources: EngineeringLessonView['resources'];
+  exercise: EngineeringLessonView['exercise'];
+  questions: { prompt: string; kind: string; choices: string[] | null; correct_answer: string; explanation: string; section: string; learning_objective: string }[];
+}
+const referenceFiles = import.meta.glob<ReferenceLesson>('../../src-tauri/seed/fallback_courses/*.json', { eager: true, import: 'default' });
+function referenceFor(focus: FocusArea): ReferenceLesson {
+  const slug = courseDefinition(focus)!.reference_lessons[0];
+  const lesson = Object.values(referenceFiles).find((lesson) => lesson.slug === slug);
+  if (!lesson) throw new Error(`Missing reference lesson for ${focus}`);
+  return lesson;
+}
 
 type Handler = (payload: unknown) => void;
 const listeners = new Map<string, Handler[]>();
@@ -312,44 +332,10 @@ const mockLanguageSettings: Record<
     sessionMinutes: 30,
   },
 };
-const CLASSROOM_CATALOG: Array<{
-  id: ClassroomSubjectId;
-  kind: 'language' | 'engineering';
-  label: string;
-  native: string;
-  short: string;
-}> = [
-  { id: 'german', kind: 'language', label: 'German', native: 'Deutsch', short: 'DE' },
-  { id: 'italian', kind: 'language', label: 'Italian', native: 'Italiano', short: 'IT' },
-  {
-    id: 'javascript',
-    kind: 'engineering',
-    label: 'JavaScript & browser',
-    native: 'runtime · platform',
-    short: 'JS',
-  },
-  {
-    id: 'typescript',
-    kind: 'engineering',
-    label: 'TypeScript',
-    native: 'types · contracts',
-    short: 'TS',
-  },
-  {
-    id: 'frontend-architecture',
-    kind: 'engineering',
-    label: 'Frontend architecture',
-    native: 'boundaries · scale',
-    short: 'FA',
-  },
-  {
-    id: 'developer-tooling',
-    kind: 'engineering',
-    label: 'Developer tooling',
-    native: 'compilers · DX',
-    short: 'DT',
-  },
-];
+const CLASSROOM_CATALOG = COURSES.map((course) => ({
+  id: course.id, kind: course.kind, label: course.label,
+  native: course.native_label, short: course.short_code,
+}));
 
 const requestedClass = (params.get('class') ?? params.get('program')) as
   | ClassroomSubjectId
@@ -617,13 +603,11 @@ function mockClassroomProgram(subjectId: ClassroomSubjectId): ClassroomProgramVi
     session_minutes: settings.sessionMinutes,
     learning_goal: settings.learningGoal,
     target_weekly_minutes: settings.targetWeeklyMinutes,
-    progress: languageProgress?.progress ?? (settings.enabled ? 0.18 : 0),
+    progress: languageProgress?.progress ?? 0,
     progress_label:
       languageProgress
         ? `${languageProgress.completed_steps} / ${languageProgress.required_steps} evidence steps in ${languageProgress.current_level}`
-        : settings.enabled
-          ? '6 / 34 concepts practiced'
-          : '0 / 34 concepts practiced',
+        : `0 / ${seedConcepts.filter((concept) => concept.focus === subjectId && concept.curriculum.core).length} core concepts practiced`,
     completed: false,
     language_progress: languageProgress,
   };
@@ -631,73 +615,28 @@ function mockClassroomProgram(subjectId: ClassroomSubjectId): ClassroomProgramVi
 
 function mockEngineeringLesson(subjectId: FocusArea): EngineeringLessonView {
   const catalog = CLASSROOM_CATALOG.find((item) => item.id === subjectId)!;
+  const reference = referenceFor(subjectId);
+  const concept = seedConcepts.find((concept) => concept.slug === reference.slug)!;
   return {
     session_id: mockEngineeringSessionId,
     subject_id: subjectId,
     label: catalog.label,
     short_code: catalog.short,
-    title:
-      subjectId === 'frontend-architecture'
-        ? 'Designing boundaries that survive team growth'
-        : 'Event-loop scheduling under production load',
-    concept_slug:
-      subjectId === 'frontend-architecture' ? 'fa-domain-boundaries' : 'js-event-loop',
-    concept_title:
-      subjectId === 'frontend-architecture'
-        ? 'Domain-oriented frontend boundaries'
-        : 'Browser event loop and rendering',
-    category: subjectId === 'frontend-architecture' ? 'architecture' : 'runtime',
-    curriculum: MOCK_CURRICULUM,
-    prerequisites: subjectId === 'frontend-architecture' ? ['fa-modular-frontend'] : [],
-    session_index: 6,
-    why_now:
-      'Session 6 advances the mechanisms phase by turning prior scheduling vocabulary into production diagnosis.',
-    markdown: COURSE_MD,
-    resources: RESOURCES,
-    questions: [
-      {
-        id: 1,
-        prompt: 'Which observation best proves a microtask storm is blocking rendering?',
-        choices: ['A long microtask chain before paint', 'A cache hit', 'A 204 response', 'A CSS token'],
-        section: 'Core mechanics',
-        learning_objective: 'Connect scheduling mechanics to measured rendering evidence.',
-      },
-      {
-        id: 2,
-        prompt: 'What runs after the current task and before the browser may render?',
-        choices: ['The microtask checkpoint', 'Every timer', 'A service worker install', 'DNS'],
-        section: 'Mental model',
-        learning_objective: 'Order task, microtask, and render opportunities.',
-      },
-      {
-        id: 3,
-        prompt: 'Which mitigation yields to another task?',
-        choices: ['scheduler.yield()', 'queueMicrotask()', 'Promise.then()', 'MutationObserver'],
-        section: 'Runnable experiment',
-        learning_objective: 'Choose a scheduling primitive from its mechanism.',
-      },
-      {
-        id: 4,
-        prompt: 'What should a production architecture decision include?',
-        choices: ['Rollback and telemetry', 'Only a diagram', 'Only bundle size', 'A framework slogan'],
-        section: 'Production architecture lens',
-        learning_objective: 'Make architecture measurable and reversible.',
-      },
-      {
-        id: 5,
-        prompt: 'Which source is strongest for normative event-loop behavior?',
-        choices: ['The HTML Standard', 'A social post', 'A package README', 'An interview answer'],
-        section: 'Key takeaways',
-        learning_objective: 'Use primary evidence for platform mechanics.',
-      },
-    ],
-    exercise: {
-      title: MOCK_EXERCISE.title,
-      instructions: MOCK_EXERCISE.instructions,
-      starter_code: MOCK_EXERCISE.starter_code,
-      deliverable: MOCK_EXERCISE.deliverable,
-      hints: MOCK_EXERCISE.hints,
-    },
+    title: reference.title,
+    concept_slug: reference.slug,
+    concept_title: concept.title,
+    category: concept.category,
+    curriculum: concept.curriculum as CurriculumBrief,
+    prerequisites: concept.prereqs,
+    session_index: 1,
+    why_now: 'Browser preview: a bundled reference lesson from this course. Native selection follows curriculum eligibility.',
+    markdown: reference.markdown,
+    resources: reference.resources,
+    questions: reference.questions.filter((question) => question.kind === 'mcq').map((question, index) => ({
+      id: index + 1, prompt: question.prompt, choices: question.choices!,
+      section: question.section, learning_objective: question.learning_objective,
+    })),
+    exercise: reference.exercise,
     agent_used: mockClassroomSettings[subjectId].agent,
     prompt_profile: `classroom.${subjectId}`,
     prompt_version: `classroom.${subjectId}.v1`,
@@ -826,6 +765,7 @@ const REVIEW: ReviewData = {
 };
 
 export const mockApi = {
+  getCatalog: async () => [...COURSES],
   getAppState: async () => appState(),
   checkAgent: async () => true,
   completeSetup: async () => {
@@ -836,34 +776,24 @@ export const mockApi = {
   getCurriculumMap: async (focus: FocusArea): Promise<CurriculumMapView> => ({
     focus,
     label: CLASSROOM_CATALOG.find((item) => item.id === focus)?.label ?? focus,
-    month_outcome:
-      'By day 30, ship and defend one coherent production artifact with measured behavior, explicit trade-offs, and a rollback path.',
-    completed_sessions: 6,
-    current_phase: 'mechanisms',
-    concepts: [
-      ['foundations', 'Runtime foundations', 'mastered'],
-      ['foundations', 'Boundary vocabulary', 'mastered'],
-      ['mechanisms', 'Observable execution mechanics', 'practicing'],
-      ['mechanisms', 'Failure diagnosis from evidence', 'unseen'],
-      ['production', 'Production decision under constraints', 'unseen'],
-      ['production', 'Migration and rollback', 'unseen'],
-      ['synthesis', 'Integrated portfolio milestone', 'unseen'],
-      ['elective', 'Current platform elective', 'unseen'],
-    ].map(([phase, title, mastery_state], index) => ({
-      id: index + 1,
-      slug: `${focus}-mock-${index + 1}`,
-      title,
-      category: String(phase),
-      tier: Math.min(index, 3),
-      phase: phase as CurriculumMapView['current_phase'],
-      core: phase !== 'elective',
-      prerequisites: index > 0 ? [`${focus}-mock-${index}`] : [],
-      mastery_state: mastery_state as CurriculumMapView['concepts'][number]['mastery_state'],
-      times_picked: mastery_state === 'unseen' ? 0 : 1,
-      last_picked_date: mastery_state === 'unseen' ? null : new Date().toISOString().slice(0, 10),
-      learner_outcome: `Apply ${String(title).toLowerCase()} in a production frontend and defend the decision with evidence.`,
-      artifact: MOCK_CURRICULUM.artifact,
-      related_concepts: [],
+    month_outcome: courseDefinition(focus)!.outcome,
+    completed_sessions: 0,
+    current_phase: 'foundations',
+    concepts: seedConcepts.filter((concept) => concept.focus === focus).map((concept) => ({
+      id: seedConcepts.indexOf(concept) + 1,
+      slug: concept.slug,
+      title: concept.title,
+      category: concept.category,
+      tier: concept.tier,
+      phase: concept.curriculum.phase as CurriculumMapView['current_phase'],
+      core: concept.curriculum.core,
+      prerequisites: concept.prereqs,
+      mastery_state: 'unseen',
+      times_picked: 0,
+      last_picked_date: null,
+      learner_outcome: concept.curriculum.learner_outcome,
+      artifact: concept.curriculum.artifact,
+      related_concepts: concept.curriculum.related_concepts,
     })),
   }),
   configureClassroomProgram: async (input: {
@@ -1059,7 +989,12 @@ export const mockApi = {
       throw new Error('engineering classroom session not found');
     }
     const lesson = mockActiveEngineering;
-    const score = input.answers.filter((answer) => answer === 0).length / lesson.questions.length;
+    const reference = referenceFor(lesson.subject_id).questions.filter((question) => question.kind === 'mcq');
+    if (input.answers.length !== lesson.questions.length || input.answers.some((answer, index) => !Number.isInteger(answer) || answer < 0 || answer >= lesson.questions[index].choices.length)) {
+      throw new Error('Answer every displayed question before submitting.');
+    }
+    const correct = input.answers.map((answer, index) => lesson.questions[index].choices[answer] === reference[index].correct_answer);
+    const score = correct.filter(Boolean).length / lesson.questions.length;
     mockActiveEngineering = null;
     return {
       session_id: input.session_id,
@@ -1070,12 +1005,9 @@ export const mockApi = {
         question_id: question.id,
         prompt: question.prompt,
         selected_answer: question.choices[input.answers[index]] ?? '',
-        correct_answer: question.choices[0],
-        correct: input.answers[index] === 0,
-        explanation:
-          input.answers[index] === 0
-            ? 'Correct: this follows from the measured mechanism.'
-            : 'Return to the mechanism and the evidence named in the lesson.',
+        correct_answer: reference[index].correct_answer,
+        correct: correct[index],
+        explanation: reference[index].explanation,
       })),
     };
   },

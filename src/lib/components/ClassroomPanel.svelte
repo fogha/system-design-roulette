@@ -10,6 +10,7 @@
     type FocusArea,
     type ModelId,
   } from '../ipc';
+  import { courseDefinition } from '../catalog';
   import { app } from '../stores.svelte';
   import AgentPicker from './AgentPicker.svelte';
   import CurriculumMap from './CurriculumMap.svelte';
@@ -299,18 +300,17 @@
     <div id="classroom-body" class="classroom-body">
       <div class="classroom-intro">
         <div>
-          <span class="eyebrow mono">SUBJECT-ISOLATED LEARNING</span>
+          <span class="eyebrow mono">YOUR COURSES</span>
           <p>
-            Each class has its own teacher, model, versioned prompt, schedule, sessions, and
-            progress. Classroom slots are advisory and never consume or overwrite the primary
-            frontend session.
+            Explore a course and its curriculum, then enable a class to start learning.
+            Each class keeps its own schedule, teacher preferences and progress.
           </p>
         </div>
         <span class="quality-chip mono"><Sparkles size={11} /> exact provider · editor-gated</span>
       </div>
       {#if primaryOwed}
         <p class="primary-wins" role="status">
-          Frontend engineering is due now. Classroom starts and resumes unlock after the enforced
+          Your daily study session is due now. Classroom starts and resumes unlock after the enforced
           session is completed or skipped; schedules and teacher settings remain available.
         </p>
       {/if}
@@ -318,6 +318,7 @@
       <div class="class-grid">
         {#each programs as program (program.subject_id)}
           {@const running = activeFor(program.subject_id)}
+          {@const course = courseDefinition(program.subject_id)}
           <article class:enabled={program.enabled} class:due={slotsFor(program.subject_id).some((s) => s.owed)} class="class-card">
             <header class="class-head">
               <span class="class-code mono">{program.short_code}</span>
@@ -329,6 +330,19 @@
                 {program.completed ? 'COMPLETE' : program.enabled ? 'ACTIVE' : 'OFF'}
               </span>
             </header>
+
+            {#if course}
+              <p class="course-summary">{course.summary}</p>
+              <details class="course-about">
+                <summary>About this course</summary>
+                <p>{course.outcome}</p>
+                <p><strong>Environment:</strong> {course.environment}</p>
+                {#if course.prerequisite_courses.length}
+                  <p><strong>Recommended preparation:</strong> {course.prerequisite_courses.map((id) => courseDefinition(id)?.label ?? id).join(', ')} or equivalent experience.</p>
+                {/if}
+                <p><strong>Course stages:</strong> {course.entry_points.map((point) => point.label).join(' → ')}</p>
+              </details>
+            {/if}
 
             <div class="progress-copy">
               <span>{program.progress_label}</span>
@@ -357,7 +371,7 @@
               </p>
             {:else}
               <p class="program-detail">
-                Independent {program.session_minutes}-minute architecture and engineering lessons.
+                {program.session_minutes}-minute learning sessions.
               </p>
             {/if}
 
@@ -374,7 +388,7 @@
                 class="resume-button"
                 type="button"
                 disabled={primaryOwed}
-                title={primaryOwed ? 'complete or skip the due frontend session first' : undefined}
+                title={primaryOwed ? 'complete or skip the due daily session first' : undefined}
                 onclick={() => app.resumeClass(program.subject_id)}
               >
                 resume · {running.title}
@@ -450,7 +464,7 @@
                 type="button"
                 disabled={!program.enabled || !!running || primaryOwed}
                 title={primaryOwed
-                  ? 'complete or skip the due frontend session first'
+                  ? 'complete or skip the due daily session first'
                   : program.enabled
                     ? program.completed
                       ? 'every module is completed — revisit is opt-in'
@@ -727,6 +741,11 @@
     background: var(--bg);
     min-width: 0;
   }
+  .course-summary { font-size: 14px; line-height: 1.55; color: var(--fg); margin: 0; }
+  .course-about { font-size: 13px; line-height: 1.55; color: var(--muted); }
+  .course-about summary { cursor: pointer; color: var(--fg); }
+  .course-about p { margin: 10px 0 0; }
+  .course-about summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
   .class-card.enabled { border-color: color-mix(in srgb, var(--accent) 30%, var(--node-border)); }
   .class-card.due { box-shadow: inset 3px 0 0 var(--amber); }
   .class-head { gap: 9px; }

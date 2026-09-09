@@ -999,32 +999,6 @@ fn with_focus(prompt: &str, focus: &str) -> String {
         .replace("{{MONTH_OUTCOME}}", crate::focus::month_outcome(focus))
 }
 
-pub const FALLBACK_COURSES_SYSTEM_DESIGN: &[&str] = &[
-    include_str!("../seed/fallback_courses/rate-limiting.json"),
-    include_str!("../seed/fallback_courses/caching-strategies.json"),
-    include_str!("../seed/fallback_courses/consistent-hashing.json"),
-];
-
-pub const FALLBACK_COURSES_JAVASCRIPT: &[&str] = &[
-    include_str!("../seed/fallback_courses/js-event-loop.json"),
-    include_str!("../seed/fallback_courses/js-v8-hidden-classes.json"),
-];
-
-pub const FALLBACK_COURSES_TYPESCRIPT: &[&str] = &[
-    include_str!("../seed/fallback_courses/ts-structural-typing.json"),
-    include_str!("../seed/fallback_courses/ts-inference-flow.json"),
-];
-
-pub const FALLBACK_COURSES_FRONTEND_ARCHITECTURE: &[&str] = &[
-    include_str!("../seed/fallback_courses/fa-domain-boundaries.json"),
-    include_str!("../seed/fallback_courses/fa-rendering-strategy.json"),
-];
-
-pub const FALLBACK_COURSES_DEVELOPER_TOOLING: &[&str] = &[
-    include_str!("../seed/fallback_courses/dt-ast-parsing.json"),
-    include_str!("../seed/fallback_courses/dt-lsp-protocol.json"),
-];
-
 #[derive(Debug, Clone, Deserialize)]
 pub struct FallbackCourse {
     pub slug: String,
@@ -1304,6 +1278,7 @@ impl Generator {
         let sources = self
             .researcher
             .gather(
+                request.focus,
                 &topic,
                 &request.curriculum.primary_sources,
                 RESEARCH_SOURCE_TARGET,
@@ -2715,13 +2690,7 @@ pub fn resolve_on_path(name: &str) -> Option<String> {
 }
 
 fn fallback_sources(focus: &str) -> &'static [&'static str] {
-    match focus {
-        "javascript" => FALLBACK_COURSES_JAVASCRIPT,
-        "typescript" => FALLBACK_COURSES_TYPESCRIPT,
-        "frontend-architecture" => FALLBACK_COURSES_FRONTEND_ARCHITECTURE,
-        "developer-tooling" => FALLBACK_COURSES_DEVELOPER_TOOLING,
-        _ => FALLBACK_COURSES_SYSTEM_DESIGN,
-    }
+    crate::catalog::course(focus).map_or(&[], |course| course.bundled_lessons)
 }
 
 /// Every MCQ across the bundled assessment material for `focus`, pooled
@@ -3604,13 +3573,7 @@ mod exercise_tests {
 
     #[test]
     fn bundled_fallback_courses_carry_a_structured_exercise_with_deliverable() {
-        for focus in [
-            "javascript",
-            "typescript",
-            "frontend-architecture",
-            "developer-tooling",
-            "system-design",
-        ] {
+        for focus in crate::focus::SELECTABLE {
             let fb = pick_fallback(focus, "");
             let exercise = fb
                 .exercise

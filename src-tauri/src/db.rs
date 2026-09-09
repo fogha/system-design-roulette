@@ -130,8 +130,7 @@ pub struct Session {
     pub session_type: String,
     /// Teacher's one-line reason for the chosen type (shown in UI).
     pub plan_reason: String,
-    /// Learning track: javascript | typescript | frontend-architecture |
-    /// developer-tooling (empty until chosen).
+    /// Engineering course ID from the catalog (empty until chosen).
     pub focus: String,
 }
 
@@ -601,36 +600,88 @@ pub fn seed_concepts(conn: &Connection, seed_json: &str) -> Result<usize> {
         crate::focus::LEGACY_FOCUS.into()
     }
     let seeds: Vec<SeedConcept> = serde_json::from_str(seed_json)?;
-    let index: HashMap<&str, &str> = seeds
-        .iter()
-        .map(|seed| (seed.slug.as_str(), seed.focus.as_str()))
-        .collect();
+    let mut index = HashMap::new();
     for seed in &seeds {
-        if crate::focus::is_selectable(&seed.focus) {
-            seed.curriculum.validate().map_err(|reason| {
-                DbError::InvalidCurriculum(seed.slug.clone(), reason.to_string())
-            })?;
-            for related in &seed.curriculum.related_concepts {
-                let Some(related_focus) = index.get(related.as_str()) else {
-                    return Err(DbError::InvalidCurriculum(
-                        seed.slug.clone(),
-                        format!("related concept does not exist: {related}"),
-                    ));
-                };
-                if *related_focus == seed.focus {
-                    return Err(DbError::InvalidCurriculum(
-                        seed.slug.clone(),
-                        format!("related concept must belong to another track: {related}"),
-                    ));
-                }
+        if seed.slug.is_empty() || index.insert(seed.slug.as_str(), seed).is_some() {
+            return Err(DbError::InvalidCurriculum(
+                seed.slug.clone(),
+                "duplicate or empty slug".into(),
+            ));
+        }
+    }
+    // Validate the entire graph before any metadata is written. A broken
+    // release must not partially refresh a learner's installed curriculum.
+    for seed in &seeds {
+        crate::focus::validate_selectable(&seed.focus)?;
+        seed.curriculum
+            .validate()
+            .map_err(|reason| DbError::InvalidCurriculum(seed.slug.clone(), reason.to_string()))?;
+        if !(0..=3).contains(&seed.tier) {
+            return Err(DbError::InvalidCurriculum(
+                seed.slug.clone(),
+                "tier must be between zero and three".into(),
+            ));
+        }
+        for prerequisite in &seed.prereqs {
+            let valid = index
+                .get(prerequisite.as_str())
+                .is_some_and(|previous| previous.focus == seed.focus && previous.tier <= seed.tier);
+            if !valid {
+                return Err(DbError::InvalidCurriculum(
+                    seed.slug.clone(),
+                    format!("invalid prerequisite: {prerequisite}"),
+                ));
+            }
+        }
+        for related in &seed.curriculum.related_concepts {
+            if index
+                .get(related.as_str())
+                .is_none_or(|other| other.focus == seed.focus)
+            {
+                return Err(DbError::InvalidCurriculum(
+                    seed.slug.clone(),
+                    format!("related concept must exist in another track: {related}"),
+                ));
             }
         }
     }
+    fn visit<'a>(
+        slug: &'a str,
+        index: &HashMap<&'a str, &'a SeedConcept>,
+        visiting: &mut std::collections::HashSet<&'a str>,
+        visited: &mut std::collections::HashSet<&'a str>,
+    ) -> Result<()> {
+        if visited.contains(slug) {
+            return Ok(());
+        }
+        if !visiting.insert(slug) {
+            return Err(DbError::InvalidCurriculum(
+                slug.to_string(),
+                "prerequisite cycle".into(),
+            ));
+        }
+        for prerequisite in &index[slug].prereqs {
+            visit(prerequisite, index, visiting, visited)?;
+        }
+        visiting.remove(slug);
+        visited.insert(slug);
+        Ok(())
+    }
+    let mut visited = std::collections::HashSet::new();
+    for seed in &seeds {
+        visit(
+            &seed.slug,
+            &index,
+            &mut std::collections::HashSet::new(),
+            &mut visited,
+        )?;
+    }
+    let tx = conn.unchecked_transaction()?;
     let mut inserted = 0;
     for s in seeds {
         let prereqs_json = serde_json::to_string(&s.prereqs)?;
         let brief_json = serde_json::to_string(&s.curriculum)?;
-        inserted += conn.execute(
+        inserted += tx.execute(
             "INSERT OR IGNORE INTO concepts
                 (slug, title, category, tier, prereqs_json, focus, brief_json)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
@@ -646,7 +697,7 @@ pub fn seed_concepts(conn: &Connection, seed_json: &str) -> Result<usize> {
         )?;
         // Curriculum metadata always refreshes from seed (existing installs
         // pick up tier/prereq/focus changes); progress columns are never touched.
-        conn.execute(
+        tx.execute(
             "UPDATE concepts
              SET title = ?2, category = ?3, tier = ?4, prereqs_json = ?5,
                  focus = ?6, brief_json = ?7
@@ -662,6 +713,7 @@ pub fn seed_concepts(conn: &Connection, seed_json: &str) -> Result<usize> {
             ],
         )?;
     }
+    tx.commit()?;
     Ok(inserted)
 }
 

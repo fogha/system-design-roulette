@@ -10,6 +10,12 @@ use tauri::{AppHandle, Emitter, State};
 
 type CmdResult<T> = Result<T, String>;
 
+#[tauri::command]
+pub fn get_catalog() -> CmdResult<Vec<crate::catalog::CourseDefinition>> {
+    crate::catalog::validate()?;
+    Ok(crate::catalog::COURSES.to_vec())
+}
+
 fn err<E: std::fmt::Display>(e: E) -> String {
     e.to_string()
 }
@@ -527,7 +533,7 @@ pub async fn start_classroom_session(
 ) -> CmdResult<serde_json::Value> {
     if session::session_owed(&state) {
         return Err(
-            "The enforced frontend engineering session is due. Complete or skip it before starting a classroom class."
+            "The focused daily study session is due. Complete or skip it before starting a classroom class."
                 .into(),
         );
     }
@@ -580,7 +586,7 @@ pub fn resume_classroom_session(
 ) -> CmdResult<Option<serde_json::Value>> {
     if session::session_owed(&state) {
         return Err(
-            "The enforced frontend engineering session is due. Complete or skip it before resuming a classroom class."
+            "The focused daily study session is due. Complete or skip it before resuming a classroom class."
                 .into(),
         );
     }

@@ -483,9 +483,20 @@ fn curriculum_seed_has_valid_focus_local_prerequisite_graphs() {
             .filter(|entry| entry["curriculum"]["core"].as_bool() == Some(true))
             .count();
         assert!(
-            core_count >= 30,
-            "track {track} needs a 30-session core path, found {core_count}"
+            core_count >= entry_points,
+            "track {track} must retain its foundations in the core path"
         );
+        // Course length follows its authored outcome; a shell course is not
+        // padded to fit the historical 30-session frontend schedule.
+        for phase in ["foundations", "mechanisms", "production", "synthesis"] {
+            assert!(
+                track_entries
+                    .iter()
+                    .any(|entry| entry["curriculum"]["phase"] == phase
+                        && entry["curriculum"]["core"] == true),
+                "{track} has no core work in entry phase {phase}"
+            );
+        }
         for entry in track_entries {
             let slug = entry["slug"].as_str().unwrap();
             let brief: db::CurriculumBrief =
@@ -704,7 +715,8 @@ fn session_focus_persists_and_rejects_invalid_values() {
     };
     db::upsert_session(&conn, &pending).unwrap();
     focus::validate_selectable("javascript").unwrap();
-    assert!(focus::validate_selectable("system-design").is_err());
+    focus::validate_selectable("system-design").unwrap();
+    assert!(focus::validate_selectable("unknown-subject").is_err());
 
     pending.focus = "typescript".into();
     pending.status = "in_progress".into();
@@ -897,7 +909,7 @@ fn dossier_reflects_ledger_and_notes_within_focus() {
         "dossier missing struggling section: {d}"
     );
     assert!(d.contains("confuses token with node kind"));
-    assert!(d.contains("developer tooling"));
+    assert!(d.contains(focus::label("developer-tooling")));
     assert!(d.contains("RECENT COURSES"));
     assert!(d.contains("RECENT EXIT-CHECK MISCONCEPTIONS"));
     assert!(d.contains("cache ownership controls invalidation"));
