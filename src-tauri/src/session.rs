@@ -144,6 +144,11 @@ pub fn questions_for_today(
     today: &str,
     yesterday: &str,
 ) -> db::Result<Vec<db::Question>> {
+    // Persist the full round, including origin and answer key. Reads and
+    // grading must not resample review questions or reinterpret carryover.
+    if let Some(questions) = crate::domain::primary_quiz::frozen_questions(conn, today)? {
+        return Ok(questions);
+    }
     let focus = session_focus(conn, today)?.unwrap_or_default();
     if focus.is_empty() {
         return Ok(Vec::new());
@@ -152,12 +157,6 @@ pub fn questions_for_today(
         && db::get_config(conn, &format!("planned:{today}"))?.is_none()
     {
         return Ok(Vec::new());
-    }
-    // Persist the full round, including origin and answer key. Reads and
-    // grading must not resample review questions or reinterpret carryover.
-    let round_key = format!("quiz_round:{today}");
-    if let Some(json) = db::get_config(conn, &round_key)? {
-        return Ok(serde_json::from_str(&json)?);
     }
     let is_pop = db::get_session(conn, today)?
         .map(|s| s.session_type == "pop_quiz")
@@ -186,7 +185,7 @@ pub fn questions_for_today(
                     });
                 }
             }
-            db::set_config(conn, &round_key, &serde_json::to_string(&out)?)?;
+            crate::domain::primary_quiz::freeze(conn, today, &out)?;
             return Ok(out);
         }
         // Activation has not assembled the pop-quiz set yet.
@@ -198,7 +197,7 @@ pub fn questions_for_today(
         let review = db::spaced_review_sample(conn, today, &focus, &exclude, 2)?;
         quiz.extend(review);
     }
-    db::set_config(conn, &round_key, &serde_json::to_string(&quiz)?)?;
+    crate::domain::primary_quiz::freeze(conn, today, &quiz)?;
     Ok(quiz)
 }
 

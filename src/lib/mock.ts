@@ -1,3 +1,4 @@
+import type { AssessmentRoundId } from './contracts/assessments';
 import { previewEnrollmentOptions, previewEnrollmentDraft, savePreviewEnrollmentDraft } from './enrollment-preview';
 import type { SaveEnrollmentDraft } from './contracts/enrollment';
 import { COURSES, courseDefinition } from './catalog';
@@ -31,6 +32,7 @@ import type {
   LanguageSessionResult,
   PlannedSlot,
   QuizQuestionView,
+  QuizRoundView,
   ReviewData,
   RouletteView,
   SessionView,
@@ -766,6 +768,20 @@ const REVIEW: ReviewData = {
   ],
 };
 
+let previewQuiz: QuizRoundView & { result: ReviewData | null } = {
+  round_id: 'preview-primary-round-v1' as AssessmentRoundId, revision: 0, questions: structuredClone(QUESTIONS), result: null,
+};
+try {
+  const saved = globalThis.localStorage?.getItem('principia:preview-primary-round-v1');
+  if (saved) {
+    const value = JSON.parse(saved);
+    if (value.round_id === previewQuiz.round_id && Number.isInteger(value.revision) && Array.isArray(value.questions) && value.questions.length === QUESTIONS.length) previewQuiz = value;
+  }
+} catch { /* Browser-only preview storage can be unavailable. */ }
+function savePreviewQuiz() {
+  try { globalThis.localStorage?.setItem('principia:preview-primary-round-v1', JSON.stringify(previewQuiz)); } catch { /* In-memory preview still works. */ }
+}
+
 export const mockApi = {
   getEnrollmentOptions: async (courseId: ClassroomSubjectId) => previewEnrollmentOptions(courseId),
   getEnrollmentDraft: async (courseId: ClassroomSubjectId) => previewEnrollmentDraft(courseId),
@@ -1182,17 +1198,42 @@ export const mockApi = {
     clearMockChatThreads();
     return session();
   },
-  getQuiz: async () => QUESTIONS,
-  submitAnswer: async (id: number) => {
-    const q = QUESTIONS.find((q) => q.id === id);
-    if (q) q.answered = true;
+  getQuiz: async (): Promise<QuizRoundView> => structuredClone(previewQuiz),
+  submitAnswer: async (roundId: AssessmentRoundId, expectedRevision: number, id: number, answer: string, confirmed: boolean) => {
+    if (roundId !== previewQuiz.round_id) throw new Error('This is no longer the displayed quiz round.');
+    if (previewQuiz.result || state.step !== 'quiz') throw new Error('This session is not awaiting quiz answers.');
+    const q = previewQuiz.questions.find((q) => q.id === id);
+    if (!q) throw new Error('Question does not belong to the displayed round.');
+    if (confirmed && !answer.trim()) throw new Error('Enter an answer before continuing.');
+    if (q.kind === 'mcq' && answer && !q.choices?.includes(answer)) throw new Error('Choose one of the displayed answers.');
+    if (new TextEncoder().encode(answer).length > 65_536) throw new Error('Assessment answer exceeds 64 KiB.');
+    if (q.draft === answer && q.answered === confirmed) return previewQuiz.revision;
+    if (expectedRevision !== previewQuiz.revision) throw new Error('Assessment answers changed; reload the saved round before editing.');
+    q.draft = answer; q.answered = confirmed; previewQuiz.revision += 1; savePreviewQuiz();
+    return previewQuiz.revision;
   },
-  finishQuiz: async () => {
-    state.step = 'review';
-    state.score = REVIEW.score;
-    return REVIEW;
+  finishQuiz: async (roundId: AssessmentRoundId, expectedRevision: number) => {
+    if (roundId !== previewQuiz.round_id) throw new Error('This is no longer the displayed quiz round.');
+    if (!previewQuiz.result) {
+      if (expectedRevision !== previewQuiz.revision) throw new Error('Answers changed; reload the saved round before submitting.');
+      if (previewQuiz.questions.some((q) => !q.answered || !q.draft?.trim())) throw new Error('Answer every question before submitting.');
+      const items = previewQuiz.questions.map((q) => {
+        const reference = REVIEW.items.find((item) => item.question_id === q.id);
+        const correctAnswer = reference?.correct_answer ?? QUESTIONS[1].choices![0];
+        const correct = q.kind === 'mcq' ? q.draft === correctAnswer : null;
+        return { question_id: q.id, prompt: q.prompt, kind: q.kind, user_answer: q.draft ?? '', correct,
+          feedback: correct === null ? 'Preview has no live grader; compare your explanation with the model answer.' : '',
+          correct_answer: correctAnswer, explanation: reference?.explanation ?? 'The microtask queue drains before the next timer task.', returns_tomorrow: correct === false };
+      });
+      const graded = items.filter((item) => item.correct !== null);
+      previewQuiz.result = { items, score: graded.length ? graded.filter((item) => item.correct).length / graded.length : 1, self_assess: items.some((item) => item.correct === null) };
+      savePreviewQuiz();
+    }
+    if (state.step === 'quiz') state.step = 'review';
+    state.score = previewQuiz.result.score;
+    return structuredClone(previewQuiz.result);
   },
-  getReview: async () => REVIEW,
+  getReview: async () => structuredClone(previewQuiz.result ?? REVIEW),
   finishReview: async () => {
     state.step = 'roulette';
     mockEmit('session:state', session());

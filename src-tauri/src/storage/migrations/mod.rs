@@ -48,6 +48,15 @@ const MIGRATIONS: &[Migration] = &[
             Ok(())
         },
     },
+    Migration {
+        version: 3,
+        name: "shared_assessments",
+        sources: &[include_str!("003_assessments.sql")],
+        apply: |conn| {
+            conn.execute_batch(include_str!("003_assessments.sql"))?;
+            Ok(())
+        },
+    },
 ];
 
 pub fn enable_foreign_keys(conn: &Connection) -> Result<()> {

@@ -1,48 +1,94 @@
 <script lang="ts">
-  import { api, type QuizQuestionView, type ReviewData } from '../ipc';
+  import { onMount } from 'svelte';
+  import { api, type QuizQuestionView, type QuizRoundView, type ReviewData } from '../ipc';
+  import type { AssessmentWork } from '../contracts/assessments';
+  import { assessmentEditor, type AssessmentEditorState } from '../features/assessments/work-editor';
   import { app } from '../stores.svelte';
   import ClusterBar from '../components/ClusterBar.svelte';
   import NodeCard from '../components/NodeCard.svelte';
   import StatusLED from '../components/StatusLED.svelte';
   import Markdown from '../components/Markdown.svelte';
-  import { Inbox, TriangleAlert, Zap, ArrowUp } from 'lucide-svelte';
+  import { Inbox, TriangleAlert, Zap, ArrowUp, Check } from 'lucide-svelte';
 
   let questions = $state<QuizQuestionView[]>([]);
   let idx = $state(0);
   let answer = $state('');
   let loading = $state(true);
   let grading = $state(false);
-
+  let advancing = $state(false);
+  let error = $state('');
+  let work = $state<AssessmentEditorState | null>(null);
+  let editor = $state<ReturnType<typeof assessmentEditor>>();
+  let unsubscribe: (() => void) | undefined;
+  let alive = false;
   let { onreview }: { onreview?: (data: ReviewData) => void } = $props();
-
   const current = $derived(questions[idx]);
   const progress = $derived(questions.length ? (idx / questions.length) * 100 : 0);
   const isAudit = $derived(app.session?.session_type === 'pop_quiz');
+  const needsRecovery = $derived(work?.status === 'error' || work?.status === 'conflict');
+  $effect(() => { answer = current ? work?.responses[String(current.id)]?.answer ?? current.draft ?? '' : ''; });
 
-  $effect(() => {
-    api.getQuiz().then((qs) => {
-      questions = qs;
-      const firstUnanswered = qs.findIndex((q) => !q.answered);
-      idx = firstUnanswered === -1 ? qs.length : firstUnanswered;
-      loading = false;
-      if (qs.length === 0) {
-        api.finishReview().then(() => app.refresh());
-      }
-    });
+  function initialWork(round: QuizRoundView): AssessmentWork {
+    if (!round.round_id) throw new Error('The quiz has no saved round. Reload the session.');
+    return { roundId: round.round_id, revision: round.revision, responses: Object.fromEntries(round.questions.map((q) => [String(q.id), { answer: q.draft ?? '', status: q.answered ? 'answered' : 'draft' }])) };
+  }
+  function firstUnanswered() {
+    const index = questions.findIndex((q) => work?.responses[String(q.id)]?.status !== 'answered');
+    idx = index < 0 ? questions.length : index;
+  }
+  async function load() {
+    loading = true; error = '';
+    try {
+      const round = await api.getQuiz();
+      if (!alive) return;
+      questions = round.questions;
+      if (!questions.length) { await api.finishReview(); if (alive) await app.refresh(); return; }
+      const initial = initialWork(round);
+      editor = assessmentEditor(initial, (id, response, revision) => api.submitAnswer(initial.roundId, revision, Number(id), response.answer, response.status === 'answered'));
+      unsubscribe?.();
+      unsubscribe = editor.subscribe((value) => { work = value; });
+      firstUnanswered();
+      if (work?.status === 'saving') void editor.flush();
+    } catch (cause) { error = String(cause); }
+    finally { loading = false; }
+  }
+  onMount(() => {
+    alive = true; void load();
+    return () => { alive = false; unsubscribe?.(); void editor?.flush(); };
   });
-
+  function edit(value: string) {
+    answer = value;
+    if (current && editor) editor.edit(String(current.id), { answer: value, status: 'draft' });
+  }
+  async function grade() {
+    if (!editor || !work || grading || needsRecovery) return;
+    grading = true; error = '';
+    try {
+      if (!await editor.flush()) return;
+      const saved = editor.snapshot();
+      const review = await api.finishQuiz(saved.roundId, saved.revision);
+      if (alive) { onreview?.(review); await app.refresh(); }
+    } catch (cause) { error = String(cause); }
+    finally { grading = false; }
+  }
   async function submit() {
-    if (!current || !answer.trim()) return;
-    await api.submitAnswer(current.id, answer.trim());
-    answer = '';
-    idx += 1;
-    if (idx >= questions.length) {
-      grading = true;
-      const review = await api.finishQuiz();
-      grading = false;
-      onreview?.(review);
-      await app.refresh();
-    }
+    if (!current || !answer.trim() || !editor || advancing || grading || needsRecovery) return;
+    advancing = true; error = '';
+    try {
+      editor.edit(String(current.id), { answer: answer.trim(), status: 'answered' });
+      if (!await editor.flush() || !alive) return;
+      idx += 1;
+      if (idx >= questions.length) await grade();
+    } finally { advancing = false; }
+  }
+  async function recover(keepLocal: boolean) {
+    if (!editor) return;
+    try {
+      const round = await api.getQuiz();
+      if (!alive) return;
+      await editor.resolve(initialWork(round), keepLocal);
+      firstUnanswered(); error = '';
+    } catch (cause) { error = String(cause); }
   }
 </script>
 
@@ -59,6 +105,8 @@
       <StatusLED tone="pending" label="grading in flight" />
       <p class="sub mono">free-text answers dispatched to agent-backend · rubric grading</p>
     </div>
+  {:else if !questions.length && error}
+    <div class="center"><p class="save-error" role="alert">{error}</p><button class="ghost mono-ghost" onclick={load}>Reload quiz</button></div>
   {:else if current}
     <div class="quiz-body">
       <div class="progress-track"><div class="progress-fill" style="width: {progress}%"></div></div>
@@ -86,7 +134,8 @@
                   role="radio"
                   aria-checked={answer === choice}
                   class:selected={answer === choice}
-                  onclick={() => (answer = choice)}
+                  onclick={() => edit(choice)}
+                  disabled={advancing || needsRecovery}
                 >
                   <span class="choice-key mono">{String.fromCharCode(65 + i)}</span>
                   <Markdown markdown={choice} compact />
@@ -94,20 +143,40 @@
               {/each}
             </div>
           {:else}
-            <textarea rows="4" placeholder="2-4 sentences — graded against a rubric" bind:value={answer}></textarea>
+            <textarea rows="4" aria-label="Your answer" placeholder="2-4 sentences — graded against a rubric" value={answer} disabled={advancing || needsRecovery} oninput={(event) => edit(event.currentTarget.value)}></textarea>
           {/if}
           <div class="actions">
-            <button class="cta mono-cta" onclick={submit} disabled={!answer.trim()}>
-              <ArrowUp size={13} />{idx === questions.length - 1 ? 'send & grade all' : 'send response'}
+            {#if idx > 0}<button class="ghost mono-ghost" disabled={advancing} onclick={() => (idx -= 1)}>Previous answer</button>{/if}
+            <button class="cta mono-cta" onclick={submit} disabled={!answer.trim() || advancing || needsRecovery}>
+              <ArrowUp size={13} />{advancing ? 'saving…' : idx === questions.length - 1 ? 'send & grade all' : 'send response'}
             </button>
           </div>
         {/snippet}
       </NodeCard>
     </div>
+  {:else if questions.length}
+    <div class="quiz-body"><NodeCard Icon={Check} name="responses-saved" badge="ready" badgeTone="teal">
+      <p>Every answer is saved. Submit this round for feedback.</p>
+      <div class="actions"><button class="ghost mono-ghost" onclick={() => (idx = 0)}>Review answers</button><button class="cta mono-cta" onclick={grade} disabled={needsRecovery}>Grade saved answers</button></div>
+    </NodeCard></div>
+  {/if}
+  {#if !loading && !grading && questions.length}
+    <div class="save-state" role="status">
+      {work?.status === 'saving' ? 'Saving this round…' : work?.status === 'saved' ? 'Answers saved on this device' : ''}
+      {#if needsRecovery}<p class="save-error" role="alert">{work?.error} Your local draft is retained.</p><div class="recovery-actions">
+        {#if work?.status === 'error'}<button class="ghost mono-ghost" onclick={() => editor?.flush()}>Retry save</button>{/if}
+        <button class="ghost mono-ghost" onclick={() => recover(false)}>Use saved answers</button>
+        {#if editor?.hasLocalChanges()}<button class="ghost mono-ghost" onclick={() => recover(true)}>Keep local answers</button>{/if}
+      </div>{/if}
+      {#if error}<p class="save-error" role="alert">{error}</p>{/if}
+    </div>
   {/if}
 </div>
 
 <style>
+  .save-state { width: min(760px, 92vw); margin: 0 auto; padding: 0 24px 20px; color: var(--muted); font: 11px/1.6 var(--font-mono); }
+  .save-error { color: var(--bad-fg); }
+  .recovery-actions { display: flex; flex-wrap: wrap; gap: 8px; }
   .quiz-wrap {
     flex: 1;
     display: flex;
@@ -220,6 +289,8 @@
   }
   .actions {
     display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
     justify-content: flex-end;
     margin-top: 16px;
   }

@@ -8,6 +8,7 @@ Principia Desk keeps the existing application data location and SQLite database.
 
 - v1 brings original-main, PR-head and intermediate schemas to the legacy baseline, preserving their IDs and values. Missing columns are detected explicitly. Course-source and exercise-owner rebuilds copy records before replacing a table.
 - v2 adds immutable curriculum snapshots, enrollment drafts, classes, accepted path revisions and namespaced legacy crosswalks. It does not enroll a learner, alter an existing program, create schedules or manufacture assessment evidence.
+- v3 adds shared assessment attempts, frozen rounds, revisioned answer drafts and immutable submissions. It preserves the original quiz config bytes and prevents further writes through the retired quiz keys.
 
 Migration SQL and the frozen `legacy_v1.rs` implementation contribute to their checksums. Once committed, do not edit these sources, even for formatting. Add a new migration for later changes. The runner itself may evolve without changing an already-applied migration's meaning.
 
@@ -30,3 +31,15 @@ There is one pending draft per course. Opaque draft IDs and expected revisions r
 ## Regression fixtures
 
 `tests/fixtures/upgrades/` includes SQL schemas extracted from the original main, PR head and intermediate exercise revision, with source commits recorded in their headers. Upgrade tests compare every original column and record, including multiple documents on one date, colliding IDs in different owner namespaces, settings, active work, language bands, mastery aggregates and audio paths. Further tests cover committed WAL data, backup failure, injected late migration failures, integrity failures, concurrent opens and incompatible ledgers. Enrollment tests cover all nine courses, restart, retries, stale edits and rollback without learning credit.
+
+## Shared assessment runtime
+
+`domain/assessments.rs` owns frozen item definitions and rubrics, saved responses, revisions and submissions. A round has an opaque ID independent of its question IDs. A response distinguishes an unfinished draft, a confirmed answer and an explicit skip. Adapters supply trusted question bodies and interpret results; learner commands supply only a round ID, expected revision and answer. Saving an assessment never activates a lesson, changes focus, consumes a schedule occurrence or awards mastery.
+
+One active attempt is permitted per owner. Follow-up rounds require the previous round's submission. Identical lost-response retries return the saved work; a different answer with a stale revision is rejected. Submission joins the adapter's transaction, checks the round and answer revision captured before grading, and stores the first immutable result. Submitted answers cannot be edited. The enrollment owner and diagnostic purpose are supported by the runtime and tested in isolation; a user-facing diagnostic bank, commands and path recommendation flow are still pending.
+
+The primary quiz is the first adapter to use this runtime. New quiz questions, drafts and results use the assessment tables exclusively. The date remains a compatibility owner lookup until the shared study-session cutover. Legacy `attempts`, carryover, mastery and session-step writes remain transactional projections of primary submission; other learning engines have not yet migrated. Legacy attempt rows still use their old boolean correctness field, including their original self-assessment convention. The canonical assessment result retains an unavailable grader's verdict as `null`; a free-text answer without a verdict does not update mastery.
+
+Migration v3 preserves `quiz_round:*`, `pending_answers:*` and `quiz_result:*` in `legacy_assessment_config`, including malformed or unrecognized data. Known full question snapshots and matching answers import once, with a namespaced crosswalk. An unknown snapshot format stops automatic reconstruction and retains the original bytes. Unmatched legacy answer IDs remain in the raw archive and are counted in the attempt context; an archive recovery UI is pending. Older results can still be read without manufacturing new grading evidence.
+
+`features/assessments/work-editor.ts` serializes native writes per round, flushes on navigation and keeps unsaved work in local recovery storage. A newer saved revision requires an explicit recovery choice. Malformed recovery records remain untouched until the learner chooses the saved answers. Native persistence still works if browser recovery storage is unavailable. The quiz restores partial text and provides an explicit grading action when every answer was confirmed before a restart.

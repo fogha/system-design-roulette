@@ -1,4 +1,8 @@
 use crate::db::{self, Attempt};
+use crate::domain::{
+    assessments::{self, Owner, ResponseStatus, Round, RoundId},
+    primary_quiz,
+};
 use crate::generator::GradeItem;
 use crate::session::{self, SessionView};
 use crate::state::AppState;
@@ -680,7 +684,7 @@ pub async fn start_session(
     Ok(v)
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct QuizQuestionView {
     pub id: i64,
     pub prompt: String,
@@ -691,17 +695,26 @@ pub struct QuizQuestionView {
     pub draft: Option<String>,
 }
 
+#[derive(Serialize, Deserialize, Clone)]
+pub struct QuizRoundView {
+    pub round_id: Option<RoundId>,
+    pub revision: u32,
+    pub questions: Vec<QuizQuestionView>,
+}
+
 #[tauri::command]
-pub fn get_quiz(state: State<'_, AppState>) -> CmdResult<Vec<QuizQuestionView>> {
+pub fn get_quiz(state: State<'_, AppState>) -> CmdResult<QuizRoundView> {
     let today = state.today();
     let yesterday = state.yesterday();
     let conn = state.db.0.lock().unwrap();
-    let pending = pending_answers(&conn, &today);
-    let qs = session::questions_for_today(&conn, &today, &yesterday).map_err(err)?;
-    Ok(qs
+    let questions = session::questions_for_today(&conn, &today, &yesterday).map_err(err)?;
+    let round = primary_quiz::current(&conn, &today).map_err(err)?;
+    let views = questions
         .into_iter()
         .map(|q| {
-            let draft = pending.get(&q.id).cloned();
+            let response = round
+                .as_ref()
+                .and_then(|r| r.responses.get(&q.id.to_string()));
             QuizQuestionView {
                 id: q.id,
                 prompt: q.prompt,
@@ -711,42 +724,39 @@ pub fn get_quiz(state: State<'_, AppState>) -> CmdResult<Vec<QuizQuestionView>> 
                     .as_deref()
                     .and_then(|c| serde_json::from_str(c).ok()),
                 origin: q.origin,
-                answered: draft.is_some(),
-                draft,
+                answered: response.is_some_and(|r| r.status == ResponseStatus::Answered),
+                draft: response.map(|r| r.answer.clone()),
             }
         })
-        .collect())
-}
-
-fn pending_key(date: &str) -> String {
-    format!("pending_answers:{date}")
-}
-
-fn pending_answers(conn: &rusqlite::Connection, date: &str) -> HashMap<i64, String> {
-    db::get_config(conn, &pending_key(date))
-        .ok()
-        .flatten()
-        .and_then(|v| serde_json::from_str(&v).ok())
-        .unwrap_or_default()
+        .collect();
+    Ok(QuizRoundView {
+        round_id: round.as_ref().map(|r| r.id.clone()),
+        revision: round.map_or(0, |r| r.revision),
+        questions: views,
+    })
 }
 
 #[tauri::command]
 pub fn submit_answer(
     state: State<'_, AppState>,
+    round_id: RoundId,
+    expected_revision: u32,
     question_id: i64,
     answer: String,
-) -> CmdResult<()> {
-    let today = state.today();
+    confirmed: bool,
+) -> CmdResult<u32> {
     let conn = state.db.0.lock().unwrap();
-    let mut pending = pending_answers(&conn, &today);
-    pending.insert(question_id, answer);
-    db::set_config(
+    Ok(primary_quiz::save_answer(
         &conn,
-        &pending_key(&today),
-        &serde_json::to_string(&pending).map_err(err)?,
+        &state.today(),
+        &round_id,
+        expected_revision,
+        question_id,
+        answer,
+        confirmed,
     )
-    .map_err(err)?;
-    Ok(())
+    .map_err(err)?
+    .revision)
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -770,15 +780,23 @@ pub struct ReviewData {
 }
 
 #[tauri::command]
-pub async fn finish_quiz(app: AppHandle, state: State<'_, AppState>) -> CmdResult<ReviewData> {
+pub async fn finish_quiz(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    round_id: RoundId,
+    expected_revision: u32,
+) -> CmdResult<ReviewData> {
     let today = state.today();
-    let yesterday = state.yesterday();
     let tomorrow = state.tomorrow();
 
-    let (questions, pending, concept_of, track_focus, dossier) = {
+    let (round, questions, pending, concept_of, track_focus, dossier) = {
         let conn = state.db.0.lock().unwrap();
-        if let Some(json) = db::get_config(&conn, &format!("quiz_result:{today}")).map_err(err)? {
-            return serde_json::from_str(&json).map_err(err);
+        let round = primary_quiz::checked_round(&conn, &today, &round_id).map_err(err)?;
+        if let Some(submission) = &round.submission {
+            return serde_json::from_value(submission.result.clone()).map_err(err);
+        }
+        if round.revision != expected_revision {
+            return Err("answers changed; reload the saved round before submitting".into());
         }
         let current = db::get_session(&conn, &today)
             .map_err(err)?
@@ -789,12 +807,15 @@ pub async fn finish_quiz(app: AppHandle, state: State<'_, AppState>) -> CmdResul
         let track_focus = session::session_focus(&conn, &today)
             .map_err(err)?
             .ok_or("session focus not chosen")?;
-        let qs = session::questions_for_today(&conn, &today, &yesterday).map_err(err)?;
-        let pending = pending_answers(&conn, &today);
+        let qs = primary_quiz::questions(&round).map_err(err)?;
+        let pending = primary_quiz::pending(&round);
         if qs.iter().any(|q| {
-            pending
-                .get(&q.id)
-                .is_none_or(|answer| answer.trim().is_empty())
+            round
+                .responses
+                .get(&q.id.to_string())
+                .is_none_or(|response| {
+                    response.status != ResponseStatus::Answered || response.answer.trim().is_empty()
+                })
         }) {
             return Err("answer every question before submitting".into());
         }
@@ -818,7 +839,7 @@ pub async fn finish_quiz(app: AppHandle, state: State<'_, AppState>) -> CmdResul
             .collect();
         let dossier =
             crate::mastery::build_dossier(&conn, &today, &track_focus).unwrap_or_default();
-        (qs, pending, concept_of, track_focus, dossier)
+        (round, qs, pending, concept_of, track_focus, dossier)
     };
 
     // Grade free-text via agent in one batch.
@@ -853,6 +874,7 @@ pub async fn finish_quiz(app: AppHandle, state: State<'_, AppState>) -> CmdResul
             &conn,
             &today,
             &tomorrow,
+            &round,
             &questions,
             &pending,
             &concept_of,
@@ -869,6 +891,7 @@ fn persist_quiz_result(
     conn: &rusqlite::Connection,
     today: &str,
     tomorrow: &str,
+    expected: &Round,
     questions: &[db::Question],
     pending: &HashMap<i64, String>,
     concept_of: &HashMap<i64, (i64, String)>,
@@ -883,8 +906,17 @@ fn persist_quiz_result(
     {
         let transaction = conn.unchecked_transaction().map_err(err)?;
         let conn = transaction;
-        if let Some(json) = db::get_config(&conn, &format!("quiz_result:{today}")).map_err(err)? {
-            return serde_json::from_str(&json).map_err(err);
+        let frozen = primary_quiz::checked_round(&conn, today, &expected.id).map_err(err)?;
+        if let Some(submission) = &frozen.submission {
+            return serde_json::from_value(submission.result.clone()).map_err(err);
+        }
+        if frozen.revision != expected.revision
+            || frozen.responses != expected.responses
+            || serde_json::to_value(questions).map_err(err)?
+                != serde_json::to_value(primary_quiz::questions(expected).map_err(err)?)
+                    .map_err(err)?
+        {
+            return Err("answers changed while grading; submit the saved answers again".into());
         }
         let current = db::get_session(&conn, today)
             .map_err(err)?
@@ -894,7 +926,7 @@ fn persist_quiz_result(
                 "the session changed while grading; your answers were not submitted".into(),
             );
         }
-        if &pending_answers(&conn, today) != pending {
+        if &primary_quiz::pending(&frozen) != pending {
             return Err("answers changed while grading; submit the updated answers again".into());
         }
         for q in questions {
@@ -977,17 +1009,17 @@ fn persist_quiz_result(
         s.quiz_score = Some(score);
         s.current_step = session::STEP_REVIEW.into();
         db::upsert_session(&conn, &s).map_err(err)?;
-        // Clear pending answers.
-        db::set_config(&conn, &pending_key(today), "{}").map_err(err)?;
         let result = ReviewData {
             items,
             score,
             self_assess,
         };
-        db::set_config(
+        assessments::submit_in_transaction(
             &conn,
-            &format!("quiz_result:{today}"),
-            &serde_json::to_string(&result).map_err(err)?,
+            &Owner::LegacyPrimary(today.into()),
+            expected,
+            &serde_json::to_value(&result).map_err(err)?,
+            true,
         )
         .map_err(err)?;
         conn.commit().map_err(err)?;
@@ -1000,8 +1032,8 @@ pub fn get_review(state: State<'_, AppState>) -> CmdResult<ReviewData> {
     let today = state.today();
     let yesterday = state.yesterday();
     let conn = state.db.0.lock().unwrap();
-    if let Some(json) = db::get_config(&conn, &format!("quiz_result:{today}")).map_err(err)? {
-        return serde_json::from_str(&json).map_err(err);
+    if let Some(result) = primary_quiz::result(&conn, &today).map_err(err)? {
+        return serde_json::from_value(result).map_err(err);
     }
     let attempts = db::attempts_for_session(&conn, &today).map_err(err)?;
     let mut by_q: HashMap<i64, &Attempt> = HashMap::new();
@@ -2470,6 +2502,7 @@ mod quiz_persistence_tests {
     struct Fixture {
         conn: rusqlite::Connection,
         questions: Vec<db::Question>,
+        round: Round,
         answers: HashMap<i64, String>,
         concepts: HashMap<i64, (i64, String)>,
     }
@@ -2522,16 +2555,22 @@ mod quiz_persistence_tests {
             )
             .unwrap();
             let answers = HashMap::from([(id, "A".into())]);
-            db::set_config(
+            let questions = db::questions_for_course(&conn, course).unwrap();
+            let round = primary_quiz::freeze(&conn, "2026-07-21", &questions).unwrap();
+            let round = primary_quiz::save_answer(
                 &conn,
-                "pending_answers:2026-07-21",
-                &serde_json::to_string(&answers).unwrap(),
+                "2026-07-21",
+                &round.id,
+                round.revision,
+                id,
+                "A".into(),
+                true,
             )
             .unwrap();
-            let questions = db::questions_for_course(&conn, course).unwrap();
             Self {
                 conn,
                 questions,
+                round,
                 answers,
                 concepts: HashMap::from([(id, (concept.id, concept.title))]),
             }
@@ -2542,6 +2581,7 @@ mod quiz_persistence_tests {
                 &self.conn,
                 "2026-07-21",
                 "2026-07-22",
+                &self.round,
                 &self.questions,
                 &self.answers,
                 &self.concepts,
@@ -2602,7 +2642,11 @@ mod quiz_persistence_tests {
             "quiz"
         );
         assert_eq!(
-            pending_answers(&fixture.conn, "2026-07-21"),
+            primary_quiz::pending(
+                &primary_quiz::current(&fixture.conn, "2026-07-21")
+                    .unwrap()
+                    .unwrap()
+            ),
             fixture.answers
         );
         fixture
@@ -2615,11 +2659,14 @@ mod quiz_persistence_tests {
     #[test]
     fn changing_answers_during_grading_keeps_the_new_draft_and_rejects_the_stale_result() {
         let fixture = Fixture::new();
-        let changed = HashMap::from([(fixture.questions[0].id, "B")]);
-        db::set_config(
+        primary_quiz::save_answer(
             &fixture.conn,
-            "pending_answers:2026-07-21",
-            &serde_json::to_string(&changed).unwrap(),
+            "2026-07-21",
+            &fixture.round.id,
+            fixture.round.revision,
+            fixture.questions[0].id,
+            "B".into(),
+            true,
         )
         .unwrap();
         assert!(fixture.submit().err().unwrap().contains("answers changed"));

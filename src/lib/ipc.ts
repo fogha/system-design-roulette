@@ -1,4 +1,5 @@
 import type { EnrollmentOptions, EnrollmentDraft, SaveEnrollmentDraft } from './contracts/enrollment';
+import type { AssessmentRoundId } from './contracts/assessments';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
@@ -342,6 +343,11 @@ export interface QuizQuestionView {
   answered: boolean;
   draft: string | null;
 }
+export interface QuizRoundView {
+  round_id: AssessmentRoundId | null;
+  revision: number;
+  questions: QuizQuestionView[];
+}
 
 export interface ReviewItem {
   question_id: number;
@@ -638,10 +644,10 @@ const realApi = {
   pauseSchedule: () => invoke<void>('pause_schedule'),
   resumeSchedule: () => invoke<void>('resume_schedule'),
   startSession: (focus: FocusArea) => invoke<SessionView>('start_session', { focus }),
-  getQuiz: () => invoke<QuizQuestionView[]>('get_quiz'),
-  submitAnswer: (questionId: number, answer: string) =>
-    invoke<void>('submit_answer', { questionId, answer }),
-  finishQuiz: () => invoke<ReviewData>('finish_quiz'),
+  getQuiz: () => invoke<QuizRoundView>('get_quiz'),
+  submitAnswer: (roundId: AssessmentRoundId, expectedRevision: number, questionId: number, answer: string, confirmed: boolean) =>
+    invoke<number>('submit_answer', { roundId, expectedRevision, questionId, answer, confirmed }),
+  finishQuiz: (roundId: AssessmentRoundId, expectedRevision: number) => invoke<ReviewData>('finish_quiz', { roundId, expectedRevision }),
   getReview: () => invoke<ReviewData>('get_review'),
   finishReview: () => invoke<SessionView>('finish_review'),
   completeTrackDay: () => invoke<SessionView>('complete_track_day'),
