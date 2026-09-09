@@ -275,10 +275,45 @@ pub fn append_round(
     rubric: &str,
     items: &[Item],
 ) -> Result<Round> {
+    if !conn.is_autocommit() {
+        return append_round_in_transaction(conn, attempt, rubric, items);
+    }
     let tx = conn.unchecked_transaction()?;
     let round = append_round_in_transaction(&tx, attempt, rubric, items)?;
     tx.commit()?;
     Ok(round)
+}
+
+/// Finish after the learner declines optional follow-up work. The submitted
+/// round remains immutable; only the active attempt lifecycle changes.
+pub fn finish_attempt(conn: &Connection, owner: &Owner, id: &AttemptId) -> Result<()> {
+    if conn.is_autocommit() {
+        let tx = conn.unchecked_transaction()?;
+        finish_attempt(&tx, owner, id)?;
+        tx.commit()?;
+        return Ok(());
+    }
+    let (kind, key) = owner.parts();
+    let status: String = conn.query_row(
+        "SELECT status FROM assessment_attempts WHERE id = ?1 AND owner_kind = ?2 AND owner_key = ?3",
+        params![id.0, kind, key], |r| r.get(0))?;
+    if status == "completed" {
+        return Ok(());
+    }
+    if status != "active" {
+        return Err(invalid("assessment is no longer active"));
+    }
+    let submitted: bool = conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM assessment_submissions WHERE round_id = (SELECT id FROM assessment_rounds WHERE attempt_id = ?1 ORDER BY ordinal DESC LIMIT 1))",
+        [&id.0], |r| r.get(0))?;
+    if !submitted {
+        return Err(invalid("submit the current round before finishing"));
+    }
+    conn.execute(
+        "UPDATE assessment_attempts SET status = 'completed', finished_at = ?2 WHERE id = ?1",
+        params![id.0, now()],
+    )?;
+    Ok(())
 }
 
 fn check_owner_and_status(conn: &Connection, round: &Round, owner: &Owner) -> Result<()> {

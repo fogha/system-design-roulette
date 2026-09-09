@@ -13,6 +13,7 @@ use std::sync::atomic::Ordering;
 use tauri::{AppHandle, Emitter, State};
 
 type CmdResult<T> = Result<T, String>;
+pub mod placement;
 
 #[tauri::command]
 pub fn get_enrollment_options(

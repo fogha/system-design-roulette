@@ -371,6 +371,10 @@ fn read_draft(conn: &Connection, id: &str) -> Result<Option<EnrollmentDraft>> {
         .transpose()
 }
 
+pub fn draft(conn: &Connection, id: &EnrollmentDraftId) -> Result<EnrollmentDraft> {
+    read_draft(conn, &id.0)?.ok_or_else(|| DbError::Invalid("enrollment draft not found".into()))
+}
+
 pub fn draft_for_course(conn: &Connection, course_id: &str) -> Result<Option<EnrollmentDraft>> {
     definition(course_id)?;
     let id: Option<String> = conn

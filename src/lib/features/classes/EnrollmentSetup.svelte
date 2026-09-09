@@ -7,7 +7,10 @@
   import type { EnrollmentEditorState } from './enrollment-editor';
   import NodeCard from '../../components/NodeCard.svelte';
   import Dropdown from '../../components/Dropdown.svelte';
-  import type { AgentId } from '../../ipc';
+  import { api, type AgentId } from '../../ipc';
+  import type { PathRecommendation } from '../../contracts/placement';
+  import PlacementCheck from './PlacementCheck.svelte';
+  import PathPreview from './PathPreview.svelte';
   import FlowStage from '../../components/FlowStage.svelte';
   import { ArrowLeft, Check, Compass, ListStart, Layers, BookOpen, Clock, Bot, Save } from 'lucide-svelte';
 
@@ -18,6 +21,10 @@
   let configuration = $state<EnrollmentConfiguration | null>(null);
   let search = $state('');
   let closing = $state(false);
+  let checking = $state(false);
+  let path = $state<PathRecommendation | null>(null);
+  let opening = $state(false);
+  let operationError = $state('');
   const routes = [
     { id: 'foundations', title: 'Start from the foundations', description: 'Build up from the introductory topics at your own pace.', icon: Layers },
     { id: 'diagnostic', title: 'Help me find my level', description: 'Use a short, optional check to help identify a starting point and gaps.', icon: Compass },
@@ -59,8 +66,25 @@
     if (view.status === 'loading' || !configuration || await editor.flush()) onclose();
     closing = false;
   }
+  async function openNext(diagnostic: boolean) {
+    if (!configuration || opening) return;
+    opening = true; operationError = '';
+    try {
+      changed();
+      if (!await editor.flush() || !view.draft) return;
+      if (diagnostic) checking = true;
+      else { checking = false; path = await api.getPathRecommendation(view.draft.id, view.draft.revision); }
+    } catch (error) { operationError = String(error); }
+    finally { opening = false; }
+  }
+  async function includeFoundations() { path = null; choose('foundations'); await openNext(false); }
 </script>
 
+{#if checking && view.draft}
+  <PlacementCheck draft={view.draft} onclose={() => (checking = false)} onrecommend={() => openNext(false)} />
+{:else if path}
+  <PathPreview {path} onclose={() => (path = null)} onfoundations={includeFoundations} />
+{:else}
 <section class="enrollment" aria-labelledby="enrollment-title">
   <button class="back-link" onclick={close} disabled={closing}><ArrowLeft size={15} /> Classes</button>
   <header>
@@ -72,7 +96,7 @@
   {#if view.status === 'loading'}
     <p role="status">Loading your course setup…</p>
   {:else if configuration && view.options}
-    <p class="notice">These choices take effect when you accept a personal path. Path review and activation are not available in this build yet.</p>
+    <p class="notice">Review a provisional path from your preferences or a short check. Activating that path in an existing class is still being connected.</p>
     <FlowStage number="01"><NodeCard Icon={BookOpen} name={course.title} badge={course.version} badgeTone="violet">
     <div class="course-context">
       <p>{course.outcome}</p>
@@ -96,7 +120,8 @@
       </div>
     </fieldset>
     {#if configuration.entry.route === 'diagnostic'}
-      <p class="notice">Diagnostic preference saved with this draft. The diagnostic and path review are not available in this build yet.</p>
+      <p class="notice">About 3–8 minutes, with optional prerequisite follow-ups. No tutor connection or focus lock is required. Skip anything unfamiliar; answers remain saved.</p>
+      <button class="cta mono-cta" onclick={() => openNext(true)} disabled={opening || view.status === 'conflict'}><Compass size={14} /> Start / resume check</button>
     {:else if configuration.entry.route === 'manual'}
       <div class="manual-entry">
         <div class="field"><Dropdown label={course.kind === 'language' ? 'Declared starting band' : 'Starting course stage'}
@@ -146,6 +171,8 @@
     </NodeCard></FlowStage>
   {/if}
 
+  {#if operationError}<p class="save-error" role="alert">{operationError}</p>{/if}
+
   {#if view.error}
     <div class="save-error" role="alert">
       <p>{view.error}</p>
@@ -164,9 +191,13 @@
       {:else if view.status === 'dirty' || view.status === 'saving'}Saving your draft…
       {:else if view.status === 'error' || view.status === 'conflict'}Your changes need attention before saving.{/if}
     </p>
-    <button class="cta mono-cta" onclick={close} disabled={closing || view.status === 'loading'}><Save size={14} /> {closing ? 'Saving…' : 'Save setup & return'}</button>
+    <div class="error-actions">
+      <button class="ghost mono-ghost" onclick={close} disabled={closing || view.status === 'loading'}><Save size={14} /> {closing ? 'Saving…' : 'Save & return'}</button>
+      <button class="cta mono-cta" onclick={() => openNext(false)} disabled={opening || view.status === 'loading' || view.status === 'conflict'}>Review path</button>
+    </div>
   </footer>
 </section>
+{/if}
 
 <style>
   .enrollment { width: min(820px, 100%); margin: 0 auto; padding: 26px 28px 48px; }

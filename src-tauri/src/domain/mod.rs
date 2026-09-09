@@ -2,4 +2,5 @@
 //! existing writers until their session/runtime cutovers are complete.
 pub mod assessments;
 pub mod enrollment;
+pub mod placement;
 pub mod primary_quiz;

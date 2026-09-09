@@ -1,4 +1,6 @@
-import type { EnrollmentOptions, EnrollmentDraft, SaveEnrollmentDraft } from './contracts/enrollment';
+import type { EnrollmentOptions, EnrollmentDraft, EnrollmentDraftId, SaveEnrollmentDraft } from './contracts/enrollment';
+import type { AssessmentResponse } from './contracts/assessments';
+import type { DiagnosticView, PathRecommendation } from './contracts/placement';
 import type { AssessmentRoundId } from './contracts/assessments';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
@@ -524,6 +526,13 @@ const realApi = {
   getEnrollmentOptions: (courseId: ClassroomSubjectId) => invoke<EnrollmentOptions>('get_enrollment_options', { courseId }),
   getEnrollmentDraft: (courseId: ClassroomSubjectId) => invoke<EnrollmentDraft | null>('get_enrollment_draft', { courseId }),
   saveEnrollmentDraft: (input: SaveEnrollmentDraft) => invoke<EnrollmentDraft>('save_enrollment_draft', { input }),
+  getPlacementCheck: (draftId: EnrollmentDraftId) => invoke<DiagnosticView | null>('get_placement_check', { draftId }),
+  startPlacementCheck: (draftId: EnrollmentDraftId, expectedRevision: number, restart = false) => invoke<DiagnosticView>('start_placement_check', { draftId, expectedRevision, restart }),
+  savePlacementResponse: (draftId: EnrollmentDraftId, roundId: AssessmentRoundId, expectedRevision: number, questionId: string, response: AssessmentResponse) => invoke<number>('save_placement_response', { draftId, roundId, expectedRevision, questionId, response }),
+  submitPlacementRound: (draftId: EnrollmentDraftId, roundId: AssessmentRoundId, expectedRevision: number) => invoke<DiagnosticView>('submit_placement_round', { draftId, roundId, expectedRevision }),
+  continuePlacementCheck: (draftId: EnrollmentDraftId, roundId: AssessmentRoundId) => invoke<DiagnosticView>('continue_placement_check', { draftId, roundId }),
+  finishPlacementCheck: (draftId: EnrollmentDraftId, roundId: AssessmentRoundId) => invoke<DiagnosticView>('finish_placement_check', { draftId, roundId }),
+  getPathRecommendation: (draftId: EnrollmentDraftId, expectedRevision: number) => invoke<PathRecommendation>('get_path_recommendation', { draftId, expectedRevision }),
   getCatalog: () => invoke<CourseDefinition[]>('get_catalog'),
   markFrontendReady: () => invoke<void>('mark_frontend_ready'),
   getAppState: () => invoke<AppStateView>('get_app_state'),

@@ -1,0 +1,1924 @@
+{
+  "schema_version": 1,
+  "courses": [
+    {
+      "course_id": "linux-bash",
+      "version": "entry-v1",
+      "estimated_minutes": 8,
+      "scope_note": "A short sample of reasoning and prerequisite knowledge. Practical performance and durable mastery need later practice.",
+      "unknown_areas": [
+        "Independent implementation and investigation",
+        "Retention over time",
+        "Competencies outside these six samples"
+      ],
+      "questions": [
+        {
+          "id": "linux-bash-entry-1",
+          "criterion": "linux-bash-criterion-1",
+          "competency": "lb-navigation",
+          "entry_point": "foundations",
+          "label": "Resolve a relative path",
+          "prompt": "Your working directory is `/home/lee/project`. Where does `../notes` point?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "/home/lee/notes"
+            },
+            {
+              "id": "2",
+              "text": "/notes"
+            },
+            {
+              "id": "3",
+              "text": "/home/lee/project/notes"
+            }
+          ],
+          "answer": "1",
+          "explanation": ".. selects the parent directory before notes is resolved.",
+          "followup_for": null
+        },
+        {
+          "id": "linux-bash-entry-2",
+          "criterion": "linux-bash-criterion-2",
+          "competency": "lb-quoting",
+          "entry_point": "foundations",
+          "label": "Preserve filename boundaries",
+          "prompt": "In Bash, `file=\"quarter one.txt\"`. Which command passes that filename as one argument?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "wc -l $file"
+            },
+            {
+              "id": "2",
+              "text": "wc -l '$file'"
+            },
+            {
+              "id": "3",
+              "text": "wc -l -- \"$file\""
+            }
+          ],
+          "answer": "3",
+          "explanation": "Double quotes preserve the expanded value as one argument; single quotes pass the literal dollar sign and name.",
+          "followup_for": null
+        },
+        {
+          "id": "linux-bash-entry-3",
+          "criterion": "linux-bash-criterion-3",
+          "competency": "lb-pipelines",
+          "entry_point": "mechanisms",
+          "label": "Understand pipeline failure",
+          "prompt": "In Bash with pipefail disabled, what is the status of `false | true`?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "The pipeline does not finish"
+            },
+            {
+              "id": "2",
+              "text": "0"
+            },
+            {
+              "id": "3",
+              "text": "1"
+            }
+          ],
+          "answer": "2",
+          "explanation": "Without pipefail, the pipeline status is the status of its final command.",
+          "followup_for": null
+        },
+        {
+          "id": "linux-bash-entry-4",
+          "criterion": "linux-bash-criterion-4",
+          "competency": "lb-permissions",
+          "entry_point": "mechanisms",
+          "label": "Interpret file permissions",
+          "prompt": "A regular file has mode `640`. What can a member of its group do through those permission bits?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "Read it"
+            },
+            {
+              "id": "2",
+              "text": "Read and write it"
+            },
+            {
+              "id": "3",
+              "text": "Execute it"
+            }
+          ],
+          "answer": "1",
+          "explanation": "The group digit 4 grants read, with no write or execute bit.",
+          "followup_for": null
+        },
+        {
+          "id": "linux-bash-entry-5",
+          "criterion": "linux-bash-criterion-5",
+          "competency": "lb-processes",
+          "entry_point": "production",
+          "label": "Choose a cooperative stop",
+          "prompt": "A process supports graceful shutdown on TERM. Which first action gives it that opportunity?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "Send SIGKILL"
+            },
+            {
+              "id": "2",
+              "text": "Delete its executable"
+            },
+            {
+              "id": "3",
+              "text": "Send SIGTERM"
+            }
+          ],
+          "answer": "3",
+          "explanation": "SIGTERM permits a handler to clean up; SIGKILL cannot be handled.",
+          "followup_for": null
+        },
+        {
+          "id": "linux-bash-entry-6",
+          "criterion": "linux-bash-criterion-6",
+          "competency": "lb-environment",
+          "entry_point": "production",
+          "label": "Explain child environments",
+          "prompt": "A Bash script executed as `./setup.sh` runs `export COLOR=blue`. What happens to COLOR in its parent shell?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "Every running process receives blue"
+            },
+            {
+              "id": "2",
+              "text": "The parent value is unchanged"
+            },
+            {
+              "id": "3",
+              "text": "The parent receives blue"
+            }
+          ],
+          "answer": "2",
+          "explanation": "An executed child inherits an environment but does not replace its parent environment.",
+          "followup_for": null
+        },
+        {
+          "id": "linux-bash-followup-1",
+          "criterion": "linux-bash-criterion-1",
+          "competency": "lb-navigation",
+          "entry_point": "foundations",
+          "label": "Resolve a relative path",
+          "prompt": "From `/srv/app`, what does `cd ./logs/..` select if logs is an ordinary subdirectory?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "/srv"
+            },
+            {
+              "id": "2",
+              "text": "/srv/app"
+            },
+            {
+              "id": "3",
+              "text": "/srv/app/logs"
+            }
+          ],
+          "answer": "2",
+          "explanation": "Entering logs and then its parent returns to app.",
+          "followup_for": "linux-bash-criterion-1"
+        },
+        {
+          "id": "linux-bash-followup-2",
+          "criterion": "linux-bash-criterion-2",
+          "competency": "lb-quoting",
+          "entry_point": "foundations",
+          "label": "Preserve filename boundaries",
+          "prompt": "`name=\"two words\"`. Which expansion supplies exactly one argument containing the value?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "$name"
+            },
+            {
+              "id": "2",
+              "text": "\"$name\""
+            },
+            {
+              "id": "3",
+              "text": "'$name'"
+            }
+          ],
+          "answer": "2",
+          "explanation": "Double quotes preserve the argument boundary while permitting expansion.",
+          "followup_for": "linux-bash-criterion-2"
+        }
+      ]
+    },
+    {
+      "course_id": "bash-scripting",
+      "version": "entry-v1",
+      "estimated_minutes": 8,
+      "scope_note": "A short sample of reasoning and prerequisite knowledge. Practical performance and durable mastery need later practice.",
+      "unknown_areas": [
+        "Independent implementation and investigation",
+        "Retention over time",
+        "Competencies outside these six samples"
+      ],
+      "questions": [
+        {
+          "id": "bash-scripting-entry-1",
+          "criterion": "bash-scripting-criterion-1",
+          "competency": "bs-arguments",
+          "entry_point": "foundations",
+          "label": "Forward arguments without splitting",
+          "prompt": "A wrapper must pass all its arguments to `tool` unchanged. Which invocation preserves each original boundary?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "tool \"$@\""
+            },
+            {
+              "id": "2",
+              "text": "tool $*"
+            },
+            {
+              "id": "3",
+              "text": "tool \"$*\""
+            }
+          ],
+          "answer": "1",
+          "explanation": "Quoted \"$@\" expands each positional argument as its own argument.",
+          "followup_for": null
+        },
+        {
+          "id": "bash-scripting-entry-2",
+          "criterion": "bash-scripting-criterion-2",
+          "competency": "bs-status",
+          "entry_point": "foundations",
+          "label": "Make failure explicit",
+          "prompt": "Which branch reports failure only when `build` returns a nonzero status?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "if build; then printf \"%s\\n\" failed >&2; fi"
+            },
+            {
+              "id": "2",
+              "text": "build; printf \"%s\\n\" failed >&2"
+            },
+            {
+              "id": "3",
+              "text": "if ! build; then printf \"%s\\n\" failed >&2; fi"
+            }
+          ],
+          "answer": "3",
+          "explanation": "The negated command status selects the branch only when build fails.",
+          "followup_for": null
+        },
+        {
+          "id": "bash-scripting-entry-3",
+          "criterion": "bash-scripting-criterion-3",
+          "competency": "bs-arrays",
+          "entry_point": "mechanisms",
+          "label": "Build a command as arguments",
+          "prompt": "`files=(\"one file\" \"two file\")`. Which expansion passes two file arguments?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "eval \"tool ${files[*]}\""
+            },
+            {
+              "id": "2",
+              "text": "tool \"${files[@]}\""
+            },
+            {
+              "id": "3",
+              "text": "tool \"${files[*]}\""
+            }
+          ],
+          "answer": "2",
+          "explanation": "Quoted array-at preserves one word per array element.",
+          "followup_for": null
+        },
+        {
+          "id": "bash-scripting-entry-4",
+          "criterion": "bash-scripting-criterion-4",
+          "competency": "bs-error-handling",
+          "entry_point": "mechanisms",
+          "label": "Recognize strict-mode limits",
+          "prompt": "Does `set -e` guarantee that every nonzero command status terminates a Bash script?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "No; command context changes its behavior"
+            },
+            {
+              "id": "2",
+              "text": "Yes, including commands used as if conditions"
+            },
+            {
+              "id": "3",
+              "text": "Only when stdout is redirected"
+            }
+          ],
+          "answer": "1",
+          "explanation": "Conditional tests and other documented contexts are exceptions; critical failure paths need explicit handling.",
+          "followup_for": null
+        },
+        {
+          "id": "bash-scripting-entry-5",
+          "criterion": "bash-scripting-criterion-5",
+          "competency": "bs-atomic-output",
+          "entry_point": "production",
+          "label": "Avoid publishing partial output",
+          "prompt": "A script must replace a local report only after generation and validation succeed. Which approach meets that goal?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "Truncate the report before generating"
+            },
+            {
+              "id": "2",
+              "text": "Append results directly and delete the report if generation fails"
+            },
+            {
+              "id": "3",
+              "text": "Write a temporary file in the destination directory, validate it, then rename it over the report"
+            }
+          ],
+          "answer": "3",
+          "explanation": "Keeping the old report until validation and a same-filesystem rename avoids exposing partially generated content; crash durability needs additional measures.",
+          "followup_for": null
+        },
+        {
+          "id": "bash-scripting-entry-6",
+          "criterion": "bash-scripting-criterion-6",
+          "competency": "bs-idempotent-automation",
+          "entry_point": "production",
+          "label": "Design repeatable automation",
+          "prompt": "An installation script may run twice. Which behavior best supports safe repetition?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "Delete all existing settings before each run"
+            },
+            {
+              "id": "2",
+              "text": "Detect or converge the desired state before making changes"
+            },
+            {
+              "id": "3",
+              "text": "Append the same config block on every run"
+            }
+          ],
+          "answer": "2",
+          "explanation": "Converging desired state avoids accumulating duplicate changes across runs.",
+          "followup_for": null
+        },
+        {
+          "id": "bash-scripting-followup-1",
+          "criterion": "bash-scripting-criterion-1",
+          "competency": "bs-arguments",
+          "entry_point": "foundations",
+          "label": "Forward arguments without splitting",
+          "prompt": "A wrapper receives `\"a b\"` and `c`. What argument count does `tool \"$@\"` pass to tool?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "1"
+            },
+            {
+              "id": "2",
+              "text": "2"
+            },
+            {
+              "id": "3",
+              "text": "3"
+            }
+          ],
+          "answer": "2",
+          "explanation": "Quoted at forwards the two original positional parameters.",
+          "followup_for": "bash-scripting-criterion-1"
+        },
+        {
+          "id": "bash-scripting-followup-2",
+          "criterion": "bash-scripting-criterion-2",
+          "competency": "bs-status",
+          "entry_point": "foundations",
+          "label": "Make failure explicit",
+          "prompt": "`if deploy; then echo done; else exit 1; fi`. If deploy fails, which path runs?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "done is printed"
+            },
+            {
+              "id": "2",
+              "text": "The else branch exits with status 1"
+            },
+            {
+              "id": "3",
+              "text": "The shell retries deploy"
+            }
+          ],
+          "answer": "2",
+          "explanation": "if tests the command status; nonzero takes the else branch.",
+          "followup_for": "bash-scripting-criterion-2"
+        }
+      ]
+    },
+    {
+      "course_id": "javascript",
+      "version": "entry-v1",
+      "estimated_minutes": 8,
+      "scope_note": "A short sample of reasoning and prerequisite knowledge. Practical performance and durable mastery need later practice.",
+      "unknown_areas": [
+        "Independent implementation and investigation",
+        "Retention over time",
+        "Competencies outside these six samples"
+      ],
+      "questions": [
+        {
+          "id": "javascript-entry-1",
+          "criterion": "javascript-criterion-1",
+          "competency": "js-event-loop",
+          "entry_point": "foundations",
+          "label": "Order synchronous code and promise reactions",
+          "prompt": "What is logged?\n```js\nconsole.log(\"A\");\nPromise.resolve().then(() => console.log(\"B\"));\nconsole.log(\"C\");\n```",
+          "choices": [
+            {
+              "id": "1",
+              "text": "A, C, B"
+            },
+            {
+              "id": "2",
+              "text": "A, B, C"
+            },
+            {
+              "id": "3",
+              "text": "B, A, C"
+            }
+          ],
+          "answer": "1",
+          "explanation": "The current job runs to completion before the promise reaction job runs.",
+          "followup_for": null
+        },
+        {
+          "id": "javascript-entry-2",
+          "criterion": "javascript-criterion-2",
+          "competency": "js-closures-scope",
+          "entry_point": "foundations",
+          "label": "Track a captured binding",
+          "prompt": "What does `read()` return?\n```js\nlet n = 1;\nconst read = () => n;\nn = 2;\n```",
+          "choices": [
+            {
+              "id": "1",
+              "text": "1"
+            },
+            {
+              "id": "2",
+              "text": "undefined"
+            },
+            {
+              "id": "3",
+              "text": "2"
+            }
+          ],
+          "answer": "3",
+          "explanation": "The closure reads the binding rather than a frozen copy of its initial value.",
+          "followup_for": null
+        },
+        {
+          "id": "javascript-entry-3",
+          "criterion": "javascript-criterion-3",
+          "competency": "js-promises-microtasks",
+          "entry_point": "mechanisms",
+          "label": "Distinguish queues",
+          "prompt": "After a click handler finishes, which normally runs first: an already-queued promise reaction or a zero-delay timer callback?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "They execute concurrently on the same main thread"
+            },
+            {
+              "id": "2",
+              "text": "The promise reaction"
+            },
+            {
+              "id": "3",
+              "text": "The timer callback"
+            }
+          ],
+          "answer": "2",
+          "explanation": "The microtask checkpoint drains queued promise reactions before the next timer task.",
+          "followup_for": null
+        },
+        {
+          "id": "javascript-entry-4",
+          "criterion": "javascript-criterion-4",
+          "competency": "js-gc-generational",
+          "entry_point": "mechanisms",
+          "label": "Reason about reachability",
+          "prompt": "A listener on a long-lived window captures a large object. Why can that object remain in memory?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "The reachable listener retains a path to the captured object"
+            },
+            {
+              "id": "2",
+              "text": "Objects captured by functions are always leaked permanently"
+            },
+            {
+              "id": "3",
+              "text": "Garbage collection runs only on page reload"
+            }
+          ],
+          "answer": "1",
+          "explanation": "Reachability, not the original local scope ending, determines whether an object can be collected.",
+          "followup_for": null
+        },
+        {
+          "id": "javascript-entry-5",
+          "criterion": "javascript-criterion-5",
+          "competency": "js-web-workers",
+          "entry_point": "production",
+          "label": "Respect worker boundaries",
+          "prompt": "Which operation belongs on the browser main thread rather than directly in a dedicated worker?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "Transforming a plain data array"
+            },
+            {
+              "id": "2",
+              "text": "Computing a checksum"
+            },
+            {
+              "id": "3",
+              "text": "Updating a DOM element"
+            }
+          ],
+          "answer": "3",
+          "explanation": "Dedicated workers have no direct access to the document DOM.",
+          "followup_for": null
+        },
+        {
+          "id": "javascript-entry-6",
+          "criterion": "javascript-criterion-6",
+          "competency": "js-performance-observer",
+          "entry_point": "production",
+          "label": "Use evidence to investigate responsiveness",
+          "prompt": "A main-thread trace shows a 300 ms JavaScript task during interaction. Which next step addresses that evidence?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "Assume a faster network will remove the task"
+            },
+            {
+              "id": "2",
+              "text": "Inspect its call stack and split, reduce or move appropriate computation"
+            },
+            {
+              "id": "3",
+              "text": "Add more synchronous work to the same task"
+            }
+          ],
+          "answer": "2",
+          "explanation": "The trace points to main-thread computation; identify the work before choosing a mitigation.",
+          "followup_for": null
+        },
+        {
+          "id": "javascript-followup-1",
+          "criterion": "javascript-criterion-1",
+          "competency": "js-event-loop",
+          "entry_point": "foundations",
+          "label": "Order synchronous code and promise reactions",
+          "prompt": "A function logs `start`, schedules a resolved promise callback, then logs `end`. Can that callback run between those two synchronous logs?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "Yes, promises interrupt synchronous code"
+            },
+            {
+              "id": "2",
+              "text": "No, the current job completes first"
+            },
+            {
+              "id": "3",
+              "text": "Only if the promise resolves to a number"
+            }
+          ],
+          "answer": "2",
+          "explanation": "Promise reactions do not interrupt the running JavaScript job.",
+          "followup_for": "javascript-criterion-1"
+        },
+        {
+          "id": "javascript-followup-2",
+          "criterion": "javascript-criterion-2",
+          "competency": "js-closures-scope",
+          "entry_point": "foundations",
+          "label": "Track a captured binding",
+          "prompt": "Two functions close over the same mutable local variable. If one updates it, what can the other observe?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "Only its value at function creation"
+            },
+            {
+              "id": "2",
+              "text": "The updated binding"
+            },
+            {
+              "id": "3",
+              "text": "A new unrelated variable"
+            }
+          ],
+          "answer": "2",
+          "explanation": "Closures can share access to the same lexical binding.",
+          "followup_for": "javascript-criterion-2"
+        }
+      ]
+    },
+    {
+      "course_id": "typescript",
+      "version": "entry-v1",
+      "estimated_minutes": 8,
+      "scope_note": "A short sample of reasoning and prerequisite knowledge. Practical performance and durable mastery need later practice.",
+      "unknown_areas": [
+        "Independent implementation and investigation",
+        "Retention over time",
+        "Competencies outside these six samples"
+      ],
+      "questions": [
+        {
+          "id": "typescript-entry-1",
+          "criterion": "typescript-criterion-1",
+          "competency": "ts-structural-typing",
+          "entry_point": "foundations",
+          "label": "Reason about structural compatibility",
+          "prompt": "`const source = { id: 1, label: \"x\" };` Can source be assigned to a variable of type `{ id: number }`?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "Yes, it has the required compatible member"
+            },
+            {
+              "id": "2",
+              "text": "No, every property must match exactly"
+            },
+            {
+              "id": "3",
+              "text": "Only after a runtime conversion"
+            }
+          ],
+          "answer": "1",
+          "explanation": "Structural assignability checks required members; fresh object literal excess-property checks are a separate rule.",
+          "followup_for": null
+        },
+        {
+          "id": "typescript-entry-2",
+          "criterion": "typescript-criterion-2",
+          "competency": "ts-type-system-foundations",
+          "entry_point": "foundations",
+          "label": "Separate types from runtime checks",
+          "prompt": "An HTTP response is asserted `as User`. What validation does that assertion perform at runtime?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "It checks every required field"
+            },
+            {
+              "id": "2",
+              "text": "It throws when a field is missing"
+            },
+            {
+              "id": "3",
+              "text": "None"
+            }
+          ],
+          "answer": "3",
+          "explanation": "A type assertion does not generate runtime validation code.",
+          "followup_for": null
+        },
+        {
+          "id": "typescript-entry-3",
+          "criterion": "typescript-criterion-3",
+          "competency": "ts-type-guards-narrowing",
+          "entry_point": "mechanisms",
+          "label": "Narrow before using a value",
+          "prompt": "For `value: string | number`, which condition permits `value.toUpperCase()` in its true branch?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "Boolean(value)"
+            },
+            {
+              "id": "2",
+              "text": "typeof value === \"string\""
+            },
+            {
+              "id": "3",
+              "text": "value !== undefined"
+            }
+          ],
+          "answer": "2",
+          "explanation": "The typeof guard narrows this union to string.",
+          "followup_for": null
+        },
+        {
+          "id": "typescript-entry-4",
+          "criterion": "typescript-criterion-4",
+          "competency": "ts-generics-variance",
+          "entry_point": "mechanisms",
+          "label": "Preserve a relationship in an API",
+          "prompt": "Which signature preserves the input type as the output type for an identity function?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "function identity<T>(value: T): T"
+            },
+            {
+              "id": "2",
+              "text": "function identity(value: unknown): any"
+            },
+            {
+              "id": "3",
+              "text": "function identity(value: string | number): string | number"
+            }
+          ],
+          "answer": "1",
+          "explanation": "The type parameter ties the return type to the particular argument type.",
+          "followup_for": null
+        },
+        {
+          "id": "typescript-entry-5",
+          "criterion": "typescript-criterion-5",
+          "competency": "ts-runtime-validation-boundary",
+          "entry_point": "production",
+          "label": "Validate external data",
+          "prompt": "A service receives untrusted JSON. Which boundary establishes that required fields have valid runtime values?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "Cast JSON.parse directly to the interface"
+            },
+            {
+              "id": "2",
+              "text": "Import the interface into the service"
+            },
+            {
+              "id": "3",
+              "text": "Parse and validate the unknown data before using a typed value"
+            }
+          ],
+          "answer": "3",
+          "explanation": "Runtime checks establish data validity; interfaces alone are erased.",
+          "followup_for": null
+        },
+        {
+          "id": "typescript-entry-6",
+          "criterion": "typescript-criterion-6",
+          "competency": "ts-branded-types",
+          "entry_point": "production",
+          "label": "Understand branded values",
+          "prompt": "A string brand distinguishes UserId and OrderId in TypeScript. What else is needed when reading an ID from a request?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "Disable type checking while parsing"
+            },
+            {
+              "id": "2",
+              "text": "Runtime validation or a trusted constructor for the incoming value"
+            },
+            {
+              "id": "3",
+              "text": "Nothing; the brand encrypts the value"
+            }
+          ],
+          "answer": "2",
+          "explanation": "A compile-time brand does not validate or authenticate external strings.",
+          "followup_for": null
+        },
+        {
+          "id": "typescript-followup-1",
+          "criterion": "typescript-criterion-1",
+          "competency": "ts-structural-typing",
+          "entry_point": "foundations",
+          "label": "Reason about structural compatibility",
+          "prompt": "A value stored in a variable has `{ x: 1, y: 2 }`. Is it structurally compatible with `{ x: number }`?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "No, extra members always forbid assignment"
+            },
+            {
+              "id": "2",
+              "text": "Yes"
+            },
+            {
+              "id": "3",
+              "text": "Only after deleting y"
+            }
+          ],
+          "answer": "2",
+          "explanation": "The required x member is compatible; the question is not a fresh object literal excess-property check.",
+          "followup_for": "typescript-criterion-1"
+        },
+        {
+          "id": "typescript-followup-2",
+          "criterion": "typescript-criterion-2",
+          "competency": "ts-type-system-foundations",
+          "entry_point": "foundations",
+          "label": "Separate types from runtime checks",
+          "prompt": "Does changing `payload as string` convert a numeric payload into a string?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "Yes, like String(payload)"
+            },
+            {
+              "id": "2",
+              "text": "No, assertions do not convert runtime values"
+            },
+            {
+              "id": "3",
+              "text": "Only with strict mode"
+            }
+          ],
+          "answer": "2",
+          "explanation": "Use an explicit conversion or validation for runtime behavior.",
+          "followup_for": "typescript-criterion-2"
+        }
+      ]
+    },
+    {
+      "course_id": "frontend-architecture",
+      "version": "entry-v1",
+      "estimated_minutes": 8,
+      "scope_note": "A short sample of reasoning and prerequisite knowledge. Practical performance and durable mastery need later practice.",
+      "unknown_areas": [
+        "Independent implementation and investigation",
+        "Retention over time",
+        "Competencies outside these six samples"
+      ],
+      "questions": [
+        {
+          "id": "frontend-architecture-entry-1",
+          "criterion": "frontend-architecture-criterion-1",
+          "competency": "fa-state-placement",
+          "entry_point": "foundations",
+          "label": "Choose a state owner",
+          "prompt": "A filter should survive reload and be shareable in a link. Where should its selected value usually be represented?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "In URL state"
+            },
+            {
+              "id": "2",
+              "text": "Only in a component-local variable"
+            },
+            {
+              "id": "3",
+              "text": "Only in a global variable reset on reload"
+            }
+          ],
+          "answer": "1",
+          "explanation": "The URL is an appropriate durable, shareable owner for navigational state.",
+          "followup_for": null
+        },
+        {
+          "id": "frontend-architecture-entry-2",
+          "criterion": "frontend-architecture-criterion-2",
+          "competency": "fa-component-api-design",
+          "entry_point": "foundations",
+          "label": "Keep one owner for controlled state",
+          "prompt": "A parent supplies a controlled input value. What should a reusable child normally do on edit?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "Keep an independent authoritative value forever"
+            },
+            {
+              "id": "2",
+              "text": "Write the parent variable through a global lookup"
+            },
+            {
+              "id": "3",
+              "text": "Emit the proposed change and render the supplied value"
+            }
+          ],
+          "answer": "3",
+          "explanation": "A controlled contract keeps ownership explicit and avoids competing sources of truth.",
+          "followup_for": null
+        },
+        {
+          "id": "frontend-architecture-entry-3",
+          "criterion": "frontend-architecture-criterion-3",
+          "competency": "fa-url-navigation-state",
+          "entry_point": "mechanisms",
+          "label": "Preserve browser navigation meaning",
+          "prompt": "A user changes a search query and expects Back to restore the previous query. Which mechanism represents that navigation?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "A full database reset"
+            },
+            {
+              "id": "2",
+              "text": "A new history entry with the query in the URL"
+            },
+            {
+              "id": "3",
+              "text": "An untracked mutable module variable"
+            }
+          ],
+          "answer": "2",
+          "explanation": "A history entry allows the browser to restore the previous navigation state.",
+          "followup_for": null
+        },
+        {
+          "id": "frontend-architecture-entry-4",
+          "criterion": "frontend-architecture-criterion-4",
+          "competency": "fa-data-cache-model",
+          "entry_point": "mechanisms",
+          "label": "Avoid cache identity collisions",
+          "prompt": "An app fetches project 7 for different signed-in tenants. What must a shared cache key distinguish?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "The relevant tenant or authorization context as well as project identity"
+            },
+            {
+              "id": "2",
+              "text": "Only the numeric project ID"
+            },
+            {
+              "id": "3",
+              "text": "Only the current minute"
+            }
+          ],
+          "answer": "1",
+          "explanation": "If the resource meaning varies by tenant, the cache identity must include that boundary.",
+          "followup_for": null
+        },
+        {
+          "id": "frontend-architecture-entry-5",
+          "criterion": "frontend-architecture-criterion-5",
+          "competency": "fa-cache-consistency-mutations",
+          "entry_point": "production",
+          "label": "Plan mutation reconciliation",
+          "prompt": "After a successful edit, another screen shows a cached copy of the resource. What should the architecture define?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "That every cache stays unchanged indefinitely"
+            },
+            {
+              "id": "2",
+              "text": "That unrelated resource keys are all renamed"
+            },
+            {
+              "id": "3",
+              "text": "How affected cached views update or invalidate"
+            }
+          ],
+          "answer": "3",
+          "explanation": "Mutation and cache reconciliation must agree on resource identity and affected views.",
+          "followup_for": null
+        },
+        {
+          "id": "frontend-architecture-entry-6",
+          "criterion": "frontend-architecture-criterion-6",
+          "competency": "fa-progressive-delivery",
+          "entry_point": "production",
+          "label": "Connect rollout to observable outcomes",
+          "prompt": "A feature is enabled for 5% of users. Which evidence supports expanding the rollout?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "The absence of any user comments in the first minute"
+            },
+            {
+              "id": "2",
+              "text": "Relevant errors and product outcomes compared with the control under a defined decision rule"
+            },
+            {
+              "id": "3",
+              "text": "The number of files in the pull request"
+            }
+          ],
+          "answer": "2",
+          "explanation": "A staged rollout needs observable criteria and a way to stop or reverse expansion.",
+          "followup_for": null
+        },
+        {
+          "id": "frontend-architecture-followup-1",
+          "criterion": "frontend-architecture-criterion-1",
+          "competency": "fa-state-placement",
+          "entry_point": "foundations",
+          "label": "Choose a state owner",
+          "prompt": "Which state should a copied search-results URL normally include?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "The focused DOM node object"
+            },
+            {
+              "id": "2",
+              "text": "The query and shareable filters"
+            },
+            {
+              "id": "3",
+              "text": "A private in-memory cache pointer"
+            }
+          ],
+          "answer": "2",
+          "explanation": "Serializable navigation state makes the copied link meaningful.",
+          "followup_for": "frontend-architecture-criterion-1"
+        },
+        {
+          "id": "frontend-architecture-followup-2",
+          "criterion": "frontend-architecture-criterion-2",
+          "competency": "fa-component-api-design",
+          "entry_point": "foundations",
+          "label": "Keep one owner for controlled state",
+          "prompt": "A controlled toggle receives `checked=false` after requesting true. What value should it display?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "true forever"
+            },
+            {
+              "id": "2",
+              "text": "false"
+            },
+            {
+              "id": "3",
+              "text": "An unrelated cached preference"
+            }
+          ],
+          "answer": "2",
+          "explanation": "The supplied controlled value remains authoritative.",
+          "followup_for": "frontend-architecture-criterion-2"
+        }
+      ]
+    },
+    {
+      "course_id": "developer-tooling",
+      "version": "entry-v1",
+      "estimated_minutes": 8,
+      "scope_note": "A short sample of reasoning and prerequisite knowledge. Practical performance and durable mastery need later practice.",
+      "unknown_areas": [
+        "Independent implementation and investigation",
+        "Retention over time",
+        "Competencies outside these six samples"
+      ],
+      "questions": [
+        {
+          "id": "developer-tooling-entry-1",
+          "criterion": "developer-tooling-criterion-1",
+          "competency": "dt-cli-design",
+          "entry_point": "foundations",
+          "label": "Keep machine output usable",
+          "prompt": "A CLI writes JSON for another process. Where should an explanatory warning normally go?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "stderr"
+            },
+            {
+              "id": "2",
+              "text": "Inside stdout before the JSON"
+            },
+            {
+              "id": "3",
+              "text": "Into the executable filename"
+            }
+          ],
+          "answer": "1",
+          "explanation": "Separate diagnostics from the machine-readable stdout contract.",
+          "followup_for": null
+        },
+        {
+          "id": "developer-tooling-entry-2",
+          "criterion": "developer-tooling-criterion-2",
+          "competency": "dt-ast-parsing",
+          "entry_point": "foundations",
+          "label": "Choose a syntax-aware transform",
+          "prompt": "A codemod renames a local variable while preserving unrelated strings and comments. Which representation supports that task?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "A global text replacement of every matching substring"
+            },
+            {
+              "id": "2",
+              "text": "A screenshot of the source"
+            },
+            {
+              "id": "3",
+              "text": "A parsed syntax tree with binding information"
+            }
+          ],
+          "answer": "3",
+          "explanation": "Syntax and binding context distinguish references from unrelated text.",
+          "followup_for": null
+        },
+        {
+          "id": "developer-tooling-entry-3",
+          "criterion": "developer-tooling-criterion-3",
+          "competency": "dt-watch-mode-incremental",
+          "entry_point": "mechanisms",
+          "label": "Invalidate dependent work",
+          "prompt": "Module A imports B, and B changes. What must a correct incremental build consider?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "Only the last file opened in the editor"
+            },
+            {
+              "id": "2",
+              "text": "B and affected dependents of B"
+            },
+            {
+              "id": "3",
+              "text": "Only files whose names start with B"
+            }
+          ],
+          "answer": "2",
+          "explanation": "The dependency graph identifies outputs that may depend on changed input.",
+          "followup_for": null
+        },
+        {
+          "id": "developer-tooling-entry-4",
+          "criterion": "developer-tooling-criterion-4",
+          "competency": "dt-test-runner-isolation",
+          "entry_point": "mechanisms",
+          "label": "Identify shared-state leakage",
+          "prompt": "A test passes alone but fails after another test mutates a module-level cache. What is the likely missing boundary?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "State isolation or explicit cache reset between tests"
+            },
+            {
+              "id": "2",
+              "text": "A larger snapshot file"
+            },
+            {
+              "id": "3",
+              "text": "A different terminal font"
+            }
+          ],
+          "answer": "1",
+          "explanation": "Order dependence points to shared mutable state crossing test boundaries.",
+          "followup_for": null
+        },
+        {
+          "id": "developer-tooling-entry-5",
+          "criterion": "developer-tooling-criterion-5",
+          "competency": "dt-codemod-jscodeshift",
+          "entry_point": "production",
+          "label": "Check repeat-run safety",
+          "prompt": "A migration codemod may be rerun after interruption. Which property is useful?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "Every run adds the same import again"
+            },
+            {
+              "id": "2",
+              "text": "The tool ignores parse failures and rewrites all files"
+            },
+            {
+              "id": "3",
+              "text": "Already-transformed code is recognized and not transformed again"
+            }
+          ],
+          "answer": "3",
+          "explanation": "Recognizing the target state supports safe repeat runs and recovery.",
+          "followup_for": null
+        },
+        {
+          "id": "developer-tooling-entry-6",
+          "criterion": "developer-tooling-criterion-6",
+          "competency": "dt-ci-deterministic-builds",
+          "entry_point": "production",
+          "label": "Track inputs for reproducibility",
+          "prompt": "A build reads an undeclared environment variable that changes its output. What should a reusable build cache do?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "Key only by the output filename"
+            },
+            {
+              "id": "2",
+              "text": "Include that relevant input in its identity or remove the dependency"
+            },
+            {
+              "id": "3",
+              "text": "Reuse the cached output regardless of the variable"
+            }
+          ],
+          "answer": "2",
+          "explanation": "A cache can be correct only if its key accounts for inputs that influence the result.",
+          "followup_for": null
+        },
+        {
+          "id": "developer-tooling-followup-1",
+          "criterion": "developer-tooling-criterion-1",
+          "competency": "dt-cli-design",
+          "entry_point": "foundations",
+          "label": "Keep machine output usable",
+          "prompt": "A command cannot open its required input file. Which CLI behavior communicates failure to a caller?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "Exit status zero with no output"
+            },
+            {
+              "id": "2",
+              "text": "A diagnostic on stderr and a nonzero exit status"
+            },
+            {
+              "id": "3",
+              "text": "A success message followed by malformed JSON"
+            }
+          ],
+          "answer": "2",
+          "explanation": "A process caller needs a failure status; diagnostic text explains the cause.",
+          "followup_for": "developer-tooling-criterion-1"
+        },
+        {
+          "id": "developer-tooling-followup-2",
+          "criterion": "developer-tooling-criterion-2",
+          "competency": "dt-ast-parsing",
+          "entry_point": "foundations",
+          "label": "Choose a syntax-aware transform",
+          "prompt": "Why can blindly replacing `name` also damage `username` and string literals?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "The operating system changes identifiers randomly"
+            },
+            {
+              "id": "2",
+              "text": "Text replacement does not understand tokens or binding scope"
+            },
+            {
+              "id": "3",
+              "text": "Parsers cannot represent identifiers"
+            }
+          ],
+          "answer": "2",
+          "explanation": "A syntax-aware transform can target the intended identifiers.",
+          "followup_for": "developer-tooling-criterion-2"
+        }
+      ]
+    },
+    {
+      "course_id": "system-design",
+      "version": "entry-v1",
+      "estimated_minutes": 8,
+      "scope_note": "A short sample of reasoning and prerequisite knowledge. Practical performance and durable mastery need later practice.",
+      "unknown_areas": [
+        "Independent implementation and investigation",
+        "Retention over time",
+        "Competencies outside these six samples"
+      ],
+      "questions": [
+        {
+          "id": "system-design-entry-1",
+          "criterion": "system-design-criterion-1",
+          "competency": "latency-numbers",
+          "entry_point": "foundations",
+          "label": "Estimate a workload",
+          "prompt": "A service receives 120 requests per second steadily for one minute. About how many requests arrive?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "7200"
+            },
+            {
+              "id": "2",
+              "text": "120"
+            },
+            {
+              "id": "3",
+              "text": "2"
+            }
+          ],
+          "answer": "1",
+          "explanation": "Multiply the rate by the 60-second interval.",
+          "followup_for": null
+        },
+        {
+          "id": "system-design-entry-2",
+          "criterion": "system-design-criterion-2",
+          "competency": "idempotency",
+          "entry_point": "foundations",
+          "label": "Reason about a lost response",
+          "prompt": "A payment succeeds but the response is lost. Which retry design helps avoid charging again for the same operation?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "Generate a new operation identity on each retry"
+            },
+            {
+              "id": "2",
+              "text": "Assume every timeout means no payment occurred"
+            },
+            {
+              "id": "3",
+              "text": "Reuse an operation key and return its recorded outcome"
+            }
+          ],
+          "answer": "3",
+          "explanation": "A stable operation identity lets the service recognize a repeated request; the key and outcome must be recorded consistently.",
+          "followup_for": null
+        },
+        {
+          "id": "system-design-entry-3",
+          "criterion": "system-design-criterion-3",
+          "competency": "quorums",
+          "entry_point": "mechanisms",
+          "label": "Check quorum overlap",
+          "prompt": "A replicated register has 3 replicas. A write reaches 2 and a read consults 2. What does their set size guarantee?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "The system automatically provides linearizability without further rules"
+            },
+            {
+              "id": "2",
+              "text": "The read and write sets overlap in at least one replica"
+            },
+            {
+              "id": "3",
+              "text": "Every replica is always current"
+            }
+          ],
+          "answer": "2",
+          "explanation": "Set overlap follows from R + W > N; version and protocol rules are still needed to reason about the returned value.",
+          "followup_for": null
+        },
+        {
+          "id": "system-design-entry-4",
+          "criterion": "system-design-criterion-4",
+          "competency": "sharding",
+          "entry_point": "mechanisms",
+          "label": "Recognize skew",
+          "prompt": "A tenant-based shard key places 60% of traffic from one tenant on one shard. What is the immediate issue?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "A hot partition despite more total shards"
+            },
+            {
+              "id": "2",
+              "text": "Every shard receives identical load"
+            },
+            {
+              "id": "3",
+              "text": "Replication eliminates the key distribution"
+            }
+          ],
+          "answer": "1",
+          "explanation": "A heavily used key can concentrate work even when the cluster has spare capacity elsewhere.",
+          "followup_for": null
+        },
+        {
+          "id": "system-design-entry-5",
+          "criterion": "system-design-criterion-5",
+          "competency": "outbox-pattern",
+          "entry_point": "production",
+          "label": "Coordinate state with event publication",
+          "prompt": "An order and its outgoing event must survive a process crash together. Which boundary is the transactional outbox designed around?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "Commit the order and hope a later in-memory callback always runs"
+            },
+            {
+              "id": "2",
+              "text": "Publish first and ignore database failure"
+            },
+            {
+              "id": "3",
+              "text": "Commit the order and outbox record in one database transaction, then publish from the outbox"
+            }
+          ],
+          "answer": "3",
+          "explanation": "The transaction retains a durable publication intention alongside the state change; delivery still requires retry and consumer deduplication.",
+          "followup_for": null
+        },
+        {
+          "id": "system-design-entry-6",
+          "criterion": "system-design-criterion-6",
+          "competency": "graceful-degradation",
+          "entry_point": "production",
+          "label": "Protect a dependency under failure",
+          "prompt": "A recommendation dependency times out during checkout. Which defined behavior can preserve the essential flow?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "Block all checkout requests until recommendations recover"
+            },
+            {
+              "id": "2",
+              "text": "Use a bounded timeout and an acceptable checkout fallback"
+            },
+            {
+              "id": "3",
+              "text": "Retry forever inside the user request"
+            }
+          ],
+          "answer": "2",
+          "explanation": "A bounded dependency budget and a product-approved fallback can preserve the essential operation.",
+          "followup_for": null
+        },
+        {
+          "id": "system-design-followup-1",
+          "criterion": "system-design-criterion-1",
+          "competency": "latency-numbers",
+          "entry_point": "foundations",
+          "label": "Estimate a workload",
+          "prompt": "At a steady 25 requests per second for 4 seconds, how many requests arrive?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "29"
+            },
+            {
+              "id": "2",
+              "text": "100"
+            },
+            {
+              "id": "3",
+              "text": "6.25"
+            }
+          ],
+          "answer": "2",
+          "explanation": "Multiply requests per second by seconds.",
+          "followup_for": "system-design-criterion-1"
+        },
+        {
+          "id": "system-design-followup-2",
+          "criterion": "system-design-criterion-2",
+          "competency": "idempotency",
+          "entry_point": "foundations",
+          "label": "Reason about a lost response",
+          "prompt": "A client retries the same operation after a timeout. What must be stable to recognize it as the same request?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "A new random identity for every attempt"
+            },
+            {
+              "id": "2",
+              "text": "The operation identity used for deduplication"
+            },
+            {
+              "id": "3",
+              "text": "The TCP connection for the lifetime of the account"
+            }
+          ],
+          "answer": "2",
+          "explanation": "Stable operation identity permits consistent retry handling across connections.",
+          "followup_for": "system-design-criterion-2"
+        }
+      ]
+    },
+    {
+      "course_id": "german",
+      "version": "entry-v1",
+      "estimated_minutes": 8,
+      "scope_note": "A short sample of reading, grammar and meaning. This is a provisional study suggestion, not a CEFR certification.",
+      "unknown_areas": [
+        "Listening comprehension",
+        "Spoken interaction and production",
+        "Independent writing",
+        "Reading outside these brief samples"
+      ],
+      "questions": [
+        {
+          "id": "german-entry-1",
+          "criterion": "german-criterion-1",
+          "competency": "reading",
+          "entry_point": "A1",
+          "label": "A1: identify a meeting time",
+          "prompt": "Read: „Der Kurs beginnt am Montag um neun Uhr.“ Wann beginnt der Kurs?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "Am Montag um neun Uhr"
+            },
+            {
+              "id": "2",
+              "text": "Am Sonntag um neun Uhr"
+            },
+            {
+              "id": "3",
+              "text": "Am Montag um zwölf Uhr"
+            }
+          ],
+          "answer": "1",
+          "explanation": "The sentence gives Montag and neun Uhr.",
+          "followup_for": null
+        },
+        {
+          "id": "german-entry-2",
+          "criterion": "german-criterion-2",
+          "competency": "grammar",
+          "entry_point": "A1",
+          "label": "A1: match a verb to its subject",
+          "prompt": "Choose the form: „Ich ___ in Berlin.“",
+          "choices": [
+            {
+              "id": "1",
+              "text": "wohnst"
+            },
+            {
+              "id": "2",
+              "text": "wohnen"
+            },
+            {
+              "id": "3",
+              "text": "wohne"
+            }
+          ],
+          "answer": "3",
+          "explanation": "With ich, wohnen takes the form wohne.",
+          "followup_for": null
+        },
+        {
+          "id": "german-entry-3",
+          "criterion": "german-criterion-3",
+          "competency": "reading",
+          "entry_point": "A2",
+          "label": "A2: interpret a changed arrangement",
+          "prompt": "Read: „Der Termin am Dienstag fällt aus. Wir treffen uns stattdessen am Donnerstag.“ Was gilt jetzt?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "Es gibt nie wieder ein Treffen"
+            },
+            {
+              "id": "2",
+              "text": "Das Treffen ist am Donnerstag"
+            },
+            {
+              "id": "3",
+              "text": "Das Treffen bleibt am Dienstag"
+            }
+          ],
+          "answer": "2",
+          "explanation": "Stattdessen introduces Thursday as the replacement.",
+          "followup_for": null
+        },
+        {
+          "id": "german-entry-4",
+          "criterion": "german-criterion-4",
+          "competency": "grammar",
+          "entry_point": "A2",
+          "label": "A2: place a verb in a reason clause",
+          "prompt": "Choose the sentence with standard word order.",
+          "choices": [
+            {
+              "id": "1",
+              "text": "Ich bleibe zu Hause, weil ich krank bin."
+            },
+            {
+              "id": "2",
+              "text": "Ich bleibe zu Hause, weil bin ich krank."
+            },
+            {
+              "id": "3",
+              "text": "Ich bleibe zu Hause, weil ich bin krank."
+            }
+          ],
+          "answer": "1",
+          "explanation": "In this weil subordinate clause, the finite verb bin comes at the end.",
+          "followup_for": null
+        },
+        {
+          "id": "german-entry-5",
+          "criterion": "german-criterion-5",
+          "competency": "reading",
+          "entry_point": "B1",
+          "label": "B1: distinguish intention from a condition",
+          "prompt": "Read: „Ich würde gern am Kurs teilnehmen. Allerdings kann ich erst zusagen, wenn mein Dienstplan feststeht.“ Hat die Person schon fest zugesagt?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "Ja, sie hat verbindlich zugesagt"
+            },
+            {
+              "id": "2",
+              "text": "Nein, sie möchte auf keinen Fall teilnehmen"
+            },
+            {
+              "id": "3",
+              "text": "Nein, die Zusage hängt noch vom Dienstplan ab"
+            }
+          ],
+          "answer": "3",
+          "explanation": "The person expresses interest but makes confirmation dependent on the schedule.",
+          "followup_for": null
+        },
+        {
+          "id": "german-entry-6",
+          "criterion": "german-criterion-6",
+          "competency": "grammar",
+          "entry_point": "B1",
+          "label": "B1: understand an unreal condition",
+          "prompt": "„Wenn ich mehr Zeit hätte, würde ich öfter lesen.“ Was wird ausgedrückt?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "Ein Befehl an eine andere Person"
+            },
+            {
+              "id": "2",
+              "text": "Ein vorgestellter Zustand und seine mögliche Folge"
+            },
+            {
+              "id": "3",
+              "text": "Ein fest bestätigter Termin morgen"
+            }
+          ],
+          "answer": "2",
+          "explanation": "Hätte and würde express a hypothetical condition and consequence here.",
+          "followup_for": null
+        },
+        {
+          "id": "german-followup-1",
+          "criterion": "german-criterion-1",
+          "competency": "reading",
+          "entry_point": "A1",
+          "label": "A1: identify a meeting time",
+          "prompt": "Read: „Die Bibliothek schließt heute um sechs Uhr.“ Was passiert um sechs Uhr?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "Die Bibliothek öffnet"
+            },
+            {
+              "id": "2",
+              "text": "Die Bibliothek schließt"
+            },
+            {
+              "id": "3",
+              "text": "Der Kurs beginnt"
+            }
+          ],
+          "answer": "2",
+          "explanation": "Schließt means closes in this sentence.",
+          "followup_for": "german-criterion-1"
+        },
+        {
+          "id": "german-followup-2",
+          "criterion": "german-criterion-2",
+          "competency": "grammar",
+          "entry_point": "A1",
+          "label": "A1: match a verb to its subject",
+          "prompt": "Choose the form: „Ich ___ Deutsch.“",
+          "choices": [
+            {
+              "id": "1",
+              "text": "lernst"
+            },
+            {
+              "id": "2",
+              "text": "lerne"
+            },
+            {
+              "id": "3",
+              "text": "lernen"
+            }
+          ],
+          "answer": "2",
+          "explanation": "With ich, lernen takes the form lerne.",
+          "followup_for": "german-criterion-2"
+        }
+      ]
+    },
+    {
+      "course_id": "italian",
+      "version": "entry-v1",
+      "estimated_minutes": 8,
+      "scope_note": "A short sample of reading, grammar and meaning. This is a provisional study suggestion, not a CEFR certification.",
+      "unknown_areas": [
+        "Listening comprehension",
+        "Spoken interaction and production",
+        "Independent writing",
+        "Reading outside these brief samples"
+      ],
+      "questions": [
+        {
+          "id": "italian-entry-1",
+          "criterion": "italian-criterion-1",
+          "competency": "reading",
+          "entry_point": "A1",
+          "label": "A1: identify a meeting time",
+          "prompt": "Leggi: «Il corso inizia lunedì alle nove.» Quando inizia?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "Lunedì alle nove"
+            },
+            {
+              "id": "2",
+              "text": "Domenica alle nove"
+            },
+            {
+              "id": "3",
+              "text": "Lunedì a mezzogiorno"
+            }
+          ],
+          "answer": "1",
+          "explanation": "The sentence gives lunedì and alle nove.",
+          "followup_for": null
+        },
+        {
+          "id": "italian-entry-2",
+          "criterion": "italian-criterion-2",
+          "competency": "grammar",
+          "entry_point": "A1",
+          "label": "A1: match a verb to its subject",
+          "prompt": "Scegli la forma: «Io ___ a Roma.»",
+          "choices": [
+            {
+              "id": "1",
+              "text": "abiti"
+            },
+            {
+              "id": "2",
+              "text": "abitano"
+            },
+            {
+              "id": "3",
+              "text": "abito"
+            }
+          ],
+          "answer": "3",
+          "explanation": "With io, abitare takes the form abito.",
+          "followup_for": null
+        },
+        {
+          "id": "italian-entry-3",
+          "criterion": "italian-criterion-3",
+          "competency": "reading",
+          "entry_point": "A2",
+          "label": "A2: interpret a changed arrangement",
+          "prompt": "Leggi: «L’incontro di martedì è annullato. Ci vediamo invece giovedì.» Qual è il nuovo giorno?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "Domenica"
+            },
+            {
+              "id": "2",
+              "text": "Giovedì"
+            },
+            {
+              "id": "3",
+              "text": "Martedì"
+            }
+          ],
+          "answer": "2",
+          "explanation": "Invece introduces Thursday as the replacement.",
+          "followup_for": null
+        },
+        {
+          "id": "italian-entry-4",
+          "criterion": "italian-criterion-4",
+          "competency": "grammar",
+          "entry_point": "A2",
+          "label": "A2: understand completed action",
+          "prompt": "«Ieri ho comprato un libro.» Quando è avvenuto l’acquisto?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "Nel passato"
+            },
+            {
+              "id": "2",
+              "text": "Domani"
+            },
+            {
+              "id": "3",
+              "text": "È soltanto un desiderio"
+            }
+          ],
+          "answer": "1",
+          "explanation": "Ieri and ho comprato refer to a completed past action.",
+          "followup_for": null
+        },
+        {
+          "id": "italian-entry-5",
+          "criterion": "italian-criterion-5",
+          "competency": "reading",
+          "entry_point": "B1",
+          "label": "B1: distinguish intention from a condition",
+          "prompt": "Leggi: «Vorrei partecipare al corso, ma potrò confermare solo quando conoscerò i miei turni di lavoro.» La partecipazione è già confermata?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "Sì, è già confermata"
+            },
+            {
+              "id": "2",
+              "text": "La persona rifiuta definitivamente"
+            },
+            {
+              "id": "3",
+              "text": "No, la conferma dipende ancora dai turni"
+            }
+          ],
+          "answer": "3",
+          "explanation": "The speaker wants to attend but cannot confirm before knowing the work shifts.",
+          "followup_for": null
+        },
+        {
+          "id": "italian-entry-6",
+          "criterion": "italian-criterion-6",
+          "competency": "grammar",
+          "entry_point": "B1",
+          "label": "B1: understand an unreal condition",
+          "prompt": "«Se avessi più tempo, leggerei di più.» Che cosa esprime la frase?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "Un appuntamento già fissato"
+            },
+            {
+              "id": "2",
+              "text": "Una condizione ipotetica e la sua conseguenza"
+            },
+            {
+              "id": "3",
+              "text": "Un ordine a un’altra persona"
+            }
+          ],
+          "answer": "2",
+          "explanation": "The sentence presents a hypothetical condition with a conditional consequence.",
+          "followup_for": null
+        },
+        {
+          "id": "italian-followup-1",
+          "criterion": "italian-criterion-1",
+          "competency": "reading",
+          "entry_point": "A1",
+          "label": "A1: identify a meeting time",
+          "prompt": "Leggi: «La biblioteca chiude oggi alle sei.» Che cosa succede alle sei?",
+          "choices": [
+            {
+              "id": "1",
+              "text": "La biblioteca apre"
+            },
+            {
+              "id": "2",
+              "text": "La biblioteca chiude"
+            },
+            {
+              "id": "3",
+              "text": "Inizia il corso"
+            }
+          ],
+          "answer": "2",
+          "explanation": "Chiude means closes in this sentence.",
+          "followup_for": "italian-criterion-1"
+        },
+        {
+          "id": "italian-followup-2",
+          "criterion": "italian-criterion-2",
+          "competency": "grammar",
+          "entry_point": "A1",
+          "label": "A1: match a verb to its subject",
+          "prompt": "Scegli la forma: «Io ___ italiano.»",
+          "choices": [
+            {
+              "id": "1",
+              "text": "studi"
+            },
+            {
+              "id": "2",
+              "text": "studio"
+            },
+            {
+              "id": "3",
+              "text": "studiano"
+            }
+          ],
+          "answer": "2",
+          "explanation": "With io, studiare takes the form studio.",
+          "followup_for": "italian-criterion-2"
+        }
+      ]
+    }
+  ]
+}

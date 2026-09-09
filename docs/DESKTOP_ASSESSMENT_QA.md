@@ -48,3 +48,27 @@ This verifies the primary assessment adapter on macOS. Shared session identities
 diagnostic placement UI, acceptance into an active class, classroom/language
 runtime migration, Windows/Linux operation, live providers and enforcement remain
 separate implementation and release gates.
+
+
+## Diagnostic and suggested-path increment
+
+The same isolated macOS profile was rebuilt and tested with the native placement
+commands. Linux Bash restored a selected but unconfirmed answer after terminating
+and relaunching the app. Keyboard selection, confirmation, skips, previous-answer
+navigation, initial submission and both optional follow-up questions worked. The
+result distinguished demonstrated samples, practice needs and unassessed criteria.
+A corrected follow-up retained the original failed response in expandable evidence.
+
+The resulting path preview proposed Practical application with 3 of 6 sampled
+criteria demonstrated, five prerequisite refreshers, eleven earlier topics still
+available and the required course outcome intact. It explicitly identifies
+unsampled/practical/retention knowledge and pending activation. Both the check and
+recommendation were visually inspected at 1100 × 760 with the original blueprint,
+node panels and amber controls. SQLite integrity returned `ok`, with no foreign-key
+violations. No class or accepted path was created.
+
+Current checks: 176 Rust tests and 43 frontend tests pass, six external/live Rust
+tests are ignored, Svelte has zero errors/warnings, strict Clippy and the packaged
+macOS build pass. All nine authored banks and all three recommendation routes are
+covered by domain/preview tests. This does not establish calibrated placement,
+active-class path acceptance, practical assessment or Linux/Windows operation.

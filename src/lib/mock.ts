@@ -1,5 +1,6 @@
 import type { AssessmentRoundId } from './contracts/assessments';
 import { previewEnrollmentOptions, previewEnrollmentDraft, savePreviewEnrollmentDraft } from './enrollment-preview';
+import { getPreviewPlacement, startPreviewPlacement, savePreviewPlacement, submitPreviewPlacement, continuePreviewPlacement, finishPreviewPlacement, recommendPreviewPath } from './placement-preview';
 import type { SaveEnrollmentDraft } from './contracts/enrollment';
 import { COURSES, courseDefinition } from './catalog';
 import seedConcepts from '../../src-tauri/seed/concepts.json';
@@ -784,6 +785,13 @@ function savePreviewQuiz() {
 
 export const mockApi = {
   getEnrollmentOptions: async (courseId: ClassroomSubjectId) => previewEnrollmentOptions(courseId),
+  getPlacementCheck: getPreviewPlacement,
+  startPlacementCheck: startPreviewPlacement,
+  savePlacementResponse: savePreviewPlacement,
+  submitPlacementRound: submitPreviewPlacement,
+  continuePlacementCheck: continuePreviewPlacement,
+  finishPlacementCheck: finishPreviewPlacement,
+  getPathRecommendation: recommendPreviewPath,
   getEnrollmentDraft: async (courseId: ClassroomSubjectId) => previewEnrollmentDraft(courseId),
   saveEnrollmentDraft: async (input: SaveEnrollmentDraft) => savePreviewEnrollmentDraft(input),
   getCatalog: async () => [...COURSES],
