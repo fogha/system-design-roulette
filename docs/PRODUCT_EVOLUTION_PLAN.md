@@ -540,3 +540,37 @@ and five-result pages; local models use Installed/Browse/Downloads tabs. Persist
 model shortlists and custom runner setup independently of the active choice.
 Library saves preserve the active tutor; explicit study/class setup saves apply
 that choice. See the runner record for the configuration-isolation regression.
+
+### Shared study runtime foundation
+
+Schema v6 and `domain/sessions.rs` now provide stable study-session IDs, immutable
+preparation context and lesson versions, the planned/preparing/ready/active/paused/
+terminal lifecycle, versioned work and reading checkpoints, per-owner resumable
+work, advisory foreground handoff and recoverable preparation leases. Class paths,
+curriculum, tutor, goal and pace are captured before provider work starts. A daily
+routine has an explicit compatibility owner without an invented class assignment.
+
+The existing assessment runtime accepts session ownership. Completion joins the
+subject adapter's grading, evidence and occurrence projection in one transaction;
+failed writes roll back and identical retries return the original result. Skipping
+retains draft answers and leaves independent class placement active. The migration
+preserves v1–v5 sources/checksums and existing assessment data, with a consistent
+pre-upgrade backup. See [the runtime contract](SHARED_SESSION_RUNTIME.md).
+
+Validation: 208 Rust tests pass, six live/external tests remain ignored, strict
+Clippy passes and the packaged macOS build succeeds. Real SQLite connection races
+and reopen tests exercise saved ownership, midnight resume, worker recovery,
+publication conflicts and transactional grading failures. Native v5→v6 upgrade
+preserved identical row hashes across 14 learning tables. The normal desktop
+launch rendered the existing catalog, accepted Linux Bash Path 2 and saved tutor.
+An earlier direct background-binary launch showed a delayed first render; the
+desktop record distinguishes that observation from the normal launch check.
+
+This foundation is not yet wired into lesson IPC. Primary import and simultaneous
+writer/due/consumed/active/history cutover come next, followed by classroom and
+language adapters. Timer ownership, occurrence/timezone integration, generalized
+OS enforcement and the shared lesson UI remain unfinished P4–P7 gates. No new
+Start action or second frontend session engine was introduced.
+
+Five additional [logo options](branding/LOGO_OPTIONS.md) are saved for the user's
+selection. They remain concepts; no candidate has replaced the installed icon.

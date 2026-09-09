@@ -107,3 +107,37 @@ during an active lesson. 197 Rust and 51 frontend tests pass, six external Rust
 tests remain ignored, Svelte has zero errors/warnings and strict Clippy passes.
 This is still a bridge to existing session adapters, not the completed shared
 learning runtime or a cross-platform release qualification.
+
+## Shared runtime schema upgrade
+
+Built the packaged debug app with identifier
+`com.darkmatter.principia-desk.assessment-qa` and upgraded that isolated profile
+from schema v5 to v6. Production data was not opened. The v5 backup was readable,
+SQLite integrity returned `ok`, and foreign-key checking reported no violations.
+
+Before/after ordered-row hashes matched for all 14 checked tables: primary,
+classroom and language sessions; courses; all four assessment tables; enrollment
+drafts; classes; path revisions; mastery; exercise drafts; and course snapshots.
+The profile retained four primary sessions, three documents, four assessment
+attempts, five rounds/submissions, four enrollment drafts, one class, two accepted
+path revisions and one pre-existing mastery row. New runtime session count was
+zero, as expected before engine cutover.
+
+The direct background-binary launch initially displayed a blank native window.
+Live process samples showed idle event loops in the app and WebContent; the
+database upgrade was already complete. The UI appeared by the time the native
+Web Inspector opened, and its console showed no error messages. This observation
+does not prove what caused the delay. After quitting that process, a normal macOS
+Launch Services launch rendered at the first observation and restored the Classes
+view, Linux Bash Path 2/Core mechanisms, and `openrouter/free`. Learning-table
+hashes still matched after relaunch. No provider calls or new study credit were
+needed for this check.
+
+Validation logs: `/tmp/principia-study-all-tests.log` (208 passed, six external
+tests ignored), `/tmp/principia-study-clippy.log`, and
+`/tmp/principia-study-native-build.log`. Isolated before/after fingerprints are in
+`/tmp/principia-study-native-before.json` and
+`/tmp/principia-study-native-after.json`. The new runtime is covered through its
+native domain and storage tests; existing UI commands still use the legacy
+engines, so this check verifies upgrade compatibility, not completed engine
+integration or cross-platform runtime behavior.

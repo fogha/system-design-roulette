@@ -75,6 +75,15 @@ const MIGRATIONS: &[Migration] = &[
             Ok(())
         },
     },
+    Migration {
+        version: 6,
+        name: "study_sessions",
+        sources: &[include_str!("006_study_sessions.sql")],
+        apply: |conn| {
+            conn.execute_batch(include_str!("006_study_sessions.sql"))?;
+            Ok(())
+        },
+    },
 ];
 
 pub fn enable_foreign_keys(conn: &Connection) -> Result<()> {
@@ -280,6 +289,71 @@ fn run(conn: &Connection, database: &Path, migrations: &[Migration]) -> Result<(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn v5_session_upgrade_preserves_frozen_assessment_records_and_original_checksums() {
+        let directory = std::env::temp_dir().join(format!(
+            "principia-session-upgrade-{:032x}",
+            rand::random::<u128>()
+        ));
+        fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("learner.db");
+        let conn = Connection::open(&path).unwrap();
+        run(&conn, &path, &MIGRATIONS[..5]).unwrap();
+        conn.execute_batch("INSERT INTO assessment_attempts VALUES('assessment-saved','legacy_primary','2026-09-08','retrieval','{\"original\":true}','active','original',NULL);
+            INSERT INTO assessment_rounds VALUES('round-saved','assessment-saved',1,'v1','[{\"id\":\"one\",\"body\":{\"prompt\":\"Original question\"}}]','original');
+            INSERT INTO assessment_work VALUES('round-saved',2,'{\"one\":{\"answer\":\"Saved learner answer\",\"status\":\"draft\"}}','saved');
+            INSERT INTO assessment_attempts VALUES('assessment-finished','legacy_primary','2026-09-07','retrieval','{}','completed','original','finished');
+            INSERT INTO assessment_rounds VALUES('round-finished','assessment-finished',1,'v1','[]','original');
+            INSERT INTO assessment_work VALUES('round-finished',0,'{}','original');
+            INSERT INTO assessment_submissions VALUES('round-finished',0,'{}','{\"feedback\":\"Original feedback\"}','finished');").unwrap();
+        fn records(conn: &Connection) -> Vec<String> {
+            [
+                "SELECT json_group_array(json_object('id',id,'owner',owner_kind,'key',owner_key,'purpose',purpose,'context',context_json,'status',status,'created',created_at,'finished',finished_at)) FROM assessment_attempts",
+                "SELECT json_group_array(json_object('id',id,'attempt',attempt_id,'ordinal',ordinal,'rubric',rubric_version,'items',items_json,'created',created_at)) FROM assessment_rounds",
+                "SELECT json_group_array(json_object('round',round_id,'revision',revision,'responses',responses_json,'updated',updated_at)) FROM assessment_work",
+                "SELECT json_group_array(json_object('round',round_id,'revision',answer_revision,'responses',responses_json,'result',result_json,'submitted',submitted_at)) FROM assessment_submissions",
+                "SELECT json_group_array(json_object('version',version,'checksum',checksum)) FROM schema_migrations WHERE version<=5",
+            ].iter().map(|sql|conn.query_row(sql,[],|r|r.get(0)).unwrap()).collect()
+        }
+        let original = records(&conn);
+        run(&conn, &path, MIGRATIONS).unwrap();
+        assert_eq!(records(&conn), original);
+        integrity_check(&conn, true).unwrap();
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM study_sessions", [], |r| r
+                .get::<_, u32>(0))
+                .unwrap(),
+            0
+        );
+        assert!(conn
+            .execute(
+                "UPDATE assessment_attempts SET context_json='{}' WHERE id='assessment-saved'",
+                []
+            )
+            .is_err());
+        assert!(conn.execute("UPDATE assessment_attempts SET status='active',finished_at=NULL WHERE id='assessment-finished'",[]).is_err());
+        assert!(conn
+            .execute(
+                "UPDATE assessment_rounds SET items_json='[]' WHERE id='round-saved'",
+                []
+            )
+            .is_err());
+        let backup: String = conn
+            .query_row(
+                "SELECT backup_path FROM schema_migrations WHERE version=6",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        let old = Connection::open(backup).unwrap();
+        assert_eq!(
+            old.pragma_query_value(None, "user_version", |r| r.get::<_, u32>(0))
+                .unwrap(),
+            5
+        );
+        assert_eq!(records(&old), original);
+    }
 
     #[test]
     fn v4_class_tutor_upgrade_retains_dependents_and_accepts_every_runner() {

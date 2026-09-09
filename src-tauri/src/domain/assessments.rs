@@ -21,6 +21,7 @@ pub enum Owner {
     LegacyPrimary(String),
     EnrollmentDraft(String),
     Class(String),
+    StudySession(String),
 }
 impl Owner {
     fn parts(&self) -> (&str, &str) {
@@ -28,6 +29,7 @@ impl Owner {
             Self::LegacyPrimary(key) => ("legacy_primary", key),
             Self::EnrollmentDraft(key) => ("enrollment_draft", key),
             Self::Class(key) => ("class", key),
+            Self::StudySession(key) => ("study_session", key),
         }
     }
 }
@@ -184,6 +186,11 @@ fn validate_owner(conn: &Connection, owner: &Owner) -> Result<()> {
             [id],
             |r| r.get(0),
         )?,
+        Owner::StudySession(id) => conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM study_sessions WHERE id=?1 AND status IN ('ready','active','paused'))",
+            [id],
+            |r| r.get(0),
+        )?,
     };
     if !exists {
         return Err(invalid("assessment owner is unavailable"));
@@ -317,6 +324,9 @@ pub fn finish_attempt(conn: &Connection, owner: &Owner, id: &AttemptId) -> Resul
 }
 
 fn check_owner_and_status(conn: &Connection, round: &Round, owner: &Owner) -> Result<()> {
+    if matches!(owner, Owner::StudySession(_)) {
+        validate_owner(conn, owner)?;
+    }
     let (kind, key) = owner.parts();
     let valid: bool = conn.query_row("SELECT EXISTS(SELECT 1 FROM assessment_attempts WHERE id = ?1 AND owner_kind = ?2 AND owner_key = ?3 AND status = 'active')",
         params![round.attempt_id.0, kind, key], |r| r.get(0))?;
