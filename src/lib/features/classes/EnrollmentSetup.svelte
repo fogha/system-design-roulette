@@ -6,6 +6,8 @@
   import { enrollmentEditor } from './enrollment-controllers';
   import type { EnrollmentEditorState } from './enrollment-editor';
   import NodeCard from '../../components/NodeCard.svelte';
+  import Dropdown from '../../components/Dropdown.svelte';
+  import type { AgentId } from '../../ipc';
   import FlowStage from '../../components/FlowStage.svelte';
   import { ArrowLeft, Check, Compass, ListStart, Layers, BookOpen, Clock, Bot, Save } from 'lucide-svelte';
 
@@ -21,6 +23,12 @@
     { id: 'diagnostic', title: 'Help me find my level', description: 'Use a short, optional check to help identify a starting point and gaps.', icon: Compass },
     { id: 'manual', title: 'Choose my starting point', description: 'Pick a course stage and tell us which topics already feel familiar.', icon: ListStart },
   ] as const;
+  const providers: { value: AgentId; label: string }[] = [
+    { value: 'claude', label: 'Claude' }, { value: 'codex', label: 'Codex' },
+    { value: 'cursor', label: 'Cursor' }, { value: 'gemini', label: 'Gemini' },
+    { value: 'deepseek', label: 'DeepSeek' }, { value: 'custom', label: 'Custom executable' },
+  ];
+  const entryOptions = $derived(view.options?.entry_points.map((point) => ({ value: point.id, label: point.label })) ?? []);
   const familiarity = $derived(view.options?.familiarity_options.filter((option) => option.label.toLowerCase().includes(search.toLowerCase())) ?? []);
 
   onMount(() => {
@@ -91,11 +99,8 @@
       <p class="notice">Diagnostic preference saved with this draft. The diagnostic and path review are not available in this build yet.</p>
     {:else if configuration.entry.route === 'manual'}
       <div class="manual-entry">
-        <label class="field"><span>{course.kind === 'language' ? 'Declared starting band' : 'Starting course stage'}</span>
-          <select bind:value={configuration.entry.entry_point} onchange={changed}>
-            {#each view.options.entry_points as point}<option value={point.id}>{point.label}</option>{/each}
-          </select>
-        </label>
+        <div class="field"><Dropdown label={course.kind === 'language' ? 'Declared starting band' : 'Starting course stage'}
+          bind:value={configuration.entry.entry_point} options={entryOptions} onchange={changed} /></div>
         <p class="hint">This is a starting preference. Familiarity is recorded separately from skills demonstrated through practice.</p>
         <details>
           <summary>Topics I already know <span>({configuration.entry.familiar_competencies.length} selected)</span></summary>
@@ -116,9 +121,7 @@
       <fieldset>
         <legend>Your goal</legend>
         {#if configuration.goal.kind === 'language_level'}
-          <label class="field"><span>Target band</span><select bind:value={configuration.goal.target_level} onchange={changed}>
-            {#each view.options.entry_points as point}<option value={point.id}>{point.label}</option>{/each}
-          </select></label>
+          <div class="field"><Dropdown label="Target band" bind:value={configuration.goal.target_level} options={entryOptions} onchange={changed} /></div>
         {/if}
         <label class="field"><span>What would you like to do with this knowledge? <small>Optional</small></span><textarea rows="3" maxlength="4000" bind:value={configuration.goal.note} oninput={changed} placeholder="For example, automate a repeatable task at work."></textarea></label>
       </fieldset>
@@ -133,9 +136,7 @@
     <details class="tutor-options">
       <summary>Tutor preference <span>{configuration.tutor.provider} · {configuration.tutor.model}</span></summary>
       <div class="form-grid">
-        <label class="field"><span>Provider</span><select bind:value={configuration.tutor.provider} onchange={changed}>
-          <option value="claude">Claude</option><option value="codex">Codex</option><option value="cursor">Cursor</option><option value="gemini">Gemini</option><option value="deepseek">DeepSeek</option><option value="custom">Custom executable</option>
-        </select></label>
+        <div class="field"><Dropdown label="Provider" bind:value={configuration.tutor.provider} options={providers} onchange={changed} /></div>
         <label class="field"><span>Model ID for this provider</span><input bind:value={configuration.tutor.model} oninput={changed} /></label>
         {#if configuration.tutor.provider === 'custom'}
           <label class="field"><span>Executable path</span><input value={configuration.tutor.custom_agent_bin ?? ''} oninput={(event) => { if (configuration) { configuration.tutor.custom_agent_bin = event.currentTarget.value; changed(); } }} /></label>
@@ -192,7 +193,7 @@
   .entry-options + .notice { margin: 14px 0 0; }
   .field { display: flex; flex-direction: column; gap: 7px; margin-bottom: 15px; font-size: 13px; min-width: 0; }
   .field small { color: var(--muted); font-weight: 400; margin-left: 5px; }
-  .field input, .field select, textarea { border: 1px solid var(--border); background: var(--bg); color: var(--fg); padding: 10px 12px; border-radius: 7px; font: inherit; width: 100%; }
+  .field input, textarea { border: 1px solid var(--border); background: var(--bg); color: var(--fg); padding: 10px 12px; border-radius: 7px; font: inherit; width: 100%; }
   textarea { resize: vertical; }
   .manual-entry > .field { max-width: 430px; }
   .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
@@ -206,7 +207,7 @@
   .save-status { font: 10px var(--font-mono); color: var(--muted); display: flex; gap: 6px; align-items: center; }
   .save-error { margin-top: 18px; padding: 14px; border-radius: 6px; border: 1px dashed var(--led-err); color: var(--bad-fg); background: var(--bad-bg); font-size: 13px; }
   .error-actions { display: flex; flex-wrap: wrap; gap: 10px; }
-  :is(button, input, select, textarea, summary):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  :is(button, input, textarea, summary):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
   @media (max-width: 620px) { .route-grid { grid-template-columns: 1fr; } .route-grid label { gap: 5px; } }
   @media (max-width: 620px) { .enrollment { padding: 22px 18px; } .form-grid, .familiar-list { grid-template-columns: 1fr; } footer button { width: 100%; } }
 </style>

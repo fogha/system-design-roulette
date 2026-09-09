@@ -29,7 +29,7 @@
 
 <style>
   .desk { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-  .command-bar { display: flex; align-items: center; justify-content: space-between; gap: 28px; margin: 18px 28px 0; padding-bottom: 18px; border-bottom: 1px dashed var(--node-border); }
+  .command-bar { position: relative; z-index: 2; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 28px; margin: 18px 28px 0; padding-bottom: 18px; border-bottom: 1px dashed var(--node-border); }
   .brand { display: flex; align-items: center; gap: 11px; border: 0; background: none; color: var(--fg); text-align: left; font: 20px/1.2 var(--font-display); cursor: pointer; padding: 0; flex-shrink: 0; }
   .brand img { width: 36px; height: 36px; }
   .brand small { display: block; margin-top: 6px; font-size: 8px; color: var(--faint); letter-spacing: 1.3px; }

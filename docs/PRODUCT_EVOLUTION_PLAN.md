@@ -441,4 +441,14 @@ The draft editor clearly states that diagnostics, path review and activation are
 
 P3 increment validation: 34 frontend tests passed, Svelte reported zero errors/warnings and the production frontend build passed. Browser checks verified all five destinations and restored a Bash Scripting draft after reload with its later stage, two familiar topics and goal intact. The home and settings views were visually compared with `main` after the design correction. Full native journey, final responsive/accessibility and cross-platform checks remain release gates.
 
+The next design increment replaces all six native selects with one custom dropdown,
+styles the remaining choice controls, reuses the segmented time picker for planner
+windows, and adds course SVG marks, catalog search and separate study/management
+action rows. The native display name is now Principia Desk while compatibility
+identifiers remain unchanged. Packaged macOS tests cover real IPC, persisted class
+levels and enrollment drafts across relaunch, keyboard/menu behavior and the
+640 × 540 minimum window. A native contrast/paint issue was found and corrected.
+See [desktop design verification](DESKTOP_DESIGN_QA.md) for evidence and limits;
+these checks do not replace the remaining end-to-end and cross-platform gates.
+
 P2's shared lesson/session/evidence/path operations remain outstanding. P4–P9 still require placement/path acceptance, the shared runtime, per-engine data cutover, occurrences/focus ownership, complete investigation/capstone labs, richer language variation and the full display/installer rebrand. The temporary guard against changing a legacy language starting level protects the existing denominator; P5 replaces that limitation with explicit path revisions that preserve history. Durable language/classroom activity drafts beyond the shared exercise workspace remain part of the shared-runtime work.

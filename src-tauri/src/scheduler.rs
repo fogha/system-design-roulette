@@ -9,6 +9,7 @@
 //! - Windows→ Task Scheduler entry (`schtasks`, task name = PRODUCT)
 
 pub const LABEL: &str = "com.darkmatter.system-design-roulette";
+// Existing Windows task identity: changing the display name must not duplicate schedules.
 pub const PRODUCT: &str = "System Design Roulette";
 
 #[cfg(any(target_os = "macos", target_os = "windows", test))]
@@ -165,7 +166,7 @@ mod imp {
     use std::process::Command;
 
     pub fn default_exe_path() -> String {
-        "/Applications/system-design-roulette.app/Contents/MacOS/system-design-roulette".into()
+        "/Applications/Principia Desk.app/Contents/MacOS/system-design-roulette".into()
     }
 
     fn plist_path() -> Option<PathBuf> {

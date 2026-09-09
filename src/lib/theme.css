@@ -2,6 +2,7 @@
 
 :root,
 .theme-noir {
+  color-scheme: dark;
   --bg: #141118;
   --surface: #221d29;
   --surface-2: #2b2434;
@@ -40,6 +41,7 @@
 }
 
 .theme-scholar {
+  color-scheme: light;
   --bg: #fbf8f1;
   --surface: #f1efe8;
   --surface-2: #e9e6dc;
@@ -94,6 +96,7 @@ body {
   display: flex;
   flex-direction: column;
   background: var(--bg);
+  color: var(--fg);
   transition: background 0.5s ease;
 }
 
@@ -195,6 +198,47 @@ input:focus,
 textarea:focus {
   border-color: var(--accent);
 }
+
+/* Keep semantic inputs and their keyboard behavior; draw every control ourselves. */
+input[type='checkbox'], input[type='radio'] {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-grid;
+  place-content: center;
+  width: 15px;
+  height: 15px;
+  min-width: 15px;
+  padding: 0;
+  margin: 2px 0;
+  border: 1px solid var(--node-border);
+  border-radius: 3px;
+  background: var(--bg);
+  cursor: pointer;
+  vertical-align: middle;
+}
+input[type='radio'] { border-radius: 50%; }
+input[type='checkbox']::before, input[type='radio']::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  background: var(--accent);
+  transform: scale(0);
+}
+input[type='checkbox']::before { width: 8px; height: 5px; background: none; border-left: 2px solid var(--accent); border-bottom: 2px solid var(--accent); }
+input[type='checkbox']:checked::before { transform: translateY(-1px) rotate(-45deg); }
+input[type='radio']::before { border-radius: 50%; }
+input[type='radio']:checked::before { transform: scale(1); }
+input[type='checkbox']:checked, input[type='radio']:checked { border-color: var(--accent); }
+input[type='checkbox']:disabled, input[type='radio']:disabled { opacity: 0.45; cursor: not-allowed; }
+input[type='number'] { appearance: textfield; -moz-appearance: textfield; }
+input[type='number']::-webkit-inner-spin-button, input[type='number']::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+input[type='search'] { -webkit-appearance: none; appearance: none; }
+input[type='search']::-webkit-search-cancel-button { -webkit-appearance: none; }
+
+summary { list-style: none; }
+summary::-webkit-details-marker { display: none; }
+summary::before { content: '›'; display: inline-block; width: 14px; color: var(--muted); font-family: var(--font-mono); transform-origin: 5px 50%; }
+details[open] > summary::before { transform: rotate(90deg); }
 
 .screen {
   flex: 1;

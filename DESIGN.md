@@ -47,12 +47,38 @@ Topology chrome on top of noir:
 
 ## Components (src/lib/components/)
 
-- `ClusterBar.svelte` — top status strip: `sdr://<route> · cluster: <host>` left, status right.
+- `ClusterBar.svelte` — top status strip: `principia://<route> · cluster: <host>` left, status right.
 - `NodeCard.svelte` — header (icon, name, badge) + body snippet; `accent` prop colors the border.
 - `StatusLED.svelte` — `tone: ok|warn|err|idle|pending` (pending pulses).
 - `MetaBadge.svelte` — mono pill, `tone: teal|amber|violet|red|muted`.
 - `BreakGlass.svelte` — circuit-breaker escape hatch (replaces EscapeHatch visuals).
 - `.cta.mono-cta` — deploy-style button (mono, uppercase, ▲ prefix where apt).
+- `CourseGlyph.svelte` — nine small SVG course marks, using the existing amber
+  strokes, violet connections and teal indicators; retain the original app mark.
+- `Dropdown.svelte` — shared select-only combobox. Opaque node surface, violet
+  active row, teal selection check, amber focus ring. Its menu escapes scrolling
+  cards and flips above its trigger when space below is limited.
+
+## Desktop controls
+
+The user explicitly requested custom controls on 2026-09-09. Do not introduce
+native `<select>` menus, browser time pickers, or `alert`/`confirm`/`prompt` dialogs.
+Use the shared `Dropdown` and `TimePicker`; semantic buttons and inputs retain
+keyboard and accessibility behavior with app-owned styling. Checkboxes and
+radios use custom marks, and number inputs hide platform spinners.
+
+Dropdowns support arrow keys, Home/End, type-ahead, Enter/Space confirmation,
+Escape cancellation, Tab navigation, outside-click dismissal and disabled states.
+Opening a dropdown explicitly focuses its trigger for WebKit. Menu positioning
+must work within desktop windows, independently of enclosing cards or scroll panes.
+
+The native window and noir surface explicitly use the dark theme. Set text color
+on the app root, and keep navigation above scrolling content; do not rely on
+system appearance or inherited browser defaults for contrast. The paper reader
+keeps its light color scheme. The default desktop window is 1100 × 760, with a
+640 × 540 minimum.
+
+See [native verification](docs/DESKTOP_DESIGN_QA.md) for the build and test scope.
 
 ## Rules
 

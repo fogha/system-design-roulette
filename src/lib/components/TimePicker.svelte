@@ -5,7 +5,9 @@
   let {
     value = $bindable('19:00'),
     cron = true,
-  }: { value?: string; cron?: boolean } = $props();
+    compact = false,
+    label = 'Time picker',
+  }: { value?: string; cron?: boolean; compact?: boolean; label?: string } = $props();
 
   const hour = $derived(Number(value.split(':')[0]) || 0);
   const minute = $derived(Number(value.split(':')[1]) || 0);
@@ -56,7 +58,7 @@
   }
 </script>
 
-<div class="tp mono" role="group" aria-label="time picker">
+<div class="tp mono" class:compact role="group" aria-label={label}>
   {#each [{ seg: 'h' as const, val: hour }, { seg: 'm' as const, val: minute }] as s, i}
     {#if i === 1}<div class="colon" class:lit={focused !== null}>:</div>{/if}
     <div class="seg-col">
@@ -99,6 +101,10 @@
     border-radius: 8px;
     padding: 6px 10px;
   }
+  .tp.compact { gap: 3px; padding: 3px 6px; }
+  .compact .seg { font-size: 17px; padding: 2px 4px; }
+  .compact .colon { font-size: 16px; }
+  .compact .chev { padding: 1px 4px; }
   .seg-col {
     display: flex;
     flex-direction: column;

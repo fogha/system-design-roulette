@@ -2,6 +2,7 @@
   import { api, type LanguageSessionResult } from '../ipc';
   import { app } from '../stores.svelte';
   import ClusterBar from '../components/ClusterBar.svelte';
+  import Dropdown from '../components/Dropdown.svelte';
   import Markdown from '../components/Markdown.svelte';
   import {
     ArrowLeft,
@@ -15,6 +16,11 @@
     Volume2,
   } from 'lucide-svelte';
 
+  const confidenceOptions = [
+    { value: 1, label: '1 · Needed the script' }, { value: 2, label: '2 · Many pauses' },
+    { value: 3, label: '3 · Understandable with help' }, { value: 4, label: '4 · Mostly clear' },
+    { value: 5, label: '5 · Clear and independent' },
+  ];
   const lesson = $derived(app.languageLesson);
   let answers = $state<number[]>([]);
   let writingResponse = $state('');
@@ -229,16 +235,7 @@
             <input type="checkbox" bind:checked={speakingCompleted} disabled={!!result} />
             <span>I said this aloud without reading every line</span>
           </label>
-          <label class="confidence">
-            <span>How understandable did it feel?</span>
-            <select bind:value={confidence} disabled={!!result}>
-              <option value={1}>1 · needed the script</option>
-              <option value={2}>2 · many pauses</option>
-              <option value={3}>3 · understandable with help</option>
-              <option value={4}>4 · mostly clear</option>
-              <option value={5}>5 · clear and independent</option>
-            </select>
-          </label>
+          <div class="confidence"><Dropdown label="How understandable did it feel?" bind:value={confidence} options={confidenceOptions} disabled={!!result} /></div>
         </section>
 
         {#if result}
@@ -321,8 +318,7 @@
   }
   button:focus-visible,
   input:focus-visible,
-  textarea:focus-visible,
-  select:focus-visible {
+  textarea:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
   }
@@ -615,24 +611,7 @@
   .speaking-check input {
     accent-color: var(--accent);
   }
-  .confidence {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    align-items: center;
-    gap: 8px;
-    margin-top: 8px;
-    color: var(--muted);
-    font-size: 9px;
-  }
-  .confidence select {
-    max-width: 190px;
-    padding: 7px;
-    color: var(--fg);
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    font-size: 9px;
-  }
+  .confidence { margin-top: 12px; max-width: 360px; }
   .submit-button,
   .finish-button {
     width: 100%;

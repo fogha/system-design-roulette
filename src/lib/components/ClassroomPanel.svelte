@@ -16,6 +16,8 @@
   import CurriculumMap from './CurriculumMap.svelte';
   import ModelPicker from './ModelPicker.svelte';
   import TimePicker from './TimePicker.svelte';
+  import Dropdown from './Dropdown.svelte';
+  import CourseGlyph from './CourseGlyph.svelte';
   import {
     BookOpen,
     CalendarClock,
@@ -24,6 +26,8 @@
     Clock3,
     Plus,
     Settings2,
+    Search,
+    X,
     Trash2,
   } from 'lucide-svelte';
 
@@ -37,7 +41,10 @@
     { id: 7, short: 'S', label: 'Sunday' },
   ];
   const LEVELS: CefrLevel[] = ['A1', 'A2', 'B1', 'B2'];
+  const levelOptions = LEVELS.map((value) => ({ value, label: value }));
   let { mode = 'classes', onsetup }: { mode?: 'classes' | 'schedule'; onsetup?: (id: ClassroomSubjectId) => void } = $props();
+  let query = $state('');
+  let courseSearch = $state<HTMLInputElement>();
   let filter = $state<'all' | 'active' | 'paused' | 'completed'>('all');
 
   const programs = $derived(app.state?.classroom_programs ?? []);
@@ -46,6 +53,8 @@
   const primaryOwed = $derived(app.state?.owed ?? false);
   const visiblePrograms = $derived(programs.filter((program) => {
     if (mode === 'schedule') return program.enabled || slots.some((slot) => slot.subject_id === program.subject_id);
+    const search = query.trim().toLocaleLowerCase();
+    if (search && !`${program.label} ${program.native_label} ${courseDefinition(program.subject_id)?.summary ?? ''}`.toLocaleLowerCase().includes(search)) return false;
     if (filter === 'active') return program.enabled && !program.completed;
     if (filter === 'paused') return !program.enabled && !program.completed && (program.progress > 0 || active.some((session) => session.subject_id === program.subject_id) || slots.some((slot) => slot.subject_id === program.subject_id));
     if (filter === 'completed') return program.completed;
@@ -315,11 +324,11 @@
           </p>
         </div>
       </div>
-      <div class="class-filters" aria-label="Filter classes">
+      <div class="catalog-toolbar"><div class="class-filters" aria-label="Filter classes">
         {#each ['all', 'active', 'paused', 'completed'] as choice}
           <button type="button" aria-pressed={filter === choice} class:chosen={filter === choice} onclick={() => (filter = choice as typeof filter)}>{choice === 'all' ? 'All courses' : choice[0].toUpperCase() + choice.slice(1)}</button>
         {/each}
-      </div>{/if}
+      </div><div class="catalog-search" role="search"><Search size={13} /><input bind:this={courseSearch} type="search" bind:value={query} aria-label="Find a course" placeholder="Find a course…" />{#if query}<button class="clear-search" aria-label="Clear course search" onclick={() => { query = ''; courseSearch?.focus(); }}><X size={12} /></button>{/if}</div></div>{/if}
       {#if primaryOwed}
         <p class="primary-wins" role="status">
           Your daily study session is due now. Classroom starts and resumes unlock after the enforced
@@ -333,7 +342,7 @@
           {@const course = courseDefinition(program.subject_id)}
           <article class:enabled={program.enabled} class:due={slotsFor(program.subject_id).some((s) => s.owed)} class="class-card">
             <header class="class-head">
-              <span class="class-code mono">{program.short_code}</span>
+              <CourseGlyph courseId={program.subject_id} />
               <span class="class-identity">
                 <strong>{program.label}</strong>
                 <small>{program.native_label}</small>
@@ -441,41 +450,6 @@
 
             <footer class="class-actions">
               <button
-                class="text-action"
-                type="button"
-                disabled={!program.enabled}
-                title={program.enabled ? undefined : `enable ${program.label} first`}
-                onclick={() => editSlot(program.subject_id)}
-              >
-                <Plus size={12} /> slot
-              </button>
-              <button class="text-action" type="button" onclick={() => loadDraft(program)}>
-                <Settings2 size={12} /> Class settings
-              </button>
-              {#if mode === 'classes' && onsetup}
-                <button class="text-action" type="button" onclick={() => onsetup?.(program.subject_id)}>Starting preferences</button>
-              {/if}
-              {#if mode === 'classes' && program.kind === 'engineering'}
-                <button
-                  class="text-action"
-                  type="button"
-                  disabled={mapLoading === program.subject_id}
-                  onclick={() => openCurriculum(program)}
-                >
-                  <BookOpen size={12} />
-                  {mapLoading === program.subject_id ? 'Loading…' : 'Curriculum'}
-                </button>
-              {/if}
-              <button
-                class="text-action"
-                type="button"
-                disabled={!program.enabled}
-                title={program.enabled ? undefined : `enable ${program.label} first`}
-                onclick={() => openPlanner(program)}
-              >
-                <CalendarClock size={12} /> Plan schedule
-              </button>
-              <button
                 class="start-button"
                 type="button"
                 disabled={!program.enabled || !!running || primaryOwed}
@@ -494,6 +468,43 @@
               <button class="power-button mono" type="button" onclick={() => toggleProgram(program)}>
                 {program.enabled ? 'disable' : 'enable'}
               </button>
+              <div class="class-tools">
+                <button
+                  class="text-action"
+                  type="button"
+                  disabled={!program.enabled}
+                  title={program.enabled ? undefined : `enable ${program.label} first`}
+                  onclick={() => editSlot(program.subject_id)}
+                >
+                  <Plus size={12} /> slot
+                </button>
+                <button class="text-action" type="button" onclick={() => loadDraft(program)}>
+                  <Settings2 size={12} /> Class settings
+                </button>
+                {#if mode === 'classes' && onsetup}
+                  <button class="text-action" type="button" onclick={() => onsetup?.(program.subject_id)}>Starting preferences</button>
+                {/if}
+                {#if mode === 'classes' && program.kind === 'engineering'}
+                  <button
+                    class="text-action"
+                    type="button"
+                    disabled={mapLoading === program.subject_id}
+                    onclick={() => openCurriculum(program)}
+                  >
+                    <BookOpen size={12} />
+                    {mapLoading === program.subject_id ? 'Loading…' : 'Curriculum'}
+                  </button>
+                {/if}
+                <button
+                  class="text-action"
+                  type="button"
+                  disabled={!program.enabled}
+                  title={program.enabled ? undefined : `enable ${program.label} first`}
+                  onclick={() => openPlanner(program)}
+                >
+                  <CalendarClock size={12} /> Plan schedule
+                </button>
+              </div>
             </footer>
 
             {#if configuring === program.subject_id}
@@ -521,18 +532,8 @@
                 </label>
                 {#if program.kind === 'language'}
                   <div class="language-fields">
-                    <label>
-                      <span>start level</span>
-                      <select bind:value={draftStart}>
-                        {#each LEVELS as level}<option value={level}>{level}</option>{/each}
-                      </select>
-                    </label>
-                    <label>
-                      <span>target level</span>
-                      <select bind:value={draftTarget}>
-                        {#each LEVELS as level}<option value={level}>{level}</option>{/each}
-                      </select>
-                    </label>
+                    <Dropdown label="Start level" bind:value={draftStart} options={levelOptions} />
+                    <Dropdown label="Target level" bind:value={draftTarget} options={levelOptions} />
                     <label>
                       <span>weekly minutes</span>
                       <input type="number" min="60" max="2100" step="30" bind:value={draftWeekly} />
@@ -614,9 +615,9 @@
                         {/each}
                       </div>
                       <div class="window-times">
-                        <input type="time" bind:value={window.start} aria-label="availability start time" />
+                        <TimePicker bind:value={window.start} cron={false} compact label="Availability start time" />
                         <span>to</span>
-                        <input type="time" bind:value={window.end} aria-label="availability end time" />
+                        <TimePicker bind:value={window.end} cron={false} compact label="Availability end time" />
                       </div>
                       <button
                         class="window-remove"
@@ -686,7 +687,13 @@
 </section>
 
 <style>
-  .class-filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 17px; }
+  .catalog-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+  .catalog-search { display: flex; align-items: center; gap: 8px; color: var(--faint); border: 1px solid var(--node-border); border-radius: 5px; padding: 6px 9px; background: var(--bg); }
+  .catalog-search:focus-within { border-color: var(--accent); }
+  .catalog-search input { min-width: 0; width: 150px; border: 0; background: transparent; color: var(--fg); font: 11px var(--font-mono); outline: none; }
+  .clear-search { display: grid; place-items: center; border: 0; padding: 2px; background: none; color: var(--muted); cursor: pointer; }
+  .class-tools { width: 100%; display: flex; flex-wrap: wrap; gap: 6px; border-top: 1px dashed var(--node-divider); padding-top: 10px; margin-top: 4px; }
+  .class-filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; }
   .class-filters button { border: 1px solid var(--border); background: var(--bg); color: var(--muted); border-radius: 5px; padding: 7px 10px; font: 11px var(--font-mono); cursor: pointer; }
   .class-filters button.chosen { color: var(--violet-fg); border-color: var(--violet); background: var(--surface-2); }
   .empty-classes { color: var(--muted); font-size: 13px; grid-column: 1 / -1; }
@@ -753,7 +760,7 @@
     font-size: 11px;
     line-height: 1.45;
   }
-  .class-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .class-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
   .class-card {
     position: relative;
     border: 1px solid var(--node-border);
@@ -770,19 +777,9 @@
   .class-card.enabled { border-color: color-mix(in srgb, var(--accent) 30%, var(--node-border)); }
   .class-card.due { box-shadow: inset 3px 0 0 var(--amber); }
   .class-head { gap: 9px; padding: 9px 12px; margin: -13px -13px 13px; border-bottom: 1px solid var(--node-divider); background: var(--node-bg); border-radius: 8px 8px 0 0; }
-  .class-code {
-    width: 32px;
-    height: 32px;
-    display: grid;
-    place-items: center;
-    border: 1px solid var(--node-border);
-    border-radius: 6px;
-    color: var(--accent);
-    font-size: 12px;
-  }
   .class-identity { flex: 1; min-width: 0; }
   .class-identity strong, .class-identity small { display: block; }
-  .class-identity strong { font: 11px var(--font-mono); color: var(--muted); }
+  .class-identity strong { font: 12px/1.5 var(--font-mono); color: var(--fg); }
   .class-identity small { color: var(--faint); font: 9px var(--font-mono); margin-top: 2px; }
   .class-state { color: var(--muted); font-size: 9px; letter-spacing: 0.4px; border-radius: 3px; background: var(--surface-2); padding: 2px 6px; }
   .class-state.online { color: var(--ok-fg); background: var(--ok-bg); }
@@ -809,7 +806,9 @@
     min-height: 32px;
     padding: 6px 10px;
     cursor: pointer;
-    font-size: 12px;
+    font: 11px var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
   }
   .resume-button { width: 100%; margin: 3px 0 8px; text-align: left; }
   .slot-list { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 4px; }
@@ -838,7 +837,8 @@
     color: var(--faint);
     cursor: pointer;
   }
-  .class-actions { gap: 6px; flex-wrap: wrap; }
+  .class-actions { gap: 8px; flex-wrap: wrap; }
+  .class-actions button { font-family: var(--font-mono); }
   .text-action, .power-button {
     min-height: 30px;
     border: 1px solid var(--node-border);
@@ -850,10 +850,10 @@
     font-size: 11px;
   }
   .text-action { display: flex; align-items: center; gap: 4px; }
-  .start-button { margin-left: auto; }
+  .start-button { margin-right: auto; }
   .power-button { font-size: 11px; }
   button:disabled { opacity: 0.4; cursor: not-allowed; }
-  button:focus-visible, input:focus-visible, select:focus-visible {
+  button:focus-visible, input:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
   }
@@ -867,9 +867,9 @@
   .settings-title { justify-content: space-between; color: var(--accent); font-size: 11px; }
   .settings-title button { border: 0; background: none; color: var(--muted); cursor: pointer; min-height: 28px; }
   .settings-pane > p, .plan-pane > p { color: var(--muted); font-size: 12px; line-height: 1.5; }
-  .number-field, .language-fields label { display: grid; gap: 5px; color: var(--muted); font-size: 11px; }
+  .number-field { display: grid; gap: 5px; color: var(--muted); font-size: 11px; }
   .number-field { margin: 12px 0; max-width: 150px; }
-  .number-field input, .language-fields input, .language-fields select {
+  .number-field input, .language-fields input {
     border: 1px solid var(--node-border);
     border-radius: 5px;
     background: var(--bg);
@@ -877,6 +877,7 @@
     min-height: 32px;
     padding: 5px 7px;
   }
+  .language-fields label { display: grid; gap: 5px; color: var(--muted); font: 11px var(--font-mono); }
   .language-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 12px 0; }
   .save-button { margin-top: 10px; }
   .slot-editor fieldset, .windows-field { border: 0; padding: 0; margin: 10px 0; }
@@ -934,15 +935,6 @@
     flex-wrap: wrap;
   }
   .window-times { display: flex; align-items: center; gap: 6px; color: var(--faint); font-size: 11px; }
-  .window-times input {
-    border: 1px solid var(--node-border);
-    border-radius: 5px;
-    background: var(--bg);
-    color: var(--text);
-    min-height: 30px;
-    padding: 4px 6px;
-    font-size: 12px;
-  }
   .window-remove {
     min-width: 28px;
     min-height: 28px;
@@ -982,7 +974,8 @@
   @media (max-width: 760px) {
     .class-grid { grid-template-columns: 1fr; }
     .classroom-intro { display: block; }
-    .language-fields { grid-template-columns: 1fr; }
+    .language-fields label { display: grid; gap: 5px; color: var(--muted); font: 11px var(--font-mono); }
+  .language-fields { grid-template-columns: 1fr; }
     .plan-numbers { grid-template-columns: 1fr; }
   }
   @media (prefers-reduced-motion: reduce) {
