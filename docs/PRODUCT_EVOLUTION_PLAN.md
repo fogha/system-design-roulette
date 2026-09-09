@@ -20,6 +20,8 @@ The source supports that interpretation directly:
 
 **Product identity: Principia Desk.** The name is finalized. Position the app as an intentional place to understand subjects from their foundations. Use this exact display name throughout the planned UI, onboarding, documentation and installer labels. The suggested tagline is **Understand deeply. Practice daily.**; tagline and visual identity remain proposals. Apply the compatibility rules in the rebranding workstream when implementing the rename.
 
+**Visual direction clarified during implementation:** the user rejected the simplified preview and requested the design on `main` as the reference, specifically for visual design. Preserve its blueprint grid, node headers, numbered rails, dashed connectors, status LEDs, compact monospace controls, amber actions, colored metadata badges, serif headlines and paper reader. The catalog, entry-level support and structural work remain in scope. Five destinations describe information organization; a sidebar or generic card styling is not a requirement. [DESIGN.md](../DESIGN.md) now records this explicit constraint.
+
 **1. Establish the product vocabulary and catalog.** Use the same meanings in code, database contracts, UI copy, fixtures and documentation. The main navigation should say **Classes**; the internal subject catalog describes what can be studied.
 
 | Term | Meaning | Example |
@@ -134,7 +136,7 @@ Today should privilege the next useful action over settings and statistics. Mult
 +----------------+-------------------------------------------------------+
 ```
 
-The wireframe illustrates information order, not a final visual design. At narrow widths use a compact navigation control and one content column. Design for the existing 1100×760 default window first.
+The wireframe illustrates information order, not a final visual design. The user's later design clarification supersedes its sidebar arrangement: implement these destinations with compact navigation and the existing visual system from `main`. At narrow widths use a compact navigation control and one content column. Design for the existing 1100×760 default window first.
 
 Use a shared **LessonShell** with a stable header, objective, stage navigation, reading preferences, time/commitment status, save state and a clear return/recovery action. The shell renders a typed set of supported activities:
 
@@ -146,7 +148,7 @@ The common learning purposes are **Recall → Learn → Practice → Check → F
 
 Keep optional roulette as a way to choose among eligible next lessons in the accepted personal path, with a deterministic persisted choice. Put it behind Choose for me. The default class action is Continue learning, whose selected topic and reason are visible. Both actions respect the entry profile, current path revision and prerequisite advice; neither reschedules bypassed introductions by accident. A random reveal must not change prerequisites or assessment evidence.
 
-**3. Make states and visual rules consistent.** Retain the useful quiet reading surface and readable typography, but replace global topology language with ordinary learning language. System diagrams still belong inside lessons where they explain the subject.
+**3. Make states and visual rules consistent.** Preserve the visual character of `main` throughout the app, as explicitly requested during implementation. Keep the quiet paper reader, blueprint application background, compact node panels, status badges, numbered rails and monospace controls. Use consistent learning terms for destinations and operations; the following mappings explain their meaning without requiring the removal of the original visual vocabulary.
 
 | Existing term | Product term |
 |---|---|
@@ -159,9 +161,9 @@ Keep optional roulette as a way to choose among eligible next lessons in the acc
 | Leader election | Choose next lesson |
 | Egress queue | Resources |
 
-Define semantic tokens for background, surface, text, muted text, border, accent, success, warning and error in both themes. Resolve the currently undefined variables such as `--text`, `--green`, `--amber` and `--good-fg`; migrate hardcoded palettes in `CoursePurpose` and `CurriculumMap`. Use subject accents as identity cues within one design system. Prefer readable 14–16 px controls/body text, comfortable article width and consistent spacing. Reserve monospace for code and compact numeric metadata.
+Define semantic tokens for background, surface, text, muted text, border, accent, success, warning and error in both themes. Resolve the currently undefined variables such as `--text`, `--green`, `--amber` and `--good-fg`; migrate hardcoded palettes in `CoursePurpose` and `CurriculumMap`. Use subject accents as identity cues within the existing design system. Preserve `main`'s compact monospace navigation, node headers, controls and metadata, paired with readable body text and comfortable article width. Do not replace that hierarchy with uniformly large controls or generic panels.
 
-Introduce a small reusable primitive set: Button, Field, Select, Card, Status, Progress, Tabs, Drawer, Dialog and EmptyState. Use proper labels, keyboard navigation, focus restoration, visible focus, sufficient contrast and reduced-motion support. Bundle required fonts/assets or provide reliable local fallbacks for a desktop app.
+Extend the existing `NodeCard`, `MetaBadge`, `StatusLED`, `TimePicker` and button styles first; extract their repeated patterns, such as the setup rail, into reusable components. Add Field, Select, Tabs, Drawer, Dialog and EmptyState primitives where they remove real duplication. Use proper labels, keyboard navigation, focus restoration, visible focus, sufficient contrast and reduced-motion support. Bundle required fonts/assets or provide reliable local fallbacks for a desktop app.
 
 Required states apply to all classes:
 
@@ -429,4 +431,14 @@ P2 storage and enrollment implementation now includes:
 
 P2 foundation validation: 164 Rust tests and 29 frontend tests passed; six live/external Rust tests remain excluded from the default run. Svelte checks reported zero errors/warnings; strict local Clippy, formatting and a production frontend build passed. Migration fixtures exercise upgrade, rollback, WAL backup and concurrent opens. Enrollment tests exercise all nine courses, curriculum drift, stale writes, idempotence, snapshot retention and storage failures.
 
-P2's shared lesson/session/evidence/path operations remain outstanding. P3–P9 still require placement/path acceptance, unified navigation/runtime, per-engine data cutover, complete investigation/capstone labs, richer language variation and the full display/installer rebrand. The temporary guard against changing a legacy language starting level protects the existing denominator; P5 replaces that limitation with explicit path revisions that preserve history. Durable language/classroom activity drafts beyond the shared exercise workspace remain part of the shared-runtime work.
+P3 navigation and draft setup now include:
+
+- Today, Classes, Schedule, Progress and Settings destinations, with the existing study readers and enforcement routes connected through compatibility state. Today shows saved work and scheduled starts; class settings, recurring slots, planner previews and the daily routine remain reachable. Progress currently exposes daily-study history; all-engine history remains pending.
+- A starting-preference editor for each course, including foundations, diagnostic intent and a manual stage/band with individual familiarity selections. Goal, pace and provider-specific model fields remain separate. Saves are serialized, flush on navigation and retain a recovery copy. Restart recovery never silently replaces a newer draft; conflicts require an explicit choice. Corrupt recovery data is retained until the learner chooses to discard it.
+- The user's design correction is applied across these views using the original `main` visual system: blueprint background, compact top navigation, centered home composition, original node components, status LEDs/badges, amber monospace actions and the setup rail extracted as `FlowStage`. `DESIGN.md` records the source reference and preservation requirement. The original reader styling remains in place.
+
+The draft editor clearly states that diagnostics, path review and activation are not available yet; its choices do not affect existing class selection. The catalog still uses the compatibility program controls. Decomposing the remaining classroom panel, completing Add class/path acceptance and unifying progress and saved lesson state remain part of P3–P7.
+
+P3 increment validation: 34 frontend tests passed, Svelte reported zero errors/warnings and the production frontend build passed. Browser checks verified all five destinations and restored a Bash Scripting draft after reload with its later stage, two familiar topics and goal intact. The home and settings views were visually compared with `main` after the design correction. Full native journey, final responsive/accessibility and cross-platform checks remain release gates.
+
+P2's shared lesson/session/evidence/path operations remain outstanding. P4–P9 still require placement/path acceptance, the shared runtime, per-engine data cutover, occurrences/focus ownership, complete investigation/capstone labs, richer language variation and the full display/installer rebrand. The temporary guard against changing a legacy language starting level protects the existing denominator; P5 replaces that limitation with explicit path revisions that preserve history. Durable language/classroom activity drafts beyond the shared exercise workspace remain part of the shared-runtime work.

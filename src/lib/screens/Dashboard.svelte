@@ -2,7 +2,6 @@
   import { api, type DashboardView, type ArchivedCourse } from '../ipc';
   import { app } from '../stores.svelte';
   import Markdown from '../components/Markdown.svelte';
-  import ClusterBar from '../components/ClusterBar.svelte';
   import NodeCard from '../components/NodeCard.svelte';
   import ExerciseWorkspace from '../components/ExerciseWorkspace.svelte';
   import { BookOpen, Hammer } from 'lucide-svelte';
@@ -12,12 +11,12 @@
   let archiveTab = $state<'read' | 'exercise'>('read');
 
   $effect(() => {
-    api.getDashboard().then((d) => (data = d));
+    api.getDashboard().then((d) => (data = d)).catch((error) => (app.error = String(error)));
   });
 
   async function openCourse(date: string) {
     archiveTab = 'read';
-    viewing = await api.getPastCourse(date);
+    try { viewing = await api.getPastCourse(date); } catch (error) { app.error = String(error); }
   }
 
   function scoreLabel(s: number | null): string {
@@ -52,7 +51,6 @@
 </script>
 
 <div class="dash-wrap blueprint">
-  <ClusterBar route={viewing ? 'archive' : 'cluster'} status="read-only" tone="idle" />
   {#if viewing}
     <div class="dash-inner">
       <div class="dash-head">
@@ -67,7 +65,7 @@
           class:active={archiveTab === 'read'}
           onclick={() => (archiveTab = 'read')}
         >
-          <BookOpen size={12} /> course
+          <BookOpen size={12} /> lesson
         </button>
         <button
           class="archive-tab"
@@ -94,25 +92,26 @@
   {:else}
     <div class="dash-inner">
       <div class="dash-head">
-        <button class="ghost mono-ghost" onclick={() => { app.screen = 'idle'; app.refresh(); }}>← back</button>
-        <h2>Cluster overview</h2>
+        <button class="ghost mono-ghost" onclick={() => app.navigate('today')}>← Today</button>
+        <h1>Progress</h1>
       </div>
       {#if !data}
         <p class="sub mono">loading…</p>
       {:else}
+        <p class="sub">Daily study history and topic progress. Individual class progress is available in Classes.</p>
         <div class="stats">
-          <NodeCard name="uptime" badge="streak" badgeTone="teal">
+          <NodeCard name="Study streak" badge="streak" badgeTone="teal">
             {#snippet children()}<div class="num mono">{data?.streak ?? 0}d</div>{/snippet}
           </NodeCard>
-          <NodeCard name="pool-coverage" badge="topics" badgeTone="violet">
+          <NodeCard name="Topics studied" badge="topics" badgeTone="violet">
             {#snippet children()}<div class="num mono">{data?.concepts_covered ?? 0}/{data?.concepts_total ?? 0}</div>{/snippet}
           </NodeCard>
-          <NodeCard name="dead-letter-queue" badge="retries due" badgeTone="amber">
+          <NodeCard name="Questions to revisit" badge="retries due" badgeTone="amber">
             {#snippet children()}<div class="num mono">{data?.carryover_due ?? 0}</div>{/snippet}
           </NodeCard>
         </div>
         <div class="hm-block">
-          <div class="meta-label">MASTERY_STORE — per-concept ledger</div>
+          <div class="meta-label">TOPIC PROGRESS</div>
           <div class="ms-grid">
             {#each masteryByCategory as [category, entries]}
               <div class="ms-row">
@@ -137,7 +136,7 @@
           </div>
         </div>
         <div class="hm-block">
-          <div class="meta-label">SESSION_LOG — last 16 weeks</div>
+          <div class="meta-label">STUDY HISTORY · Last 16 weeks</div>
           <div class="heatmap" aria-label="last 16 weeks of sessions">
             {#each heatmap as week}
               <div class="hm-col">
@@ -156,7 +155,7 @@
         <div class="dash-body">
           <table class="history mono">
             <thead>
-              <tr><th>date</th><th>topic</th><th>status</th><th>budget</th><th></th></tr>
+              <tr><th>date</th><th>topic</th><th>status</th><th>Quiz score</th><th></th></tr>
             </thead>
             <tbody>
               {#each data.history as h}
@@ -170,7 +169,7 @@
                       class:bad={h.status === 'skipped'}
                       class:warn={h.status === 'in_progress' || h.status === 'pending'}
                     >
-                      {h.status === 'completed' ? '200' : h.status === 'skipped' ? '503' : h.status}
+                      {h.status}
                     </span>
                   </td>
                   <td>{scoreLabel(h.quiz_score)}</td>

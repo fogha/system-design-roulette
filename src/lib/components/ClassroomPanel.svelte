@@ -24,7 +24,6 @@
     Clock3,
     Plus,
     Settings2,
-    Sparkles,
     Trash2,
   } from 'lucide-svelte';
 
@@ -38,11 +37,20 @@
     { id: 7, short: 'S', label: 'Sunday' },
   ];
   const LEVELS: CefrLevel[] = ['A1', 'A2', 'B1', 'B2'];
+  let { mode = 'classes', onsetup }: { mode?: 'classes' | 'schedule'; onsetup?: (id: ClassroomSubjectId) => void } = $props();
+  let filter = $state<'all' | 'active' | 'paused' | 'completed'>('all');
 
   const programs = $derived(app.state?.classroom_programs ?? []);
   const slots = $derived(app.state?.classroom_slots ?? []);
   const active = $derived(app.state?.active_classroom_sessions ?? []);
   const primaryOwed = $derived(app.state?.owed ?? false);
+  const visiblePrograms = $derived(programs.filter((program) => {
+    if (mode === 'schedule') return program.enabled || slots.some((slot) => slot.subject_id === program.subject_id);
+    if (filter === 'active') return program.enabled && !program.completed;
+    if (filter === 'paused') return !program.enabled && !program.completed && (program.progress > 0 || active.some((session) => session.subject_id === program.subject_id) || slots.some((slot) => slot.subject_id === program.subject_id));
+    if (filter === 'completed') return program.completed;
+    return true;
+  }));
 
   let expanded = $state(true);
   let configuring = $state<ClassroomSubjectId | null>(null);
@@ -282,8 +290,8 @@
     <span class="trigger-copy">
       <span class="trigger-icon"><BookOpen size={15} /></span>
       <span>
-        <strong id="classroom-title">Classroom</strong>
-        <small>independent classes · schedules · teachers · prompt contracts</small>
+        <strong id="classroom-title">{mode === 'schedule' ? 'Class schedules' : 'Courses and classes'}</strong>
+        <small>{mode === 'schedule' ? 'Recurring study times and weekly plans' : 'Explore nine courses and manage your learning'}</small>
       </span>
     </span>
     <span class="trigger-meta mono">
@@ -298,16 +306,20 @@
 
   {#if expanded}
     <div id="classroom-body" class="classroom-body">
-      <div class="classroom-intro">
+      {#if mode === 'classes'}<div class="classroom-intro">
         <div>
-          <span class="eyebrow mono">YOUR COURSES</span>
+          <span class="eyebrow mono">COURSE CATALOG</span>
           <p>
             Explore a course and its curriculum, then enable a class to start learning.
             Each class keeps its own schedule, teacher preferences and progress.
           </p>
         </div>
-        <span class="quality-chip mono"><Sparkles size={11} /> exact provider · editor-gated</span>
       </div>
+      <div class="class-filters" aria-label="Filter classes">
+        {#each ['all', 'active', 'paused', 'completed'] as choice}
+          <button type="button" aria-pressed={filter === choice} class:chosen={filter === choice} onclick={() => (filter = choice as typeof filter)}>{choice === 'all' ? 'All courses' : choice[0].toUpperCase() + choice.slice(1)}</button>
+        {/each}
+      </div>{/if}
       {#if primaryOwed}
         <p class="primary-wins" role="status">
           Your daily study session is due now. Classroom starts and resumes unlock after the enforced
@@ -316,7 +328,7 @@
       {/if}
 
       <div class="class-grid">
-        {#each programs as program (program.subject_id)}
+        {#each visiblePrograms as program (program.subject_id)}
           {@const running = activeFor(program.subject_id)}
           {@const course = courseDefinition(program.subject_id)}
           <article class:enabled={program.enabled} class:due={slotsFor(program.subject_id).some((s) => s.owed)} class="class-card">
@@ -331,6 +343,7 @@
               </span>
             </header>
 
+            {#if mode === 'classes'}
             {#if course}
               <p class="course-summary">{course.summary}</p>
               <details class="course-about">
@@ -361,7 +374,7 @@
 
             <div class="profile-line mono">
               <span>{program.agent} / {program.model}</span>
-              <span>{program.prompt_profile}.{program.prompt_version}</span>
+              <span>{program.session_minutes} min / session</span>
             </div>
 
             {#if program.language_progress}
@@ -378,9 +391,9 @@
             {#if !program.enabled}
               <p class="disabled-hint">
                 <Settings2 size={11} />
-                enable this class with <strong>teacher</strong> below to start, schedule, or add
-                slots
+                Enable this class to start learning or add study times.
               </p>
+            {/if}
             {/if}
 
             {#if running}
@@ -437,9 +450,12 @@
                 <Plus size={12} /> slot
               </button>
               <button class="text-action" type="button" onclick={() => loadDraft(program)}>
-                <Settings2 size={12} /> teacher
+                <Settings2 size={12} /> Class settings
               </button>
-              {#if program.kind === 'engineering'}
+              {#if mode === 'classes' && onsetup}
+                <button class="text-action" type="button" onclick={() => onsetup?.(program.subject_id)}>Starting preferences</button>
+              {/if}
+              {#if mode === 'classes' && program.kind === 'engineering'}
                 <button
                   class="text-action"
                   type="button"
@@ -447,7 +463,7 @@
                   onclick={() => openCurriculum(program)}
                 >
                   <BookOpen size={12} />
-                  {mapLoading === program.subject_id ? 'loading…' : 'curriculum'}
+                  {mapLoading === program.subject_id ? 'Loading…' : 'Curriculum'}
                 </button>
               {/if}
               <button
@@ -457,7 +473,7 @@
                 title={program.enabled ? undefined : `enable ${program.label} first`}
                 onclick={() => openPlanner(program)}
               >
-                <CalendarClock size={12} /> plan schedule
+                <CalendarClock size={12} /> Plan schedule
               </button>
               <button
                 class="start-button"
@@ -473,7 +489,7 @@
                 onclick={() =>
                   app.startClass(program.subject_id, null, program.completed)}
               >
-                {program.completed ? 'revisit a module' : 'learn now'}
+                {program.completed ? 'Revisit a lesson' : 'Learn now'}
               </button>
               <button class="power-button mono" type="button" onclick={() => toggleProgram(program)}>
                 {program.enabled ? 'disable' : 'enable'}
@@ -483,7 +499,7 @@
             {#if configuring === program.subject_id}
               <div class="settings-pane">
                 <div class="settings-title">
-                  <span class="mono">TEACHER PROFILE · {program.short_code}</span>
+                  <span class="mono">CLASS SETTINGS · {program.short_code}</span>
                   <button type="button" onclick={() => (configuring = null)}>close</button>
                 </div>
                 <p>
@@ -524,7 +540,7 @@
                   </div>
                 {/if}
                 <button class="save-button" type="button" disabled={saving} onclick={() => persist(program)}>
-                  {saving ? 'saving…' : 'save isolated teacher'}
+                  {saving ? 'Saving…' : 'Save class settings'}
                 </button>
               </div>
             {/if}
@@ -658,6 +674,8 @@
               </div>
             {/if}
           </article>
+        {:else}
+          <p class="empty-classes">{mode === 'schedule' ? 'Enable a class from Classes to add its study times.' : 'No classes match this filter. Browse All courses to explore the catalog.'}</p>
         {/each}
       </div>
       {#if curriculumMap}
@@ -668,13 +686,17 @@
 </section>
 
 <style>
+  .class-filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 17px; }
+  .class-filters button { border: 1px solid var(--border); background: var(--bg); color: var(--muted); border-radius: 5px; padding: 7px 10px; font: 11px var(--font-mono); cursor: pointer; }
+  .class-filters button.chosen { color: var(--violet-fg); border-color: var(--violet); background: var(--surface-2); }
+  .empty-classes { color: var(--muted); font-size: 13px; grid-column: 1 / -1; }
   .classroom-panel {
     width: min(1120px, 100%);
     margin: 18px auto 24px;
     flex: 0 0 auto;
     border: 1px solid var(--node-border);
     border-radius: 10px;
-    background: var(--surface);
+    background: var(--node-bg);
     overflow: hidden;
   }
   .panel-trigger {
@@ -692,13 +714,13 @@
   }
   .panel-trigger:hover { background: var(--surface-2); }
   .trigger-copy, .trigger-meta, .class-head, .class-actions, .profile-line,
-  .progress-copy, .settings-title, .quality-chip {
+  .progress-copy, .settings-title {
     display: flex;
     align-items: center;
   }
   .trigger-copy { gap: 10px; }
   .trigger-copy strong { display: block; font-size: 13px; }
-  .trigger-copy small { display: block; color: var(--faint); font-size: 10px; margin-top: 2px; }
+  .trigger-copy small { display: block; color: var(--faint); font-size: 12px; margin-top: 2px; }
   .trigger-icon {
     width: 30px;
     height: 30px;
@@ -708,7 +730,7 @@
     place-items: center;
     color: var(--accent);
   }
-  .trigger-meta { gap: 8px; color: var(--muted); font-size: 10px; }
+  .trigger-meta { gap: 8px; color: var(--muted); font-size: 12px; }
   .due-count { color: var(--amber); }
   .classroom-body {
     border-top: 1px solid var(--node-border);
@@ -721,8 +743,7 @@
     padding: 4px 2px 14px;
   }
   .classroom-intro p { margin: 5px 0 0; color: var(--muted); font-size: 12px; line-height: 1.55; max-width: 740px; }
-  .eyebrow { color: var(--accent); font-size: 9px; letter-spacing: 1.5px; }
-  .quality-chip { align-self: flex-start; gap: 5px; border: 1px solid var(--node-border); border-radius: 999px; padding: 5px 8px; color: var(--faint); font-size: 8px; white-space: nowrap; }
+  .eyebrow { color: var(--accent); font-size: 11px; letter-spacing: 1.5px; }
   .primary-wins {
     margin: 0 2px 12px;
     border-left: 3px solid var(--amber);
@@ -741,14 +762,14 @@
     background: var(--bg);
     min-width: 0;
   }
-  .course-summary { font-size: 14px; line-height: 1.55; color: var(--fg); margin: 0; }
+  .course-summary { font-size: 13px; line-height: 1.55; color: var(--fg); margin: 0; }
   .course-about { font-size: 13px; line-height: 1.55; color: var(--muted); }
   .course-about summary { cursor: pointer; color: var(--fg); }
   .course-about p { margin: 10px 0 0; }
   .course-about summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
   .class-card.enabled { border-color: color-mix(in srgb, var(--accent) 30%, var(--node-border)); }
   .class-card.due { box-shadow: inset 3px 0 0 var(--amber); }
-  .class-head { gap: 9px; }
+  .class-head { gap: 9px; padding: 9px 12px; margin: -13px -13px 13px; border-bottom: 1px solid var(--node-divider); background: var(--node-bg); border-radius: 8px 8px 0 0; }
   .class-code {
     width: 32px;
     height: 32px;
@@ -757,30 +778,29 @@
     border: 1px solid var(--node-border);
     border-radius: 6px;
     color: var(--accent);
-    font-size: 10px;
+    font-size: 12px;
   }
   .class-identity { flex: 1; min-width: 0; }
   .class-identity strong, .class-identity small { display: block; }
-  .class-identity strong { font-size: 12px; }
-  .class-identity small { color: var(--faint); font-size: 9px; margin-top: 2px; }
-  .class-state { color: var(--faint); font-size: 8px; letter-spacing: 1px; }
-  .class-state.online { color: var(--green); }
-  .class-state.complete { color: var(--violet); }
-  .progress-copy { justify-content: space-between; color: var(--muted); font-size: 9px; margin: 13px 0 5px; }
+  .class-identity strong { font: 11px var(--font-mono); color: var(--muted); }
+  .class-identity small { color: var(--faint); font: 9px var(--font-mono); margin-top: 2px; }
+  .class-state { color: var(--muted); font-size: 9px; letter-spacing: 0.4px; border-radius: 3px; background: var(--surface-2); padding: 2px 6px; }
+  .class-state.online { color: var(--ok-fg); background: var(--ok-bg); }
+  .class-state.complete { color: var(--violet-fg); background: var(--violet-bg); }
+  .progress-copy { justify-content: space-between; color: var(--muted); font-size: 11px; margin: 13px 0 5px; }
   .progress-track { height: 3px; background: var(--surface-2); overflow: hidden; }
   .progress-track span { display: block; height: 100%; background: var(--accent); }
-  .profile-line { justify-content: space-between; gap: 8px; margin-top: 10px; color: var(--faint); font-size: 8px; overflow-wrap: anywhere; }
-  .program-detail { min-height: 30px; margin: 8px 0; color: var(--muted); font-size: 10px; line-height: 1.45; }
+  .profile-line { justify-content: space-between; gap: 8px; margin-top: 10px; color: var(--faint); font-size: 11px; overflow-wrap: anywhere; }
+  .program-detail { min-height: 30px; margin: 8px 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
   .disabled-hint {
     display: flex;
     align-items: center;
     gap: 5px;
     margin: 0 0 8px;
     color: var(--amber);
-    font-size: 9px;
+    font-size: 11px;
     line-height: 1.4;
   }
-  .disabled-hint strong { color: var(--text); }
   .resume-button, .start-button, .save-button {
     border: 1px solid var(--accent);
     background: var(--accent);
@@ -789,7 +809,7 @@
     min-height: 32px;
     padding: 6px 10px;
     cursor: pointer;
-    font-size: 10px;
+    font-size: 12px;
   }
   .resume-button { width: 100%; margin: 3px 0 8px; text-align: left; }
   .slot-list { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 4px; }
@@ -809,7 +829,7 @@
     padding: 5px 7px;
   }
   .slot-main small { color: var(--faint); }
-  .slot-main em { margin-left: auto; color: var(--amber); font-style: normal; font-size: 8px; }
+  .slot-main em { margin-left: auto; color: var(--amber); font-style: normal; font-size: 11px; }
   .slot-delete {
     width: 30px;
     border: 0;
@@ -827,11 +847,11 @@
     color: var(--muted);
     padding: 5px 8px;
     cursor: pointer;
-    font-size: 9px;
+    font-size: 11px;
   }
   .text-action { display: flex; align-items: center; gap: 4px; }
   .start-button { margin-left: auto; }
-  .power-button { font-size: 8px; }
+  .power-button { font-size: 11px; }
   button:disabled { opacity: 0.4; cursor: not-allowed; }
   button:focus-visible, input:focus-visible, select:focus-visible {
     outline: 2px solid var(--accent);
@@ -844,10 +864,10 @@
     border-top: 1px solid var(--node-border);
     background: var(--surface-2);
   }
-  .settings-title { justify-content: space-between; color: var(--accent); font-size: 9px; }
+  .settings-title { justify-content: space-between; color: var(--accent); font-size: 11px; }
   .settings-title button { border: 0; background: none; color: var(--muted); cursor: pointer; min-height: 28px; }
-  .settings-pane > p, .plan-pane > p { color: var(--muted); font-size: 10px; line-height: 1.5; }
-  .number-field, .language-fields label { display: grid; gap: 5px; color: var(--muted); font-size: 9px; }
+  .settings-pane > p, .plan-pane > p { color: var(--muted); font-size: 12px; line-height: 1.5; }
+  .number-field, .language-fields label { display: grid; gap: 5px; color: var(--muted); font-size: 11px; }
   .number-field { margin: 12px 0; max-width: 150px; }
   .number-field input, .language-fields input, .language-fields select {
     border: 1px solid var(--node-border);
@@ -860,9 +880,9 @@
   .language-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 12px 0; }
   .save-button { margin-top: 10px; }
   .slot-editor fieldset, .windows-field { border: 0; padding: 0; margin: 10px 0; }
-  .slot-editor legend, .windows-field legend { color: var(--muted); font-size: 9px; margin-bottom: 6px; }
+  .slot-editor legend, .windows-field legend { color: var(--muted); font-size: 11px; margin-bottom: 6px; }
   .day-row { display: flex; gap: 5px; }
-  .day-row.small button { min-width: 26px; min-height: 26px; font-size: 9px; }
+  .day-row.small button { min-width: 26px; min-height: 26px; font-size: 11px; }
   .day-row button {
     min-width: 32px;
     min-height: 32px;
@@ -873,12 +893,12 @@
     cursor: pointer;
   }
   .day-row button.active { border-color: var(--accent); color: var(--accent); background: var(--surface); }
-  .field-error { color: var(--red); font-size: 9px; }
+  .field-error { color: var(--red); font-size: 11px; }
   .goal-field {
     display: grid;
     gap: 5px;
     color: var(--muted);
-    font-size: 9px;
+    font-size: 11px;
     margin: 12px 0;
   }
   .goal-field textarea {
@@ -897,7 +917,7 @@
     gap: 8px;
     margin: 12px 0;
   }
-  .plan-numbers label { display: grid; gap: 5px; color: var(--muted); font-size: 9px; }
+  .plan-numbers label { display: grid; gap: 5px; color: var(--muted); font-size: 11px; }
   .plan-numbers input {
     border: 1px solid var(--node-border);
     border-radius: 5px;
@@ -913,7 +933,7 @@
     margin-bottom: 6px;
     flex-wrap: wrap;
   }
-  .window-times { display: flex; align-items: center; gap: 6px; color: var(--faint); font-size: 9px; }
+  .window-times { display: flex; align-items: center; gap: 6px; color: var(--faint); font-size: 11px; }
   .window-times input {
     border: 1px solid var(--node-border);
     border-radius: 5px;
@@ -921,7 +941,7 @@
     color: var(--text);
     min-height: 30px;
     padding: 4px 6px;
-    font-size: 10px;
+    font-size: 12px;
   }
   .window-remove {
     min-width: 28px;
@@ -942,19 +962,19 @@
     color: var(--muted);
     padding: 6px 10px;
     cursor: pointer;
-    font-size: 10px;
+    font-size: 12px;
   }
   .plan-preview {
     margin-top: 12px;
     padding-top: 10px;
     border-top: 1px dashed var(--node-border);
   }
-  .preview-summary { color: var(--led-ok, var(--accent)); font-size: 9px; line-height: 1.5; }
+  .preview-summary { color: var(--led-ok, var(--accent)); font-size: 11px; line-height: 1.5; }
   .preview-summary.short { color: var(--amber); }
   .preview-slots { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 4px; }
   .preview-slots li {
     color: var(--muted);
-    font-size: 9px;
+    font-size: 11px;
     border: 1px solid var(--node-border);
     border-radius: 5px;
     padding: 5px 8px;
@@ -962,7 +982,6 @@
   @media (max-width: 760px) {
     .class-grid { grid-template-columns: 1fr; }
     .classroom-intro { display: block; }
-    .quality-chip { display: inline-flex; margin-top: 10px; }
     .language-fields { grid-template-columns: 1fr; }
     .plan-numbers { grid-template-columns: 1fr; }
   }

@@ -32,6 +32,11 @@
   --font-display: 'Fraunces', Georgia, serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
   --cta-radius: 999px;
+  --text: var(--fg);
+  --amber: var(--warn-fg);
+  --green: var(--ok-fg);
+  --red: var(--bad-fg);
+  --good-fg: var(--ok-fg);
 }
 
 .theme-scholar {
@@ -51,10 +56,18 @@
   --warn-fg: #633806;
   --warn-bg: #faeeda;
   --cta-radius: 10px;
+  --node-bg: #f1efe8;
+  --node-border: #d3d1c7;
+  --node-divider: #e9e6dc;
 }
 
 * {
   box-sizing: border-box;
+}
+
+:is(button, input, select, textarea, summary, a):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
 }
 
 html,

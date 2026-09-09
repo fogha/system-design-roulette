@@ -3,7 +3,11 @@
   import { app, shouldShowEscapeHatch } from '../lib/stores.svelte';
   import type { ReviewData } from '../lib/ipc';
   import SetupWizard from '../lib/screens/SetupWizard.svelte';
-  import Idle from '../lib/screens/Idle.svelte';
+  import Today from '../lib/screens/Today.svelte';
+  import Classes from '../lib/features/classes/Classes.svelte';
+  import Schedule from '../lib/screens/Schedule.svelte';
+  import StudySettings from '../lib/screens/StudySettings.svelte';
+  import DeskShell from '../lib/app/DeskShell.svelte';
   import Quiz from '../lib/screens/Quiz.svelte';
   import AnswerReview from '../lib/screens/AnswerReview.svelte';
   import Roulette from '../lib/screens/Roulette.svelte';
@@ -41,8 +45,14 @@
     <div class="screen"><p>…</p></div>
   {:else if app.screen === 'setup'}
     <SetupWizard />
-  {:else if app.screen === 'idle'}
-    <Idle />
+  {:else if app.screen === 'idle' || app.screen === 'dashboard'}
+    <DeskShell>
+      {#if app.screen === 'dashboard'}<Dashboard />
+      {:else if app.destination === 'classes'}<Classes />
+      {:else if app.destination === 'schedule'}<Schedule />
+      {:else if app.destination === 'settings'}<StudySettings />
+      {:else}<Today />{/if}
+    </DeskShell>
   {:else if app.screen === 'quiz'}
     <Quiz onreview={(d) => (reviewData = d)} />
   {:else if app.screen === 'review'}
@@ -57,8 +67,6 @@
     <LanguageLesson />
   {:else if app.screen === 'classroom'}
     <ClassroomLesson />
-  {:else if app.screen === 'dashboard'}
-    <Dashboard />
   {/if}
 
   {#if showEscapeHatch}

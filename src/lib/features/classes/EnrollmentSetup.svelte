@@ -1,0 +1,212 @@
+<script lang="ts">
+  import { onMount } from 'svelte';
+  import type { ClassroomSubjectId } from '../../catalog.generated';
+  import type { EnrollmentConfiguration, EntryChoice } from '../../contracts/enrollment';
+  import { courseDefinition } from '../../catalog';
+  import { enrollmentEditor } from './enrollment-controllers';
+  import type { EnrollmentEditorState } from './enrollment-editor';
+  import NodeCard from '../../components/NodeCard.svelte';
+  import FlowStage from '../../components/FlowStage.svelte';
+  import { ArrowLeft, Check, Compass, ListStart, Layers, BookOpen, Clock, Bot, Save } from 'lucide-svelte';
+
+  let { courseId, onclose }: { courseId: ClassroomSubjectId; onclose: () => void } = $props();
+  const course = $derived(courseDefinition(courseId)!);
+  let editor: ReturnType<typeof enrollmentEditor>;
+  let view = $state<EnrollmentEditorState>({ options: null, draft: null, configuration: null, status: 'loading', error: '' });
+  let configuration = $state<EnrollmentConfiguration | null>(null);
+  let search = $state('');
+  let closing = $state(false);
+  const routes = [
+    { id: 'foundations', title: 'Start from the foundations', description: 'Build up from the introductory topics at your own pace.', icon: Layers },
+    { id: 'diagnostic', title: 'Help me find my level', description: 'Use a short, optional check to help identify a starting point and gaps.', icon: Compass },
+    { id: 'manual', title: 'Choose my starting point', description: 'Pick a course stage and tell us which topics already feel familiar.', icon: ListStart },
+  ] as const;
+  const familiarity = $derived(view.options?.familiarity_options.filter((option) => option.label.toLowerCase().includes(search.toLowerCase())) ?? []);
+
+  onMount(() => {
+    editor = enrollmentEditor(courseId);
+    const unsubscribe = editor.subscribe((next) => {
+      view = next;
+      configuration = next.configuration;
+    });
+    void editor.load();
+    return () => { unsubscribe(); void editor.flush(); };
+  });
+  function changed() { if (configuration) editor.edit($state.snapshot(configuration)); }
+  function choose(route: EntryChoice['route']) {
+    if (!configuration || !view.options) return;
+    configuration.entry = route === 'manual'
+      ? { route, entry_point: view.options.entry_points[0].id, familiar_competencies: [] }
+      : { route };
+    changed();
+  }
+  function toggleFamiliar(id: string) {
+    if (configuration?.entry.route !== 'manual') return;
+    const selected = configuration.entry.familiar_competencies;
+    configuration.entry.familiar_competencies = selected.includes(id) ? selected.filter((value) => value !== id) : [...selected, id];
+    changed();
+  }
+  async function close() {
+    closing = true;
+    if (view.status === 'loading' || !configuration || await editor.flush()) onclose();
+    closing = false;
+  }
+</script>
+
+<section class="enrollment" aria-labelledby="enrollment-title">
+  <button class="back-link" onclick={close} disabled={closing}><ArrowLeft size={15} /> Classes</button>
+  <header>
+    <p class="eyebrow mono">{course.label} · Setup draft</p>
+    <h1 id="enrollment-title">Start from what you know</h1>
+    <p class="intro">Choose your goal and starting preferences. Your setup is saved so you can return to it later.</p>
+  </header>
+
+  {#if view.status === 'loading'}
+    <p role="status">Loading your course setup…</p>
+  {:else if configuration && view.options}
+    <p class="notice">These choices take effect when you accept a personal path. Path review and activation are not available in this build yet.</p>
+    <FlowStage number="01"><NodeCard Icon={BookOpen} name={course.title} badge={course.version} badgeTone="violet">
+    <div class="course-context">
+      <p>{course.outcome}</p>
+      <p><strong>Environment:</strong> {course.environment}</p>
+      {#if course.prerequisite_courses.length}
+        <p><strong>Recommended preparation:</strong> {course.prerequisite_courses.map((id) => courseDefinition(id)?.label ?? id).join(', ')} or equivalent experience.</p>
+      {/if}
+    </div>
+    </NodeCard></FlowStage>
+
+    <FlowStage number="02"><NodeCard Icon={Compass} name="entry-profile" badge={configuration.entry.route} badgeTone="amber">
+    <fieldset class="entry-options">
+      <legend>Your starting point</legend>
+      <div class="route-grid">
+        {#each routes as route}
+          <label class:selected={configuration.entry.route === route.id}>
+            <span class="route-top"><route.icon size={14} /><input type="radio" name="entry-route" value={route.id} checked={configuration.entry.route === route.id} onchange={() => choose(route.id)} /></span>
+            <strong>{route.title}</strong><span>{route.description}</span>
+          </label>
+        {/each}
+      </div>
+    </fieldset>
+    {#if configuration.entry.route === 'diagnostic'}
+      <p class="notice">Diagnostic preference saved with this draft. The diagnostic and path review are not available in this build yet.</p>
+    {:else if configuration.entry.route === 'manual'}
+      <div class="manual-entry">
+        <label class="field"><span>{course.kind === 'language' ? 'Declared starting band' : 'Starting course stage'}</span>
+          <select bind:value={configuration.entry.entry_point} onchange={changed}>
+            {#each view.options.entry_points as point}<option value={point.id}>{point.label}</option>{/each}
+          </select>
+        </label>
+        <p class="hint">This is a starting preference. Familiarity is recorded separately from skills demonstrated through practice.</p>
+        <details>
+          <summary>Topics I already know <span>({configuration.entry.familiar_competencies.length} selected)</span></summary>
+          <label class="field search"><span>Find a topic or skill</span><input type="search" bind:value={search} placeholder="Search familiar topics" /></label>
+          <div class="familiar-list">
+            {#each familiarity as option}
+              <label><input type="checkbox" checked={configuration.entry.familiar_competencies.includes(option.id)} onchange={() => toggleFamiliar(option.id)} /><span>{option.label}</span></label>
+            {:else}<p>No matching topics.</p>{/each}
+          </div>
+        </details>
+      </div>
+    {/if}
+
+    </NodeCard></FlowStage>
+
+    <FlowStage number="03"><NodeCard Icon={Clock} name="study-plan" badge={configuration.pace.session_minutes + ' min'} badgeTone="teal">
+    <div class="form-grid">
+      <fieldset>
+        <legend>Your goal</legend>
+        {#if configuration.goal.kind === 'language_level'}
+          <label class="field"><span>Target band</span><select bind:value={configuration.goal.target_level} onchange={changed}>
+            {#each view.options.entry_points as point}<option value={point.id}>{point.label}</option>{/each}
+          </select></label>
+        {/if}
+        <label class="field"><span>What would you like to do with this knowledge? <small>Optional</small></span><textarea rows="3" maxlength="4000" bind:value={configuration.goal.note} oninput={changed} placeholder="For example, automate a repeatable task at work."></textarea></label>
+      </fieldset>
+      <fieldset>
+        <legend>Your pace</legend>
+        <label class="field"><span>Minutes per session</span><input type="number" min="10" max="120" bind:value={configuration.pace.session_minutes} oninput={changed} /></label>
+        <label class="field"><span>Minutes per week <small>Optional</small></span><input type="number" min={configuration.pace.session_minutes} max="10080" value={configuration.pace.weekly_minutes ?? ''} oninput={(event) => { if (configuration) { configuration.pace.weekly_minutes = event.currentTarget.value === '' ? null : Number(event.currentTarget.value); changed(); } }} /></label>
+      </fieldset>
+    </div>
+    </NodeCard></FlowStage>
+    <FlowStage number="04" last><NodeCard Icon={Bot} name="tutor-backend" badge={configuration.tutor.provider} badgeTone="violet">
+    <details class="tutor-options">
+      <summary>Tutor preference <span>{configuration.tutor.provider} · {configuration.tutor.model}</span></summary>
+      <div class="form-grid">
+        <label class="field"><span>Provider</span><select bind:value={configuration.tutor.provider} onchange={changed}>
+          <option value="claude">Claude</option><option value="codex">Codex</option><option value="cursor">Cursor</option><option value="gemini">Gemini</option><option value="deepseek">DeepSeek</option><option value="custom">Custom executable</option>
+        </select></label>
+        <label class="field"><span>Model ID for this provider</span><input bind:value={configuration.tutor.model} oninput={changed} /></label>
+        {#if configuration.tutor.provider === 'custom'}
+          <label class="field"><span>Executable path</span><input value={configuration.tutor.custom_agent_bin ?? ''} oninput={(event) => { if (configuration) { configuration.tutor.custom_agent_bin = event.currentTarget.value; changed(); } }} /></label>
+        {/if}
+      </div>
+    </details>
+    </NodeCard></FlowStage>
+  {/if}
+
+  {#if view.error}
+    <div class="save-error" role="alert">
+      <p>{view.error}</p>
+      {#if view.options}
+        <div class="error-actions">
+          {#if view.status !== 'conflict'}<button class="ghost mono-ghost" onclick={() => editor.flush()}>Retry save</button>{/if}
+          <button class="ghost mono-ghost" onclick={() => editor.resolve(false)}>Use saved choices</button>
+          <button class="ghost mono-ghost" onclick={() => editor.resolve(true)}>Keep my choices</button>
+        </div>
+      {:else}<button class="ghost mono-ghost" onclick={() => editor.load()}>Retry loading</button>{/if}
+    </div>
+  {/if}
+  <footer>
+    <p class="save-status" role="status" aria-live="polite">
+      {#if view.status === 'saved'}<Check size={15} /> {view.draft ? 'Draft saved' : 'Choose a starting point to save your draft'}
+      {:else if view.status === 'dirty' || view.status === 'saving'}Saving your draft…
+      {:else if view.status === 'error' || view.status === 'conflict'}Your changes need attention before saving.{/if}
+    </p>
+    <button class="cta mono-cta" onclick={close} disabled={closing || view.status === 'loading'}><Save size={14} /> {closing ? 'Saving…' : 'Save setup & return'}</button>
+  </footer>
+</section>
+
+<style>
+  .enrollment { width: min(820px, 100%); margin: 0 auto; padding: 26px 28px 48px; }
+  header { margin: 22px 0; }
+  h1 { font-size: 28px; }
+  .eyebrow { color: var(--faint); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; margin: 0 0 8px; }
+  .intro, .hint, .course-context p { color: var(--muted); font-size: 13px; }
+  .intro { max-width: 690px; }
+  .back-link { font: 11px var(--font-mono); display: flex; align-items: center; gap: 8px; border: 0; background: none; color: var(--muted); cursor: pointer; padding: 0; }
+  .course-context { padding: 0; }
+  .course-context p:first-child { margin-top: 0; }
+  .course-context p:last-child { margin-bottom: 0; }
+  fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+  legend { font: 10px var(--font-mono); letter-spacing: 1px; text-transform: uppercase; color: var(--muted); margin-bottom: 14px; }
+  .route-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .route-grid label { display: flex; flex-direction: column; gap: 9px; padding: 12px; border: 1px solid var(--border); border-radius: 7px; cursor: pointer; background: var(--bg); }
+  .route-grid label.selected { border-color: var(--violet); background: var(--surface-2); }
+  .route-top { display: flex; justify-content: space-between; color: var(--accent); }
+  .route-grid strong { font: 11px/1.55 var(--font-mono); letter-spacing: 0.5px; text-transform: uppercase; }
+  .route-grid label > span:last-child { font-size: 12px; color: var(--muted); line-height: 1.55; }
+  input[type='radio'], input[type='checkbox'] { accent-color: var(--accent); flex: 0 0 auto; }
+  .manual-entry { margin-top: 18px; padding-top: 16px; border-top: 1px dashed var(--node-divider); }
+  .notice { border-left: 2px solid var(--violet); padding: 8px 12px; margin: 0 0 20px 38px; color: var(--muted); font: 11px/1.6 var(--font-mono); }
+  .entry-options + .notice { margin: 14px 0 0; }
+  .field { display: flex; flex-direction: column; gap: 7px; margin-bottom: 15px; font-size: 13px; min-width: 0; }
+  .field small { color: var(--muted); font-weight: 400; margin-left: 5px; }
+  .field input, .field select, textarea { border: 1px solid var(--border); background: var(--bg); color: var(--fg); padding: 10px 12px; border-radius: 7px; font: inherit; width: 100%; }
+  textarea { resize: vertical; }
+  .manual-entry > .field { max-width: 430px; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  summary { cursor: pointer; font-size: 13px; font-weight: 500; }
+  summary span { color: var(--muted); font-weight: 400; margin-left: 8px; }
+  .search { margin-top: 15px; }
+  .familiar-list { max-height: 270px; overflow-y: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 5px 16px; }
+  .familiar-list label { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; padding: 5px; }
+  .tutor-options > .form-grid { margin-top: 18px; }
+  footer { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; justify-content: space-between; margin-top: 28px; }
+  .save-status { font: 10px var(--font-mono); color: var(--muted); display: flex; gap: 6px; align-items: center; }
+  .save-error { margin-top: 18px; padding: 14px; border-radius: 6px; border: 1px dashed var(--led-err); color: var(--bad-fg); background: var(--bad-bg); font-size: 13px; }
+  .error-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+  :is(button, input, select, textarea, summary):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  @media (max-width: 620px) { .route-grid { grid-template-columns: 1fr; } .route-grid label { gap: 5px; } }
+  @media (max-width: 620px) { .enrollment { padding: 22px 18px; } .form-grid, .familiar-list { grid-template-columns: 1fr; } footer button { width: 100%; } }
+</style>

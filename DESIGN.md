@@ -1,8 +1,19 @@
 # Design system — "the UI is the diagram"
 
-The app teaches system design, so every screen is drawn as a system topology.
-No metaphor is decorative: each component maps honestly to what it does, and the
-vocabulary doubles as daily reinforcement of the concepts being learned.
+Principia Desk retains the visual system on `main` (`73dfa512`): blueprint grids,
+node panels, compact monospace controls, status LEDs, colored metadata badges,
+numbered rails and dashed connections, with Fraunces headlines and a paper
+reading surface. The user explicitly reaffirmed this direction on 2026-09-09
+after rejecting the simplified preview. New functionality must extend this
+visual system. Organizing the app into five destinations does not require a
+sidebar or a different visual identity.
+
+Use `main`'s `SetupWizard`, `Idle`, `NodeCard`, `MetaBadge`, `StatusLED`,
+`TimePicker` and the screenshots under `docs/screenshots/` as references. The
+new `FlowStage` extracts the numbered rail from that setup design. Course and
+class terminology may become more consistent while the original visual
+character remains intact. Diagrams and status indicators should represent
+actual relationships and state.
 
 ## Vocabulary map
 

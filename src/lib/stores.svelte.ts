@@ -7,6 +7,7 @@ import {
   type LanguageLessonView,
   type SessionView,
 } from './ipc';
+import type { Destination } from './app/navigation';
 
 export type Screen =
   | 'loading'
@@ -68,6 +69,7 @@ export function shouldShowEscapeHatch(state: AppStateView | null): boolean {
 class AppStore {
   state = $state<AppStateView | null>(null);
   screen = $state<Screen>('loading');
+  destination = $state<Destination>('today');
   genStatus = $state<string>('');
   genLog = $state<string[]>([]);
   timerRemaining = $state<number>(-1);
@@ -80,6 +82,12 @@ class AppStore {
 
   get session(): SessionView | null {
     return this.state?.session ?? null;
+  }
+
+  navigate(destination: Destination) {
+    if (this.session?.locked) return;
+    this.destination = destination;
+    this.screen = destination === 'progress' ? 'dashboard' : 'idle';
   }
 
   async refresh() {
