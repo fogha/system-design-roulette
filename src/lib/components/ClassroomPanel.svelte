@@ -12,9 +12,8 @@
   } from '../ipc';
   import { courseDefinition } from '../catalog';
   import { app } from '../stores.svelte';
-  import AgentPicker from './AgentPicker.svelte';
+  import RunnerSetup from '../features/runners/RunnerSetup.svelte';
   import CurriculumMap from './CurriculumMap.svelte';
-  import ModelPicker from './ModelPicker.svelte';
   import TimePicker from './TimePicker.svelte';
   import Dropdown from './Dropdown.svelte';
   import CourseGlyph from './CourseGlyph.svelte';
@@ -517,15 +516,12 @@
                   This provider and prompt profile are scoped to {program.label}; changing them
                   does not change another class or the primary daily session.
                 </p>
-                <AgentPicker
+                <RunnerSetup
                   bind:agent={draftAgent}
+                  bind:model={draftModel}
                   bind:customBin={draftCustom}
-                  deepseekKeyConfigured={app.state?.deepseek_key_configured ?? false}
                   allowKeyEditing={false}
                 />
-                {#if draftAgent === 'claude'}
-                  <ModelPicker bind:value={draftModel} />
-                {/if}
                 <label class="number-field">
                   <span>session minutes</span>
                   <input type="number" min="15" max="90" bind:value={draftMinutes} />

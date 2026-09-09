@@ -287,14 +287,11 @@ pub struct ConfigureClassroomInput {
 }
 
 fn valid_agent(agent: &str) -> bool {
-    matches!(
-        agent,
-        "claude" | "codex" | "cursor" | "gemini" | "deepseek" | "custom"
-    )
+    crate::agents::RunnerId::parse(agent).is_some()
 }
 
 fn valid_model(model: &str) -> bool {
-    matches!(model, "opus" | "sonnet" | "haiku")
+    crate::agents::valid_model(model)
 }
 
 pub fn configure_program(

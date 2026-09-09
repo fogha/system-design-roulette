@@ -3,12 +3,10 @@
   import { app } from '../stores.svelte';
   import ClusterBar from '../components/ClusterBar.svelte';
   import NodeCard from '../components/NodeCard.svelte';
-  import StatusLED from '../components/StatusLED.svelte';
   import TimePicker from '../components/TimePicker.svelte';
   import EnforcementPicker from '../components/EnforcementPicker.svelte';
-  import ModelPicker from '../components/ModelPicker.svelte';
-  import AgentPicker from '../components/AgentPicker.svelte';
-  import { Clock, Zap, Lock, Rocket, X } from 'lucide-svelte';
+  import RunnerSetup from '../features/runners/RunnerSetup.svelte';
+  import { Clock, Lock, Rocket, X } from 'lucide-svelte';
 
   let time = $state('19:00');
   let kioskLevel = $state('hard');
@@ -17,21 +15,8 @@
   let customBin = $state('');
   let phrase = $state('I am choosing to skip my training today and I accept the broken streak');
   let phrase2 = $state('');
-  let agentStatus = $state<'idle' | 'checking' | 'ok' | 'fail'>('idle');
   let submitting = $state(false);
   let error = $state('');
-
-  async function checkAgent() {
-    agentStatus = 'checking';
-    agentStatus = (await api.checkAgent(agent, customBin).catch(() => false)) ? 'ok' : 'fail';
-  }
-
-  // Switching agents invalidates a previous healthcheck result.
-  $effect(() => {
-    void agent;
-    void customBin;
-    agentStatus = 'idle';
-  });
 
   async function finish() {
     error = '';
@@ -46,6 +31,7 @@
     const [h, m] = time.split(':').map(Number);
     submitting = true;
     try {
+      if (agent === 'custom') customBin = (await api.getRunnerConfiguration(agent)).custom_command;
       await api.completeSetup(h, m, phrase.trim(), kioskLevel, model, agent, customBin);
       await app.refresh();
     } catch (e) {
@@ -91,60 +77,14 @@
       <!-- 02 · agent -->
       <section class="stage">
         <span class="step mono">02</span>
-        <NodeCard
-          Icon={Zap}
-          name="agent-backend"
-          badge={agentStatus === 'ok' ? 'healthy' : agentStatus === 'fail' ? 'degraded' : 'unknown'}
-          badgeTone={agentStatus === 'ok' ? 'teal' : agentStatus === 'fail' ? 'red' : 'muted'}
-        >
-          {#snippet children()}
-            <div class="meta-label">AGENT_CLI — who powers the teacher</div>
-            <AgentPicker
-              bind:agent
-              bind:customBin
-              deepseekKeyConfigured={app.state?.deepseek_key_configured ?? false}
-              onKeyChanged={() => app.refresh()}
-            />
-            <div class="health">
-              <span class="meta-label">HEALTHCHECK — {agent} ping</span>
-              <div class="health-row">
-                {#if agentStatus === 'ok'}
-                  <StatusLED tone="ok" label="200 OK" />
-                  <span class="hint">fallback: {agent === 'claude' ? 'codex' : 'claude'} → bundled</span>
-                {:else if agentStatus === 'fail'}
-                  <StatusLED tone="err" label="unreachable" />
-                  <span class="hint">bundled courses will serve</span>
-                {:else if agentStatus === 'checking'}
-                  <StatusLED tone="pending" label="probing…" />
-                {:else}
-                  <button class="ghost mono-ghost" onclick={checkAgent}>run healthcheck</button>
-                {/if}
-              </div>
-            </div>
-          {/snippet}
-        </NodeCard>
+        <RunnerSetup bind:agent bind:model bind:customBin initiallyExpanded onKeyChanged={() => app.refresh()} />
       </section>
 
-      {#if agent === 'claude'}
         <div class="pipe" aria-hidden="true"></div>
-
-        <!-- 03 · model (claude only) -->
-        <section class="stage">
-          <span class="step mono">03</span>
-          <NodeCard Icon={Zap} name="course-model" badge={model} badgeTone="amber">
-            {#snippet children()}
-              <div class="meta-label">COURSE_MODEL — who writes your lessons</div>
-              <ModelPicker bind:value={model} />
-            {/snippet}
-          </NodeCard>
-        </section>
-      {/if}
-
-      <div class="pipe" aria-hidden="true"></div>
 
       <!-- enforcement -->
       <section class="stage">
-        <span class="step mono">{agent === 'claude' ? '04' : '03'}</span>
+        <span class="step mono">03</span>
         <NodeCard
           Icon={Lock}
           name="enforcement-service"
@@ -163,7 +103,7 @@
 
       <!-- escape phrase -->
       <section class="stage">
-        <span class="step mono">{agent === 'claude' ? '05' : '04'}</span>
+        <span class="step mono">04</span>
         <div class="break-glass">
           <div class="bg-tag">BREAK<br />GLASS</div>
           <div class="bg-fields">
@@ -284,16 +224,6 @@
     font-size: 10px;
     color: var(--faint);
     line-height: 1.6;
-  }
-  .health {
-    margin-top: 16px;
-  }
-  .health-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-top: 8px;
-    min-height: 30px;
   }
   .break-glass {
     background: #1f1316;

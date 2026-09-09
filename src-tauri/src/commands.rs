@@ -1,3 +1,4 @@
+pub mod agents;
 use crate::db::{self, Attempt};
 use crate::domain::{
     assessments::{self, Owner, ResponseStatus, Round, RoundId},
@@ -65,7 +66,7 @@ pub struct AppStateView {
     pub schedule_paused: bool,
     /// Kiosk strictness: 'advisory' | 'firm' | 'hard'.
     pub kiosk_level: String,
-    /// Course-generation model: 'opus' | 'sonnet' | 'haiku'.
+    /// Selected model identifier for the primary runner.
     pub model: String,
     /// Primary generation provider.
     pub agent: String,
@@ -87,14 +88,11 @@ pub struct AppStateView {
 }
 
 fn valid_agent(agent: &str) -> bool {
-    matches!(
-        agent,
-        "claude" | "codex" | "cursor" | "gemini" | "deepseek" | "custom"
-    )
+    crate::agents::RunnerId::parse(agent).is_some()
 }
 
 /// Switch the primary CLI agent (and the custom binary path when relevant).
-/// Applies to the next generation; the fallback chain adapts automatically.
+/// Applies to the next generation; provider switching never creates a fallback.
 #[tauri::command]
 pub fn set_agent(
     state: State<'_, AppState>,
@@ -108,21 +106,42 @@ pub fn set_agent(
     if agent == "custom" && custom.trim().is_empty() {
         return Err("custom agent needs a binary path".into());
     }
-    if agent == "custom" && !std::path::Path::new(custom.trim()).exists() {
-        return Err(format!("binary not found: {}", custom.trim()));
+    if agent == "custom" {
+        let words = crate::agents::process::command_words(&custom).map_err(err)?;
+        if crate::agents::process::resolve(&words[0]).is_none() {
+            return Err("custom executable not found".into());
+        }
     }
-    {
-        let conn = state.db.0.lock().unwrap();
-        db::set_config(&conn, "agent", &agent).map_err(err)?;
-        db::set_config(&conn, "custom_agent_bin", custom.trim()).map_err(err)?;
+    let mut conn = state.db.0.lock().unwrap();
+    let tx = conn.transaction().map_err(err)?;
+    let runner = crate::agents::RunnerId::parse(&agent).ok_or("unknown runner")?;
+    let prior_agent = db::get_config(&tx, "agent")
+        .map_err(err)?
+        .unwrap_or_else(|| "claude".into());
+    let prior_model = db::get_config(&tx, "model")
+        .map_err(err)?
+        .unwrap_or_else(|| "opus".into());
+    if let Some(prior) = crate::agents::RunnerId::parse(&prior_agent) {
+        db::set_config(&tx, &format!("model_{}", prior.id()), &prior_model).map_err(err)?;
     }
-    *state.generator.agent.lock().unwrap() = agent;
-    *state.generator.custom_bin.lock().unwrap() = custom.trim().to_string();
+    let model = db::get_config(&tx, &format!("model_{}", runner.id()))
+        .map_err(err)?
+        .unwrap_or_else(|| crate::agents::default_model(runner));
+    db::set_config(&tx, "model", &model).map_err(err)?;
+    db::set_config(&tx, "agent", &agent).map_err(err)?;
+    db::set_config(&tx, "custom_agent_bin", custom.trim()).map_err(err)?;
+    tx.commit().map_err(err)?;
+    let mut current_agent = state.generator.agent.lock().unwrap();
+    let mut current_model = state.generator.model.lock().unwrap();
+    let mut current_custom = state.generator.custom_bin.lock().unwrap();
+    *current_agent = agent;
+    *current_model = model;
+    *current_custom = custom.trim().into();
     Ok(())
 }
 
 fn valid_model(model: &str) -> bool {
-    matches!(model, "opus" | "sonnet" | "haiku")
+    crate::agents::valid_model(model)
 }
 
 /// Change the course-generation model. Applies to the NEXT generation —
@@ -132,10 +151,13 @@ pub fn set_model(state: State<'_, AppState>, model: String) -> CmdResult<()> {
     if !valid_model(&model) {
         return Err(format!("unknown model: {model}"));
     }
-    {
-        let conn = state.db.0.lock().unwrap();
-        db::set_config(&conn, "model", &model).map_err(err)?;
-    }
+    let mut conn = state.db.0.lock().unwrap();
+    let tx = conn.transaction().map_err(err)?;
+    let runner =
+        crate::agents::RunnerId::parse(&state.generator.current_agent()).ok_or("unknown runner")?;
+    db::set_config(&tx, "model", &model).map_err(err)?;
+    db::set_config(&tx, &format!("model_{}", runner.id()), &model).map_err(err)?;
+    tx.commit().map_err(err)?;
     *state.generator.model.lock().unwrap() = model;
     Ok(())
 }
@@ -306,76 +328,9 @@ pub async fn check_agent(
     agent: Option<String>,
     custom_bin: Option<String>,
 ) -> CmdResult<bool> {
-    let gen = state.generator.clone();
-    let which = agent.unwrap_or_else(|| gen.current_agent());
-    if which == "deepseek" {
-        return Ok(gen.check_deepseek().await);
-    }
-    const PING: &str = "reply with exactly: pong";
-    let mut cmd = match which.as_str() {
-        "codex" => {
-            let bin = gen
-                .codex_bin
-                .clone()
-                .or_else(|| crate::generator::resolve_on_path("codex"))
-                .unwrap_or_else(|| "codex".into());
-            let mut c = tokio::process::Command::new(bin);
-            c.args(["exec", "--skip-git-repo-check", "--color", "never", PING]);
-            c
-        }
-        "cursor" => {
-            let Some(bin) = crate::generator::resolve_on_path("cursor-agent") else {
-                return Ok(false);
-            };
-            let mut c = tokio::process::Command::new(bin);
-            c.args(["-p", "--output-format", "text", PING]);
-            c
-        }
-        "gemini" => {
-            let Some(bin) = crate::generator::resolve_on_path("gemini") else {
-                return Ok(false);
-            };
-            let mut c = tokio::process::Command::new(bin);
-            c.args(["-p", PING]);
-            c
-        }
-        "custom" => {
-            // Parse the spec like the generator does: binary + args, {prompt} token.
-            let spec = custom_bin.unwrap_or_else(|| gen.current_custom_bin());
-            let spec = spec.trim();
-            if spec.is_empty() {
-                return Ok(false);
-            }
-            let mut toks = spec.split_whitespace();
-            let Some(bin) = toks.next() else {
-                return Ok(false);
-            };
-            let mut c = tokio::process::Command::new(bin);
-            let mut subbed = false;
-            for t in toks {
-                if t.contains("{prompt}") {
-                    c.arg(t.replace("{prompt}", PING));
-                    subbed = true;
-                } else {
-                    c.arg(t);
-                }
-            }
-            if !subbed {
-                c.arg(PING);
-            }
-            c
-        }
-        _ => {
-            let mut c = tokio::process::Command::new(&gen.claude_bin);
-            c.args(["-p", PING, "--max-turns", "1", "--model", "haiku"]);
-            c
-        }
-    };
-    let out = cmd.current_dir(&gen.scratch_dir).output();
-    match tokio::time::timeout(std::time::Duration::from_secs(120), out).await {
-        Ok(Ok(o)) => Ok(o.status.success()),
-        _ => Ok(false),
-    }
+    Ok(agents::test_connection(&state, agent, custom_bin, None)
+        .await?
+        .ok)
 }
 
 #[derive(Deserialize)]

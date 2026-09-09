@@ -143,7 +143,19 @@ While `~/sdr-unlock` exists the app can never hold a lock — delete it to re-ar
 
 ## Content generation — your provider
 
-Courses, quizzes, and grading can use Claude Code, Codex, Cursor Agent, Gemini CLI, a custom CLI, or the hosted DeepSeek API. CLI providers use their existing authentication. DeepSeek uses one app-wide credential for the primary teacher and every classroom subject: the macOS Keychain value saved in the app, or `DEEPSEEK_API_KEY` when supplied to the Rust process.
+Settings separates **Runners & models** configuration from the **Active tutor** box below it. The library offers three runner routes adapted from Remote Ledger:
+
+- **An agent I already have:** Claude Code, Codex, Cursor Agent, Gemini CLI or a custom command. Each CLI keeps its existing authentication.
+- **My own API key:** Anthropic, OpenAI, Google Gemini, OpenRouter, Groq, Mistral or DeepSeek. Provider keys are shared by the desk and its classes; on macOS, save them in Keychain from Settings. Environment keys take priority.
+- **On this machine:** Ollama installation/detection/start, installed models, a model shelf with approximate download/RAM sizes, background downloads, testing and removal. Downloaded models answer locally; the teaching backend still fetches source documentation from the web.
+
+Configure providers and save a model shortlist for each in the library. Catalogue
+search and five-result pages keep long lists manageable. Then select a runner and
+saved model in **Active tutor**, test its response, and choose **Use for study**.
+Saving library configuration does not switch the active tutor. API catalogues load
+from the provider; CLI aliases and manual model IDs are also supported. OpenRouter defaults to free
+models only, with live prices and capabilities in its catalogue. Class settings
+reuse these controls while retaining their own tutor choice.
 
 Course generation uses exactly the configured provider and model. The result
 must pass the full course, five-check, exercise, source, and first-principles
@@ -153,10 +165,12 @@ scores mechanism depth, specificity, production transfer, dossier use,
 exercise alignment, and source discipline. Otherwise the real generation error
 is shown. There is no alternate-provider or bundled-course substitution.
 
-- **Course**: the app retrieves the source material itself before any provider call, so grounding no longer depends on the provider having search tools (DeepSeek's API has none). See [Sourcing](#sourcing-what-the-courses-are-taught-from).
+- **Course**: the app retrieves the source material itself before any provider call, so grounding no longer depends on the provider having search tools (DeepSeek has no provider-side search in these calls). See [Sourcing](#sourcing-what-the-courses-are-taught-from).
 - **Quiz**: generated from the stored course text, no tools.
-- **Quiz and grading resilience**: auxiliary assessment calls may retry or use bundled question material. Free-text grading can degrade to self-assessment, but this never replaces the course itself.
+- **Quiz and grading resilience**: auxiliary question selection can use bundled question material. Free-text grading can remain unassessed when the provider is unavailable. Grading, planning, narration and language enrichment switch providers only when an explicit fallback is configured; this never replaces a researched course.
 - **Pre-generation**: tomorrow's content generates the moment today's session completes (and retries hourly via a job queue), so the roulette reveal is instant.
+
+The optional fallback has its own runner and model and starts disabled. See [the runner implementation record](docs/AGENT_BACKEND_PORT.md) for routing, validation and platform limits.
 
 ## Sourcing: what the courses are taught from
 
@@ -205,7 +219,7 @@ A launchd LaunchAgent (`~/Library/LaunchAgents/com.darkmatter.system-design-roul
 ### Prerequisites
 
 - macOS 13+
-- At least one supported CLI provider, or a [DeepSeek API](https://api-docs.deepseek.com/) key.
+- A supported CLI, a provider API key, or Ollama with a downloaded chat model.
 - To build: Rust 1.80+, Node 20+.
 
 For DeepSeek development:
@@ -214,11 +228,12 @@ For DeepSeek development:
 DEEPSEEK_API_KEY=... npm run tauri dev
 ```
 
-For an installed macOS app, choose DeepSeek in the global agent settings and save the key once. It is stored in the login Keychain under service `system-design-roulette` and account `deepseek_api_key`; classroom teacher settings only choose the provider and always reuse that same credential.
-
-```bash
-security find-generic-password -a deepseek_api_key -s system-design-roulette -w
-```
+For an installed macOS app, choose **My own API key** in Settings and save a key
+for the provider you want. Keys use the existing `system-design-roulette` Keychain
+service with separate `<provider>_api_key` accounts. On other platforms, supply
+`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY` (or `GEMINI_API_KEY`),
+`OPENROUTER_API_KEY`, `GROQ_API_KEY`, `MISTRAL_API_KEY` or `DEEPSEEK_API_KEY` to
+the process. In-app key storage on Windows/Linux remains a release follow-up.
 
 ### Build from source
 
@@ -282,9 +297,10 @@ Useful flags and env vars:
 | `--triggered` | What launchd passes; goes straight to the owed-session check |
 | `SDR_DATE=2026-06-12` | Override "today" — simulate multi-day carryover flows |
 | `SDR_CLAUDE_BIN=/path` | Override the Claude binary |
-| `SDR_CODEX_BIN=none` | Disable Codex for auxiliary fallback calls |
+| `SDR_CODEX_BIN=none` | Disable the Codex runner |
 | `SDR_MODEL=sonnet` | Override the exact course-generation model (default: `opus`) |
 | `DEEPSEEK_API_KEY=...` | Authenticate DeepSeek for the whole process; the in-app alternative stores one shared key in macOS Keychain |
+| `OLLAMA_URL=http://127.0.0.1:11434` | Optional loopback Ollama endpoint; remote/cloud endpoints are rejected for the local route |
 | `DEEPSEEK_MODEL=deepseek-v4-pro` | Override DeepSeek's default `deepseek-v4-flash` model |
 | `SDR_SESSION_TYPE=pop_quiz` | Force tomorrow's planned session type (skips the planner call) |
 | `touch ~/sdr-unlock` | Instantly release the kiosk lock |

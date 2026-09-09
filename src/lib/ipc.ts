@@ -1,3 +1,5 @@
+import type { RunnerConfiguration } from './contracts/agents';
+import type { AgentCall, AgentPolicy, HealthCheck, RunnerInfo, ModelCatalog, LocalStatus, LocalPull } from './contracts/agents';
 import type { EnrollmentOptions, EnrollmentDraft, EnrollmentDraftId, SaveEnrollmentDraft } from './contracts/enrollment';
 import type { AssessmentResponse } from './contracts/assessments';
 import type { DiagnosticView, PathRecommendation } from './contracts/placement';
@@ -11,8 +13,8 @@ export type { FocusArea, LanguageId, ClassroomSubjectId } from './catalog.genera
 export type { CourseDefinition } from './catalog';
 
 export type ClassroomKind = 'language' | 'engineering';
-export type AgentId = 'claude' | 'codex' | 'cursor' | 'gemini' | 'deepseek' | 'custom';
-export type ModelId = 'opus' | 'sonnet' | 'haiku';
+export type AgentId = 'claude' | 'codex' | 'cursor' | 'gemini' | 'deepseek' | 'custom' | 'anthropic' | 'openai' | 'google' | 'openrouter' | 'groq' | 'mistral' | 'ollama';
+export type ModelId = string;
 export type CefrLevel = 'A1' | 'A2' | 'B1' | 'B2';
 export type LanguageStrand =
   | 'listening'
@@ -536,6 +538,24 @@ const realApi = {
   getCatalog: () => invoke<CourseDefinition[]>('get_catalog'),
   markFrontendReady: () => invoke<void>('mark_frontend_ready'),
   getAppState: () => invoke<AppStateView>('get_app_state'),
+  getRunnerConfiguration: (runner: string) => invoke<RunnerConfiguration>('get_runner_configuration', { runner }),
+  saveRunnerConfiguration: (configuration: RunnerConfiguration) => invoke<RunnerConfiguration>('save_runner_configuration', { configuration }),
+  getRunnerModels: (runner: string, refresh = false) => invoke<ModelCatalog>('get_runner_models', { runner, refresh }),
+  setRunnerKey: (runner: string, value: string) => invoke<void>('set_runner_key', { runner, value }),
+  getLocalModels: () => invoke<LocalStatus>('get_local_models'),
+  getLocalPulls: () => invoke<LocalPull[]>('get_local_pulls'),
+  installLocalRunner: () => invoke<string>('install_local_runner'),
+  startLocalRunner: () => invoke<void>('start_local_runner'),
+  pullLocalModel: (model: string) => invoke<LocalPull>('pull_local_model', { model }),
+  removeLocalModel: (model: string) => invoke<void>('remove_local_model', { model }),
+  selectRunner: (agent: string, model: string, customBin: string) => invoke<void>('select_runner', { agent, model, customBin }),
+  getOpenrouterFreeOnly: () => invoke<boolean>('get_openrouter_free_only'),
+  setOpenrouterFreeOnly: (freeOnly: boolean) => invoke<void>('set_openrouter_free_only', { freeOnly }),
+  listAgentRunners: () => invoke<RunnerInfo[]>('list_agent_runners'),
+  testAgentConnection: (agent?: string, customBin?: string, model?: string) => invoke<HealthCheck>('test_agent_connection', { agent, customBin, model }),
+  getAgentActivity: () => invoke<AgentCall[]>('get_agent_activity'),
+  getAgentPolicy: () => invoke<AgentPolicy>('get_agent_policy'),
+  setAgentPolicy: (policy: AgentPolicy) => invoke<void>('set_agent_policy', { policy }),
   checkAgent: (agent?: string, customBin?: string) =>
     invoke<boolean>('check_agent', { agent, customBin }),
   completeSetup: (

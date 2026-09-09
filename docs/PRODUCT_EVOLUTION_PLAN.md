@@ -472,4 +472,27 @@ Validation: 176 Rust tests and 43 frontend tests pass, with six live/external Ru
 
 These banks are small entry samples, not calibrated proficiency assessments. Acceptance into an active class, explicit path revisions during learning, practical challenges, complete session ownership and per-engine cutover remain required P4–P8 work. The UI states that activation is pending; recommendations do not yet alter existing topic selection.
 
-User-directed backend addition (2026-09-09): port Remote Ledger's agent operation into the native Rust backend, preserving its unified request/result and runner contracts, per-runner model selection, explicit fallback, capability-aware bounded tool loop, provider/model discovery, usage and budget records, and actionable status. Adapt its job ownership to learning work and its research tools to course source policy; retain native secret storage and desktop packaging. The reference is remote-ledger main commit `19997d3d253e48c93911364b35ef619b835e50a2`. This extends the generation work and does not replace the outstanding P0–P9 scope.
+User-directed runner addition (2026-09-09): bring over Remote Ledger's **CLI / API /
+local model implementation and setup flow**, connected to the existing Principia
+teaching backend. The three routes now share model selection and real connection
+tests in setup, desk settings and class settings. They include seven hosted API
+providers, the existing CLIs/custom command, live provider catalogues, OpenRouter
+free-only selection and an Ollama install/start/model/download/test/remove flow.
+The original Principia node/rail design and custom dropdown controls remain the
+visual base. This work is about making those runner choices usable; a separate
+orchestration or activity dashboard is not the requested product change.
+
+The reference is Remote Ledger main commit
+`19997d3d253e48c93911364b35ef619b835e50a2`. Native transport support honors the
+selected model, isolates CLI output, handles cancellation and keeps fallback
+explicit. Existing lesson prompts, source retrieval and learning quality gates
+continue to own teaching behavior. Validation and platform limits are recorded in
+[the runner implementation record](AGENT_BACKEND_PORT.md). The outstanding P0–P9
+class/path/session work above is unchanged.
+
+Runner design iteration: separate a collapsible runner/model library from the
+active tutor selector. Provider editors open individually; catalogues use search
+and five-result pages; local models use Installed/Browse/Downloads tabs. Persist
+model shortlists and custom runner setup independently of the active choice.
+Library saves preserve the active tutor; explicit study/class setup saves apply
+that choice. See the runner record for the configuration-isolation regression.

@@ -33,7 +33,11 @@
   const providers: { value: AgentId; label: string }[] = [
     { value: 'claude', label: 'Claude' }, { value: 'codex', label: 'Codex' },
     { value: 'cursor', label: 'Cursor' }, { value: 'gemini', label: 'Gemini' },
-    { value: 'deepseek', label: 'DeepSeek' }, { value: 'custom', label: 'Custom executable' },
+    { value: 'custom', label: 'Custom CLI' },
+    { value: 'anthropic', label: 'Anthropic API' }, { value: 'openai', label: 'OpenAI API' },
+    { value: 'google', label: 'Google Gemini API' }, { value: 'openrouter', label: 'OpenRouter' },
+    { value: 'groq', label: 'Groq API' }, { value: 'mistral', label: 'Mistral API' },
+    { value: 'deepseek', label: 'DeepSeek API' }, { value: 'ollama', label: 'Ollama · local' },
   ];
   const entryOptions = $derived(view.options?.entry_points.map((point) => ({ value: point.id, label: point.label })) ?? []);
   const familiarity = $derived(view.options?.familiarity_options.filter((option) => option.label.toLowerCase().includes(search.toLowerCase())) ?? []);

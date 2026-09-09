@@ -306,8 +306,7 @@ fn validate(input: &SaveEnrollmentDraft, options: &EnrollmentOptions) -> Result<
             "choose sessions of 10–120 minutes and a weekly pace that can contain a session".into(),
         ));
     }
-    if !["claude", "codex", "cursor", "gemini", "deepseek", "custom"]
-        .contains(&config.tutor.provider.as_str())
+    if crate::agents::RunnerId::parse(&config.tutor.provider).is_none()
         || config.tutor.model.trim().is_empty()
         || config.tutor.model.len() > 200
     {

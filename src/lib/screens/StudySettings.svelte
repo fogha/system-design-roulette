@@ -4,9 +4,9 @@
   import { app } from '../stores.svelte';
   import NodeCard from '../components/NodeCard.svelte';
   import FlowStage from '../components/FlowStage.svelte';
-  import { Zap, Cpu, Lock, ShieldAlert } from 'lucide-svelte';
-  import AgentPicker from '../components/AgentPicker.svelte';
-  import ModelPicker from '../components/ModelPicker.svelte';
+  import { Lock, ShieldAlert } from 'lucide-svelte';
+  import RunnerSetup from '../features/runners/RunnerSetup.svelte';
+  import RunnerFallback from '../features/runners/RunnerFallback.svelte';
   import EnforcementPicker from '../components/EnforcementPicker.svelte';
   let agent = $state('claude');
   let customBin = $state('');
@@ -15,12 +15,11 @@
   let saving = $state('');
   let saved = $state('');
   onMount(() => { agent = app.state?.agent ?? 'claude'; customBin = app.state?.custom_agent_bin ?? ''; model = app.state?.model ?? 'opus'; policy = app.state?.kiosk_level ?? 'hard'; });
-  async function save(section: 'provider' | 'model' | 'focus') {
+  async function saveTutor() { await api.selectRunner(agent, model, customBin); await app.refresh(); }
+  async function save(section: 'focus') {
     if (saving) return;
     saving = section; saved = '';
     try {
-      if (section === 'provider') await api.setAgent(agent, customBin);
-      if (section === 'model') await api.setModel(model);
       if (section === 'focus') await api.setKioskLevel(policy);
       await app.refresh(); saved = section;
     } catch (error) { app.error = String(error); }
@@ -30,18 +29,14 @@
 
 <div class="settings-page">
   <header><div class="meta-label">CONFIGURATION — TUTOR · FOCUS · RECOVERY</div><h1>Configure your desk</h1><p>Each service has its own controls. Class-specific tutor preferences live with the class.</p></header>
-  <FlowStage number="01"><section aria-label="Default tutor"><NodeCard Icon={Zap} name="agent-backend" badge={app.state?.agent ?? 'claude'} badgeTone="violet">
-    <div class="meta-label">DEFAULT TUTOR — DAILY STUDY</div>
-    <AgentPicker bind:agent bind:customBin deepseekKeyConfigured={app.state?.deepseek_key_configured ?? false} onKeyChanged={() => app.refresh()} />
-    <button class="cta mono-cta" disabled={!!saving} onclick={() => save('provider')}>{saving === 'provider' ? 'Saving…' : saved === 'provider' ? 'Provider saved' : 'Save provider'}</button>
-  </NodeCard></section></FlowStage>
-  {#if app.state?.agent === 'claude'}<FlowStage number="02"><section aria-label="Default model"><NodeCard Icon={Cpu} name="course-model" badge={app.state?.model ?? 'opus'} badgeTone="amber">
-    <div class="meta-label">MODEL — WHO WRITES YOUR LESSONS</div><ModelPicker bind:value={model} /><button class="cta mono-cta" disabled={!!saving} onclick={() => save('model')}>{saving === 'model' ? 'Saving…' : saved === 'model' ? 'Model saved' : 'Save model'}</button>
-  </NodeCard></section></FlowStage>{/if}
-  <FlowStage number={app.state?.agent === 'claude' ? '03' : '02'}><section aria-label="Daily study focus"><NodeCard Icon={Lock} name="enforcement-service" badge={app.state?.kiosk_level ?? 'hard'} badgeTone="violet" accent="var(--violet)">
+  <FlowStage number="01"><section aria-label="Tutor configuration">
+    <RunnerSetup bind:agent bind:model bind:customBin onUse={saveTutor} onKeyChanged={() => app.refresh()} />
+    <RunnerFallback />
+  </section></FlowStage>
+  <FlowStage number="02"><section aria-label="Daily study focus"><NodeCard Icon={Lock} name="enforcement-service" badge={app.state?.kiosk_level ?? 'hard'} badgeTone="violet" accent="var(--violet)">
     <div class="meta-label">DAILY STUDY — FOCUS POLICY</div><EnforcementPicker bind:value={policy} /><button class="cta mono-cta" disabled={!!saving} onclick={() => save('focus')}>{saving === 'focus' ? 'Saving…' : saved === 'focus' ? 'Focus preference saved' : 'Save focus preference'}</button>
   </NodeCard></section></FlowStage>
-  <FlowStage number={app.state?.agent === 'claude' ? '04' : '03'} last><section aria-label="Recovery"><NodeCard Icon={ShieldAlert} name="break-glass" badge={app.state?.enforcement_disarmed ? 'disarmed' : 'standby'} badgeTone="red">
+  <FlowStage number="03" last><section aria-label="Recovery"><NodeCard Icon={ShieldAlert} name="break-glass" badge={app.state?.enforcement_disarmed ? 'disarmed' : 'standby'} badgeTone="red">
     <div class="recovery"><span class="recovery-tag mono">RECOVERY</span><div><p>Your emergency phrase and <code>~/sdr-unlock</code> recovery file remain available during enforced study.</p><p class="mono">{app.state?.enforcement_disarmed ? 'Enforcement disarmed · recovery file present' : 'Recovery file absent · configured policy applies'}</p></div></div>
   </NodeCard></section></FlowStage>
 </div>

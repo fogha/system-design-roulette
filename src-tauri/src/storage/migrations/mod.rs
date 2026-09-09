@@ -57,6 +57,15 @@ const MIGRATIONS: &[Migration] = &[
             Ok(())
         },
     },
+    Migration {
+        version: 4,
+        name: "agent_calls",
+        sources: &[include_str!("004_agent_calls.sql")],
+        apply: |conn| {
+            conn.execute_batch(include_str!("004_agent_calls.sql"))?;
+            Ok(())
+        },
+    },
 ];
 
 pub fn enable_foreign_keys(conn: &Connection) -> Result<()> {

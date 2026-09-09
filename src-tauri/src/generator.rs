@@ -1,9 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use std::process::Stdio;
 use std::time::Duration;
-use tokio::io::AsyncReadExt;
-use tokio::process::Command;
 
 #[derive(Debug, thiserror::Error)]
 pub enum GenError {
@@ -757,7 +754,7 @@ pub struct Generator {
     pub codex_bin: Option<String>,
     pub scratch_dir: PathBuf,
     /// Primary model for course generation (the expensive, quality-bound call).
-    /// Quiz and grading stay on sonnet: rubric-bound, latency-sensitive.
+    /// All primary tasks use the selected runner model.
     /// Shared + hot-swappable: settings changes apply without a restart.
     pub model: std::sync::Arc<std::sync::Mutex<String>>,
     /// Which generation provider is primary.
@@ -770,6 +767,9 @@ pub struct Generator {
     /// Fetches the primary documentation a lesson is taught from. Providers are
     /// never trusted to supply URLs from memory.
     pub researcher: crate::research::Researcher,
+    pub runner: crate::agents::Runner,
+    purpose: String,
+    owner: Option<String>,
 }
 
 /// Immutable generation routing for one classroom subject. Subject profiles
@@ -938,7 +938,6 @@ fn validate_chat_reply(
 }
 
 /// Model for quiz/grade/repair calls regardless of the configured primary.
-const SMALL_MODEL: &str = "sonnet";
 
 #[derive(Debug, Clone, Copy)]
 enum PedagogyDomain {
@@ -1024,7 +1023,19 @@ impl Generator {
         log_tx: Option<tokio::sync::broadcast::Sender<String>>,
     ) -> Self {
         let _ = std::fs::create_dir_all(&scratch_dir);
+        let runner = crate::agents::Runner {
+            claude_bin: claude_bin.clone(),
+            codex_bin: codex_bin.clone(),
+            scratch_dir: scratch_dir.clone(),
+            database: None,
+            log_tx: log_tx.clone(),
+            #[cfg(test)]
+            test_deepseek: None,
+        };
         Self {
+            runner,
+            purpose: "generation".into(),
+            owner: None,
             claude_bin,
             codex_bin,
             scratch_dir,
@@ -1214,6 +1225,7 @@ impl Generator {
         course: GeneratedCourse,
         context: CourseEditContext<'_>,
     ) -> Result<GeneratedCourse> {
+        let scoped = self.scoped("quality-review");
         let brief = serde_json::to_string(context.curriculum)
             .map_err(|error| GenError::Parse(format!("could not serialize curriculum: {error}")))?;
         let draft = serde_json::to_string(&course)
@@ -1244,11 +1256,11 @@ impl Generator {
             label = context.label,
             dossier = context.dossier,
         );
-        self.log(format!(
+        scoped.log(format!(
             "{} is running the same-provider curriculum editor for {}",
             context.agent, context.label
         ));
-        let (mut review, _) = self
+        let (mut review, _) = scoped
             .run_exact_for::<CourseEditorialReview>(
                 context.agent,
                 context.custom_bin,
@@ -1426,9 +1438,10 @@ impl Generator {
         &self,
         request: CourseRequest<'_>,
     ) -> Result<(GeneratedCourse, String)> {
+        let scoped = self.scoped("lesson");
         let curriculum_json = serde_json::to_string_pretty(request.curriculum)
             .map_err(|error| GenError::Parse(format!("could not serialize curriculum: {error}")))?;
-        let sources = self.research_for(&request).await;
+        let sources = scoped.research_for(&request).await;
         let prompt = with_teacher(
             request.dossier,
             &format!(
@@ -1440,10 +1453,10 @@ impl Generator {
             ),
             request.focus,
         );
-        let agent = self.current_agent();
-        let custom_bin = self.current_custom_bin();
-        let model = self.current_model();
-        let (course, source) = self
+        let agent = scoped.current_agent();
+        let custom_bin = scoped.current_custom_bin();
+        let model = scoped.current_model();
+        let (course, source) = scoped
             .run_exact_for::<GeneratedCourse>(
                 &agent,
                 &custom_bin,
@@ -1454,10 +1467,10 @@ impl Generator {
             )
             .await?;
         let context = format!("primary {} course", request.focus);
-        let course = self
+        let course = scoped
             .ensure_course_quality(course, &agent, &custom_bin, &model, &context)
             .await?;
-        let course = self
+        let course = scoped
             .edit_course_quality(
                 course,
                 CourseEditContext {
@@ -1470,7 +1483,7 @@ impl Generator {
                 },
             )
             .await?;
-        let course = self
+        let course = scoped
             .ensure_source_grounding(course, &sources, &agent, &custom_bin, &model, &context)
             .await?;
         Ok((course, source))
@@ -1485,9 +1498,11 @@ impl Generator {
         subject_contract: &str,
         profile: &GenerationProfile,
     ) -> Result<(GeneratedCourse, String)> {
+        let mut scoped = self.scoped("lesson");
+        scoped.owner = Some(format!("catalog:{}", profile.subject_id));
         let curriculum_json = serde_json::to_string_pretty(request.curriculum)
             .map_err(|error| GenError::Parse(format!("could not serialize curriculum: {error}")))?;
-        let sources = self.research_for(&request).await;
+        let sources = scoped.research_for(&request).await;
         let task = format!(
             "{subject_contract}\n\nPROMPT_PROFILE_VERSION: {}\n\n\
              AUTHORITATIVE CURRICULUM BRIEF:\n{curriculum_json}\n\n{}\n\n{}",
@@ -1498,7 +1513,7 @@ impl Generator {
                 .replace("{{CATEGORY}}", request.category)
         );
         let prompt = with_teacher(request.dossier, &task, request.focus);
-        let (course, source) = self
+        let (course, source) = scoped
             .run_exact_for::<GeneratedCourse>(
                 &profile.agent,
                 &profile.custom_bin,
@@ -1509,7 +1524,7 @@ impl Generator {
             )
             .await?;
         let context = format!("classroom course for {}", profile.subject_id);
-        let course = self
+        let course = scoped
             .ensure_course_quality(
                 course,
                 &profile.agent,
@@ -1518,7 +1533,7 @@ impl Generator {
                 &context,
             )
             .await?;
-        let course = self
+        let course = scoped
             .edit_course_quality(
                 course,
                 CourseEditContext {
@@ -1531,7 +1546,7 @@ impl Generator {
                 },
             )
             .await?;
-        let course = self
+        let course = scoped
             .ensure_source_grounding(
                 course,
                 &sources,
@@ -1550,6 +1565,8 @@ impl Generator {
         profile: &GenerationProfile,
         seed: &crate::language::StoredLesson,
     ) -> (crate::language::StoredLesson, String) {
+        let mut scoped = self.scoped("language-lesson");
+        scoped.owner = Some(format!("catalog:{}", profile.subject_id));
         let seed_json = serde_json::to_string_pretty(seed).unwrap_or_default();
         let task = format!(
             r#"{subject_contract}
@@ -1571,7 +1588,7 @@ CURATED_LESSON:
             version = profile.prompt_version,
         );
         let prompt = prepend_first_principles(&task, PedagogyDomain::Language);
-        match self
+        match scoped
             .run_with_fallback_for::<crate::language::StoredLesson>(
                 &profile.agent,
                 &profile.custom_bin,
@@ -1617,15 +1634,16 @@ CURATED_LESSON:
         focus: &str,
         _preferred_title: &str,
     ) -> Result<(Vec<GeneratedQuestion>, String)> {
+        let scoped = self.scoped("retrieval-quiz");
         let prompt = with_teacher(
             dossier,
             &QUIZ_PROMPT.replace("{{COURSE}}", course_markdown),
             focus,
         );
-        let agent = self.current_agent();
-        let custom_bin = self.current_custom_bin();
-        let model = self.current_model();
-        let (quiz, source) = self
+        let agent = scoped.current_agent();
+        let custom_bin = scoped.current_custom_bin();
+        let model = scoped.current_model();
+        let (quiz, source) = scoped
             .run_exact_for::<GeneratedQuiz>(
                 &agent,
                 &custom_bin,
@@ -1648,7 +1666,7 @@ CURATED_LESSON:
              substitute unrelated bundled material.\n\nCOURSE:\n{course_markdown}\n\n\
              LEARNER_DOSSIER:\n{dossier}\n\nQUIZ_TO_CORRECT:{draft}"
         );
-        let (corrected, _) = self
+        let (corrected, _) = scoped
             .run_exact_for::<GeneratedQuiz>(
                 &agent,
                 &custom_bin,
@@ -1673,17 +1691,18 @@ CURATED_LESSON:
         course_markdown: &str,
         focus: &str,
     ) -> Result<Vec<crate::audio::ScriptLine>> {
+        let scoped = self.scoped("narration");
         let prompt = with_pedagogy(
             &AUDIO_PROMPT.replace("{{COURSE}}", course_markdown),
             focus,
             PedagogyDomain::Engineering,
         );
-        let (script, _) = self
+        let (script, _) = scoped
             .run_with_fallback::<crate::audio::GeneratedScript>(
                 &prompt,
                 false,
                 Duration::from_secs(300),
-                SMALL_MODEL,
+                &scoped.current_model(),
             )
             .await?;
         Ok(script.lines)
@@ -1701,6 +1720,7 @@ CURATED_LESSON:
         exclusions: &[String],
         failed_areas: &[FailedArea],
     ) -> Result<Vec<ExitCheck>> {
+        let scoped = self.scoped("exit-check");
         let excluded = if exclusions.is_empty() {
             "(none)".to_string()
         } else {
@@ -1721,10 +1741,10 @@ CURATED_LESSON:
             focus,
             PedagogyDomain::Engineering,
         );
-        let agent = self.current_agent();
-        let custom_bin = self.current_custom_bin();
-        let model = self.current_model();
-        let (checks, _) = self
+        let agent = scoped.current_agent();
+        let custom_bin = scoped.current_custom_bin();
+        let model = scoped.current_model();
+        let (checks, _) = scoped
             .run_exact_for::<ExitChecks>(
                 &agent,
                 &custom_bin,
@@ -1778,7 +1798,7 @@ CURATED_LESSON:
              unrelated fallback questions.\n\nCOURSE:\n{course_markdown}\n\n\
              TARGETING:\n{targeting}\n\nEXCLUSIONS:\n{excluded}\n\nCHECKS_TO_CORRECT:{draft}"
         );
-        let (corrected, _) = self
+        let (corrected, _) = scoped
             .run_exact_for::<ExitChecks>(
                 &agent,
                 &custom_bin,
@@ -1800,13 +1820,19 @@ CURATED_LESSON:
     /// whether pop_quiz is currently allowed (guardrails re-checked by caller).
     /// Failure falls back to a lesson day — planning can never block.
     pub async fn plan_day(&self, dossier: &str, eligible: bool, focus: &str) -> SessionPlan {
+        let scoped = self.scoped("session-plan");
         let prompt = with_teacher(
             dossier,
             &PLAN_PROMPT.replace("{{ELIGIBLE}}", if eligible { "yes" } else { "no" }),
             focus,
         );
-        match self
-            .run_with_fallback::<SessionPlan>(&prompt, false, Duration::from_secs(90), SMALL_MODEL)
+        match scoped
+            .run_with_fallback::<SessionPlan>(
+                &prompt,
+                false,
+                Duration::from_secs(90),
+                &scoped.current_model(),
+            )
             .await
         {
             Ok((plan, _)) => plan,
@@ -1827,6 +1853,7 @@ CURATED_LESSON:
         dossier: &str,
         focus: &str,
     ) -> Option<Vec<Verdict>> {
+        let scoped = self.scoped("grading");
         if items.is_empty() {
             return Some(vec![]);
         }
@@ -1836,8 +1863,13 @@ CURATED_LESSON:
             &GRADE_PROMPT.replace("{{ITEMS}}", &items_json),
             focus,
         );
-        match self
-            .run_with_fallback::<Verdicts>(&prompt, false, Duration::from_secs(120), SMALL_MODEL)
+        match scoped
+            .run_with_fallback::<Verdicts>(
+                &prompt,
+                false,
+                Duration::from_secs(120),
+                &scoped.current_model(),
+            )
             .await
         {
             Ok((v, _)) => {
@@ -1895,6 +1927,8 @@ CURATED_LESSON:
         history: &[ChatTurn],
         profile: &GenerationProfile,
     ) -> Result<ChatReply> {
+        let mut scoped = self.scoped("course-tutor");
+        scoped.owner = Some(format!("catalog:{}", profile.subject_id));
         let headings = course_headings(&context.markdown);
         if headings.is_empty() {
             return Err(GenError::Parse(
@@ -1919,11 +1953,11 @@ CURATED_LESSON:
             &context.focus,
             PedagogyDomain::Engineering,
         );
-        self.log(format!(
+        scoped.log(format!(
             "{} is answering a {} course-chat question with {} ({})",
             profile.agent, profile.subject_id, profile.model, profile.prompt_version
         ));
-        let (mut reply, _) = self
+        let (mut reply, _) = scoped
             .run_exact_for::<ChatReply>(
                 &profile.agent,
                 &profile.custom_bin,
@@ -1937,7 +1971,7 @@ CURATED_LESSON:
             return Ok(reply);
         };
 
-        self.log(format!(
+        scoped.log(format!(
             "{} chat answer missed a quality gate; requesting one same-provider correction: {reason}",
             profile.agent
         ));
@@ -1950,7 +1984,7 @@ CURATED_LESSON:
              the supplied course, and choose `section` exactly from this list:\n{heading_list}\n\n\
              ORIGINAL_COURSE_TUTOR_REQUEST:\n{prompt}\n\nREPLY_TO_CORRECT:\n{draft}"
         );
-        let (mut corrected, _) = self
+        let (mut corrected, _) = scoped
             .run_exact_for::<ChatReply>(
                 &profile.agent,
                 &profile.custom_bin,
@@ -1966,150 +2000,6 @@ CURATED_LESSON:
             ))
         })?;
         Ok(corrected)
-    }
-
-    /// One attempt on the primary generation provider.
-    async fn run_primary(
-        &self,
-        agent: &str,
-        prompt: &str,
-        web_tools: bool,
-        timeout: Duration,
-        model: &str,
-        wire: Wire,
-    ) -> Result<String> {
-        match agent {
-            "codex" => {
-                let bin = self
-                    .codex_bin
-                    .clone()
-                    .or_else(|| resolve_on_path("codex"))
-                    .unwrap_or_else(|| "codex".into());
-                self.log(format!("spawn: codex exec ({bin})"));
-                self.run_codex(&bin, prompt, timeout).await
-            }
-            "cursor" => {
-                let bin = resolve_on_path("cursor-agent").ok_or(GenError::NoBinary)?;
-                self.log(format!("spawn: cursor-agent ({bin})"));
-                self.run_cursor(&bin, prompt, timeout).await
-            }
-            "gemini" => {
-                let bin = resolve_on_path("gemini").ok_or(GenError::NoBinary)?;
-                self.log(format!("spawn: gemini ({bin})"));
-                self.run_gemini(&bin, prompt, timeout).await
-            }
-            "deepseek" => {
-                self.log(format!("request: DeepSeek API ({})", deepseek_model()));
-                self.run_deepseek(prompt, web_tools, timeout, wire).await
-            }
-            "custom" => {
-                let spec = self.current_custom_bin();
-                if spec.trim().is_empty() {
-                    return Err(GenError::NoBinary);
-                }
-                self.log(format!("spawn: custom ({spec})"));
-                self.run_custom(&spec, prompt, timeout).await
-            }
-            _ => self.run_claude(prompt, web_tools, timeout, model).await,
-        }
-    }
-
-    async fn run_deepseek(
-        &self,
-        prompt: &str,
-        web_tools_requested: bool,
-        timeout: Duration,
-        wire: Wire,
-    ) -> Result<String> {
-        // Env var wins when present (dev workflow, CI); otherwise fall back
-        // to the Keychain-backed key set from the agent picker in-app.
-        let api_key = std::env::var("DEEPSEEK_API_KEY")
-            .ok()
-            .filter(|v| !v.trim().is_empty())
-            .or_else(|| crate::keychain::get_secret("deepseek"))
-            .ok_or_else(|| {
-                GenError::Api(
-                    "no DeepSeek API key configured — add one in the agent picker \
-                     or export DEEPSEEK_API_KEY"
-                        .into(),
-                )
-            })?;
-
-        let prompt = match wire {
-            Wire::Prose => format!(
-                "{prompt}\n\nReturn only the requested markdown. No JSON, no code fence around \
-                 the whole answer, and no preamble or closing commentary."
-            ),
-            Wire::Json if web_tools_requested => format!(
-                "{prompt}\n\nProvider constraint: you have no live web-search tools in this call, \
-                 so the RETRIEVED SOURCE MATERIAL above is your only evidence of current \
-                 behavior. Cite those exact URLs inline and list them in `resources`. Never \
-                 invent or guess a URL — unverifiable links are stripped before the learner sees \
-                 them. Return the requested object as bare JSON without markdown fences."
-            ),
-            Wire::Json => {
-                format!(
-                    "{prompt}\n\nReturn the requested object as bare JSON without markdown fences."
-                )
-            }
-        };
-        let mut body = serde_json::json!({
-            "model": deepseek_model(),
-            "messages": [{ "role": "user", "content": prompt }],
-            "thinking": { "type": "disabled" },
-            // Course JSON repair and quality correction are tool-free but can
-            // still be as long as the original researched lesson.
-            "max_tokens": 16_384,
-            "stream": false
-        });
-        if matches!(wire, Wire::Json) {
-            body["response_format"] = serde_json::json!({ "type": "json_object" });
-        }
-        let client = reqwest::Client::builder()
-            .timeout(timeout)
-            .build()
-            .map_err(|e| GenError::Api(e.to_string()))?;
-        let response = client
-            .post("https://api.deepseek.com/chat/completions")
-            .bearer_auth(api_key.trim())
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| GenError::Api(e.to_string()))?;
-        let status = response.status();
-        let response_body = response
-            .text()
-            .await
-            .map_err(|e| GenError::Api(e.to_string()))?;
-        if !status.is_success() {
-            return Err(GenError::Api(format!(
-                "DeepSeek returned {status}: {}",
-                response_body.chars().take(2_000).collect::<String>()
-            )));
-        }
-        parse_deepseek_response(&response_body)
-    }
-
-    pub async fn check_deepseek(&self) -> bool {
-        let response = self
-            .run_deepseek(
-                "Return exactly this JSON object: {\"status\":\"pong\"}",
-                false,
-                Duration::from_secs(30),
-                Wire::Json,
-            )
-            .await;
-        response
-            .ok()
-            .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
-            .and_then(|value| {
-                value
-                    .get("status")
-                    .and_then(|status| status.as_str())
-                    .map(str::to_owned)
-            })
-            .as_deref()
-            == Some("pong")
     }
 
     async fn run_exact_for<T: serde::de::DeserializeOwned>(
@@ -2171,65 +2061,28 @@ CURATED_LESSON:
         timeout: Duration,
         model: &str,
     ) -> Result<(T, String)> {
-        let mut last_err: Option<GenError> = None;
-        for attempt in 0..2 {
-            // Claude retries downgrade to the small model; other agents just retry.
-            let attempt_model = if attempt == 0 { model } else { SMALL_MODEL };
-            match self
-                .run_primary_for(agent, custom_bin, prompt, web_tools, timeout, attempt_model)
-                .await
-            {
-                Ok(raw) => match parse_json_payload::<T>(&raw) {
-                    Ok(v) => return Ok((v, agent.to_string())),
-                    Err(_) => match self
-                        .repair_json_for::<T>(agent, custom_bin, &raw, attempt_model)
-                        .await
-                    {
-                        Ok(v) => return Ok((v, agent.to_string())),
-                        Err(e) => last_err = Some(e),
-                    },
-                },
-                Err(e) => {
-                    log::warn!("{agent} attempt {attempt} failed: {e}");
-                    last_err = Some(e);
-                }
+        let request = self.provider_request(
+            prompt,
+            ProviderCall {
+                agent,
+                custom_bin,
+                model,
+                web_tools,
+                timeout,
+                wire: Wire::Json,
+            },
+        )?;
+        let fallback = self.runner.fallback(custom_bin)?;
+        let result = self.runner.run(&request, fallback.as_ref()).await?;
+        let actual = result.runner.legacy_id();
+        let parsed = match parse_json_payload::<T>(&result.text) {
+            Ok(parsed) => parsed,
+            Err(_) => {
+                self.repair_json_for(actual, custom_bin, &result.text, &result.model)
+                    .await?
             }
-        }
-        // Cross-agent fallback: claude falls back to codex; any other primary
-        // falls back to claude (which is also the JSON-repair engine).
-        if agent == "claude" {
-            if let Some(codex) = &self.codex_bin {
-                self.log("fallback: trying codex".to_string());
-                match self.run_codex(codex, prompt, timeout).await {
-                    Ok(raw) => {
-                        if let Ok(v) = parse_json_payload::<T>(&raw) {
-                            return Ok((v, "codex".into()));
-                        }
-                    }
-                    Err(e) => {
-                        log::warn!("codex fallback failed: {e}");
-                        last_err = Some(e);
-                    }
-                }
-            }
-        } else {
-            self.log("fallback: trying claude".to_string());
-            match self
-                .run_claude(prompt, web_tools, timeout, SMALL_MODEL)
-                .await
-            {
-                Ok(raw) => {
-                    if let Ok(v) = parse_json_payload::<T>(&raw) {
-                        return Ok((v, "claude".into()));
-                    }
-                }
-                Err(e) => {
-                    log::warn!("claude fallback failed: {e}");
-                    last_err = Some(e);
-                }
-            }
-        }
-        Err(last_err.unwrap_or(GenError::NoBinary))
+        };
+        Ok((parsed, actual.into()))
     }
 
     async fn run_primary_for(
@@ -2283,257 +2136,44 @@ CURATED_LESSON:
     }
 
     async fn run_wire_for(&self, prompt: &str, call: ProviderCall<'_>) -> Result<String> {
-        if call.agent == "custom" {
-            if call.custom_bin.trim().is_empty() {
-                return Err(GenError::NoBinary);
-            }
-            self.log(format!("spawn: classroom custom ({})", call.custom_bin));
-            return self.run_custom(call.custom_bin, prompt, call.timeout).await;
-        }
-        self.run_primary(
-            call.agent,
-            prompt,
-            call.web_tools,
-            call.timeout,
-            call.model,
-            call.wire,
-        )
-        .await
+        let request = self.provider_request(prompt, call)?;
+        self.runner
+            .run(&request, None)
+            .await
+            .map(|result| result.text)
     }
 
-    /// Custom agent. The configured string is whitespace-split into binary +
-    /// args; any `{prompt}` token is replaced with the prompt (lets users
-    /// encode flags, e.g. `mycli --print {prompt}`). With no `{prompt}` token,
-    /// the prompt is appended as the final argument. No shell — no injection.
-    async fn run_custom(&self, spec: &str, prompt: &str, timeout: Duration) -> Result<String> {
-        let mut tokens = spec.split_whitespace();
-        let bin = tokens.next().ok_or(GenError::NoBinary)?;
-        let rest: Vec<&str> = tokens.collect();
-        let mut cmd = Command::new(bin);
-        let mut substituted = false;
-        for tok in &rest {
-            if tok.contains("{prompt}") {
-                cmd.arg(tok.replace("{prompt}", prompt));
-                substituted = true;
-            } else {
-                cmd.arg(tok);
-            }
-        }
-        if !substituted {
-            cmd.arg(prompt);
-        }
-        cmd.current_dir(&self.scratch_dir)
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-        run_capture(cmd, timeout).await
-    }
-
-    fn claude_cmd(&self, prompt: &str, web_tools: bool, model: &str, stream: bool) -> Command {
-        let mut cmd = Command::new(&self.claude_bin);
-        cmd.arg("-p")
-            .arg(prompt)
-            .arg("--output-format")
-            .arg(if stream { "stream-json" } else { "json" })
-            .arg("--model")
-            .arg(model)
-            .arg("--max-turns")
-            .arg("25")
-            .current_dir(&self.scratch_dir)
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-        if stream {
-            // print-mode stream-json requires --verbose
-            cmd.arg("--verbose");
-        }
-        if web_tools {
-            cmd.arg("--allowedTools").arg("WebSearch,WebFetch");
-        }
-        cmd.arg("--disallowedTools")
-            .arg("Bash,Edit,Write,NotebookEdit");
-        cmd
-    }
-
-    async fn run_claude(
+    fn provider_request(
         &self,
         prompt: &str,
-        web_tools: bool,
-        timeout: Duration,
-        model: &str,
-    ) -> Result<String> {
-        // Long calls (course, audio script) stream so the UI can show the
-        // agent working; short rubric calls stay on the simple JSON envelope.
-        if timeout >= Duration::from_secs(240) && self.log_tx.is_some() {
-            match self
-                .run_claude_stream(prompt, web_tools, timeout, model)
-                .await
-            {
-                Ok(out) => return Ok(out),
-                Err(e) => {
-                    // e.g. an older CLI without stream-json — degrade silently.
-                    log::warn!("streaming run failed ({e}), retrying buffered");
-                }
-            }
-        }
-        let cmd = self.claude_cmd(prompt, web_tools, model, false);
-        let raw = run_capture(cmd, timeout).await?;
-        // claude --output-format json wraps the reply in {"result": "..."} among other fields
-        if let Ok(envelope) = serde_json::from_str::<serde_json::Value>(&raw) {
-            if let Some(result) = envelope.get("result").and_then(|r| r.as_str()) {
-                return Ok(result.to_string());
-            }
-        }
-        Ok(raw)
-    }
-
-    /// stream-json variant: emits a gen:log line per agent event (web search
-    /// queries, fetches, drafting turns) and returns the final result text.
-    async fn run_claude_stream(
-        &self,
-        prompt: &str,
-        web_tools: bool,
-        timeout: Duration,
-        model: &str,
-    ) -> Result<String> {
-        use tokio::io::{AsyncBufReadExt, BufReader};
-        self.log(format!("spawn: agent · model {model}"));
-        let mut child = self
-            .claude_cmd(prompt, web_tools, model, true)
-            .spawn()
-            .map_err(|e| {
-                if e.kind() == std::io::ErrorKind::NotFound {
-                    GenError::NoBinary
-                } else {
-                    GenError::Io(e)
-                }
-            })?;
-        let stdout = child.stdout.take().expect("piped stdout");
-        let mut stderr = child.stderr.take().expect("piped stderr");
-        // Drain stderr concurrently so the child can't block on a full pipe.
-        let err_task = tokio::spawn(async move {
-            let mut buf = String::new();
-            let _ = stderr.read_to_string(&mut buf).await;
-            buf
-        });
-
-        let me = self.clone();
-        let read_fut = async move {
-            let mut lines = BufReader::new(stdout).lines();
-            let mut result: Option<String> = None;
-            let mut drafted = 0usize;
-            while let Ok(Some(line)) = lines.next_line().await {
-                let Ok(v) = serde_json::from_str::<serde_json::Value>(&line) else {
-                    continue;
-                };
-                match v.get("type").and_then(|t| t.as_str()) {
-                    Some("assistant") => {
-                        for block in v["message"]["content"].as_array().unwrap_or(&vec![]) {
-                            match block.get("type").and_then(|t| t.as_str()) {
-                                Some("tool_use") => {
-                                    let name = block["name"].as_str().unwrap_or("tool");
-                                    let detail = block["input"]["query"]
-                                        .as_str()
-                                        .or_else(|| block["input"]["url"].as_str())
-                                        .unwrap_or("");
-                                    me.log(format!(
-                                        "tool: {name} {}",
-                                        detail.chars().take(80).collect::<String>()
-                                    ));
-                                }
-                                Some("text") => {
-                                    let n = block["text"].as_str().map(|t| t.len()).unwrap_or(0);
-                                    drafted += n;
-                                    if n > 200 {
-                                        me.log(format!("draft: {} chars written", drafted));
-                                    }
-                                }
-                                _ => {}
-                            }
-                        }
-                    }
-                    Some("result") => {
-                        result = v["result"].as_str().map(|s| s.to_string());
-                    }
-                    _ => {}
-                }
-            }
-            let status = child.wait().await?;
-            Ok::<(Option<String>, std::process::ExitStatus), std::io::Error>((result, status))
+        call: ProviderCall<'_>,
+    ) -> Result<crate::agents::RunRequest> {
+        let runner = crate::agents::RunnerId::parse(call.agent)
+            .ok_or_else(|| GenError::Api(format!("unknown runner: {}", call.agent)))?;
+        let route = crate::agents::Route {
+            runner,
+            model: crate::agents::effective_model(runner, call.model),
+            custom_command: call.custom_bin.into(),
         };
-
-        match tokio::time::timeout(timeout, read_fut).await {
-            Ok(Ok((Some(result), status))) if status.success() => {
-                self.log(format!("done: agent returned {} chars", result.len()));
-                Ok(result)
-            }
-            Ok(Ok((_, status))) => {
-                let err = err_task.await.unwrap_or_default();
-                self.log("fail: agent exited without a result".to_string());
-                Err(GenError::BadExit(
-                    status.code().unwrap_or(-1),
-                    err.chars().take(2000).collect(),
-                ))
-            }
-            Ok(Err(e)) => Err(GenError::Io(e)),
-            Err(_) => {
-                self.log(format!(
-                    "fail: agent timed out after {}s",
-                    timeout.as_secs()
-                ));
-                Err(GenError::Timeout(timeout))
-            }
-        }
+        let mut request = crate::agents::RunRequest::new(route, prompt);
+        request.json = matches!(call.wire, Wire::Json);
+        request.allow_web = call.web_tools;
+        request.timeout = call.timeout;
+        request.purpose = self.purpose.clone();
+        request.owner = self.owner.clone();
+        Ok(request)
     }
 
-    async fn run_codex(&self, codex_bin: &str, prompt: &str, timeout: Duration) -> Result<String> {
-        // codex exec streams event logs to stdout; --output-last-message writes
-        // ONLY the final assistant message to a file, which is what we parse.
-        let out_file = self.scratch_dir.join("codex-last.txt");
-        let _ = std::fs::remove_file(&out_file);
-        let mut cmd = Command::new(codex_bin);
-        cmd.arg("exec")
-            .arg("--skip-git-repo-check")
-            .arg("--color")
-            .arg("never")
-            .arg("--output-last-message")
-            .arg(&out_file)
-            .arg(prompt)
-            .current_dir(&self.scratch_dir)
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-        let stdout = run_capture(cmd, timeout).await?;
-        match std::fs::read_to_string(&out_file) {
-            Ok(s) if !s.trim().is_empty() => Ok(s),
-            _ => Ok(stdout), // fall back to stdout if the file wasn't written
-        }
-    }
-
-    /// cursor-agent -p --output-format text "<prompt>"  (needs auth or CURSOR_API_KEY)
-    async fn run_cursor(&self, bin: &str, prompt: &str, timeout: Duration) -> Result<String> {
-        let mut cmd = Command::new(bin);
-        cmd.arg("-p")
-            .arg("--output-format")
-            .arg("text")
-            .arg(prompt)
-            .current_dir(&self.scratch_dir)
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-        run_capture(cmd, timeout).await
-    }
-
-    /// gemini -p "<prompt>"  (text output by default)
-    async fn run_gemini(&self, bin: &str, prompt: &str, timeout: Duration) -> Result<String> {
-        let mut cmd = Command::new(bin);
-        cmd.arg("-p")
-            .arg(prompt)
-            .current_dir(&self.scratch_dir)
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-        run_capture(cmd, timeout).await
+    fn scoped(&self, purpose: &str) -> Self {
+        let agent = self.agent.lock().unwrap();
+        let model = self.model.lock().unwrap();
+        let custom = self.custom_bin.lock().unwrap();
+        let mut scoped = self.clone();
+        scoped.purpose = purpose.into();
+        scoped.agent = std::sync::Arc::new(std::sync::Mutex::new(agent.clone()));
+        scoped.model = std::sync::Arc::new(std::sync::Mutex::new(model.clone()));
+        scoped.custom_bin = std::sync::Arc::new(std::sync::Mutex::new(custom.clone()));
+        scoped
     }
 
     async fn repair_json_for<T: serde::de::DeserializeOwned>(
@@ -2543,6 +2183,7 @@ CURATED_LESSON:
         raw: &str,
         model: &str,
     ) -> Result<T> {
+        let scoped = self.scoped("json-repair");
         let truncated: String = raw.chars().take(60_000).collect();
         let prompt = format!(
             "The following response was supposed to be one RFC 8259 JSON object but is malformed. \
@@ -2551,7 +2192,7 @@ CURATED_LESSON:
              characters, and newlines inside strings. Output only the corrected bare JSON object with no markdown \
              fence or commentary.\n\nMALFORMED_RESPONSE:\n{truncated}"
         );
-        let out = self
+        let out = scoped
             .run_primary_for(
                 agent,
                 custom_bin,
@@ -2565,128 +2206,16 @@ CURATED_LESSON:
     }
 }
 
-fn deepseek_model() -> String {
-    std::env::var("DEEPSEEK_MODEL").unwrap_or_else(|_| "deepseek-v4-flash".into())
-}
-
-fn parse_deepseek_response(raw: &str) -> Result<String> {
-    #[derive(Deserialize)]
-    struct Message {
-        content: Option<String>,
-    }
-    #[derive(Deserialize)]
-    struct Choice {
-        message: Message,
-    }
-    #[derive(Deserialize)]
-    struct Response {
-        choices: Vec<Choice>,
-    }
-
-    let response: Response =
-        serde_json::from_str(raw).map_err(|e| GenError::Parse(e.to_string()))?;
-    response
-        .choices
-        .into_iter()
-        .find_map(|choice| choice.message.content)
-        .filter(|content| !content.trim().is_empty())
-        .ok_or_else(|| GenError::Parse("DeepSeek response contained no message content".into()))
-}
-
-async fn run_capture(mut cmd: Command, timeout: Duration) -> Result<String> {
-    let mut child = cmd.spawn().map_err(|e| {
-        if e.kind() == std::io::ErrorKind::NotFound {
-            GenError::NoBinary
-        } else {
-            GenError::Io(e)
-        }
-    })?;
-    let mut stdout = child.stdout.take().expect("piped stdout");
-    let mut stderr = child.stderr.take().expect("piped stderr");
-    let read_fut = async {
-        let mut out = String::new();
-        let mut err = String::new();
-        let _ = stdout.read_to_string(&mut out).await;
-        let _ = stderr.read_to_string(&mut err).await;
-        let status = child.wait().await?;
-        Ok::<(String, String, std::process::ExitStatus), std::io::Error>((out, err, status))
-    };
-    match tokio::time::timeout(timeout, read_fut).await {
-        Ok(Ok((out, err, status))) => {
-            if status.success() {
-                Ok(out)
-            } else {
-                Err(GenError::BadExit(
-                    status.code().unwrap_or(-1),
-                    err.chars().take(2000).collect(),
-                ))
-            }
-        }
-        Ok(Err(e)) => Err(GenError::Io(e)),
-        Err(_) => Err(GenError::Timeout(timeout)),
-    }
-}
-
-/// Extract a JSON object from raw model output: tries fenced ```json block, then
-/// first-{ to last-} slice, then the raw string itself.
+/// Recover JSON using the runner's balanced-value parser, including arrays and
+/// escaped braces in lesson markdown. Payload validation remains typed here.
 pub fn parse_json_payload<T: serde::de::DeserializeOwned>(raw: &str) -> Result<T> {
-    if let Some(start) = raw.find("```json") {
-        let after = &raw[start + 7..];
-        // Use the LAST closing fence: course markdown legitimately contains
-        // embedded ``` blocks inside the JSON string.
-        if let Some(end) = after.rfind("```") {
-            let candidate = after[..end].trim();
-            if let Ok(v) = serde_json::from_str::<T>(candidate) {
-                return Ok(v);
-            }
-        }
-        if let Some(end) = after.find("```") {
-            let candidate = after[..end].trim();
-            if let Ok(v) = serde_json::from_str::<T>(candidate) {
-                return Ok(v);
-            }
-        }
-    }
-    if let (Some(start), Some(end)) = (raw.find('{'), raw.rfind('}')) {
-        if end > start {
-            if let Ok(v) = serde_json::from_str::<T>(&raw[start..=end]) {
-                return Ok(v);
-            }
-        }
-    }
-    serde_json::from_str::<T>(raw.trim()).map_err(|e| {
-        GenError::Parse(format!(
-            "{e}; head: {}",
-            raw.chars().take(300).collect::<String>()
-        ))
-    })
+    crate::agents::parse_json(raw)
+        .ok_or_else(|| GenError::Parse("no complete JSON value in the agent response".into()))
+        .and_then(|value| serde_json::from_value(value).map_err(|e| GenError::Parse(e.to_string())))
 }
 
-/// Resolve a binary by name: common install dirs first, then a login-shell
-/// `which` (launchd has no nvm/PATH). Returns None if not found.
 pub fn resolve_on_path(name: &str) -> Option<String> {
-    let home = std::env::var("HOME").unwrap_or_default();
-    let candidates = [
-        format!("{home}/.local/bin/{name}"),
-        format!("/opt/homebrew/bin/{name}"),
-        format!("/usr/local/bin/{name}"),
-    ];
-    for c in &candidates {
-        if std::path::Path::new(c).exists() {
-            return Some(c.clone());
-        }
-    }
-    let out = std::process::Command::new("zsh")
-        .args(["-lc", &format!("which {name}")])
-        .output()
-        .ok()?;
-    if out.status.success() {
-        let p = String::from_utf8_lossy(&out.stdout).trim().to_string();
-        if !p.is_empty() && std::path::Path::new(&p).exists() {
-            return Some(p);
-        }
-    }
-    None
+    crate::agents::process::resolve(name)
 }
 
 fn fallback_sources(focus: &str) -> &'static [&'static str] {
@@ -3072,7 +2601,7 @@ mod quality_gate_tests {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod generation_policy_tests {
     use super::{
         CourseRequest, Exercise, ExitCheck, GenError, GeneratedCourse, GenerationProfile,
@@ -3646,7 +3175,18 @@ mod exercise_tests {
 
 #[cfg(test)]
 mod deepseek_tests {
-    use super::parse_deepseek_response;
+    fn parse_deepseek_response(raw: &str) -> super::Result<String> {
+        let request = crate::agents::RunRequest::new(
+            crate::agents::Route {
+                runner: crate::agents::RunnerId::DeepseekApi,
+                model: "fixture".into(),
+                custom_command: String::new(),
+            },
+            "fixture",
+        );
+        crate::agents::adapters::parse_compatible(serde_json::from_str(raw).unwrap(), &request)
+            .map(|result| result.text)
+    }
 
     #[test]
     fn extracts_chat_completion_content() {

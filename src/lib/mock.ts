@@ -1,3 +1,5 @@
+import { previewConfiguration, savePreviewConfiguration, previewRunners, previewModels, previewLocal, rememberPreviewModel, desktopRequired } from './features/runners/preview';
+import type { AgentPolicy, RunnerId } from './contracts/agents';
 import type { AssessmentRoundId } from './contracts/assessments';
 import { previewEnrollmentOptions, previewEnrollmentDraft, savePreviewEnrollmentDraft } from './enrollment-preview';
 import { getPreviewPlacement, startPreviewPlacement, savePreviewPlacement, submitPreviewPlacement, continuePreviewPlacement, finishPreviewPlacement, recommendPreviewPath } from './placement-preview';
@@ -783,6 +785,8 @@ function savePreviewQuiz() {
   try { globalThis.localStorage?.setItem('principia:preview-primary-round-v1', JSON.stringify(previewQuiz)); } catch { /* In-memory preview still works. */ }
 }
 
+let previewFreeOnly = true;
+
 export const mockApi = {
   getEnrollmentOptions: async (courseId: ClassroomSubjectId) => previewEnrollmentOptions(courseId),
   getPlacementCheck: getPreviewPlacement,
@@ -796,7 +800,29 @@ export const mockApi = {
   saveEnrollmentDraft: async (input: SaveEnrollmentDraft) => savePreviewEnrollmentDraft(input),
   getCatalog: async () => [...COURSES],
   getAppState: async () => appState(),
-  checkAgent: async () => true,
+  checkAgent: async () => false,
+  getRunnerConfiguration: async (runner: string) => previewConfiguration(runner),
+  saveRunnerConfiguration: async (configuration: import('./contracts/agents').RunnerConfiguration) => savePreviewConfiguration(configuration),
+  listAgentRunners: async () => previewRunners(),
+  getRunnerModels: async (runner: string, _refresh = false) => previewModels(runner),
+  setRunnerKey: desktopRequired,
+  getLocalModels: async () => previewLocal(),
+  getLocalPulls: async () => [],
+  installLocalRunner: desktopRequired,
+  startLocalRunner: desktopRequired,
+  pullLocalModel: desktopRequired,
+  removeLocalModel: desktopRequired,
+  selectRunner: async (agent: string, model: string, customBin: string) => {
+    rememberPreviewModel(mockAgent, mockModel);
+    mockAgent = agent as AppStateView['agent']; mockModel = model; mockCustomBin = customBin;
+    rememberPreviewModel(agent, model);
+  },
+  getOpenrouterFreeOnly: async () => previewFreeOnly,
+  setOpenrouterFreeOnly: async (value: boolean) => { previewFreeOnly = value; },
+  testAgentConnection: async (agent = 'claude', _customBin = '', model = 'default') => ({ runner: previewRunners().find(r => r.provider === agent || r.id === agent)?.id ?? 'custom-cli' as RunnerId, model, ok: false, detail: 'Connection tests run in the desktop app. This browser preview does not contact providers.', duration_ms: 0 }),
+  getAgentActivity: async () => [],
+  getAgentPolicy: async (): Promise<AgentPolicy> => JSON.parse(localStorage.getItem('principia.preview.agent-policy') ?? '{"fallback_agent":null,"fallback_model":"default","monthly_budget_usd":0}'),
+  setAgentPolicy: async (policy: AgentPolicy) => { localStorage.setItem('principia.preview.agent-policy', JSON.stringify(policy)); },
   completeSetup: async () => {
     setupCompleted = true;
     return appState();

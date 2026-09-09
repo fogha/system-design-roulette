@@ -64,7 +64,7 @@ export function savePreviewEnrollmentDraft(input: SaveEnrollmentDraft): Enrollme
   }
   const { session_minutes: minutes, weekly_minutes: weekly } = config.pace;
   if (!Number.isInteger(minutes) || minutes < 10 || minutes > 120 || (weekly !== null && (!Number.isInteger(weekly) || weekly < minutes || weekly > 10080))) throw new Error('Choose a valid study pace.');
-  if (!['claude', 'codex', 'cursor', 'gemini', 'deepseek', 'custom'].includes(config.tutor.provider) || !config.tutor.model.trim() || byteLength(config.tutor.model) > 200 || (config.tutor.provider === 'custom' && !config.tutor.custom_agent_bin?.trim())) throw new Error('Choose a provider and its model.');
+  if (!['claude', 'codex', 'cursor', 'gemini', 'deepseek', 'custom', 'anthropic', 'openai', 'google', 'openrouter', 'groq', 'mistral', 'ollama'].includes(config.tutor.provider) || !config.tutor.model.trim() || byteLength(config.tutor.model) > 200 || (config.tutor.provider === 'custom' && !config.tutor.custom_agent_bin?.trim())) throw new Error('Choose a provider and its model.');
   if (config.tutor.custom_agent_bin !== null && (byteLength(config.tutor.custom_agent_bin) > 4096 || config.tutor.custom_agent_bin.includes('\0'))) throw new Error('Invalid custom executable path.');
   const existing = previewEnrollmentDraft(input.course.course_id);
   if (input.id && (!existing || input.id !== existing.id)) throw new Error('Enrollment draft not found.');

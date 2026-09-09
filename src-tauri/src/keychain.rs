@@ -1,13 +1,7 @@
-//! Local storage for provider API keys (currently just DeepSeek) so the
-//! installed app doesn't require launching from a shell with the key
-//! exported. Keys never touch the SQLite config table or the webview —
-//! only this module's callers (`generator::run_deepseek`) read them, and
-//! only a configured/not-configured boolean is ever sent to the frontend.
-//!
-//! macOS-only: backed by the login Keychain via the `security` CLI. On
-//! other platforms, only the documented environment-variable path applies
-//! (see README) — `set_secret` reports that explicitly rather than
-//! silently discarding the key.
+//! Provider keys stay outside SQLite and are never returned to the webview.
+//! Native runner adapters read them; the UI receives configured/not-configured.
+//! macOS uses the login Keychain. Other platforms accept environment keys and
+//! report in-app storage as unavailable instead of discarding a saved key.
 
 #[cfg(target_os = "macos")]
 const SERVICE: &str = "system-design-roulette";

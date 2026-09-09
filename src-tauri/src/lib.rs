@@ -1,3 +1,4 @@
+pub mod agents;
 pub mod audio;
 pub mod catalog;
 pub mod classroom;
@@ -44,7 +45,7 @@ fn resolve_claude_bin() -> String {
 
 fn resolve_codex_bin(conn: &rusqlite::Connection) -> Option<String> {
     match std::env::var("SDR_CODEX_BIN").as_deref() {
-        Ok("none") => return None,
+        Ok("none") => return Some("none".into()),
         Ok(p) => return Some(p.to_string()),
         _ => {}
     }
@@ -53,18 +54,9 @@ fn resolve_codex_bin(conn: &rusqlite::Connection) -> Option<String> {
             return Some(saved);
         }
     }
-    let out = std::process::Command::new("zsh")
-        .args(["-lc", "which codex"])
-        .output()
-        .ok()?;
-    if out.status.success() {
-        let path = String::from_utf8_lossy(&out.stdout).trim().to_string();
-        if !path.is_empty() {
-            let _ = db::set_config(conn, "codex_bin", &path);
-            return Some(path);
-        }
-    }
-    None
+    let path = agents::process::resolve("codex")?;
+    let _ = db::set_config(conn, "codex_bin", &path);
+    Some(path)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -140,7 +132,7 @@ pub fn run() {
                     }
                 });
             }
-            let generator = generator::Generator::new(
+            let mut generator = generator::Generator::new(
                 resolve_claude_bin(),
                 codex_bin,
                 data_dir.join("scratch"),
@@ -149,6 +141,7 @@ pub fn run() {
                 custom_bin,
                 Some(log_tx),
             );
+            generator.runner.database = Some(data_dir.join("roulette.db"));
             app.manage(AppState {
                 db: db::Db(Mutex::new(conn)),
                 generator,
@@ -275,6 +268,24 @@ pub fn run() {
             commands::placement::finish_placement_check,
             commands::placement::get_path_recommendation,
             commands::check_agent,
+            commands::agents::list_agent_runners,
+            commands::agents::get_runner_models,
+            commands::agents::get_runner_configuration,
+            commands::agents::save_runner_configuration,
+            commands::agents::set_runner_key,
+            commands::agents::get_local_models,
+            commands::agents::get_local_pulls,
+            commands::agents::install_local_runner,
+            commands::agents::start_local_runner,
+            commands::agents::pull_local_model,
+            commands::agents::remove_local_model,
+            commands::agents::select_runner,
+            commands::agents::set_openrouter_free_only,
+            commands::agents::get_openrouter_free_only,
+            commands::agents::test_agent_connection,
+            commands::agents::get_agent_activity,
+            commands::agents::get_agent_policy,
+            commands::agents::set_agent_policy,
             commands::complete_setup,
             commands::update_schedule,
             commands::get_curriculum_map,
