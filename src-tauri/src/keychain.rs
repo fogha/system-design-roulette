@@ -9,8 +9,10 @@
 //! (see README) — `set_secret` reports that explicitly rather than
 //! silently discarding the key.
 
+#[cfg(target_os = "macos")]
 const SERVICE: &str = "system-design-roulette";
 
+#[cfg(any(target_os = "macos", test))]
 fn account_for(name: &str) -> String {
     format!("{name}_api_key")
 }
@@ -103,10 +105,6 @@ mod imp {
              environment variable instead (see README)"
                 .into(),
         )
-    }
-
-    pub fn delete_secret(_name: &str) -> Result<(), String> {
-        Ok(())
     }
 }
 

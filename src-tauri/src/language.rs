@@ -606,6 +606,12 @@ pub fn configure_program(
         )
         .map_err(|error| error.to_string())?;
     let existing = program_row(conn, &input.language)?;
+    if encounters > 0 && input.start_level != existing.start_level {
+        return Err(
+            "the starting level cannot change after study begins; existing progress is preserved"
+                .into(),
+        );
+    }
     if encounters > 0 && level_index(&input.target_level) < level_index(&existing.current_level) {
         return Err("target level cannot be below the demonstrated current level".into());
     }
@@ -637,6 +643,12 @@ pub fn configure_program(
         ],
     )
     .map_err(|error| error.to_string())?;
+    if active == 0
+        && encounters > 0
+        && level_index(&input.target_level) > level_index(&existing.target_level)
+    {
+        maybe_advance_level(conn, &input.language, &current_level)?;
+    }
     Ok(())
 }
 
@@ -1458,6 +1470,10 @@ fn maybe_advance_level(
     language: &str,
     current_level: &str,
 ) -> Result<Option<String>> {
+    let program = program_row(conn, language)?;
+    if level_index(current_level) >= level_index(&program.target_level) {
+        return Ok(None);
+    }
     let curriculum = curriculum(language)?;
     let level = level_spec(curriculum, current_level)?;
     let (completed, required) = level_progress(conn, language, level)?;
@@ -1488,6 +1504,10 @@ pub fn submit_session(
     input: &SubmitSessionInput,
     today: &str,
 ) -> Result<LanguageSessionResult> {
+    let transaction = conn
+        .unchecked_transaction()
+        .map_err(|error| error.to_string())?;
+    let conn = &*transaction;
     let row = conn
         .query_row(
             "SELECT language, level, unit_slug, phase, status, lesson_json
@@ -1619,7 +1639,7 @@ pub fn submit_session(
         None
     };
     let current_level = program_row(conn, &language)?.current_level;
-    Ok(LanguageSessionResult {
+    let result = LanguageSessionResult {
         session_id: input.session_id,
         passed,
         score,
@@ -1627,7 +1647,9 @@ pub fn submit_session(
         level_advanced_to,
         current_level,
         progress: program_view(conn, &language, today)?,
-    })
+    };
+    transaction.commit().map_err(|error| error.to_string())?;
+    Ok(result)
 }
 
 pub fn now_iso() -> String {

@@ -390,6 +390,16 @@
                     <small>{daySummary(slot.weekdays)}</small>
                     {#if slot.owed}<em>due</em>{/if}
                   </button>
+                  {#if slot.owed}
+                    <button
+                      class="text-action"
+                      type="button"
+                      disabled={!program.enabled || !!running || primaryOwed}
+                      onclick={() => app.startClass(program.subject_id, slot.id, program.completed)}
+                    >
+                      Start scheduled class
+                    </button>
+                  {/if}
                   <button
                     class="slot-delete"
                     type="button"
@@ -449,7 +459,7 @@
                 onclick={() =>
                   app.startClass(program.subject_id, null, program.completed)}
               >
-                {program.completed ? 'revisit a module' : 'start class'}
+                {program.completed ? 'revisit a module' : 'learn now'}
               </button>
               <button class="power-button mono" type="button" onclick={() => toggleProgram(program)}>
                 {program.enabled ? 'disable' : 'enable'}

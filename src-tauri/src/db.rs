@@ -289,6 +289,7 @@ CREATE TABLE IF NOT EXISTS mastery (
     score_ema REAL NOT NULL DEFAULT 0,
     encounters INTEGER NOT NULL DEFAULT 0,
     last_seen_date TEXT,
+    last_assessed_date TEXT,
     next_review_date TEXT,
     review_interval_days INTEGER NOT NULL DEFAULT 7,
     teacher_notes TEXT NOT NULL DEFAULT ''
@@ -456,6 +457,7 @@ pub fn open(path: &PathBuf) -> Result<Connection> {
         "ALTER TABLE concepts ADD COLUMN focus TEXT NOT NULL DEFAULT 'system-design'",
         "ALTER TABLE concepts ADD COLUMN brief_json TEXT NOT NULL DEFAULT '{}'",
         "ALTER TABLE sessions ADD COLUMN focus TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE mastery ADD COLUMN last_assessed_date TEXT",
         "ALTER TABLE exit_questions ADD COLUMN round INTEGER NOT NULL DEFAULT 1",
         "ALTER TABLE exit_questions ADD COLUMN section TEXT NOT NULL DEFAULT ''",
         "ALTER TABLE exit_questions ADD COLUMN learning_objective TEXT NOT NULL DEFAULT ''",
@@ -473,6 +475,7 @@ pub fn open(path: &PathBuf) -> Result<Connection> {
     }
     migrate_course_sources(&conn)?;
     migrate_exercise_drafts(&conn)?;
+    conn.execute_batch("PRAGMA foreign_keys=ON;")?;
     Ok(conn)
 }
 

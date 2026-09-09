@@ -45,6 +45,83 @@ fn configure(conn: &rusqlite::Connection, subject_id: &str, agent: &str) {
 }
 
 #[test]
+fn planned_time_collision_never_changes_a_manual_slot_or_program() {
+    let conn = test_db();
+    configure(&conn, "german", "claude");
+    let manual_id = classroom::upsert_slot(
+        &conn,
+        &UpsertClassroomSlotInput {
+            id: None,
+            subject_id: "german".into(),
+            hour: 7,
+            minute: 0,
+            weekdays: vec![7],
+            enabled: true,
+        },
+    )
+    .unwrap();
+    for commit in [false, true] {
+        let result = classroom::plan_schedule(
+            &conn,
+            &PlanClassroomScheduleInput {
+                subject_id: "german".into(),
+                learning_goal: "must not replace the old goal".into(),
+                target_weekly_minutes: 90,
+                commit,
+                windows: vec![AvailabilityWindowInput {
+                    weekdays: vec![1, 3, 5],
+                    start_hour: 7,
+                    start_minute: 0,
+                    end_hour: 8,
+                    end_minute: 0,
+                }],
+            },
+            "2026-07-21",
+        );
+        assert!(result.unwrap_err().contains("manual class"));
+        let slot = classroom::slot_views(&conn, "2026-07-21", false)
+            .unwrap()
+            .into_iter()
+            .find(|s| s.id == manual_id)
+            .unwrap();
+        assert_eq!(slot.source, "manual");
+        assert_eq!(slot.weekdays, vec![7]);
+        let goal: String = conn
+            .query_row(
+                "SELECT learning_goal FROM classroom_programs WHERE subject_id = 'german'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!(goal.is_empty());
+    }
+}
+
+#[test]
+fn restarting_does_not_recreate_a_deleted_imported_language_schedule() {
+    let conn = test_db();
+    // Simulate an installation that has not performed the legacy import yet.
+    conn.execute(
+        "DELETE FROM config WHERE key = 'migration:classroom_language_slots:v1'",
+        [],
+    )
+    .unwrap();
+    conn.execute("INSERT INTO language_schedule_slots (language, hour, minute, weekdays_json, enabled, created_at) VALUES ('german', 7, 0, '[1,2,3,4,5]', 1, 'now')", []).unwrap();
+    classroom::initialize(&conn).unwrap();
+    let slot = classroom::slot_views(&conn, "2026-07-21", false)
+        .unwrap()
+        .into_iter()
+        .find(|s| s.subject_id == "german")
+        .unwrap();
+    classroom::delete_slot(&conn, slot.id).unwrap();
+    classroom::initialize(&conn).unwrap();
+    assert!(classroom::slot_views(&conn, "2026-07-21", false)
+        .unwrap()
+        .iter()
+        .all(|s| s.id != slot.id));
+}
+
+#[test]
 fn classroom_seeds_every_subject_with_an_isolated_prompt_contract() {
     let conn = test_db();
     let programs = classroom::program_views(&conn, "2026-07-21").unwrap();

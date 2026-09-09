@@ -375,6 +375,95 @@ fn complete_level(conn: &rusqlite::Connection, language: &str, level: &str) {
     }
 }
 
+#[test]
+fn completing_each_target_stops_there_and_keeps_settings_editable() {
+    for target in ["A1", "A2", "B1", "B2"] {
+        let conn = test_db();
+        let mut settings = ConfigureProgramInput {
+            language: "german".into(),
+            enabled: true,
+            start_level: target.into(),
+            target_level: target.into(),
+            weekly_minutes: 210,
+            session_minutes: 30,
+        };
+        language::configure_program(&conn, &settings, "2026-07-21").unwrap();
+        complete_level(&conn, "german", target);
+        for strand in language::STRANDS {
+            conn.execute("INSERT INTO language_skill_scores (language, strand, score_ema, encounters) VALUES ('german', ?1, 0.9, 5)", [strand]).unwrap();
+        }
+        let lesson = language::start_session(&conn, "german", "2026-07-21", true).unwrap();
+        pass_session(&conn, lesson.session_id, "2026-07-21");
+        let progress = language::program_view(&conn, "german", "2026-07-21").unwrap();
+        assert_eq!(progress.current_level, target);
+        settings.enabled = false;
+        language::configure_program(&conn, &settings, "2026-07-21").unwrap();
+        if target == "A1" {
+            settings.enabled = true;
+            settings.target_level = "A2".into();
+            language::configure_program(&conn, &settings, "2026-07-21").unwrap();
+            let next = language::start_session(&conn, "german", "2026-07-22", false).unwrap();
+            assert_eq!(next.level, "A2");
+        }
+    }
+}
+
+#[test]
+fn invalid_last_answer_does_not_leave_partial_language_evidence() {
+    let conn = test_db();
+    enable_german(&conn);
+    let lesson = language::start_session(&conn, "german", "2026-07-21", false).unwrap();
+    let mut answers = correct_answers(&conn, lesson.session_id);
+    *answers.last_mut().unwrap() = usize::MAX;
+    let result = language::submit_session(
+        &conn,
+        &SubmitSessionInput {
+            session_id: lesson.session_id,
+            answers,
+            writing_response: "draft".into(),
+            speaking_completed: false,
+            listened: false,
+            confidence: 3,
+        },
+        "2026-07-21",
+    );
+    assert!(result.is_err());
+    let evidence: i64 = conn
+        .query_row("SELECT COUNT(*) FROM language_skill_scores", [], |r| {
+            r.get(0)
+        })
+        .unwrap();
+    assert_eq!(evidence, 0);
+    pass_session(&conn, lesson.session_id, "2026-07-21");
+}
+
+#[test]
+fn changing_legacy_start_after_learning_cannot_rewrite_the_progress_baseline() {
+    let conn = test_db();
+    enable_german(&conn);
+    let lesson = language::start_session(&conn, "german", "2026-07-21", false).unwrap();
+    pass_session(&conn, lesson.session_id, "2026-07-21");
+    let result = language::configure_program(
+        &conn,
+        &ConfigureProgramInput {
+            language: "german".into(),
+            enabled: true,
+            start_level: "A2".into(),
+            target_level: "A2".into(),
+            weekly_minutes: 210,
+            session_minutes: 30,
+        },
+        "2026-07-21",
+    );
+    assert!(result.is_err());
+    assert_eq!(
+        language::program_view(&conn, "german", "2026-07-21")
+            .unwrap()
+            .start_level,
+        "A1"
+    );
+}
+
 fn wrong_answers(conn: &rusqlite::Connection, session_id: i64) -> Vec<usize> {
     let lesson_json: String = conn
         .query_row(

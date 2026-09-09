@@ -20,6 +20,7 @@
    */
   import { onDestroy } from 'svelte';
   import { isTauri } from '../ipc';
+  import { chunkText } from '../audio-chunks';
   import { SkipBack, SkipForward, Play, Pause, GraduationCap, Presentation, AudioLines } from 'lucide-svelte';
 
   interface Line {
@@ -33,7 +34,6 @@
   let playing = $state(false);
   let rate = $state(1.0);
   const RATES = [0.8, 1.0, 1.2, 1.5];
-  const MAX_CHUNK_CHARS = 180;
 
   let audioEl: HTMLAudioElement | null = null;
   let convertFileSrc: ((p: string) => string) | null = null;
@@ -94,42 +94,6 @@
       });
     }
     return voicesPromise;
-  }
-
-  /** Split into engine-safe pieces on sentence boundaries (falling back to
-   * word boundaries for run-on sentences) so no single utterance is long
-   * enough to trigger the long-utterance stall bug. */
-  function chunkText(text: string, maxLen = MAX_CHUNK_CHARS): string[] {
-    const sentences = text.match(/[^.!?]+[.!?]*\s*/g) ?? [text];
-    const chunks: string[] = [];
-    let current = '';
-    for (const raw of sentences) {
-      const sentence = raw.trim();
-      if (!sentence) continue;
-      if (sentence.length > maxLen) {
-        let piece = '';
-        for (const word of sentence.split(' ')) {
-          const next = piece ? `${piece} ${word}` : word;
-          if (next.length > maxLen && piece) {
-            chunks.push(piece);
-            piece = word;
-          } else {
-            piece = next;
-          }
-        }
-        if (piece) chunks.push(piece);
-        continue;
-      }
-      const next = current ? `${current} ${sentence}` : sentence;
-      if (next.length > maxLen && current) {
-        chunks.push(current);
-        current = sentence;
-      } else {
-        current = next;
-      }
-    }
-    if (current) chunks.push(current);
-    return chunks.length > 0 ? chunks : [text];
   }
 
   /** ~14 chars/sec at 1x is a normal speaking pace; give generous headroom

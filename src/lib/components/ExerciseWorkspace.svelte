@@ -1,5 +1,6 @@
 <script lang="ts">
   import { api, type ExerciseOwner, type ExerciseView } from '../ipc';
+  import { createDraftSaver, type SaveStatus } from '../draft-save';
   import Markdown from './Markdown.svelte';
   import { Lightbulb, Copy, Check, RotateCcw } from 'lucide-svelte';
 
@@ -15,12 +16,12 @@
   let reflection = $state('');
   let completed = $state(false);
   let revealedHints = $state(0);
-  let saveStatus = $state<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  let saveStatus = $state<SaveStatus>('idle');
   let completionStatus = $state<'idle' | 'saving' | 'saved' | 'error'>('idle');
   let completionError = $state('');
   let copied = $state(false);
-  let loadedFor = -1;
-  let saveTimer: ReturnType<typeof setTimeout> | undefined;
+  let saver: ReturnType<typeof createDraftSaver> | undefined;
+  let loadVersion = 0;
   const owner: ExerciseOwner = $derived(
     classroomSessionId !== undefined
       ? { classroom_session_id: classroomSessionId }
@@ -28,9 +29,17 @@
   );
 
   $effect(() => {
-    const id = classroomSessionId ?? courseId ?? -1;
-    if (id === loadedFor) return;
-    loadedFor = id;
+    const capturedOwner = { ...owner };
+    const ownerKey = classroomSessionId !== undefined
+      ? `classroom:${classroomSessionId}` : `course:${courseId}`;
+    const version = ++loadVersion;
+    let disposed = false;
+    const currentSaver = createDraftSaver(
+      ownerKey,
+      (text) => api.saveExerciseDraft(capturedOwner, text),
+      (status) => { if (!disposed) saveStatus = status; },
+    );
+    saver = currentSaver;
     loading = true;
     loadError = '';
     exercise = null;
@@ -38,36 +47,33 @@
     saveStatus = 'idle';
     completionStatus = 'idle';
     completionError = '';
-    api
-      .getExercise(owner)
+    currentSaver.flush()
+      .then(() => api.getExercise(capturedOwner))
       .then((e) => {
+        if (disposed) return;
         exercise = e;
-        draft = e?.draft ?? e?.starter_code ?? '';
+        const recovered = currentSaver.recoveredDraft();
+        draft = recovered ?? e?.draft ?? e?.starter_code ?? '';
         reflection = e?.reflection ?? '';
         completed = e?.completed ?? false;
         loading = false;
+        if (recovered !== null && e) currentSaver.schedule(recovered);
       })
       .catch((e) => {
+        if (disposed) return;
         loadError = String(e);
         loading = false;
       });
+    return () => {
+      disposed = true;
+      void currentSaver.flush();
+      if (version === loadVersion) saver = undefined;
+    };
   });
-
-  $effect(() => () => clearTimeout(saveTimer));
 
   function scheduleSave() {
     if (!exercise) return;
-    saveStatus = 'saving';
-    clearTimeout(saveTimer);
-    const text = draft;
-    saveTimer = setTimeout(async () => {
-      try {
-        await api.saveExerciseDraft(owner, text);
-        saveStatus = 'saved';
-      } catch {
-        saveStatus = 'error';
-      }
-    }, 700);
+    saver?.schedule(draft);
   }
 
   function onDraftInput(e: Event) {
@@ -98,6 +104,9 @@
 
   async function saveCompletion(nextCompleted: boolean) {
     if (!exercise) return;
+    const capturedOwner = { ...owner };
+    const version = loadVersion;
+    const savedReflection = reflection;
     completionError = '';
     if (nextCompleted && reflection.trim().split(/\s+/).filter(Boolean).length < 5) {
       completionStatus = 'error';
@@ -106,10 +115,15 @@
     }
     completionStatus = 'saving';
     try {
-      await api.saveExerciseCompletion(owner, nextCompleted, reflection);
+      await saver?.flush();
+      if (version !== loadVersion) return;
+      if (saveStatus === 'error') throw new Error('Save the exercise draft before marking it complete.');
+      await api.saveExerciseCompletion(capturedOwner, nextCompleted, savedReflection);
+      if (version !== loadVersion) return;
       completed = nextCompleted;
       completionStatus = 'saved';
     } catch (e) {
+      if (version !== loadVersion) return;
       completionStatus = 'error';
       completionError = String(e);
     }
@@ -161,9 +175,12 @@
             : saveStatus === 'saved'
               ? 'saved'
               : saveStatus === 'error'
-                ? 'save failed — will retry on next edit'
+                ? 'save failed — recovery copy retained'
                 : ''}
         </span>
+        {#if saveStatus === 'error'}
+          <button type="button" onclick={() => saver?.flush()}>Retry save</button>
+        {/if}
       </div>
       <textarea
         class="draft-input mono"

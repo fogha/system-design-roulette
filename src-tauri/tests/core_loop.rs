@@ -34,6 +34,233 @@ fn session_with_focus(date: &str, focus: &str) -> Session {
     }
 }
 
+fn app_state(conn: rusqlite::Connection) -> system_design_roulette_lib::state::AppState {
+    use std::sync::{
+        atomic::{AtomicBool, AtomicI64},
+        Arc, Mutex,
+    };
+    use system_design_roulette_lib::{generator::Generator, state::AppState};
+    let data_dir = std::env::temp_dir().join(format!(
+        "principia-state-{}-{}",
+        std::process::id(),
+        COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+    ));
+    AppState {
+        db: db::Db(Mutex::new(conn)),
+        generator: Generator::new(
+            "/missing-test-provider".into(),
+            None,
+            data_dir.clone(),
+            Arc::new(Mutex::new("sonnet".into())),
+            Arc::new(Mutex::new("claude".into())),
+            Arc::new(Mutex::new(String::new())),
+            None,
+        ),
+        data_dir,
+        locked: AtomicBool::new(false),
+        reading_remaining: AtomicI64::new(0),
+        timer_running: AtomicBool::new(false),
+        timer_paused: AtomicBool::new(false),
+        debug_day: true,
+        escape_failures: Mutex::new(Vec::new()),
+        prev_muted: Mutex::new(None),
+        frontend_ready: AtomicBool::new(false),
+        gen_notify: tokio::sync::Notify::new(),
+        chat_threads: Mutex::new(Default::default()),
+    }
+}
+
+#[tokio::test]
+async fn fresh_session_selects_focus_and_plans_before_choosing_its_first_stage() {
+    use system_design_roulette_lib::session;
+    let state = app_state(test_db());
+    let question = {
+        let conn = state.db.0.lock().unwrap();
+        let concept = db::all_concepts(&conn, "javascript").unwrap()[0].clone();
+        let course = db::insert_course(
+            &conn,
+            &state.yesterday(),
+            concept.id,
+            "# Prior lesson",
+            "[]",
+            "fallback",
+        )
+        .unwrap();
+        db::insert_question(
+            &conn,
+            course,
+            "Recall the mechanism",
+            "mcq",
+            Some(r#"["A","B"]"#),
+            "A",
+            "A follows the mechanism",
+        )
+        .unwrap()
+    };
+    let started = session::start_session(&state, Some("javascript"))
+        .await
+        .unwrap();
+    assert_eq!(started.current_step, "quiz");
+    assert_eq!(started.focus, "javascript");
+    assert_eq!(started.status, "in_progress");
+    let conn = state.db.0.lock().unwrap();
+    let shown = session::questions_for_today(&conn, &state.today(), &state.yesterday()).unwrap();
+    assert_eq!(
+        shown.iter().map(|q| q.id).collect::<Vec<_>>(),
+        vec![question]
+    );
+}
+
+#[tokio::test]
+async fn seventh_completed_session_schedules_retrieval_before_activation() {
+    use system_design_roulette_lib::{mastery, session};
+    let state = app_state(test_db());
+    {
+        let conn = state.db.0.lock().unwrap();
+        let today = chrono::NaiveDate::parse_from_str(&state.today(), "%Y-%m-%d").unwrap();
+        for (index, concept) in db::all_concepts(&conn, "javascript")
+            .unwrap()
+            .iter()
+            .take(7)
+            .enumerate()
+        {
+            let date = (today - chrono::Duration::days(index as i64 + 1)).to_string();
+            let mut completed = session_with_focus(&date, "javascript");
+            completed.status = "completed".into();
+            completed.current_step = "done".into();
+            db::upsert_session(&conn, &completed).unwrap();
+            mastery::record_quiz_outcome(&conn, concept.id, &date, 1.0).unwrap();
+            let course =
+                db::insert_course(&conn, &date, concept.id, "# Prior lesson", "[]", "fallback")
+                    .unwrap();
+            db::insert_question(
+                &conn,
+                course,
+                "Recall",
+                "mcq",
+                Some(r#"["A","B"]"#),
+                "A",
+                "Reason",
+            )
+            .unwrap();
+        }
+    }
+    let started = session::start_session(&state, Some("javascript"))
+        .await
+        .unwrap();
+    assert_eq!(started.session_type, "pop_quiz");
+    assert_eq!(started.current_step, "quiz");
+    assert!(started.plan_reason.contains("weekly retrieval"));
+    let resumed = session::start_session(&state, Some("typescript"))
+        .await
+        .unwrap();
+    assert_eq!(resumed.focus, "javascript");
+    assert_eq!(resumed.session_type, "pop_quiz");
+}
+
+#[test]
+fn review_round_survives_history_changes_and_a_database_reopen() {
+    use system_design_roulette_lib::{mastery, session};
+    let conn = test_db();
+    let concept = db::all_concepts(&conn, "javascript").unwrap()[0].clone();
+    let older = db::insert_course(
+        &conn,
+        "2026-07-01",
+        concept.id,
+        "# Old lesson",
+        "[]",
+        "fallback",
+    )
+    .unwrap();
+    for index in 0..8 {
+        let id = db::insert_question(
+            &conn,
+            older,
+            &format!("Review {index}"),
+            "mcq",
+            Some(r#"["A","B"]"#),
+            "A",
+            "Reason",
+        )
+        .unwrap();
+        db::record_attempt(
+            &conn,
+            &Attempt {
+                question_id: id,
+                session_date: "2026-07-02".into(),
+                user_answer: "A".into(),
+                correct: true,
+                grader_feedback: String::new(),
+            },
+        )
+        .unwrap();
+    }
+    mastery::record_quiz_outcome(&conn, concept.id, "2026-07-02", 0.2).unwrap();
+    let recent = db::insert_course(
+        &conn,
+        "2026-07-20",
+        concept.id,
+        "# Recent lesson",
+        "[]",
+        "fallback",
+    )
+    .unwrap();
+    db::insert_question(
+        &conn,
+        recent,
+        "Fresh",
+        "mcq",
+        Some(r#"["A","B"]"#),
+        "A",
+        "Reason",
+    )
+    .unwrap();
+    db::upsert_session(&conn, &session_with_focus("2026-07-21", "javascript")).unwrap();
+    let shown = session::questions_for_today(&conn, "2026-07-21", "2026-07-20").unwrap();
+    assert_eq!(shown.len(), 3);
+    let snapshot = serde_json::to_value(shown).unwrap();
+    conn.execute(
+        "UPDATE questions SET correct_answer = 'B', prompt = 'Changed source'",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "UPDATE mastery SET state = 'mastered', next_review_date = '2027-01-01'",
+        [],
+    )
+    .unwrap();
+    let path: String = conn
+        .query_row(
+            "SELECT file FROM pragma_database_list WHERE name = 'main'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    drop(conn);
+    let reopened = db::open(&std::path::PathBuf::from(&path)).unwrap();
+    let graded = session::questions_for_today(&reopened, "2026-07-21", "2026-07-20").unwrap();
+    assert_eq!(serde_json::to_value(graded).unwrap(), snapshot);
+}
+
+#[test]
+fn reading_does_not_replace_the_previous_assessment_date_or_inflate_retention() {
+    use system_design_roulette_lib::mastery;
+    let conn = test_db();
+    let id = db::all_concepts(&conn, "javascript").unwrap()[0].id;
+    mastery::record_quiz_outcome(&conn, id, "2026-07-01", 1.0).unwrap();
+    mastery::record_course_read(&conn, id, "2026-07-10").unwrap();
+    let after_reading = mastery::get(&conn, id).unwrap();
+    assert_eq!(
+        after_reading.last_assessed_date.as_deref(),
+        Some("2026-07-01")
+    );
+    let assessed = mastery::record_quiz_outcome(&conn, id, "2026-07-10", 1.0).unwrap();
+    assert_eq!(assessed.state, "mastered");
+    let repeated = mastery::record_quiz_outcome(&conn, id, "2026-07-10", 1.0).unwrap();
+    assert_eq!(repeated.review_interval_days, assessed.review_interval_days);
+    assert_eq!(repeated.next_review_date, assessed.next_review_date);
+}
+
 #[test]
 fn migration_adds_focus_columns() {
     let conn = test_db();

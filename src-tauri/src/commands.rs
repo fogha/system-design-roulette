@@ -630,12 +630,14 @@ pub fn submit_language_session(
 }
 
 #[tauri::command]
-pub fn start_session(
+pub async fn start_session(
     app: AppHandle,
     state: State<'_, AppState>,
     focus: String,
 ) -> CmdResult<SessionView> {
-    let s = session::start_session(&state, Some(focus.trim())).map_err(err)?;
+    let s = session::start_session(&state, Some(focus.trim()))
+        .await
+        .map_err(err)?;
     {
         let conn = state.db.0.lock().unwrap();
         let _ = crate::mastery::set_profile(&conn, "preferred_focus", &s.focus);
@@ -717,7 +719,7 @@ pub fn submit_answer(
     Ok(())
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct ReviewItem {
     pub question_id: i64,
     pub prompt: String,
@@ -730,7 +732,7 @@ pub struct ReviewItem {
     pub returns_tomorrow: bool,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct ReviewData {
     pub items: Vec<ReviewItem>,
     pub score: f64,
@@ -745,11 +747,27 @@ pub async fn finish_quiz(app: AppHandle, state: State<'_, AppState>) -> CmdResul
 
     let (questions, pending, concept_of, track_focus, dossier) = {
         let conn = state.db.0.lock().unwrap();
+        if let Some(json) = db::get_config(&conn, &format!("quiz_result:{today}")).map_err(err)? {
+            return serde_json::from_str(&json).map_err(err);
+        }
+        let current = db::get_session(&conn, &today)
+            .map_err(err)?
+            .ok_or("no session")?;
+        if current.status != "in_progress" || current.current_step != session::STEP_QUIZ {
+            return Err("this session is not awaiting quiz answers".into());
+        }
         let track_focus = session::session_focus(&conn, &today)
             .map_err(err)?
             .ok_or("session focus not chosen")?;
         let qs = session::questions_for_today(&conn, &today, &yesterday).map_err(err)?;
         let pending = pending_answers(&conn, &today);
+        if qs.iter().any(|q| {
+            pending
+                .get(&q.id)
+                .is_none_or(|answer| answer.trim().is_empty())
+        }) {
+            return Err("answer every question before submitting".into());
+        }
         // question_id -> (concept_id, concept_title), for grading context + mastery.
         let mut stmt = conn
             .prepare(
@@ -799,14 +817,57 @@ pub async fn finish_quiz(app: AppHandle, state: State<'_, AppState>) -> CmdResul
         .map(|v| (v.id, (v.correct, v.feedback, v.note)))
         .collect();
 
+    let result = {
+        let conn = state.db.0.lock().unwrap();
+        persist_quiz_result(
+            &conn,
+            &today,
+            &tomorrow,
+            &questions,
+            &pending,
+            &concept_of,
+            &verdict_map,
+            self_assess,
+        )?
+    };
+    let _ = app.emit("session:state", ());
+    Ok(result)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn persist_quiz_result(
+    conn: &rusqlite::Connection,
+    today: &str,
+    tomorrow: &str,
+    questions: &[db::Question],
+    pending: &HashMap<i64, String>,
+    concept_of: &HashMap<i64, (i64, String)>,
+    verdict_map: &HashMap<i64, (bool, String, String)>,
+    self_assess: bool,
+) -> CmdResult<ReviewData> {
     let mut items = Vec::new();
     let mut n_graded = 0usize;
     let mut n_correct = 0usize;
     // concept_id -> (correct, total) for mastery transitions after the loop.
     let mut by_concept: HashMap<i64, (usize, usize)> = HashMap::new();
     {
-        let conn = state.db.0.lock().unwrap();
-        for q in &questions {
+        let transaction = conn.unchecked_transaction().map_err(err)?;
+        let conn = transaction;
+        if let Some(json) = db::get_config(&conn, &format!("quiz_result:{today}")).map_err(err)? {
+            return serde_json::from_str(&json).map_err(err);
+        }
+        let current = db::get_session(&conn, today)
+            .map_err(err)?
+            .ok_or("no session")?;
+        if current.status != "in_progress" || current.current_step != session::STEP_QUIZ {
+            return Err(
+                "the session changed while grading; your answers were not submitted".into(),
+            );
+        }
+        if &pending_answers(&conn, today) != pending {
+            return Err("answers changed while grading; submit the updated answers again".into());
+        }
+        for q in questions {
             let user_answer = pending.get(&q.id).cloned().unwrap_or_default();
             let (correct, feedback): (Option<bool>, String) = if q.kind == "mcq" {
                 let ok = user_answer.trim() == q.correct_answer.trim();
@@ -836,14 +897,14 @@ pub async fn finish_quiz(app: AppHandle, state: State<'_, AppState>) -> CmdResul
             // Teacher's per-concept observation from the grader, kept for next encounter.
             if let Some((_, _, note)) = verdict_map.get(&q.id) {
                 if let Some((cid, _)) = concept_of.get(&q.id) {
-                    let _ = crate::mastery::set_teacher_note(&conn, *cid, note);
+                    crate::mastery::set_teacher_note(&conn, *cid, note).map_err(err)?;
                 }
             }
             db::record_attempt(
                 &conn,
                 &Attempt {
                     question_id: q.id,
-                    session_date: today.clone(),
+                    session_date: today.to_string(),
                     user_answer: user_answer.clone(),
                     correct: counted_correct,
                     grader_feedback: feedback.clone(),
@@ -852,7 +913,7 @@ pub async fn finish_quiz(app: AppHandle, state: State<'_, AppState>) -> CmdResul
             .map_err(err)?;
             let failed = correct == Some(false);
             if failed {
-                db::push_carryover(&conn, q.id, &today, &tomorrow).map_err(err)?;
+                db::push_carryover(&conn, q.id, today, tomorrow).map_err(err)?;
             } else if q.origin == "carryover" && correct == Some(true) {
                 db::clear_carryover(&conn, q.id).map_err(err)?;
             }
@@ -876,28 +937,31 @@ pub async fn finish_quiz(app: AppHandle, state: State<'_, AppState>) -> CmdResul
         // Mastery transitions: one quiz encounter per concept touched today.
         for (cid, (ok, total)) in &by_concept {
             if *total > 0 {
-                let _ = crate::mastery::record_quiz_outcome(
-                    &conn,
-                    *cid,
-                    &today,
-                    *ok as f64 / *total as f64,
-                );
+                crate::mastery::record_quiz_outcome(&conn, *cid, today, *ok as f64 / *total as f64)
+                    .map_err(err)?;
             }
         }
-        let mut s = db::get_session(&conn, &today)
+        let mut s = db::get_session(&conn, today)
             .map_err(err)?
             .ok_or("no session")?;
         s.quiz_score = Some(score);
         s.current_step = session::STEP_REVIEW.into();
         db::upsert_session(&conn, &s).map_err(err)?;
         // Clear pending answers.
-        db::set_config(&conn, &pending_key(&today), "{}").map_err(err)?;
-        let _ = app.emit("session:state", ());
-        Ok(ReviewData {
+        db::set_config(&conn, &pending_key(today), "{}").map_err(err)?;
+        let result = ReviewData {
             items,
             score,
             self_assess,
-        })
+        };
+        db::set_config(
+            &conn,
+            &format!("quiz_result:{today}"),
+            &serde_json::to_string(&result).map_err(err)?,
+        )
+        .map_err(err)?;
+        conn.commit().map_err(err)?;
+        Ok(result)
     }
 }
 
@@ -906,6 +970,9 @@ pub fn get_review(state: State<'_, AppState>) -> CmdResult<ReviewData> {
     let today = state.today();
     let yesterday = state.yesterday();
     let conn = state.db.0.lock().unwrap();
+    if let Some(json) = db::get_config(&conn, &format!("quiz_result:{today}")).map_err(err)? {
+        return serde_json::from_str(&json).map_err(err);
+    }
     let attempts = db::attempts_for_session(&conn, &today).map_err(err)?;
     let mut by_q: HashMap<i64, &Attempt> = HashMap::new();
     for a in &attempts {
@@ -2363,5 +2430,171 @@ mod exit_quiz_tests {
         );
         assert!(prepare_chat_message(" \n ".into()).is_err());
         assert!(prepare_chat_message("x".repeat(MAX_CHAT_MESSAGE_CHARS + 1)).is_err());
+    }
+}
+
+#[cfg(test)]
+mod quiz_persistence_tests {
+    use super::*;
+
+    struct Fixture {
+        conn: rusqlite::Connection,
+        questions: Vec<db::Question>,
+        answers: HashMap<i64, String>,
+        concepts: HashMap<i64, (i64, String)>,
+    }
+
+    impl Fixture {
+        fn new() -> Self {
+            static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+            let path = std::env::temp_dir().join(format!(
+                "principia-quiz-{}-{}.db",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+            let conn = db::open(&path).unwrap();
+            db::seed_concepts(&conn, include_str!("../seed/concepts.json")).unwrap();
+            let concept = db::all_concepts(&conn, "javascript").unwrap()[0].clone();
+            let course = db::insert_course(
+                &conn,
+                "2026-07-20",
+                concept.id,
+                "# Prior lesson",
+                "[]",
+                "fallback",
+            )
+            .unwrap();
+            let id = db::insert_question(
+                &conn,
+                course,
+                "What happens?",
+                "mcq",
+                Some(r#"["A","B"]"#),
+                "A",
+                "A follows the mechanism.",
+            )
+            .unwrap();
+            db::upsert_session(
+                &conn,
+                &db::Session {
+                    date: "2026-07-21".into(),
+                    concept_id: None,
+                    status: "in_progress".into(),
+                    current_step: "quiz".into(),
+                    quiz_score: None,
+                    started_at: None,
+                    completed_at: None,
+                    reading_seconds: 0,
+                    session_type: "lesson".into(),
+                    plan_reason: String::new(),
+                    focus: "javascript".into(),
+                },
+            )
+            .unwrap();
+            let answers = HashMap::from([(id, "A".into())]);
+            db::set_config(
+                &conn,
+                "pending_answers:2026-07-21",
+                &serde_json::to_string(&answers).unwrap(),
+            )
+            .unwrap();
+            let questions = db::questions_for_course(&conn, course).unwrap();
+            Self {
+                conn,
+                questions,
+                answers,
+                concepts: HashMap::from([(id, (concept.id, concept.title))]),
+            }
+        }
+
+        fn submit(&self) -> CmdResult<ReviewData> {
+            persist_quiz_result(
+                &self.conn,
+                "2026-07-21",
+                "2026-07-22",
+                &self.questions,
+                &self.answers,
+                &self.concepts,
+                &HashMap::new(),
+                false,
+            )
+        }
+    }
+
+    #[test]
+    fn retry_returns_the_original_result_without_duplicate_assessment_evidence() {
+        let fixture = Fixture::new();
+        let first = fixture.submit().unwrap();
+        let retry = fixture.submit().unwrap();
+        assert_eq!(
+            serde_json::to_value(first).unwrap(),
+            serde_json::to_value(retry).unwrap()
+        );
+        assert_eq!(
+            db::attempts_for_session(&fixture.conn, "2026-07-21")
+                .unwrap()
+                .len(),
+            1
+        );
+        let concept_id = fixture.concepts.values().next().unwrap().0;
+        assert_eq!(
+            crate::mastery::get(&fixture.conn, concept_id)
+                .unwrap()
+                .encounters,
+            1
+        );
+    }
+
+    #[test]
+    fn late_storage_failure_rolls_back_attempts_mastery_and_session_changes() {
+        let fixture = Fixture::new();
+        fixture.conn.execute_batch("CREATE TRIGGER fail_quiz_commit BEFORE UPDATE OF quiz_score ON sessions BEGIN SELECT RAISE(ABORT, 'injected storage failure'); END;").unwrap();
+        assert!(fixture
+            .submit()
+            .err()
+            .unwrap()
+            .contains("injected storage failure"));
+        assert!(db::attempts_for_session(&fixture.conn, "2026-07-21")
+            .unwrap()
+            .is_empty());
+        let concept_id = fixture.concepts.values().next().unwrap().0;
+        assert_eq!(
+            crate::mastery::get(&fixture.conn, concept_id)
+                .unwrap()
+                .encounters,
+            0
+        );
+        assert_eq!(
+            db::get_session(&fixture.conn, "2026-07-21")
+                .unwrap()
+                .unwrap()
+                .current_step,
+            "quiz"
+        );
+        assert_eq!(
+            pending_answers(&fixture.conn, "2026-07-21"),
+            fixture.answers
+        );
+        fixture
+            .conn
+            .execute_batch("DROP TRIGGER fail_quiz_commit;")
+            .unwrap();
+        assert_eq!(fixture.submit().unwrap().score, 1.0);
+    }
+
+    #[test]
+    fn changing_answers_during_grading_keeps_the_new_draft_and_rejects_the_stale_result() {
+        let fixture = Fixture::new();
+        let changed = HashMap::from([(fixture.questions[0].id, "B")]);
+        db::set_config(
+            &fixture.conn,
+            "pending_answers:2026-07-21",
+            &serde_json::to_string(&changed).unwrap(),
+        )
+        .unwrap();
+        assert!(fixture.submit().err().unwrap().contains("answers changed"));
+        assert!(db::attempts_for_session(&fixture.conn, "2026-07-21")
+            .unwrap()
+            .is_empty());
     }
 }

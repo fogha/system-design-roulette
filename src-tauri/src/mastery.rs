@@ -27,6 +27,7 @@ pub struct Mastery {
     pub score_ema: f64,
     pub encounters: i64,
     pub last_seen_date: Option<String>,
+    pub last_assessed_date: Option<String>,
     pub next_review_date: Option<String>,
     pub review_interval_days: i64,
     pub teacher_notes: String,
@@ -39,6 +40,7 @@ fn default_row(concept_id: i64) -> Mastery {
         score_ema: 0.0,
         encounters: 0,
         last_seen_date: None,
+        last_assessed_date: None,
         next_review_date: None,
         review_interval_days: 7,
         teacher_notes: String::new(),
@@ -48,7 +50,7 @@ fn default_row(concept_id: i64) -> Mastery {
 pub fn get(conn: &Connection, concept_id: i64) -> Result<Mastery> {
     let mut stmt = conn.prepare(
         "SELECT concept_id, state, score_ema, encounters, last_seen_date,
-                next_review_date, review_interval_days, teacher_notes
+                next_review_date, review_interval_days, teacher_notes, last_assessed_date
          FROM mastery WHERE concept_id = ?1",
     )?;
     let mut rows = stmt.query(params![concept_id])?;
@@ -62,6 +64,7 @@ pub fn get(conn: &Connection, concept_id: i64) -> Result<Mastery> {
             next_review_date: r.get(5)?,
             review_interval_days: r.get(6)?,
             teacher_notes: r.get(7)?,
+            last_assessed_date: r.get(8)?,
         },
         None => default_row(concept_id),
     })
@@ -70,13 +73,14 @@ pub fn get(conn: &Connection, concept_id: i64) -> Result<Mastery> {
 fn upsert(conn: &Connection, m: &Mastery) -> Result<()> {
     conn.execute(
         "INSERT INTO mastery (concept_id, state, score_ema, encounters, last_seen_date,
-                              next_review_date, review_interval_days, teacher_notes)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+                              next_review_date, review_interval_days, teacher_notes, last_assessed_date)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
          ON CONFLICT(concept_id) DO UPDATE SET
             state = excluded.state,
             score_ema = excluded.score_ema,
             encounters = excluded.encounters,
             last_seen_date = excluded.last_seen_date,
+            last_assessed_date = excluded.last_assessed_date,
             next_review_date = excluded.next_review_date,
             review_interval_days = excluded.review_interval_days,
             teacher_notes = excluded.teacher_notes",
@@ -88,7 +92,8 @@ fn upsert(conn: &Connection, m: &Mastery) -> Result<()> {
             m.last_seen_date,
             m.next_review_date,
             m.review_interval_days,
-            m.teacher_notes
+            m.teacher_notes,
+            m.last_assessed_date
         ],
     )?;
     Ok(())
@@ -132,7 +137,7 @@ pub fn record_quiz_outcome(
     score: f64,
 ) -> Result<Mastery> {
     let mut m = get(conn, concept_id)?;
-    let prev_seen = m.last_seen_date.clone();
+    let prev_seen = m.last_assessed_date.clone();
     m.encounters += 1;
     m.score_ema = if m.encounters <= 1 {
         score
@@ -152,6 +157,10 @@ pub fn record_quiz_outcome(
                 m.review_interval_days = REVIEW_INTERVALS[0];
                 m.next_review_date = None;
                 "decayed".into()
+            } else if prev_seen.as_deref() == Some(date) {
+                // Additional practice today is useful, but is not a later
+                // retention check and cannot lengthen the review interval.
+                m.state.clone()
             } else {
                 // Passed review: advance the spaced-repetition interval.
                 let next_interval = REVIEW_INTERVALS
@@ -181,6 +190,7 @@ pub fn record_quiz_outcome(
         }
     };
     m.last_seen_date = Some(date.to_string());
+    m.last_assessed_date = Some(date.to_string());
     upsert(conn, &m)?;
     Ok(m)
 }

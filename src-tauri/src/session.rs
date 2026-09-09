@@ -148,12 +148,23 @@ pub fn questions_for_today(
     if focus.is_empty() {
         return Ok(Vec::new());
     }
+    if db::get_session(conn, today)?.is_some_and(|s| s.status == "pending")
+        && db::get_config(conn, &format!("planned:{today}"))?.is_none()
+    {
+        return Ok(Vec::new());
+    }
+    // Persist the full round, including origin and answer key. Reads and
+    // grading must not resample review questions or reinterpret carryover.
+    let round_key = format!("quiz_round:{today}");
+    if let Some(json) = db::get_config(conn, &round_key)? {
+        return Ok(serde_json::from_str(&json)?);
+    }
     let is_pop = db::get_session(conn, today)?
         .map(|s| s.session_type == "pop_quiz")
         .unwrap_or(false);
     if is_pop {
         if let Ok(Some(ids_json)) = db::get_config(conn, &pop_quiz_key(today)) {
-            let ids: Vec<i64> = serde_json::from_str(&ids_json).unwrap_or_default();
+            let ids: Vec<i64> = serde_json::from_str(&ids_json)?;
             let mut out = Vec::new();
             for id in ids {
                 let mut stmt = conn.prepare(
@@ -175,8 +186,11 @@ pub fn questions_for_today(
                     });
                 }
             }
+            db::set_config(conn, &round_key, &serde_json::to_string(&out)?)?;
             return Ok(out);
         }
+        // Activation has not assembled the pop-quiz set yet.
+        return Ok(Vec::new());
     }
     let mut quiz = db::quiz_for_date(conn, today, yesterday, &focus)?;
     if !is_pop {
@@ -184,20 +198,32 @@ pub fn questions_for_today(
         let review = db::spaced_review_sample(conn, today, &focus, &exclude, 2)?;
         quiz.extend(review);
     }
+    db::set_config(conn, &round_key, &serde_json::to_string(&quiz)?)?;
     Ok(quiz)
 }
 
 /// Begin (or resume) today's session: pick the right starting step.
-pub fn start_session(state: &AppState, chosen_focus: Option<&str>) -> db::Result<Session> {
-    let mut s = ensure_today_session(state)?;
-    if s.status == "completed" || s.status == "skipped" {
-        return Ok(s);
-    }
-    apply_session_focus(&mut s, chosen_focus)?;
+pub async fn start_session(state: &AppState, chosen_focus: Option<&str>) -> db::Result<Session> {
+    ensure_today_session(state)?;
     let today = state.today();
     let yesterday = state.yesterday();
-    let focus = s.focus.clone();
+    let focus = {
+        let conn = state.db.0.lock().unwrap();
+        let mut s = db::get_session(&conn, &today)?.ok_or("session missing")?;
+        if s.status == "completed" || s.status == "skipped" {
+            return Ok(s);
+        }
+        apply_session_focus(&mut s, chosen_focus)?;
+        db::upsert_session(&conn, &s)?;
+        s.focus
+    };
+    // Plan while pending and before acquiring kiosk enforcement. The generation
+    // worker may also request this plan; re-read authoritative state afterward.
+    ensure_day_plan(state, &today, &focus)
+        .await
+        .map_err(|error| db::DbError::Invalid(error.to_string()))?;
     let conn = state.db.0.lock().unwrap();
+    let mut s = db::get_session(&conn, &today)?.ok_or("session missing")?;
     if s.status == "pending" {
         // Older builds may have pre-drawn a system-design concept before the
         // learner chose today's focus. Never carry that concept across tracks.
@@ -238,6 +264,7 @@ pub fn start_session(state: &AppState, chosen_focus: Option<&str>) -> db::Result
                 )?;
             }
         }
+        db::upsert_session(&conn, &s)?;
         let quiz = questions_for_today(&conn, &today, &yesterday)?;
         s.current_step = if quiz.is_empty() {
             STEP_ROULETTE.into()
@@ -415,7 +442,7 @@ pub fn weekly_review_due(completed_in_track: i64) -> bool {
 /// Decide (once) what kind of day `date` is. Requires a chosen focus; without
 /// one the caller must not pre-plan or pre-generate content.
 pub async fn ensure_day_plan(
-    state: &tauri::State<'_, AppState>,
+    state: &AppState,
     date: &str,
     track_focus: &str,
 ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
@@ -423,9 +450,11 @@ pub async fn ensure_day_plan(
     let (eligible, milestone_review, track_complete, dossier) = {
         let conn = state.db.0.lock().unwrap();
         let already = db::get_config(&conn, &planned_key)?.is_some();
-        let existing_type = db::get_session(&conn, date)?.map(|s| s.session_type);
-        if already {
-            return Ok(existing_type.unwrap_or_else(|| "lesson".into()));
+        let existing = db::get_session(&conn, date)?;
+        if already || existing.as_ref().is_some_and(|s| s.status != "pending") {
+            return Ok(existing
+                .map(|s| s.session_type)
+                .unwrap_or_else(|| "lesson".into()));
         }
         let practiced: i64 = conn.query_row(
             "SELECT COUNT(*) FROM mastery m
@@ -494,6 +523,12 @@ pub async fn ensure_day_plan(
     };
 
     let conn = state.db.0.lock().unwrap();
+    // A competing request may have committed a plan while this one awaited a provider.
+    if db::get_config(&conn, &planned_key)?.is_some() {
+        return Ok(db::get_session(&conn, date)?
+            .map(|s| s.session_type)
+            .unwrap_or_else(|| "lesson".into()));
+    }
     let mut s = db::get_session(&conn, date)?.unwrap_or(Session {
         date: date.to_string(),
         concept_id: None,

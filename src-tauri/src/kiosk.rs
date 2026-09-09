@@ -287,11 +287,11 @@ pub fn engage(app: &AppHandle, state: &AppState) {
             .inner_size(size.width as f64 / scale, size.height as f64 / scale)
             .build();
             match built {
-                Ok(w) => {
+                Ok(_window) => {
                     #[cfg(target_os = "macos")]
                     {
-                        let w2 = w.clone();
-                        let _ = w.run_on_main_thread(move || {
+                        let w2 = _window.clone();
+                        let _ = _window.run_on_main_thread(move || {
                             let _ =
                                 objc2::exception::catch(std::panic::AssertUnwindSafe(|| unsafe {
                                     if let Ok(ptr) = w2.ns_window() {

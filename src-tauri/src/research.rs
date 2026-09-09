@@ -618,7 +618,7 @@ fn relevant_mdn_documents(payload: &serde_json::Value, topic: &str, limit: usize
         })
         .collect();
     // Overlapping queries return the same document; keep its best score once.
-    scored.sort_by(|left, right| right.0.cmp(&left.0));
+    scored.sort_by_key(|item| std::cmp::Reverse(item.0));
     let mut seen = std::collections::BTreeSet::new();
     scored
         .into_iter()

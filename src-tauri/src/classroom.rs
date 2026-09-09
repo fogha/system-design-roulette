@@ -157,6 +157,17 @@ pub fn initialize(conn: &Connection) -> Result<()> {
 }
 
 fn migrate_language_slots(conn: &Connection) -> Result<()> {
+    let key = "migration:classroom_language_slots:v1";
+    if db::get_config(conn, key)
+        .map_err(|error| error.to_string())?
+        .is_some()
+    {
+        return Ok(());
+    }
+    let transaction = conn
+        .unchecked_transaction()
+        .map_err(|error| error.to_string())?;
+    let conn = &*transaction;
     conn.execute(
         "INSERT OR IGNORE INTO classroom_schedule_slots
             (subject_id, hour, minute, weekdays_json, enabled, created_at)
@@ -180,6 +191,8 @@ fn migrate_language_slots(conn: &Connection) -> Result<()> {
         [],
     )
     .map_err(|error| error.to_string())?;
+    db::set_config(conn, key, "1").map_err(|error| error.to_string())?;
+    transaction.commit().map_err(|error| error.to_string())?;
     Ok(())
 }
 
@@ -639,6 +652,25 @@ pub fn plan_schedule(
         return Err("target weekly minutes cannot be negative".into());
     }
     let slots = plan_windows(&input.windows)?;
+    // Preview and commit share the same collision check. A manual slot owns
+    // its time even when its weekdays differ from the proposed recurrence.
+    let transaction = conn
+        .unchecked_transaction()
+        .map_err(|error| error.to_string())?;
+    let conn = &*transaction;
+    for slot in &slots {
+        let manual_collision: bool = conn
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM classroom_schedule_slots
+             WHERE subject_id = ?1 AND hour = ?2 AND minute = ?3 AND source = 'manual')",
+                params![input.subject_id, slot.hour, slot.minute],
+                |row| row.get(0),
+            )
+            .map_err(|error| error.to_string())?;
+        if manual_collision {
+            return Err(format!("A manual class already uses {:02}:{:02}. Choose another planning window or edit that class time first.", slot.hour, slot.minute));
+        }
+    }
     let program = program_row(conn, &input.subject_id)?;
     let total_weekly_minutes: i64 = slots
         .iter()
@@ -687,10 +719,7 @@ pub fn plan_schedule(
                 "INSERT INTO classroom_schedule_slots
                     (subject_id, hour, minute, weekdays_json, enabled, source, created_at)
                  VALUES (?1, ?2, ?3, ?4, 1, 'planned', ?5)
-                 ON CONFLICT(subject_id, hour, minute) DO UPDATE SET
-                    weekdays_json = excluded.weekdays_json,
-                    enabled = 1,
-                    source = 'planned'",
+                 ON CONFLICT(subject_id, hour, minute) DO NOTHING",
                 params![
                     input.subject_id,
                     slot.hour,
@@ -713,6 +742,7 @@ pub fn plan_schedule(
         (None, None)
     };
 
+    transaction.commit().map_err(|error| error.to_string())?;
     Ok(ClassroomPlanView {
         slots,
         total_weekly_minutes,
@@ -1538,6 +1568,10 @@ pub fn submit_engineering_session(
     input: &SubmitEngineeringInput,
     today: &str,
 ) -> Result<EngineeringSessionResult> {
+    let transaction = conn
+        .unchecked_transaction()
+        .map_err(|error| error.to_string())?;
+    let conn = &*transaction;
     let row = conn
         .query_row(
             "SELECT subject_id, status, payload_json FROM classroom_sessions WHERE id = ?1",
@@ -1622,6 +1656,7 @@ pub fn submit_engineering_session(
         params![input.session_id, score, response_json, language::now_iso(),],
     )
     .map_err(|error| error.to_string())?;
+    transaction.commit().map_err(|error| error.to_string())?;
     Ok(EngineeringSessionResult {
         session_id: input.session_id,
         subject_id,
