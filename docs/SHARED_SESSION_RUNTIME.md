@@ -33,3 +33,43 @@ Terminal results freeze the submitted checkpoint. Original lesson content, owner
 `tests/study_sessions.rs` exercises real SQLite connections and process-style reopenings: concurrent planning, competing preparation claims, expiry/recovery, stale worker rejection, save conflicts, foreground handoff, midnight resume, revised-path/tutor isolation, atomic grade/progress failure, result retries, terminal immutability and independent placement. Migration tests retain original assessment records and verify the v5 backup and unchanged v1–v5 ledger entries.
 
 The next integration needs primary session import/crosswalks, compatibility IPC keyed to the stable session, native preparation worker calls, captured timer ownership and simultaneous due/consumed/history reader cutover. The same runtime then supports the classroom and CEFR adapters. Occurrences/timezones, OS enforcement coordination, shared lesson UI and evidence-based curriculum completion remain separate unfinished gates in `PRODUCT_EVOLUTION_PLAN.md`.
+
+## Primary identity boundary
+
+Schema v7 backfills stable IDs for every existing primary row and assigns them
+atomically to subsequent rows. `primary_session_ids` and the `sessions` crosswalk
+retain that mapping; the eventual shared-runtime import must reuse these IDs.
+The compatibility table still permits one primary record per service date. This
+is not yet the full primary FSM/storage cutover.
+
+Primary lesson IPC now receives a captured `session_id`: recall and review,
+lesson selection, reader preparation, reading start/completion, audio, exit
+checks and resource opening no longer choose their owner from the current date.
+The frontend captures the ID when each lesson screen opens and remounts the
+screen when that ID changes. Feedback reloads its immutable native result rather
+than sharing a root-level cache. Out-of-order state refreshes and another
+session's timer events cannot replace the current owner. Startup resumes
+unfinished primary work before a later pending day, preserving its original
+subject. Emergency recovery remains a native global action so it works without
+a healthy or correctly positioned lesson screen.
+
+The reading worker uses an explicit owner and total duration. Each charged
+second is saved to that still-active reader before its event is published;
+failed saves retain the previous counter for retry. Timer events carry the
+session ID and the UI ignores another session's events. Reopening the reader
+re-establishes its native timer from stored reading time. Duplicate starts share
+one worker and read the counter under the timer's guard; late preparation replies
+from an unmounted reader do not restart it. Completion joins the
+primary state, introduced-concept update and next quiz job in one transaction.
+
+Desktop QA verified a September 19 fixture resumed under a September 20 test
+clock, normal Quit at 17 saved seconds, restart with the same ID and remaining
+time, and completion of only the original day. The September 20 row stayed
+pending with zero reading time. Debug mode also now exempts native window/quit
+handling and webview shortcuts from its simulated UI lock. Real enforcement
+keeps its existing protections.
+
+Still required: migrate primary state and content into `study_sessions` and
+`lesson_versions`, bind the preparation worker and assessment ownership to that
+runtime, cut over due/consumed/history projections together, and support legacy
+assignment and multiple voluntary sessions without using a date as identity.

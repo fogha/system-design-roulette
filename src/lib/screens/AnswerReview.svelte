@@ -1,28 +1,29 @@
 <script lang="ts">
   import { api, type ReviewData } from '../ipc';
   import { app } from '../stores.svelte';
+  // Capture once: async work must keep the session that opened this screen.
+  const sessionId = app.session?.session_id ?? '';
   import ClusterBar from '../components/ClusterBar.svelte';
   import NodeCard from '../components/NodeCard.svelte';
   import MetaBadge from '../components/MetaBadge.svelte';
   import Markdown from '../components/Markdown.svelte';
   import { Check, X, Circle, TriangleAlert, ArrowRight } from 'lucide-svelte';
 
-  let { data = null }: { data?: ReviewData | null } = $props();
-
   let review = $state<ReviewData | null>(null);
+  let error = $state('');
   let idx = $state(0);
   let dwell = $state(10);
 
   const current = $derived(review?.items[idx]);
   const isLast = $derived(review ? idx === review.items.length - 1 : false);
 
-  $effect(() => {
-    if (data) {
-      review = data;
-    } else {
-      api.getReview().then((r) => (review = r));
-    }
-  });
+  async function load() {
+    error = '';
+    try { review = await api.getReview(sessionId); }
+    catch (cause) { error = String(cause); }
+  }
+
+  $effect(() => { void load(); });
 
   $effect(() => {
     idx;
@@ -37,7 +38,7 @@
   async function next() {
     if (!review) return;
     if (isLast) {
-      await api.finishReview();
+      await api.finishReview(sessionId);
       await app.refresh();
     } else {
       idx += 1;
@@ -47,7 +48,9 @@
 
 <div class="review-wrap blueprint">
   <ClusterBar route="quiz/trace" status="responses graded" tone="ok" />
-  {#if !review}
+  {#if error}
+    <div class="center"><p role="alert">{error}</p><button class="ghost mono-ghost" onclick={load}>Reload feedback</button></div>
+  {:else if !review}
     <div class="center"><p class="sub mono">loading trace…</p></div>
   {:else if review.items.length === 0}
     <div class="center"><p class="sub mono">no requests today</p></div>

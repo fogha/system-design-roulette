@@ -59,6 +59,7 @@ fn app_state(conn: rusqlite::Connection) -> system_design_roulette_lib::state::A
         data_dir,
         locked: AtomicBool::new(false),
         reading_remaining: AtomicI64::new(0),
+        reading_owner: Mutex::new(None),
         timer_running: AtomicBool::new(false),
         timer_paused: AtomicBool::new(false),
         debug_day: true,
@@ -730,6 +731,176 @@ fn session_focus_persists_and_rejects_invalid_values() {
     db::set_session_focus(&conn, "2026-08-01", "developer-tooling").unwrap();
     let changed = db::get_session(&conn, "2026-08-01").unwrap().unwrap();
     assert_eq!(changed.focus, "developer-tooling");
+}
+
+#[tokio::test]
+async fn primary_resume_uses_its_stable_id_and_original_day_without_consuming_today() {
+    let conn = test_db();
+    let state = app_state(conn);
+    let today = state.today();
+    let previous = system_design_roulette_lib::session::adjacent_date(&today, -1).unwrap();
+    let (old_id, today_id) = {
+        let conn = state.db.0.lock().unwrap();
+        let mut old = session_with_focus(&previous, "typescript");
+        old.status = "in_progress".into();
+        old.current_step = "review".into();
+        old.reading_seconds = 17;
+        db::upsert_session(&conn, &old).unwrap();
+        let mut new = session_with_focus(&today, "javascript");
+        new.status = "pending".into();
+        db::upsert_session(&conn, &new).unwrap();
+        (
+            db::primary_session_id(&conn, &previous).unwrap().unwrap(),
+            db::primary_session_id(&conn, &today).unwrap().unwrap(),
+        )
+    };
+    assert_ne!(old_id, today_id);
+    assert!(!old_id.contains(&previous));
+    let resumed = system_design_roulette_lib::session::start_session(&state, Some("javascript"))
+        .await
+        .unwrap();
+    assert_eq!(resumed.date, previous);
+    assert_eq!(resumed.focus, "typescript");
+    let view = system_design_roulette_lib::session::view(&state);
+    assert_eq!(view.session_id.as_deref(), Some(old_id.as_str()));
+    assert_eq!(view.step, "review");
+    assert_eq!(
+        system_design_roulette_lib::session::owner_date(&state, &old_id).unwrap(),
+        previous
+    );
+    system_design_roulette_lib::session::set_step(&state, &old_id, "roulette").unwrap();
+    let conn = state.db.0.lock().unwrap();
+    assert_eq!(
+        db::primary_session_by_id(&conn, &today_id).unwrap().status,
+        "pending"
+    );
+    assert_eq!(
+        db::primary_session_by_id(&conn, &today_id)
+            .unwrap()
+            .current_step,
+        "quiz"
+    );
+    assert_eq!(
+        db::primary_session_by_id(&conn, &old_id)
+            .unwrap()
+            .reading_seconds,
+        17
+    );
+    let mut finished = db::primary_session_by_id(&conn, &old_id).unwrap();
+    finished.status = "completed".into();
+    db::upsert_session(&conn, &finished).unwrap();
+    assert_eq!(
+        db::current_primary_session(&conn, &today)
+            .unwrap()
+            .unwrap()
+            .date,
+        today
+    );
+    assert_eq!(
+        db::primary_session_id(&conn, &previous).unwrap().as_deref(),
+        Some(old_id.as_str())
+    );
+}
+
+#[test]
+fn primary_timer_ticks_keep_the_captured_owner_and_stop_after_skip() {
+    let conn = test_db();
+    for date in ["2026-09-09", "2026-09-10"] {
+        let mut row = session_with_focus(date, "typescript");
+        row.status = "in_progress".into();
+        row.current_step = "course".into();
+        db::upsert_session(&conn, &row).unwrap();
+    }
+    let id = db::primary_session_id(&conn, "2026-09-09")
+        .unwrap()
+        .unwrap();
+    let other = db::primary_session_id(&conn, "2026-09-10")
+        .unwrap()
+        .unwrap();
+    assert!(db::save_primary_reading(&conn, &id, 42).unwrap());
+    assert!(db::save_primary_reading(&conn, &id, 40).unwrap());
+    assert_eq!(
+        db::primary_session_by_id(&conn, &id)
+            .unwrap()
+            .reading_seconds,
+        42
+    );
+    assert_eq!(
+        db::primary_session_by_id(&conn, &other)
+            .unwrap()
+            .reading_seconds,
+        0
+    );
+    let mut skipped = db::primary_session_by_id(&conn, &id).unwrap();
+    skipped.status = "skipped".into();
+    db::upsert_session(&conn, &skipped).unwrap();
+    assert!(!db::save_primary_reading(&conn, &id, 99).unwrap());
+    assert_eq!(
+        db::primary_session_by_id(&conn, &id)
+            .unwrap()
+            .reading_seconds,
+        42
+    );
+    assert!(db::save_primary_reading(&conn, &other, -1).is_err());
+    assert!(
+        db::primary_session_by_id(&conn, "2026-09-10").is_err(),
+        "dates are not session IDs"
+    );
+    assert!(conn
+        .execute(
+            "UPDATE primary_session_ids SET session_id='replacement' WHERE session_id=?1",
+            [&id]
+        )
+        .is_err());
+    assert!(conn
+        .execute("DELETE FROM primary_session_ids WHERE session_id=?1", [&id])
+        .is_err());
+    assert_eq!(conn.query_row("SELECT entity_id FROM legacy_crosswalk WHERE legacy_table='sessions' AND legacy_key='2026-09-09'",[],|r|r.get::<_,String>(0)).unwrap(),id);
+}
+
+#[test]
+fn reader_restart_uses_saved_time_and_duplicate_starts_share_one_worker() {
+    use std::sync::atomic::Ordering;
+    use system_design_roulette_lib::session;
+    let conn = test_db();
+    let mut row = session_with_focus("2026-09-19", "javascript");
+    row.reading_seconds = 17;
+    db::upsert_session(&conn, &row).unwrap();
+    let id = db::primary_session_id(&conn, &row.date).unwrap().unwrap();
+    let state = app_state(conn);
+    assert!(session::start_reading(&state, &id).is_err());
+    assert!(!state.timer_running.load(Ordering::SeqCst));
+    assert!(state.reading_owner.lock().unwrap().is_none());
+
+    row.current_step = "roulette".into();
+    db::upsert_session(&state.db.0.lock().unwrap(), &row).unwrap();
+    assert!(session::start_reading(&state, &id).unwrap());
+    assert_eq!(state.reading_remaining.load(Ordering::SeqCst), 13);
+    assert_eq!(
+        state
+            .reading_owner
+            .lock()
+            .unwrap()
+            .as_ref()
+            .unwrap()
+            .session_id,
+        id
+    );
+    assert!(!session::start_reading(&state, &id).unwrap());
+
+    // A native tick was saved between two reader-start requests.
+    db::save_primary_reading(&state.db.0.lock().unwrap(), &id, 19).unwrap();
+    assert!(!session::start_reading(&state, &id).unwrap());
+    assert_eq!(state.reading_remaining.load(Ordering::SeqCst), 11);
+
+    // A fresh process has no worker/counter but the same durable reading time.
+    state.timer_running.store(false, Ordering::SeqCst);
+    state.reading_remaining.store(0, Ordering::SeqCst);
+    assert!(session::start_reading(&state, &id).unwrap());
+    assert_eq!(state.reading_remaining.load(Ordering::SeqCst), 11);
+    row.status = "skipped".into();
+    db::upsert_session(&state.db.0.lock().unwrap(), &row).unwrap();
+    assert!(session::start_reading(&state, &id).is_err());
 }
 
 #[test]

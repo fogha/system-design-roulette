@@ -1,9 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { api, type QuizQuestionView, type QuizRoundView, type ReviewData } from '../ipc';
+  import { api, type QuizQuestionView, type QuizRoundView } from '../ipc';
   import type { AssessmentWork } from '../contracts/assessments';
   import { assessmentEditor, type AssessmentEditorState } from '../features/assessments/work-editor';
   import { app } from '../stores.svelte';
+  // Capture once: async work must keep the session that opened this screen.
+  const sessionId = app.session?.session_id ?? '';
   import ClusterBar from '../components/ClusterBar.svelte';
   import NodeCard from '../components/NodeCard.svelte';
   import StatusLED from '../components/StatusLED.svelte';
@@ -21,7 +23,6 @@
   let editor = $state<ReturnType<typeof assessmentEditor>>();
   let unsubscribe: (() => void) | undefined;
   let alive = false;
-  let { onreview }: { onreview?: (data: ReviewData) => void } = $props();
   const current = $derived(questions[idx]);
   const progress = $derived(questions.length ? (idx / questions.length) * 100 : 0);
   const isAudit = $derived(app.session?.session_type === 'pop_quiz');
@@ -39,12 +40,12 @@
   async function load() {
     loading = true; error = '';
     try {
-      const round = await api.getQuiz();
+      const round = await api.getQuiz(sessionId);
       if (!alive) return;
       questions = round.questions;
-      if (!questions.length) { await api.finishReview(); if (alive) await app.refresh(); return; }
+      if (!questions.length) { await api.finishReview(sessionId); if (alive) await app.refresh(); return; }
       const initial = initialWork(round);
-      editor = assessmentEditor(initial, (id, response, revision) => api.submitAnswer(initial.roundId, revision, Number(id), response.answer, response.status === 'answered'));
+      editor = assessmentEditor(initial, (id, response, revision) => api.submitAnswer(sessionId, initial.roundId, revision, Number(id), response.answer, response.status === 'answered'));
       unsubscribe?.();
       unsubscribe = editor.subscribe((value) => { work = value; });
       firstUnanswered();
@@ -66,8 +67,8 @@
     try {
       if (!await editor.flush()) return;
       const saved = editor.snapshot();
-      const review = await api.finishQuiz(saved.roundId, saved.revision);
-      if (alive) { onreview?.(review); await app.refresh(); }
+      await api.finishQuiz(sessionId, saved.roundId, saved.revision);
+      if (alive) await app.refresh();
     } catch (cause) { error = String(cause); }
     finally { grading = false; }
   }
@@ -84,7 +85,7 @@
   async function recover(keepLocal: boolean) {
     if (!editor) return;
     try {
-      const round = await api.getQuiz();
+      const round = await api.getQuiz(sessionId);
       if (!alive) return;
       await editor.resolve(initialWork(round), keepLocal);
       firstUnanswered(); error = '';

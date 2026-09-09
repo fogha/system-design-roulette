@@ -148,6 +148,7 @@ pub fn run() {
                 data_dir,
                 locked: AtomicBool::new(false),
                 reading_remaining: AtomicI64::new(0),
+                reading_owner: Mutex::new(None),
                 timer_running: AtomicBool::new(false),
                 timer_paused: AtomicBool::new(false),
                 debug_day,
@@ -241,13 +242,13 @@ pub fn run() {
         .on_window_event(|window, event| match event {
             tauri::WindowEvent::CloseRequested { api, .. } => {
                 let state = window.app_handle().state::<AppState>();
-                if state.locked.load(Ordering::SeqCst) {
+                if !state.debug_day && state.locked.load(Ordering::SeqCst) {
                     api.prevent_close();
                 }
             }
             tauri::WindowEvent::Focused(false) => {
                 let state = window.app_handle().state::<AppState>();
-                if state.locked.load(Ordering::SeqCst) {
+                if !state.debug_day && state.locked.load(Ordering::SeqCst) {
                     let _ = window.set_focus();
                 }
             }
@@ -337,7 +338,7 @@ pub fn run() {
         .run(|app, event| {
             if let tauri::RunEvent::ExitRequested { api, .. } = event {
                 let state = app.state::<AppState>();
-                if state.locked.load(Ordering::SeqCst) {
+                if !state.debug_day && state.locked.load(Ordering::SeqCst) {
                     api.prevent_exit();
                 }
             }

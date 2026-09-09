@@ -13,6 +13,8 @@ pub struct AppState {
     pub locked: AtomicBool,
     /// Remaining required reading seconds for today's course step.
     pub reading_remaining: AtomicI64,
+    /// Guards timer admission and counter updates for a captured primary owner.
+    pub reading_owner: Mutex<Option<ReadingOwner>>,
     /// Course timer task is running.
     pub timer_running: AtomicBool,
     /// Pause flag (system sleep).
@@ -35,6 +37,12 @@ pub struct AppState {
     /// (this is memory-only). Namespaced keys keep independently allocated
     /// course and classroom ids from colliding.
     pub chat_threads: Mutex<HashMap<String, Vec<ChatTurn>>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ReadingOwner {
+    pub session_id: String,
+    pub total_seconds: i64,
 }
 
 impl AppState {

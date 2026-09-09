@@ -574,3 +574,37 @@ Start action or second frontend session engine was introduced.
 
 Five additional [logo options](branding/LOGO_OPTIONS.md) are saved for the user's
 selection. They remain concepts; no candidate has replaced the installed icon.
+
+### Primary ownership and midnight resume
+
+The primary command boundary now takes stable session IDs. Migration v7 preserves
+all original primary rows and creates immutable identity/crosswalk mappings; it
+also assigns an ID atomically when the compatibility writer creates a row.
+Readers, recall answers, grading, audio, stage changes, completion and resource
+opening resolve the captured owner rather than re-reading today's date.
+Startup prioritizes an unfinished earlier primary session over a later pending
+day, including its saved subject. The reading worker saves each charged second
+to its captured owner and emits owner-tagged events; reopening the reader resumes
+the stored timer. Primary completion writes state, introduced-concept progress
+and its quiz job transactionally.
+
+Native restart QA found that the debug-mode simulated lock was also intercepting
+Quit in the native event handler and webview shortcut handler. Both now exempt
+debug mode. In the final packaged macOS check, Quit exited with 17 seconds saved;
+relaunch continued the same reader, and Complete session changed only the older
+fixture. The separate next-day session retained its ID, pending status and zero
+reading seconds. Schema v6→v7 backup/integrity checks passed. 211 Rust and 52
+frontend tests pass; six live/external Rust tests remain ignored. Svelte checks
+and strict Clippy pass.
+
+The final screen integration remounts readers and quizzes when their captured
+session changes and loads feedback from that owner's native result. A regression
+drives overlapping refresh requests and delayed timer events to prove that neither
+can restore another session's screen or countdown. Native reader admission tests
+cover saved-time restoration, duplicate starts and rejection after skipping.
+
+This is the identity boundary ahead of primary FSM cutover. Primary state still
+lives in the compatibility table, and shared-runtime session count remains zero
+in desktop QA. Its migration must reuse the new IDs and switch state/content,
+preparation, assessment ownership and due/consumed/history projections together.
+The full P4–P9 scope and outstanding cross-platform gates remain unchanged.

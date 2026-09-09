@@ -392,6 +392,50 @@ pub fn upsert_session(conn: &Connection, s: &Session) -> Result<()> {
     Ok(())
 }
 
+/// Stable identity at the legacy primary boundary. Its eventual shared-runtime
+/// import must reuse this ID, including for original pre-upgrade records.
+pub fn primary_session_id(conn: &Connection, date: &str) -> Result<Option<String>> {
+    Ok(conn
+        .query_row(
+            "SELECT session_id FROM primary_session_ids WHERE legacy_date=?1",
+            [date],
+            |r| r.get(0),
+        )
+        .optional()?)
+}
+
+pub fn primary_session_by_id(conn: &Connection, id: &str) -> Result<Session> {
+    let date: String = conn
+        .query_row(
+            "SELECT legacy_date FROM primary_session_ids WHERE session_id=?1",
+            [id],
+            |r| r.get(0),
+        )
+        .optional()?
+        .ok_or_else(|| {
+            DbError::Invalid("This study session is unavailable. Reload its saved state.".into())
+        })?;
+    get_session(conn, &date)?
+        .ok_or_else(|| DbError::Invalid("The saved primary session is missing.".into()))
+}
+
+/// Resume unfinished work before considering a new calendar day. Older legacy
+/// builds could leave multiple days active; retain all rows and resume the most
+/// recently started one instead of silently assigning its work to today's row.
+pub fn current_primary_session(conn: &Connection, today: &str) -> Result<Option<Session>> {
+    let date: Option<String> = conn.query_row("SELECT date FROM sessions WHERE status='in_progress' AND date<=?1 ORDER BY date DESC LIMIT 1",[today],|r|r.get(0)).optional()?;
+    get_session(conn, date.as_deref().unwrap_or(today))
+}
+
+/// Timers persist only to the captured still-active reading session. A finished
+/// or skipped session cannot receive another timer tick after navigation.
+pub fn save_primary_reading(conn: &Connection, id: &str, seconds: i64) -> Result<bool> {
+    if seconds < 0 {
+        return Err(DbError::Invalid("Reading time cannot be negative.".into()));
+    }
+    Ok(conn.execute("UPDATE sessions SET reading_seconds=MAX(reading_seconds,?2) WHERE date=(SELECT legacy_date FROM primary_session_ids WHERE session_id=?1) AND status='in_progress' AND current_step='course'",params![id,seconds])?==1)
+}
+
 /// Explicitly change the track when a finished day starts a new voluntary
 /// session. Normal in-progress upserts intentionally cannot change focus.
 pub fn set_session_focus(conn: &Connection, date: &str, focus: &str) -> Result<()> {

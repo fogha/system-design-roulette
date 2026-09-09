@@ -14,6 +14,7 @@ pub const STEP_DONE: &str = "done";
 
 #[derive(Debug, Clone, Serialize)]
 pub struct SessionView {
+    pub session_id: Option<String>,
     pub date: String,
     pub status: String,
     pub step: String,
@@ -79,7 +80,7 @@ pub fn session_owed(state: &AppState) -> bool {
 pub fn ensure_today_session(state: &AppState) -> db::Result<Session> {
     let today = state.today();
     let conn = state.db.0.lock().unwrap();
-    if let Some(s) = db::get_session(&conn, &today)? {
+    if let Some(s) = db::current_primary_session(&conn, &today)? {
         return Ok(s);
     }
     let s = Session {
@@ -203,9 +204,8 @@ pub fn questions_for_today(
 
 /// Begin (or resume) today's session: pick the right starting step.
 pub async fn start_session(state: &AppState, chosen_focus: Option<&str>) -> db::Result<Session> {
-    ensure_today_session(state)?;
-    let today = state.today();
-    let yesterday = state.yesterday();
+    let today = ensure_today_session(state)?.date;
+    let yesterday = adjacent_date(&today, -1)?;
     let focus = {
         let conn = state.db.0.lock().unwrap();
         let mut s = db::get_session(&conn, &today)?.ok_or("session missing")?;
@@ -286,10 +286,34 @@ pub async fn start_session(state: &AppState, chosen_focus: Option<&str>) -> db::
     Ok(s)
 }
 
-pub fn set_step(state: &AppState, step: &str) -> db::Result<Session> {
-    let today = state.today();
+pub fn owner_date(state: &AppState, session_id: &str) -> db::Result<String> {
+    Ok(db::primary_session_by_id(&state.db.0.lock().unwrap(), session_id)?.date)
+}
+
+pub fn adjacent_date(date: &str, days: i64) -> db::Result<String> {
+    let date = chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d")
+        .map_err(|_| db::DbError::Invalid("Invalid saved session date.".into()))?;
+    date.checked_add_signed(chrono::Duration::days(days))
+        .map(|date| date.format("%Y-%m-%d").to_string())
+        .ok_or_else(|| db::DbError::Invalid("Session date is out of range.".into()))
+}
+
+pub fn set_step(state: &AppState, session_id: &str, step: &str) -> db::Result<Session> {
     let conn = state.db.0.lock().unwrap();
-    let mut s = db::get_session(&conn, &today)?.expect("session exists");
+    let mut s = db::primary_session_by_id(&conn, session_id)?;
+    if s.status != "in_progress" {
+        return Err("This session is no longer active.".into());
+    }
+    if s.current_step == step {
+        return Ok(s);
+    }
+    let empty_recall = s.current_step == STEP_QUIZ
+        && step == STEP_ROULETTE
+        && crate::domain::primary_quiz::current(&conn, &s.date)?
+            .is_some_and(|round| round.items.is_empty() && round.submission.is_some());
+    if !allowed_transition(&s.current_step, step) && !empty_recall {
+        return Err("This session is not ready for that learning stage.".into());
+    }
     s.current_step = step.to_string();
     db::upsert_session(&conn, &s)?;
     Ok(s)
@@ -309,10 +333,11 @@ pub fn allowed_transition(from: &str, to: &str) -> bool {
 pub fn view(state: &AppState) -> SessionView {
     let today = state.today();
     let conn = state.db.0.lock().unwrap();
-    let s = db::get_session(&conn, &today).ok().flatten();
+    let s = db::current_primary_session(&conn, &today).ok().flatten();
     let streak = db::streak(&conn, &today).unwrap_or(0);
     match s {
         Some(s) => SessionView {
+            session_id: db::primary_session_id(&conn, &s.date).ok().flatten(),
             date: s.date,
             status: s.status,
             step: s.current_step,
@@ -328,6 +353,7 @@ pub fn view(state: &AppState) -> SessionView {
             },
         },
         None => SessionView {
+            session_id: None,
             date: today,
             status: "pending".into(),
             step: STEP_QUIZ.into(),
@@ -342,21 +368,40 @@ pub fn view(state: &AppState) -> SessionView {
 }
 
 /// Mark today completed, enqueue tomorrow's pregeneration, release the lock.
-pub fn complete_session(app: &AppHandle, state: &AppState) -> db::Result<Session> {
-    let today = state.today();
-    let tomorrow = state.tomorrow();
+pub fn complete_session(
+    app: &AppHandle,
+    state: &AppState,
+    session_id: &str,
+) -> db::Result<Session> {
     let s = {
         let conn = state.db.0.lock().unwrap();
-        let mut s = db::get_session(&conn, &today)?.expect("session exists");
+        let tx = conn.unchecked_transaction()?;
+        let mut s = db::primary_session_by_id(&tx, session_id)?;
+        if s.status == "completed" {
+            return Ok(s);
+        }
+        if s.status != "in_progress" {
+            return Err("This session is no longer active.".into());
+        }
+        if crate::domain::primary_quiz::current(&tx, &s.date)?
+            .is_some_and(|round| round.submission.is_none())
+        {
+            return Err(
+                "Submit the saved retrieval answers before completing this session.".into(),
+            );
+        }
+        let today = s.date.clone();
+        let tomorrow = adjacent_date(&today, 1)?;
         s.status = "completed".into();
         s.current_step = STEP_DONE.into();
         s.completed_at = Some(now_iso());
-        db::upsert_session(&conn, &s)?;
+        db::upsert_session(&tx, &s)?;
         // Mastery ledger: today's concept has been read (unseen -> introduced).
         if let Some(cid) = s.concept_id {
-            let _ = crate::mastery::record_course_read(&conn, cid, &today);
+            crate::mastery::record_course_read(&tx, cid, &today)?;
         }
-        db::jobs::enqueue(&conn, "quiz", &tomorrow)?;
+        db::jobs::enqueue(&tx, "quiz", &tomorrow)?;
+        tx.commit()?;
         s
     };
     state.gen_notify.notify_one();
@@ -800,58 +845,86 @@ pub async fn ensure_course_for_date(
     Ok(course_row)
 }
 
-/// Authoritative course reading timer. Emits timer:tick {remaining} every second.
+/// Only foreground reading counts; a sleep gap never consumes reading time.
 fn timer_tick_is_active(paused: bool, elapsed: std::time::Duration) -> bool {
     !paused && elapsed < std::time::Duration::from_secs(5)
+}
+
+#[derive(Clone, Serialize)]
+pub struct TimerTick {
+    pub session_id: String,
+    pub remaining: i64,
+}
+
+/// Restore the saved reader and admit at most one native worker. This uses the
+/// timer's lock order so a duplicate start cannot overwrite a newer tick.
+pub fn start_reading(state: &AppState, session_id: &str) -> db::Result<bool> {
+    use std::sync::atomic::Ordering;
+    let mut owner = state.reading_owner.lock().unwrap();
+    let session = set_step(state, session_id, STEP_COURSE)?;
+    let total = state.course_duration_secs();
+    let remaining = (total - session.reading_seconds).max(0);
+    *owner = Some(crate::state::ReadingOwner {
+        session_id: session_id.into(),
+        total_seconds: total,
+    });
+    state.reading_remaining.store(remaining, Ordering::SeqCst);
+    Ok(remaining > 0 && !state.timer_running.swap(true, Ordering::SeqCst))
 }
 
 pub async fn run_course_timer(app: AppHandle) {
     use std::sync::atomic::Ordering;
     let state = app.state::<AppState>();
-    if state.timer_running.swap(true, Ordering::SeqCst) {
-        return;
-    }
-    let mut persist_counter = 0;
     let mut last_tick = std::time::Instant::now();
     loop {
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         let elapsed = last_tick.elapsed();
         last_tick = std::time::Instant::now();
-        let paused = state.timer_paused.load(Ordering::SeqCst);
-        if !timer_tick_is_active(paused, elapsed) {
+        if !timer_tick_is_active(state.timer_paused.load(Ordering::SeqCst), elapsed) {
             if elapsed >= std::time::Duration::from_secs(5) {
-                log::info!(
-                    "reading timer detected a {:.1}s sleep/wake gap; elapsed sleep is not charged",
-                    elapsed.as_secs_f64()
-                );
                 let _ = app.emit("timer:paused-for-sleep", elapsed.as_secs());
             }
             continue;
         }
+        // Admission, owner and the shared counter move under one lock. A new
+        // reader cannot inherit a tick computed for a previous session.
+        let mut guard = state.reading_owner.lock().unwrap();
+        let Some(owner) = guard.clone() else {
+            state.timer_running.store(false, Ordering::SeqCst);
+            return;
+        };
         let remaining = state.reading_remaining.load(Ordering::SeqCst);
-        if remaining <= 0 {
-            let _ = app.emit("timer:tick", 0);
-            break;
-        }
-        let next = remaining - 1;
-        state.reading_remaining.store(next, Ordering::SeqCst);
-        let _ = app.emit("timer:tick", next);
-        persist_counter += 1;
-        if persist_counter % 10 == 0 {
-            let today = state.today();
-            let total = state.course_duration_secs();
+        let next = (remaining - 1).max(0);
+        let saved = {
             let conn = state.db.0.lock().unwrap();
-            if let Ok(Some(mut s)) = db::get_session(&conn, &today) {
-                s.reading_seconds = total - next;
-                let _ = db::upsert_session(&conn, &s);
+            db::save_primary_reading(&conn, &owner.session_id, owner.total_seconds - next)
+        };
+        match saved {
+            Ok(true) => {}
+            Ok(false) => {
+                *guard = None;
+                state.timer_running.store(false, Ordering::SeqCst);
+                return;
+            }
+            Err(error) => {
+                log::error!("reading time could not be saved: {error}");
+                // Keep the previous counter and retry; never report unsaved
+                // time as completed work.
+                continue;
             }
         }
-        if next <= 0 {
-            break;
+        state.reading_remaining.store(next, Ordering::SeqCst);
+        let tick = TimerTick {
+            session_id: owner.session_id,
+            remaining: next,
+        };
+        let _ = app.emit("timer:tick", tick.clone());
+        if next == 0 {
+            state.timer_running.store(false, Ordering::SeqCst);
+            let _ = app.emit("timer:done", tick);
+            return;
         }
     }
-    state.timer_running.store(false, Ordering::SeqCst);
-    let _ = app.emit("timer:done", true);
 }
 
 #[cfg(test)]

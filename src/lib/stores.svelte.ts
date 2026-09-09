@@ -67,6 +67,7 @@ export function shouldShowEscapeHatch(state: AppStateView | null): boolean {
 }
 
 class AppStore {
+  private refreshRequest = 0;
   state = $state<AppStateView | null>(null);
   screen = $state<Screen>('loading');
   destination = $state<Destination>('today');
@@ -91,11 +92,15 @@ class AppStore {
   }
 
   async refresh() {
+    const request = ++this.refreshRequest;
     try {
-      this.state = await api.getAppState();
+      const next = await api.getAppState();
+      if (request !== this.refreshRequest) return;
+      if (next.session.session_id !== this.session?.session_id) this.timerRemaining = -1;
+      this.state = next;
       this.route();
     } catch (e) {
-      this.error = String(e);
+      if (request === this.refreshRequest) this.error = String(e);
     }
   }
 
@@ -181,8 +186,8 @@ class AppStore {
       const ts = new Date().toTimeString().slice(0, 8);
       this.genLog = [...this.genLog.slice(-49), `${ts}  ${line}`];
     });
-    await onEvent<number>('timer:tick', (remaining) => {
-      this.timerRemaining = remaining;
+    await onEvent<{ session_id: string; remaining: number }>('timer:tick', (tick) => {
+      if (tick.session_id === this.session?.session_id) this.timerRemaining = tick.remaining;
     });
   }
 }

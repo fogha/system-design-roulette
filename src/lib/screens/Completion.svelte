@@ -1,6 +1,8 @@
 <script lang="ts">
   import { api } from '../ipc';
   import { app } from '../stores.svelte';
+  // Capture once: async work must keep the session that opened this screen.
+  const sessionId = app.session?.session_id ?? '';
   import ClusterBar from '../components/ClusterBar.svelte';
   import NodeCard from '../components/NodeCard.svelte';
   import StatusLED from '../components/StatusLED.svelte';
@@ -21,7 +23,7 @@
   }
 
   async function openResources() {
-    const n = await api.openResources().catch(() => 0);
+    const n = await api.openResources(sessionId).catch(() => 0);
     resourcesOpened = n > 0;
   }
 

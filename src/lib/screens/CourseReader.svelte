@@ -7,6 +7,8 @@
     type AudioView,
   } from '../ipc';
   import { app } from '../stores.svelte';
+  // Capture once: async work must keep the session that opened this screen.
+  const sessionId = app.session?.session_id ?? '';
   import Markdown from '../components/Markdown.svelte';
   import AudioPlayer from '../components/AudioPlayer.svelte';
   import AgentLog from '../components/AgentLog.svelte';
@@ -31,7 +33,7 @@
     audioLoading = true;
     audioErr = '';
     try {
-      audio = await api.ensureAudio();
+      audio = await api.ensureAudio(sessionId);
     } catch (e) {
       audioErr = String(e);
     } finally {
@@ -109,11 +111,17 @@
   }
 
   $effect(() => {
-    api.ensureCourse().then((c) => {
+    let alive = true;
+    let tocTimer: ReturnType<typeof setTimeout> | undefined;
+    api.ensureCourse(sessionId).then(async (c) => {
+      if (!alive) return;
       course = c;
+      // Re-establish the native timer for this saved owner after app restart.
+      await api.startCourse(sessionId);
       // Markdown renders next tick; build the TOC after paint.
-      setTimeout(buildToc, 80);
-    });
+      if (alive) tocTimer = setTimeout(buildToc, 80);
+    }).catch((error) => { if (alive) app.error = String(error); });
+    return () => { alive = false; clearTimeout(tocTimer); };
   });
 
   // ---- exit check ("prove it") ----
@@ -139,7 +147,7 @@
     if (exitQs.length === 0) {
       exitLoading = true;
       try {
-        exitQs = await api.getExitQuiz();
+        exitQs = await api.getExitQuiz(sessionId);
       } catch (e) {
         exitMsg = String(e);
       } finally {
@@ -193,9 +201,9 @@
     exitMsg = '';
     exitSubmitting = true;
     try {
-      const r = await api.submitExitQuiz(exitAnswers);
+      const r = await api.submitExitQuiz(sessionId, exitAnswers);
       if (r.passed) {
-        await api.finishCourse();
+        await api.finishCourse(sessionId);
         exitOpen = false;
         await app.refresh();
       } else {
@@ -218,7 +226,7 @@
     exitReview = [];
     exitQs = [];
     try {
-      exitQs = await api.getExitQuiz();
+      exitQs = await api.getExitQuiz(sessionId);
     } catch (e) {
       exitMsg = String(e);
     } finally {
@@ -228,7 +236,7 @@
 
   async function finish() {
     try {
-      await api.finishCourse();
+      await api.finishCourse(sessionId);
       await app.refresh();
     } catch (e) {
       app.error = String(e);

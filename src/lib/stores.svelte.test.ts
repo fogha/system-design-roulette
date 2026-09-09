@@ -1,11 +1,13 @@
-import { describe, expect, it } from 'vitest';
-import type { AppStateView } from './ipc';
-import { resolveRoute, shouldShowEscapeHatch } from './stores.svelte';
+import { describe, expect, it, vi } from 'vitest';
+import { api, type AppStateView } from './ipc';
+import { mockEmit } from './mock';
+import { app, resolveRoute, shouldShowEscapeHatch } from './stores.svelte';
 
 function state(overrides: Partial<AppStateView> = {}): AppStateView {
   return {
     onboarded: true,
     session: {
+      session_id: "primary-fixture",
       date: '2026-07-28',
       status: 'pending',
       step: 'quiz',
@@ -105,4 +107,35 @@ describe('escape hatch visibility', () => {
       ),
     ).toBe(false);
   });
+});
+
+it('keeps the latest session when refreshes and timer events arrive out of order', async () => {
+  const first = state();
+  const second = state({ session: { ...first.session, session_id: 'primary-next', status: 'in_progress', step: 'course' } });
+  const getState = vi.spyOn(api, 'getAppState').mockResolvedValue(first);
+  vi.spyOn(api, 'markFrontendReady').mockResolvedValue(undefined);
+  try {
+    await app.init();
+    mockEmit('timer:tick', { session_id: first.session.session_id, remaining: 17 });
+    expect(app.timerRemaining).toBe(17);
+
+    let releaseOld!: (value: AppStateView) => void;
+    getState.mockImplementationOnce(() => new Promise((resolve) => { releaseOld = resolve; }));
+    const oldRefresh = app.refresh();
+    getState.mockResolvedValueOnce(second);
+    await app.refresh();
+    expect(app.timerRemaining).toBe(-1);
+    mockEmit('timer:tick', { session_id: first.session.session_id, remaining: 0 });
+    expect(app.timerRemaining).toBe(-1);
+    mockEmit('timer:tick', { session_id: second.session.session_id, remaining: 29 });
+    expect(app.timerRemaining).toBe(29);
+
+    releaseOld(first);
+    await oldRefresh;
+    expect(app.session?.session_id).toBe(second.session.session_id);
+    expect(app.screen).toBe('course');
+    expect(app.timerRemaining).toBe(29);
+  } finally {
+    vi.restoreAllMocks();
+  }
 });

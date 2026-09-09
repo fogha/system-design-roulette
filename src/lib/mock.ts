@@ -286,8 +286,13 @@ const MOCK_EXIT_PROMPTS: { prompt: string; section: string; learning_objective: 
   },
 ];
 
+const PREVIEW_PRIMARY_ID = 'primary-preview-session';
+function requirePreviewPrimary(id: string) {
+  if (id !== PREVIEW_PRIMARY_ID) throw new Error('This study session is unavailable.');
+}
 function session(): SessionView {
   return {
+    session_id: PREVIEW_PRIMARY_ID,
     date: new Date().toISOString().slice(0, 10),
     status: state.status,
     step: state.step,
@@ -1262,8 +1267,9 @@ export const mockApi = {
     clearMockChatThreads();
     return session();
   },
-  getQuiz: async (): Promise<QuizRoundView> => structuredClone(previewQuiz),
-  submitAnswer: async (roundId: AssessmentRoundId, expectedRevision: number, id: number, answer: string, confirmed: boolean) => {
+  getQuiz: async (sessionId: string): Promise<QuizRoundView> => { requirePreviewPrimary(sessionId); return structuredClone(previewQuiz); },
+  submitAnswer: async (sessionId: string, roundId: AssessmentRoundId, expectedRevision: number, id: number, answer: string, confirmed: boolean) => {
+    requirePreviewPrimary(sessionId);
     if (roundId !== previewQuiz.round_id) throw new Error('This is no longer the displayed quiz round.');
     if (previewQuiz.result || state.step !== 'quiz') throw new Error('This session is not awaiting quiz answers.');
     const q = previewQuiz.questions.find((q) => q.id === id);
@@ -1276,7 +1282,8 @@ export const mockApi = {
     q.draft = answer; q.answered = confirmed; previewQuiz.revision += 1; savePreviewQuiz();
     return previewQuiz.revision;
   },
-  finishQuiz: async (roundId: AssessmentRoundId, expectedRevision: number) => {
+  finishQuiz: async (sessionId: string, roundId: AssessmentRoundId, expectedRevision: number) => {
+    requirePreviewPrimary(sessionId);
     if (roundId !== previewQuiz.round_id) throw new Error('This is no longer the displayed quiz round.');
     if (!previewQuiz.result) {
       if (expectedRevision !== previewQuiz.revision) throw new Error('Answers changed; reload the saved round before submitting.');
@@ -1297,19 +1304,21 @@ export const mockApi = {
     state.score = previewQuiz.result.score;
     return structuredClone(previewQuiz.result);
   },
-  getReview: async () => structuredClone(previewQuiz.result ?? REVIEW),
-  finishReview: async () => {
+  getReview: async (sessionId: string) => { requirePreviewPrimary(sessionId); return structuredClone(previewQuiz.result ?? REVIEW); },
+  finishReview: async (sessionId: string) => {
+    requirePreviewPrimary(sessionId);
     state.step = 'roulette';
     mockEmit('session:state', session());
     return session();
   },
-  completeTrackDay: async () => {
+  completeTrackDay: async (sessionId: string) => {
+    requirePreviewPrimary(sessionId);
     state.step = 'done';
     state.status = 'completed';
     mockEmit('session:state', session());
     return session();
   },
-  getRoulette: async (): Promise<RouletteView> => ({
+  getRoulette: async (sessionId: string): Promise<RouletteView> => (requirePreviewPrimary(sessionId), {
     pool: [
       'Closures and lexical scope',
       'Prototypes vs classes',
@@ -1331,7 +1340,8 @@ export const mockApi = {
     pool_total: 72,
     track_complete: false,
   }),
-  ensureCourse: async (): Promise<CourseView> => {
+  ensureCourse: async (sessionId: string): Promise<CourseView> => {
+    requirePreviewPrimary(sessionId);
     // Demo the live agent log the way a real generation streams it.
     const feed = [
       'spawn: agent · model opus',
@@ -1362,18 +1372,20 @@ export const mockApi = {
       total_seconds: 30 * 60,
     };
   },
-  startCourse: async () => {
+  startCourse: async (sessionId: string) => {
+    requirePreviewPrimary(sessionId);
     state.step = 'course';
     state.remaining = 27 * 60 + 14;
     if (!state.timerId) {
       state.timerId = setInterval(() => {
         state.remaining = Math.max(0, state.remaining - 1);
-        mockEmit('timer:tick', state.remaining);
+        mockEmit('timer:tick', { session_id: PREVIEW_PRIMARY_ID, remaining: state.remaining });
       }, 1000);
     }
     return session();
   },
-  finishCourse: async () => {
+  finishCourse: async (sessionId: string) => {
+    requirePreviewPrimary(sessionId);
     state.step = 'done';
     state.status = 'completed';
     clearMockChatThreads();
@@ -1441,9 +1453,9 @@ export const mockApi = {
     markdown: COURSE_MD,
     resources: RESOURCES,
   }),
-  openResources: async () => RESOURCES.length,
+  openResources: async (sessionId: string) => { requirePreviewPrimary(sessionId); return RESOURCES.length; },
   markFrontendReady: async () => {},
-  ensureAudio: async () => ({
+  ensureAudio: async (sessionId: string) => (requirePreviewPrimary(sessionId), {
     engine: 'speech' as const,
     lines: [
       { speaker: 'teacher' as const, text: "Today we're on the event loop — the scheduler every async API shares. Before I explain: what order do you expect from sync code, a zero-delay timer, and a resolved promise?" },
@@ -1457,7 +1469,8 @@ export const mockApi = {
   }),
   getAudioEnabled: async () => false,
   setAudioEnabled: async () => {},
-  getExitQuiz: async () => {
+  getExitQuiz: async (sessionId: string) => {
+    requirePreviewPrimary(sessionId);
     if (mockExitQuestions.length === 0) {
       mockExitQuestions = Array.from({ length: mockExitCount }, (_, index) => {
         const source = MOCK_EXIT_PROMPTS[((mockExitRound - 1) * 5 + index) % MOCK_EXIT_PROMPTS.length];
@@ -1477,7 +1490,8 @@ export const mockApi = {
     }
     return mockExitQuestions.map(({ id, prompt, choices }) => ({ id, prompt, choices }));
   },
-  submitExitQuiz: async (answers: Record<number, string>) => {
+  submitExitQuiz: async (sessionId: string, answers: Record<number, string>) => {
+    requirePreviewPrimary(sessionId);
     const correctAnswer = 'The mechanism described in the course';
     const correct = mockExitQuestions
       .filter((question) => answers[question.id] === correctAnswer)
@@ -1504,8 +1518,8 @@ export const mockApi = {
     );
     if (passed) {
       state.remaining = 0;
-      mockEmit('timer:tick', 0);
-      mockEmit('timer:done', true);
+      mockEmit('timer:tick', { session_id: PREVIEW_PRIMARY_ID, remaining: 0 });
+      mockEmit('timer:done', { session_id: PREVIEW_PRIMARY_ID, remaining: 0 });
     } else {
       mockExitRound += 1;
       mockExitCount = nextQuestionCount;

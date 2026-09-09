@@ -9,6 +9,7 @@ function state(overrides: Partial<AppStateView> = {}): AppStateView {
   return {
     onboarded: true,
     session: {
+      session_id: "primary-fixture",
       date: '2026-07-27',
       status: 'completed',
       step: 'done',

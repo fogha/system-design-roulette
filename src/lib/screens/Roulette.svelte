@@ -1,6 +1,8 @@
 <script lang="ts">
   import { api, type RouletteView } from '../ipc';
   import { app } from '../stores.svelte';
+  // Capture once: async work must keep the session that opened this screen.
+  const sessionId = app.session?.session_id ?? '';
   import ShardRouter from '../components/ShardRouter.svelte';
   import ClusterBar from '../components/ClusterBar.svelte';
   import StatusLED from '../components/StatusLED.svelte';
@@ -13,7 +15,7 @@
   let phase = $state<'ready' | 'spinning' | 'landed' | 'generating'>('ready');
 
   $effect(() => {
-    api.getRoulette().then((r) => (data = r));
+    api.getRoulette(sessionId).then((r) => (data = r));
   });
 
   function spin() {
@@ -24,12 +26,12 @@
   async function revisit() {
     phase = 'ready';
     data = null;
-    data = await api.getRoulette(true);
+    data = await api.getRoulette(sessionId, true);
   }
 
   async function endDay() {
     try {
-      await api.completeTrackDay();
+      await api.completeTrackDay(sessionId);
       await app.refresh();
     } catch (error) {
       app.error = String(error);
@@ -43,8 +45,8 @@
   async function toCourse() {
     phase = 'generating';
     try {
-      await api.ensureCourse();
-      await api.startCourse();
+      await api.ensureCourse(sessionId);
+      await api.startCourse(sessionId);
       await app.refresh();
     } catch (e) {
       app.error = String(e);

@@ -141,3 +141,58 @@ tests ignored), `/tmp/principia-study-clippy.log`, and
 native domain and storage tests; existing UI commands still use the legacy
 engines, so this check verifies upgrade compatibility, not completed engine
 integration or cross-platform runtime behavior.
+
+## Primary identity and reader restart
+
+Used a separate profile, `com.darkmatter.principia-desk.primary-id-qa`, copied with
+SQLite's backup API from the earlier isolated v6 assessment profile. Added only
+synthetic QA rows: a prepared September 19 JavaScript reader and a separate
+September 20 TypeScript pending row. Launch Services started the packaged app
+with `SDR_DATE=2026-09-20`, disabled Claude/Codex executables and `--debug-day`.
+This is a controlled service-date test, not a timezone/DST test.
+
+The v7 upgrade retained a v6 backup, generated distinct primary IDs, passed SQLite
+integrity and foreign-key checks, and restored the September 19 reader. Normal
+Quit initially revealed two debug-mode restrictions: native close/quit guards
+and the webview's Cmd-Q interceptor used the simulated lock. Both were corrected.
+Only the synthetic reader's counter was reset between these QA attempts.
+
+With the final build, Cmd-Q terminated the process while the reader was still
+unfinished. SQLite contained 17 saved seconds and the same session ID. A fresh
+launch restored that lesson and continued its remaining time; after the timer
+reached zero, the native Complete session button changed September 19 to
+`completed` / `done` with 30 debug seconds. September 20 remained `pending` /
+`quiz` with zero seconds. The UI correctly showed that next day as still due.
+
+Prepared course bytes, all four assessment tables, classes and path revisions
+retained their pre-test hashes. The original assessment profile and production
+learner data were not edited. The new shared-runtime table still has zero rows:
+this test exercises the primary compatibility command boundary, not the future
+FSM/content migration.
+
+Evidence: `/tmp/principia-primary-native-before.json`,
+`/tmp/principia-primary-native-quit.json`,
+`/tmp/principia-primary-native-completed.json`,
+`/tmp/principia-primary-native-build.log`, `/tmp/principia-primary-tests.log`,
+`/tmp/principia-primary-clippy.log`, `/tmp/principia-primary-ui-check.log` and
+`/tmp/principia-primary-ui-tests.log`. Automated results: 211 Rust tests passed,
+six live/external tests ignored, 52 frontend tests passed, no Svelte diagnostics,
+and strict Clippy passed.
+
+The final feedback integration was also checked in the packaged desktop app under
+`SDR_DATE=2026-10-03`: it restored the existing three-item review directly from
+native storage, displayed the saved `let` answers and moved to the second item.
+Cmd-Q exited normally. Screen components now remount on owner changes; a frontend
+regression rejects out-of-order refresh replies and foreign timer events. Reader
+admission tests verify that duplicate starts share one worker and use the latest
+persisted counter. The reader ignores a late preparation reply after unmounting.
+
+After the final timer-admission change, a fresh October 4 fixture started at
+seven saved seconds under an October 5 clock. Cmd-Q exited at 25 seconds. Relaunch
+finished the remaining five seconds; Complete session changed only October 4 to
+completed with 30 seconds. October 5 stayed pending at zero, and both IDs were
+unchanged. The app then restored the older October 3 unfinished review, which is
+also retained in this QA profile. Integrity and foreign-key checks passed.
+Evidence: `/tmp/principia-primary-final-before.json`,
+`/tmp/principia-primary-final-quit.json` and
+`/tmp/principia-primary-final-completed.json`.

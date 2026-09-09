@@ -92,7 +92,7 @@ fn original_main_pr_head_and_intermediate_schemas_preserve_all_original_fields()
             .collect::<Vec<_>>();
         drop(old);
         let conn = db::open(&path).unwrap_or_else(|error| panic!("{name}: {error}"));
-        assert_eq!(schema_version(&conn), 6);
+        assert_eq!(schema_version(&conn), 7);
         for (table, columns, original) in snapshots {
             let condition = if table == "exercise_drafts" && !unified {
                 "WHERE course_id IS NOT NULL"
@@ -156,7 +156,7 @@ fn original_main_pr_head_and_intermediate_schemas_preserve_all_original_fields()
         drop(snapshot);
         drop(conn);
         let reopened = db::open(&path).unwrap();
-        assert_eq!(schema_version(&reopened), 6);
+        assert_eq!(schema_version(&reopened), 7);
         assert_eq!(
             backups(&path),
             backup_paths,
@@ -189,7 +189,7 @@ fn pre_upgrade_backup_includes_committed_wal_pages() {
         .unwrap()
         .exists([])
         .unwrap());
-    assert_eq!(schema_version(&conn), 6);
+    assert_eq!(schema_version(&conn), 7);
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -260,7 +260,7 @@ fn concurrent_opens_share_one_upgrade_and_one_pre_upgrade_snapshot() {
             std::thread::spawn(move || {
                 barrier.wait();
                 let conn = db::open(&path).unwrap();
-                assert_eq!(schema_version(&conn), 6);
+                assert_eq!(schema_version(&conn), 7);
             })
         })
         .collect::<Vec<_>>();

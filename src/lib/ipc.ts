@@ -308,6 +308,7 @@ export interface EngineeringSessionResult {
 }
 
 export interface SessionView {
+  session_id: string | null;
   date: string;
   status: 'pending' | 'in_progress' | 'completed' | 'skipped';
   step: 'quiz' | 'review' | 'roulette' | 'course' | 'done';
@@ -677,29 +678,29 @@ const realApi = {
   pauseSchedule: () => invoke<void>('pause_schedule'),
   resumeSchedule: () => invoke<void>('resume_schedule'),
   startSession: (focus: FocusArea) => invoke<SessionView>('start_session', { focus }),
-  getQuiz: () => invoke<QuizRoundView>('get_quiz'),
-  submitAnswer: (roundId: AssessmentRoundId, expectedRevision: number, questionId: number, answer: string, confirmed: boolean) =>
-    invoke<number>('submit_answer', { roundId, expectedRevision, questionId, answer, confirmed }),
-  finishQuiz: (roundId: AssessmentRoundId, expectedRevision: number) => invoke<ReviewData>('finish_quiz', { roundId, expectedRevision }),
-  getReview: () => invoke<ReviewData>('get_review'),
-  finishReview: () => invoke<SessionView>('finish_review'),
-  completeTrackDay: () => invoke<SessionView>('complete_track_day'),
-  getRoulette: (revisit?: boolean) => invoke<RouletteView>('get_roulette', { revisit }),
-  ensureCourse: () => invoke<CourseView>('ensure_course'),
-  startCourse: () => invoke<SessionView>('start_course'),
-  finishCourse: () => invoke<SessionView>('finish_course'),
+  getQuiz: (sessionId: string) => invoke<QuizRoundView>('get_quiz', { sessionId }),
+  submitAnswer: (sessionId: string, roundId: AssessmentRoundId, expectedRevision: number, questionId: number, answer: string, confirmed: boolean) =>
+    invoke<number>('submit_answer', { sessionId, roundId, expectedRevision, questionId, answer, confirmed }),
+  finishQuiz: (sessionId: string, roundId: AssessmentRoundId, expectedRevision: number) => invoke<ReviewData>('finish_quiz', { sessionId, roundId, expectedRevision }),
+  getReview: (sessionId: string) => invoke<ReviewData>('get_review', { sessionId }),
+  finishReview: (sessionId: string) => invoke<SessionView>('finish_review', { sessionId }),
+  completeTrackDay: (sessionId: string) => invoke<SessionView>('complete_track_day', { sessionId }),
+  getRoulette: (sessionId: string, revisit?: boolean) => invoke<RouletteView>('get_roulette', { sessionId, revisit }),
+  ensureCourse: (sessionId: string) => invoke<CourseView>('ensure_course', { sessionId }),
+  startCourse: (sessionId: string) => invoke<SessionView>('start_course', { sessionId }),
+  finishCourse: (sessionId: string) => invoke<SessionView>('finish_course', { sessionId }),
   escapeSession: (phrase: string) => invoke<boolean>('escape_session', { phrase }),
-  ensureAudio: () => invoke<AudioView>('ensure_audio'),
+  ensureAudio: (sessionId: string) => invoke<AudioView>('ensure_audio', { sessionId }),
   getAudioEnabled: () => invoke<boolean>('get_audio_enabled'),
   setAudioEnabled: (enabled: boolean) => invoke<void>('set_audio_enabled', { enabled }),
-  getExitQuiz: () => invoke<ExitQuizQuestion[]>('get_exit_quiz'),
-  submitExitQuiz: (answers: Record<number, string>) =>
-    invoke<ExitQuizResult>('submit_exit_quiz', { answers }),
+  getExitQuiz: (sessionId: string) => invoke<ExitQuizQuestion[]>('get_exit_quiz', { sessionId }),
+  submitExitQuiz: (sessionId: string, answers: Record<number, string>) =>
+    invoke<ExitQuizResult>('submit_exit_quiz', { sessionId, answers }),
   getEscapePhrase: () => invoke<string>('get_escape_phrase'),
   getDashboard: () => invoke<DashboardView>('get_dashboard'),
   getPastCourse: (date: string) =>
     invoke<ArchivedCourse | null>('get_past_course', { date }),
-  openResources: () => invoke<number>('open_resources'),
+  openResources: (sessionId: string) => invoke<number>('open_resources', { sessionId }),
 };
 
 /** Demo mode: outside Tauri (plain `vite dev`), serve canned data from mock.ts. */

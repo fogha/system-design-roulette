@@ -231,9 +231,11 @@ pub fn get_app_state(state: State<'_, AppState>) -> CmdResult<AppStateView> {
                 .ok()
                 .flatten()
                 .unwrap_or_else(|| "hard".into()),
-            session::session_focus(&conn, &today)
+            db::current_primary_session(&conn, &today)
                 .ok()
                 .flatten()
+                .map(|session| session.focus)
+                .filter(|focus| !focus.is_empty())
                 .or_else(|| {
                     crate::mastery::get_profile(&conn, "preferred_focus")
                         .ok()
@@ -668,9 +670,9 @@ pub struct QuizRoundView {
 }
 
 #[tauri::command]
-pub fn get_quiz(state: State<'_, AppState>) -> CmdResult<QuizRoundView> {
-    let today = state.today();
-    let yesterday = state.yesterday();
+pub fn get_quiz(state: State<'_, AppState>, session_id: String) -> CmdResult<QuizRoundView> {
+    let today = session::owner_date(&state, &session_id).map_err(err)?;
+    let yesterday = session::adjacent_date(&today, -1).map_err(err)?;
     let conn = state.db.0.lock().unwrap();
     let questions = session::questions_for_today(&conn, &today, &yesterday).map_err(err)?;
     let round = primary_quiz::current(&conn, &today).map_err(err)?;
@@ -704,16 +706,18 @@ pub fn get_quiz(state: State<'_, AppState>) -> CmdResult<QuizRoundView> {
 #[tauri::command]
 pub fn submit_answer(
     state: State<'_, AppState>,
+    session_id: String,
     round_id: RoundId,
     expected_revision: u32,
     question_id: i64,
     answer: String,
     confirmed: bool,
 ) -> CmdResult<u32> {
+    let today = session::owner_date(&state, &session_id).map_err(err)?;
     let conn = state.db.0.lock().unwrap();
     Ok(primary_quiz::save_answer(
         &conn,
-        &state.today(),
+        &today,
         &round_id,
         expected_revision,
         question_id,
@@ -748,11 +752,12 @@ pub struct ReviewData {
 pub async fn finish_quiz(
     app: AppHandle,
     state: State<'_, AppState>,
+    session_id: String,
     round_id: RoundId,
     expected_revision: u32,
 ) -> CmdResult<ReviewData> {
-    let today = state.today();
-    let tomorrow = state.tomorrow();
+    let today = session::owner_date(&state, &session_id).map_err(err)?;
+    let tomorrow = session::adjacent_date(&today, 1).map_err(err)?;
 
     let (round, questions, pending, concept_of, track_focus, dossier) = {
         let conn = state.db.0.lock().unwrap();
@@ -993,9 +998,9 @@ fn persist_quiz_result(
 }
 
 #[tauri::command]
-pub fn get_review(state: State<'_, AppState>) -> CmdResult<ReviewData> {
-    let today = state.today();
-    let yesterday = state.yesterday();
+pub fn get_review(state: State<'_, AppState>, session_id: String) -> CmdResult<ReviewData> {
+    let today = session::owner_date(&state, &session_id).map_err(err)?;
+    let yesterday = session::adjacent_date(&today, -1).map_err(err)?;
     let conn = state.db.0.lock().unwrap();
     if let Some(result) = primary_quiz::result(&conn, &today).map_err(err)? {
         return serde_json::from_value(result).map_err(err);
@@ -1087,8 +1092,12 @@ pub struct RouletteView {
 /// the roulette step and only when the track is actually complete — the
 /// mastered track's retrieval lives in pop-quiz days, not repeated lessons.
 #[tauri::command]
-pub fn complete_track_day(app: AppHandle, state: State<'_, AppState>) -> CmdResult<SessionView> {
-    let today = state.today();
+pub fn complete_track_day(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    session_id: String,
+) -> CmdResult<SessionView> {
+    let today = session::owner_date(&state, &session_id).map_err(err)?;
     {
         let conn = state.db.0.lock().unwrap();
         let track_focus = session::session_focus(&conn, &today)
@@ -1098,16 +1107,20 @@ pub fn complete_track_day(app: AppHandle, state: State<'_, AppState>) -> CmdResu
             return Err("the track still has new modules — draw one instead".into());
         }
     }
-    session::complete_session(&app, &state).map_err(err)?;
+    session::complete_session(&app, &state, &session_id).map_err(err)?;
     let v = session::view(&state);
     let _ = app.emit("session:state", v.clone());
     Ok(v)
 }
 
 #[tauri::command]
-pub fn finish_review(app: AppHandle, state: State<'_, AppState>) -> CmdResult<SessionView> {
+pub fn finish_review(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    session_id: String,
+) -> CmdResult<SessionView> {
     let is_pop = {
-        let today = state.today();
+        let today = session::owner_date(&state, &session_id).map_err(err)?;
         let conn = state.db.0.lock().unwrap();
         db::get_session(&conn, &today)
             .map_err(err)?
@@ -1116,9 +1129,9 @@ pub fn finish_review(app: AppHandle, state: State<'_, AppState>) -> CmdResult<Se
     };
     if is_pop {
         // Pop-quiz day: the audit IS the session — no new topic, done after review.
-        session::complete_session(&app, &state).map_err(err)?;
+        session::complete_session(&app, &state, &session_id).map_err(err)?;
     } else {
-        session::set_step(&state, session::STEP_ROULETTE).map_err(err)?;
+        session::set_step(&state, &session_id, session::STEP_ROULETTE).map_err(err)?;
     }
     let v = session::view(&state);
     let _ = app.emit("session:state", v.clone());
@@ -1129,8 +1142,12 @@ pub fn finish_review(app: AppHandle, state: State<'_, AppState>) -> CmdResult<Se
 /// `revisit` is the opt-in path that draws from completed modules only —
 /// never the automatic selection.
 #[tauri::command]
-pub fn get_roulette(state: State<'_, AppState>, revisit: Option<bool>) -> CmdResult<RouletteView> {
-    let today = state.today();
+pub fn get_roulette(
+    state: State<'_, AppState>,
+    session_id: String,
+    revisit: Option<bool>,
+) -> CmdResult<RouletteView> {
+    let today = session::owner_date(&state, &session_id).map_err(err)?;
     let conn = state.db.0.lock().unwrap();
     let track_focus = session::session_focus(&conn, &today)
         .map_err(err)?
@@ -1227,8 +1244,12 @@ pub struct CourseView {
 /// Generate today's course if missing (slow path), then return it. Frontend shows
 /// gen:status events while this runs.
 #[tauri::command]
-pub async fn ensure_course(app: AppHandle, state: State<'_, AppState>) -> CmdResult<CourseView> {
-    let today = state.today();
+pub async fn ensure_course(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    session_id: String,
+) -> CmdResult<CourseView> {
+    let today = session::owner_date(&state, &session_id).map_err(err)?;
     let _ = app.emit("gen:status", "checking course");
     let course = session::ensure_course_for_date(&state, &today)
         .await
@@ -1290,19 +1311,12 @@ pub async fn ensure_course(app: AppHandle, state: State<'_, AppState>) -> CmdRes
 }
 
 #[tauri::command]
-pub fn start_course(app: AppHandle, state: State<'_, AppState>) -> CmdResult<SessionView> {
-    let today = state.today();
-    let total = state.course_duration_secs();
-    let remaining = {
-        let conn = state.db.0.lock().unwrap();
-        let s = db::get_session(&conn, &today)
-            .map_err(err)?
-            .ok_or("no session")?;
-        (total - s.reading_seconds).max(0)
-    };
-    session::set_step(&state, session::STEP_COURSE).map_err(err)?;
-    state.reading_remaining.store(remaining, Ordering::SeqCst);
-    if !state.timer_running.load(Ordering::SeqCst) && remaining > 0 {
+pub fn start_course(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    session_id: String,
+) -> CmdResult<SessionView> {
+    if session::start_reading(&state, &session_id).map_err(err)? {
         let app2 = app.clone();
         tauri::async_runtime::spawn(async move {
             session::run_course_timer(app2).await;
@@ -1314,12 +1328,27 @@ pub fn start_course(app: AppHandle, state: State<'_, AppState>) -> CmdResult<Ses
 }
 
 #[tauri::command]
-pub fn finish_course(app: AppHandle, state: State<'_, AppState>) -> CmdResult<SessionView> {
-    let remaining = state.reading_remaining.load(Ordering::SeqCst);
+pub fn finish_course(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    session_id: String,
+) -> CmdResult<SessionView> {
+    let remaining = {
+        let conn = state.db.0.lock().unwrap();
+        let session = db::primary_session_by_id(&conn, &session_id).map_err(err)?;
+        if session.status == "completed" {
+            drop(conn);
+            return Ok(session::view(&state));
+        }
+        if session.status != "in_progress" || session.current_step != session::STEP_COURSE {
+            return Err("This session is not at the reading stage.".into());
+        }
+        (state.course_duration_secs() - session.reading_seconds).max(0)
+    };
     if remaining > 0 {
         return Err(format!("{remaining} seconds of reading remain"));
     }
-    session::complete_session(&app, &state).map_err(err)?;
+    session::complete_session(&app, &state, &session_id).map_err(err)?;
     Ok(session::view(&state))
 }
 
@@ -1330,8 +1359,9 @@ pub fn finish_course(app: AppHandle, state: State<'_, AppState>) -> CmdResult<Se
 pub async fn ensure_audio(
     app: AppHandle,
     state: State<'_, AppState>,
+    session_id: String,
 ) -> CmdResult<crate::audio::AudioView> {
-    let today = state.today();
+    let today = session::owner_date(&state, &session_id).map_err(err)?;
     let course = {
         let conn = state.db.0.lock().unwrap();
         db::course_for_date(&conn, &today)
@@ -1529,8 +1559,11 @@ fn fallback_exit_checks(
 /// blocking the reader — mirrors the never-blocks guarantee course and
 /// quiz generation already give the rest of the session.
 #[tauri::command]
-pub async fn get_exit_quiz(state: State<'_, AppState>) -> CmdResult<Vec<ExitQuizQuestion>> {
-    let today = state.today();
+pub async fn get_exit_quiz(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> CmdResult<Vec<ExitQuizQuestion>> {
+    let today = session::owner_date(&state, &session_id).map_err(err)?;
     let (course, focus, round, target_count, mut exclusions, failed_areas) = {
         let conn = state.db.0.lock().unwrap();
         let course = db::course_for_date(&conn, &today)
@@ -1730,9 +1763,10 @@ fn grade_exit_round(
 pub fn submit_exit_quiz(
     app: AppHandle,
     state: State<'_, AppState>,
+    session_id: String,
     answers: HashMap<i64, String>,
 ) -> CmdResult<ExitQuizResult> {
-    let today = state.today();
+    let today = session::owner_date(&state, &session_id).map_err(err)?;
     let (course_id, round, question_count, questions) = {
         let conn = state.db.0.lock().unwrap();
         let course = db::course_for_date(&conn, &today)
@@ -1798,14 +1832,23 @@ pub fn submit_exit_quiz(
     if passed {
         // Burn the remaining TTL: the running timer sees 0 and fires timer:done.
         let total = state.course_duration_secs();
-        state.reading_remaining.store(0, Ordering::SeqCst);
+        let owner = state.reading_owner.lock().unwrap();
         let conn = state.db.0.lock().unwrap();
-        if let Ok(Some(mut s)) = db::get_session(&conn, &today) {
-            s.reading_seconds = total;
-            let _ = db::upsert_session(&conn, &s);
+        if !db::save_primary_reading(&conn, &session_id, total).map_err(err)? {
+            return Err("This reading session is no longer active.".into());
         }
-        let _ = app.emit("timer:tick", 0);
-        let _ = app.emit("timer:done", true);
+        if owner
+            .as_ref()
+            .is_some_and(|owner| owner.session_id == session_id)
+        {
+            state.reading_remaining.store(0, Ordering::SeqCst);
+        }
+        let tick = session::TimerTick {
+            session_id: session_id.clone(),
+            remaining: 0,
+        };
+        let _ = app.emit("timer:tick", tick.clone());
+        let _ = app.emit("timer:done", tick);
     } else {
         let conn = state.db.0.lock().unwrap();
         db::set_config(&conn, &exit_round_key(course_id), &(round + 1).to_string()).map_err(err)?;
@@ -1853,7 +1896,7 @@ pub fn escape_session(
                     .flatten()
                     .filter(|value| crate::focus::is_selectable(value))
                     .unwrap_or_else(|| "javascript".into());
-                let mut s = db::get_session(&conn, &today)
+                let mut s = db::current_primary_session(&conn, &today)
                     .ok()
                     .flatten()
                     .unwrap_or(db::Session {
@@ -2176,11 +2219,15 @@ pub async fn send_chat_message(
 
 /// After the session, open all of today's resource links in the default browser.
 #[tauri::command]
-pub fn open_resources(app: AppHandle, state: State<'_, AppState>) -> CmdResult<usize> {
+pub fn open_resources(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    session_id: String,
+) -> CmdResult<usize> {
     if state.locked.load(Ordering::SeqCst) {
         return Err("locked — resources unlock after the session".into());
     }
-    let today = state.today();
+    let today = session::owner_date(&state, &session_id).map_err(err)?;
     let urls: Vec<String> = {
         let conn = state.db.0.lock().unwrap();
         let course = db::course_for_date(&conn, &today).map_err(err)?;

@@ -84,6 +84,15 @@ const MIGRATIONS: &[Migration] = &[
             Ok(())
         },
     },
+    Migration {
+        version: 7,
+        name: "primary_identity",
+        sources: &[include_str!("007_primary_identity.sql")],
+        apply: |conn| {
+            conn.execute_batch(include_str!("007_primary_identity.sql"))?;
+            Ok(())
+        },
+    },
 ];
 
 pub fn enable_foreign_keys(conn: &Connection) -> Result<()> {

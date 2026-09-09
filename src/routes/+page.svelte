@@ -1,7 +1,6 @@
 <script lang="ts">
   import '../lib/theme.css';
   import { app, shouldShowEscapeHatch } from '../lib/stores.svelte';
-  import type { ReviewData } from '../lib/ipc';
   import SetupWizard from '../lib/screens/SetupWizard.svelte';
   import Today from '../lib/screens/Today.svelte';
   import Classes from '../lib/features/classes/Classes.svelte';
@@ -18,7 +17,6 @@
   import Dashboard from '../lib/screens/Dashboard.svelte';
   import EscapeHatch from '../lib/components/EscapeHatch.svelte';
 
-  let reviewData = $state<ReviewData | null>(null);
   const isBlanker =
     typeof location !== 'undefined' && new URLSearchParams(location.search).has('blanker');
   const showEscapeHatch = $derived(shouldShowEscapeHatch(app.state));
@@ -29,14 +27,14 @@
 
   // Block common quit/close shortcuts while locked.
   function onKeydown(e: KeyboardEvent) {
-    if (app.session?.locked && e.metaKey && ['q', 'w', 'h', 'm'].includes(e.key.toLowerCase())) {
+    if (!app.state?.debug_day && app.session?.locked && e.metaKey && ['q', 'w', 'h', 'm'].includes(e.key.toLowerCase())) {
       e.preventDefault();
       e.stopPropagation();
     }
   }
 </script>
 
-<svelte:window onkeydown={onKeydown} oncontextmenu={(e) => app.session?.locked && e.preventDefault()} />
+<svelte:window onkeydown={onKeydown} oncontextmenu={(e) => !app.state?.debug_day && app.session?.locked && e.preventDefault()} />
 
 <div id="app-root" class="theme-noir">
   {#if isBlanker}
@@ -54,15 +52,15 @@
       {:else}<Today />{/if}
     </DeskShell>
   {:else if app.screen === 'quiz'}
-    <Quiz onreview={(d) => (reviewData = d)} />
+    {#key app.session?.session_id}<Quiz />{/key}
   {:else if app.screen === 'review'}
-    <AnswerReview data={reviewData} />
+    {#key app.session?.session_id}<AnswerReview />{/key}
   {:else if app.screen === 'roulette'}
-    <Roulette />
+    {#key app.session?.session_id}<Roulette />{/key}
   {:else if app.screen === 'course'}
-    <CourseReader />
+    {#key app.session?.session_id}<CourseReader />{/key}
   {:else if app.screen === 'completion'}
-    <Completion />
+    {#key app.session?.session_id}<Completion />{/key}
   {:else if app.screen === 'language'}
     <LanguageLesson />
   {:else if app.screen === 'classroom'}
