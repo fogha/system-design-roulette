@@ -89,7 +89,14 @@ export interface LanguageQuestionView {
 }
 
 export interface LanguageLessonView {
-  session_id: number;
+  /** Legacy row ID or shared-runtime `study-…` ID; see `runtime`. */
+  session_id: string;
+  runtime: 'legacy' | 'study';
+  lifecycle: string;
+  revision: number;
+  checkpoint: LessonCheckpoint | null;
+  check: LessonCheckView | null;
+  outcome: LanguageSessionResult | null;
   language: LanguageId;
   label: string;
   native_label: string;
@@ -122,7 +129,7 @@ export interface LanguageCorrection {
 }
 
 export interface LanguageSessionResult {
-  session_id: number;
+  session_id: string;
   passed: boolean;
   score: number;
   corrections: LanguageCorrection[];
@@ -762,6 +769,8 @@ const realApi = {
     invoke<LessonCheckView>('save_class_check_answer', { sessionId, roundId, expectedRevision, questionId, choice }),
   submitClassCheck: (sessionId: string, roundId: AssessmentRoundId, expectedRevision: number, reflection: string) =>
     invoke<EngineeringSessionResult>('submit_class_check', { sessionId, roundId, expectedRevision, reflection }),
+  submitClassLanguageCheck: (sessionId: string, roundId: AssessmentRoundId, expectedRevision: number, input: { writing_response: string; speaking_completed: boolean; listened: boolean; confidence: number }) =>
+    invoke<LanguageSessionResult>('submit_class_language_check', { sessionId, roundId, expectedRevision, input }),
   pauseClassLesson: (sessionId: string) => invoke<void>('pause_class_lesson', { sessionId }),
   skipClassLesson: (sessionId: string) => invoke<void>('skip_class_lesson', { sessionId }),
   submitLanguageSession: (input: {

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { api, type LanguageSessionResult } from '../ipc';
+  import type { AssessmentRoundId } from '../contracts/assessments';
   import { app } from '../stores.svelte';
   import ClusterBar from '../components/ClusterBar.svelte';
   import Dropdown from '../components/Dropdown.svelte';
@@ -22,6 +23,13 @@
     { value: 5, label: '5 · Clear and independent' },
   ];
   const lesson = $derived(app.languageLesson);
+  /** Shared-runtime lessons persist answers and production work with the session. */
+  const study = $derived(lesson?.runtime === 'study');
+  let roundId = $state<AssessmentRoundId | null>(null);
+  let checkRevision = $state(0);
+  let answerStatus = $state<'saved' | 'saving' | 'error'>('saved');
+  let answerError = $state('');
+  let saveQueue: Promise<void> = Promise.resolve();
   let answers = $state<number[]>([]);
   let writingResponse = $state('');
   let speakingCompleted = $state(false);
@@ -30,16 +38,29 @@
   let speaking = $state(false);
   let submitting = $state(false);
   let result = $state<LanguageSessionResult | null>(null);
-  let preparedSession = $state<number | null>(null);
+  let preparedSession = $state<string | null>(null);
 
   $effect(() => {
     if (lesson && preparedSession !== lesson.session_id) {
-      answers = Array(lesson.questions.length).fill(-1);
-      writingResponse = '';
-      speakingCompleted = false;
-      listened = false;
-      confidence = 3;
-      result = null;
+      const restored: number[] = Array(lesson.questions.length).fill(-1);
+      if (lesson.check) {
+        for (const [index, question] of lesson.questions.entries()) {
+          const saved = lesson.check.responses[String(question.id)];
+          const choice = saved?.status === 'answered' ? Number(saved.answer) : NaN;
+          if (Number.isInteger(choice) && choice >= 0) restored[index] = choice;
+        }
+      }
+      answers = restored;
+      const work = lesson.checkpoint?.body.work ?? {};
+      writingResponse = typeof work.writing_response === 'string' ? work.writing_response : '';
+      speakingCompleted = work.speaking_completed === true;
+      listened = work.listened === true;
+      confidence = typeof work.confidence === 'number' && work.confidence >= 1 && work.confidence <= 5 ? work.confidence : 3;
+      result = lesson.outcome ?? null;
+      roundId = lesson.check?.round_id ?? null;
+      checkRevision = lesson.check?.revision ?? 0;
+      answerStatus = 'saved';
+      answerError = '';
       preparedSession = lesson.session_id;
     }
   });
@@ -48,6 +69,38 @@
     if (result) return;
     answers[questionIndex] = choiceIndex;
     answers = [...answers];
+    if (!lesson || !study || !roundId) return;
+    const sessionId = lesson.session_id;
+    const round = roundId;
+    const questionId = lesson.questions[questionIndex].id;
+    answerStatus = 'saving';
+    saveQueue = saveQueue.then(async () => {
+      try {
+        const saved = await api.saveClassCheckAnswer(sessionId, round, checkRevision, questionId, choiceIndex);
+        checkRevision = saved.revision;
+        answerStatus = 'saved';
+        answerError = '';
+      } catch (error) {
+        answerStatus = 'error';
+        answerError = String(error);
+      }
+    });
+  }
+
+  /** Production work is saved with the lesson so a paused session restores it. */
+  async function pause() {
+    stopSpeaking();
+    if (lesson && study && !result) {
+      try {
+        await saveQueue;
+        await api.saveClassLessonWork({ session_id: lesson.session_id, expected_revision: null, work: { writing_response: writingResponse, speaking_completed: speakingCompleted, listened, confidence } });
+        await api.pauseClassLesson(lesson.session_id);
+      } catch (error) {
+        app.error = String(error);
+      }
+    }
+    app.screen = 'idle';
+    void app.refresh();
   }
 
   function stopSpeaking() {
@@ -80,14 +133,21 @@
     if (!lesson || answers.some((answer) => answer < 0) || submitting) return;
     submitting = true;
     try {
-      result = await api.submitLanguageSession({
-        session_id: lesson.session_id,
-        answers,
-        writing_response: writingResponse,
-        speaking_completed: speakingCompleted,
-        listened,
-        confidence,
-      });
+      if (study) {
+        await saveQueue;
+        if (answerStatus === 'error') throw new Error(answerError || 'Saved answers could not be stored. Try again.');
+        if (!roundId) throw new Error('The knowledge check is not ready yet.');
+        result = await api.submitClassLanguageCheck(lesson.session_id, roundId, checkRevision, { writing_response: writingResponse, speaking_completed: speakingCompleted, listened, confidence });
+      } else {
+        result = await api.submitLanguageSession({
+          session_id: Number(lesson.session_id),
+          answers,
+          writing_response: writingResponse,
+          speaking_completed: speakingCompleted,
+          listened,
+          confidence,
+        });
+      }
       stopSpeaking();
     } catch (error) {
       app.error = String(error);
@@ -110,14 +170,7 @@
     />
 
     <header class="lesson-head">
-      <button
-        class="back"
-        type="button"
-        onclick={() => {
-          stopSpeaking();
-          app.screen = 'idle';
-        }}
-      >
+      <button class="back" type="button" onclick={pause}>
         <ArrowLeft size={14} /> pause and return
       </button>
       <div class="lesson-identity">
@@ -168,6 +221,7 @@
           <span class="meta-label">RETRIEVAL + PRODUCTION</span>
           <h2 id="practice-title">Show what you can do</h2>
           <p>Answer from memory. Wrong answers return with a concrete explanation.</p>
+          {#if study && !result}<p class="save-state mono" class:err={answerStatus === 'error'} role="status">{answerStatus === 'saving' ? 'saving answers…' : answerStatus === 'error' ? `answers not saved: ${answerError}` : 'answers saved with this lesson'}</p>{/if}
         </div>
 
         <div class="questions">
@@ -458,6 +512,8 @@
   .practice-pane {
     background: color-mix(in srgb, var(--node-bg) 96%, transparent);
   }
+  .save-state { color: var(--faint); font-size: 9px; margin: 6px 0 0; }
+  .save-state.err { color: var(--red); }
   .practice-intro {
     margin-bottom: 18px;
   }

@@ -104,7 +104,7 @@ fn a1_completes_alphabet_and_counting_foundations_before_later_scenarios() {
             .contains("### One analogy, and where it breaks"));
         assert!(lesson.markdown.contains("**Where it breaks:**"));
         assert!(lesson.markdown.contains("**Derive it:**"));
-        pass_session(&conn, lesson.session_id, &today);
+        pass_session(&conn, lesson.session_id.parse::<i64>().unwrap(), &today);
     }
 
     let numbers = language::start_session(&conn, "german", "2026-07-24", false).unwrap();
@@ -252,11 +252,11 @@ fn passed_language_session_records_skill_and_unit_evidence() {
     let conn = test_db();
     enable_german(&conn);
     let lesson = language::start_session(&conn, "german", "2026-07-21", false).unwrap();
-    let answers = correct_answers(&conn, lesson.session_id);
+    let answers = correct_answers(&conn, lesson.session_id.parse::<i64>().unwrap());
     let result = language::submit_session(
         &conn,
         &SubmitSessionInput {
-            session_id: lesson.session_id,
+            session_id: lesson.session_id.parse::<i64>().unwrap(),
             answers,
             writing_response:
                 "Guten Tag. Ich heiße Armand und ich komme aus England. Freut mich sehr.".into(),
@@ -309,8 +309,8 @@ fn cefr_level_advances_only_after_unit_and_skill_gate_evidence() {
     let result = language::submit_session(
         &conn,
         &SubmitSessionInput {
-            session_id: lesson.session_id,
-            answers: correct_answers(&conn, lesson.session_id),
+            session_id: lesson.session_id.parse::<i64>().unwrap(),
+            answers: correct_answers(&conn, lesson.session_id.parse::<i64>().unwrap()),
             writing_response:
                 "Guten Tag. Ich heiße Armand und ich komme aus England. Freut mich sehr.".into(),
             speaking_completed: true,
@@ -393,7 +393,11 @@ fn completing_each_target_stops_there_and_keeps_settings_editable() {
             conn.execute("INSERT INTO language_skill_scores (language, strand, score_ema, encounters) VALUES ('german', ?1, 0.9, 5)", [strand]).unwrap();
         }
         let lesson = language::start_session(&conn, "german", "2026-07-21", true).unwrap();
-        pass_session(&conn, lesson.session_id, "2026-07-21");
+        pass_session(
+            &conn,
+            lesson.session_id.parse::<i64>().unwrap(),
+            "2026-07-21",
+        );
         let progress = language::program_view(&conn, "german", "2026-07-21").unwrap();
         assert_eq!(progress.current_level, target);
         settings.enabled = false;
@@ -413,12 +417,12 @@ fn invalid_last_answer_does_not_leave_partial_language_evidence() {
     let conn = test_db();
     enable_german(&conn);
     let lesson = language::start_session(&conn, "german", "2026-07-21", false).unwrap();
-    let mut answers = correct_answers(&conn, lesson.session_id);
+    let mut answers = correct_answers(&conn, lesson.session_id.parse::<i64>().unwrap());
     *answers.last_mut().unwrap() = usize::MAX;
     let result = language::submit_session(
         &conn,
         &SubmitSessionInput {
-            session_id: lesson.session_id,
+            session_id: lesson.session_id.parse::<i64>().unwrap(),
             answers,
             writing_response: "draft".into(),
             speaking_completed: false,
@@ -434,7 +438,11 @@ fn invalid_last_answer_does_not_leave_partial_language_evidence() {
         })
         .unwrap();
     assert_eq!(evidence, 0);
-    pass_session(&conn, lesson.session_id, "2026-07-21");
+    pass_session(
+        &conn,
+        lesson.session_id.parse::<i64>().unwrap(),
+        "2026-07-21",
+    );
 }
 
 #[test]
@@ -442,7 +450,11 @@ fn changing_legacy_start_after_learning_cannot_rewrite_the_progress_baseline() {
     let conn = test_db();
     enable_german(&conn);
     let lesson = language::start_session(&conn, "german", "2026-07-21", false).unwrap();
-    pass_session(&conn, lesson.session_id, "2026-07-21");
+    pass_session(
+        &conn,
+        lesson.session_id.parse::<i64>().unwrap(),
+        "2026-07-21",
+    );
     let result = language::configure_program(
         &conn,
         &ConfigureProgramInput {
@@ -503,8 +515,8 @@ fn completed_level_units_are_never_reserved_automatically() {
     language::submit_session(
         &conn,
         &SubmitSessionInput {
-            session_id: remediation.session_id,
-            answers: wrong_answers(&conn, remediation.session_id),
+            session_id: remediation.session_id.parse::<i64>().unwrap(),
+            answers: wrong_answers(&conn, remediation.session_id.parse::<i64>().unwrap()),
             writing_response: "short".into(),
             speaking_completed: false,
             listened: false,

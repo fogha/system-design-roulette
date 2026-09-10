@@ -307,6 +307,7 @@ pub fn run() {
             commands::save_class_lesson_work,
             commands::save_class_check_answer,
             commands::submit_class_check,
+            commands::submit_class_language_check,
             commands::pause_class_lesson,
             commands::skip_class_lesson,
             commands::submit_language_session,

@@ -1663,7 +1663,8 @@ pub fn validate_slot_start(
     }
     let consumed: i64 = conn
         .query_row(
-            "SELECT COUNT(*) FROM classroom_sessions WHERE slot_id = ?1 AND session_date = ?2",
+            "SELECT (SELECT COUNT(*) FROM classroom_sessions WHERE slot_id = ?1 AND session_date = ?2)
+                  + (SELECT COUNT(*) FROM language_sessions WHERE classroom_slot_id = ?1 AND session_date = ?2)",
             params![slot_id, today],
             |row| row.get(0),
         )
@@ -2056,7 +2057,7 @@ pub fn active_sessions(conn: &Connection) -> Result<Vec<ActiveClassroomSessionVi
     }
     for language in language::active_summaries(conn)? {
         active.push(ActiveClassroomSessionView {
-            session_id: language.session_id.to_string(),
+            session_id: language.session_id,
             subject_id: language.language,
             kind: "language".into(),
             label: language.label,
@@ -2066,6 +2067,7 @@ pub fn active_sessions(conn: &Connection) -> Result<Vec<ActiveClassroomSessionVi
         });
     }
     active.extend(crate::subjects::engineering::active_summaries(conn)?);
+    active.extend(crate::subjects::language::active_summaries(conn)?);
     Ok(active)
 }
 

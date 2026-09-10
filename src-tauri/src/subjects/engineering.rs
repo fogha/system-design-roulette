@@ -57,6 +57,14 @@ pub fn selection(session: &Session) -> Result<Selection> {
     serde_json::from_value(session.context.selection.clone()).map_err(e)
 }
 
+/// Snake-case lifecycle name for views.
+pub fn lifecycle_name(status: Status) -> String {
+    serde_json::to_value(status)
+        .ok()
+        .and_then(|value| value.as_str().map(String::from))
+        .unwrap_or_default()
+}
+
 fn owner_for(conn: &Connection, course_id: &str) -> Result<Option<PlanOwner>> {
     Ok(classes::current_path(conn, course_id)
         .map_err(e)?
@@ -65,7 +73,7 @@ fn owner_for(conn: &Connection, course_id: &str) -> Result<Option<PlanOwner>> {
         }))
 }
 
-fn get(conn: &Connection, id: &SessionId) -> Result<Option<Session>> {
+pub fn get(conn: &Connection, id: &SessionId) -> Result<Option<Session>> {
     let exists: bool = conn
         .query_row(
             "SELECT EXISTS(SELECT 1 FROM study_sessions WHERE id = ?1)",
@@ -329,7 +337,7 @@ fn check_round(conn: &Connection, session: &Session) -> Result<Option<Round>> {
     ensure_check_round(conn, session).map(Some)
 }
 
-fn check_view(round: &Round) -> CheckView {
+pub fn check_view(round: &Round) -> CheckView {
     CheckView {
         round_id: round.id.clone(),
         revision: round.revision,
@@ -347,7 +355,11 @@ fn outcome_result(outcome: &Value) -> Result<Option<EngineeringSessionResult>> {
         .map_err(e)
 }
 
-fn legacy_status(status: Status) -> &'static str {
+pub fn legacy_status(status: Status) -> &'static str {
+    lifecycle_legacy(status)
+}
+
+fn lifecycle_legacy(status: Status) -> &'static str {
     match status {
         Status::Completed => "completed",
         Status::Skipped => "skipped",
@@ -606,9 +618,10 @@ pub fn save_answer(
         .iter()
         .find(|item| item.id == question_id.to_string())
         .ok_or("Question does not belong to the displayed knowledge check.")?;
-    let question = stored_question(item)?;
+    // Any adapter's frozen item exposes its displayed choices the same way.
+    let choice_count = item.body["choices"].as_array().map_or(0, Vec::len);
     let response = match choice {
-        Some(index) if index < question.choices.len() => Response {
+        Some(index) if index < choice_count => Response {
             answer: index.to_string(),
             status: ResponseStatus::Answered,
         },

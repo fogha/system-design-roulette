@@ -508,30 +508,39 @@ pub async fn start_classroom_session(
     let spec = crate::classroom::subject(subject_id.trim()).map_err(err)?;
     let value = match spec.kind {
         crate::classroom::SubjectKind::Language => {
-            let (base, seed, program) = {
+            // A legacy in-progress row resumes as it was; every new lesson runs
+            // on the shared study runtime with the curated seed enriched once.
+            let (legacy, planned) = {
                 let conn = state.db.0.lock().unwrap();
-                let base = crate::language::start_classroom_session(
-                    &conn,
-                    spec.id,
-                    slot_id,
-                    &state.today(),
-                    revisit,
-                )
-                .map_err(err)?;
-                let seed = crate::language::stored_lesson(&conn, base.session_id).map_err(err)?;
-                let program = crate::classroom::program_row(&conn, spec.id).map_err(err)?;
-                (base, seed, program)
+                let legacy = crate::language::active_session_for(&conn, spec.id).map_err(err)?;
+                if legacy.is_some() {
+                    (legacy, None)
+                } else {
+                    let program = crate::classroom::program_row(&conn, spec.id).map_err(err)?;
+                    let planned = crate::subjects::language::plan(
+                        &conn,
+                        &program,
+                        slot_id,
+                        &state.today(),
+                        revisit,
+                    )?;
+                    (None, Some(planned))
+                }
             };
-            let profile = crate::classroom::generation_profile(&program);
-            let contract = crate::classroom::contract_with_goal(&program, spec.prompt);
-            let (generated, _) = state
-                .generator
-                .enrich_classroom_language_lesson(&contract, &profile, &seed)
-                .await;
-            let lesson = {
-                let conn = state.db.0.lock().unwrap();
-                crate::language::replace_stored_lesson(&conn, base.session_id, &generated)
-                    .map_err(err)?
+            let lesson = match (legacy, planned) {
+                (Some(lesson), _) => lesson,
+                (None, Some(planned)) => {
+                    let _ = app.emit(
+                        "classroom:state",
+                        serde_json::json!({ "planned": planned.id }),
+                    );
+                    crate::subjects::language::prepare(&state, &planned.id).await?;
+                    let conn = state.db.0.lock().unwrap();
+                    crate::subjects::language::activate(&conn, &planned.id)?;
+                    crate::subjects::language::view(&conn, &planned.id)?
+                        .ok_or("The prepared lesson could not be read.")?
+                }
+                (None, None) => unreachable!(),
             };
             serde_json::json!({ "kind": "language", "lesson": lesson })
         }
@@ -660,6 +669,31 @@ pub fn submit_class_check(
     Ok(result)
 }
 
+#[tauri::command]
+pub fn submit_class_language_check(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    session_id: crate::domain::sessions::SessionId,
+    round_id: crate::domain::assessments::RoundId,
+    expected_revision: u32,
+    input: crate::subjects::language::LanguageCheckInput,
+) -> CmdResult<serde_json::Value> {
+    let result = {
+        let conn = state.db.0.lock().unwrap();
+        crate::subjects::language::submit(
+            &conn,
+            &session_id,
+            &round_id,
+            expected_revision,
+            &input,
+            &state.today(),
+        )?
+    };
+    state.clear_chat_threads();
+    let _ = app.emit("classroom:state", &result);
+    Ok(result)
+}
+
 /// Leave a lesson open for later without losing its saved work.
 #[tauri::command]
 pub fn pause_class_lesson(
@@ -698,8 +732,26 @@ pub fn resume_classroom_session(
     match spec.kind {
         crate::classroom::SubjectKind::Language => {
             let conn = state.db.0.lock().unwrap();
-            Ok(crate::language::active_session_for(&conn, spec.id)
-                .map_err(err)?
+            if let Some(lesson) =
+                crate::language::active_session_for(&conn, spec.id).map_err(err)?
+            {
+                return Ok(Some(
+                    serde_json::json!({ "kind": "language", "lesson": lesson }),
+                ));
+            }
+            let Some(session) = crate::subjects::language::resumable(&conn, spec.id)? else {
+                return Ok(None);
+            };
+            if !matches!(
+                session.status,
+                crate::domain::sessions::Status::Ready
+                    | crate::domain::sessions::Status::Active
+                    | crate::domain::sessions::Status::Paused
+            ) {
+                return Ok(None);
+            }
+            crate::subjects::language::activate(&conn, &session.id)?;
+            Ok(crate::subjects::language::view(&conn, &session.id)?
                 .map(|lesson| serde_json::json!({ "kind": "language", "lesson": lesson })))
         }
         crate::classroom::SubjectKind::Engineering => {

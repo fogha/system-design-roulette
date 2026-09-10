@@ -225,7 +225,7 @@ fn a_new_language_path_changes_future_entry_without_rewriting_an_active_lesson()
     let before: String = conn
         .query_row(
             "SELECT lesson_json FROM language_sessions WHERE id=?1",
-            [lesson.session_id],
+            [lesson.session_id.parse::<i64>().unwrap()],
             |r| r.get(0),
         )
         .unwrap();
@@ -241,7 +241,7 @@ fn a_new_language_path_changes_future_entry_without_rewriting_an_active_lesson()
     let after: String = conn
         .query_row(
             "SELECT lesson_json FROM language_sessions WHERE id=?1",
-            [lesson.session_id],
+            [lesson.session_id.parse::<i64>().unwrap()],
             |r| r.get(0),
         )
         .unwrap();
@@ -258,7 +258,7 @@ fn a_new_language_path_changes_future_entry_without_rewriting_an_active_lesson()
     // A fixture terminal state leaves the next start free to use the accepted cursor.
     conn.execute(
         "UPDATE language_sessions SET status='completed' WHERE id=?1",
-        params![lesson.session_id],
+        params![lesson.session_id.parse::<i64>().unwrap()],
     )
     .unwrap();
     let next = language::start_session(&conn, "german", "2026-09-10", false).unwrap();

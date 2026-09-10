@@ -703,7 +703,15 @@ pub struct LanguageQuestionView {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct LanguageLessonView {
-    pub session_id: i64,
+    /// Legacy row ID or shared-runtime `study-…` ID; see `runtime`.
+    pub session_id: String,
+    pub runtime: String,
+    pub lifecycle: String,
+    pub revision: u32,
+    pub checkpoint: Option<crate::domain::sessions::Checkpoint>,
+    pub check: Option<crate::classroom::CheckView>,
+    /// Immutable `LanguageSessionResult` of a finished shared-runtime lesson.
+    pub outcome: Option<serde_json::Value>,
     pub language: String,
     pub label: String,
     pub native_label: String,
@@ -1110,7 +1118,7 @@ fn select_unit(
 }
 
 struct LessonMeta<'a> {
-    session_id: i64,
+    session_id: String,
     language: &'a str,
     level: &'a str,
     unit_slug: &'a str,
@@ -1123,6 +1131,12 @@ fn lesson_view(meta: LessonMeta<'_>, stored: StoredLesson) -> Result<LanguageLes
     let curriculum = curriculum(meta.language)?;
     Ok(LanguageLessonView {
         session_id: meta.session_id,
+        runtime: "legacy".into(),
+        lifecycle: meta.status.to_string(),
+        revision: 0,
+        checkpoint: None,
+        check: None,
+        outcome: None,
         language: meta.language.to_string(),
         label: curriculum.label.clone(),
         native_label: curriculum.native_label.clone(),
@@ -1189,7 +1203,7 @@ fn read_session(
                 serde_json::from_str(&lesson_json).map_err(|error| error.to_string())?;
             lesson_view(
                 LessonMeta {
-                    session_id: id,
+                    session_id: id.to_string(),
                     language: &language,
                     level: &level,
                     unit_slug: &slug,
@@ -1214,7 +1228,7 @@ pub fn active_session_for(conn: &Connection, language: &str) -> Result<Option<La
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ActiveLanguageSessionView {
-    pub session_id: i64,
+    pub session_id: String,
     pub language: String,
     pub label: String,
     pub level: String,
@@ -1237,6 +1251,182 @@ pub fn active_summaries(conn: &Connection) -> Result<Vec<ActiveLanguageSessionVi
             Err(error) => Some(Err(error)),
         })
         .collect()
+}
+
+/// The curated lesson the shared-runtime adapter would start next: the class's
+/// current band, the unit chosen by the same rotation as the legacy engine and
+/// the seed content that enrichment may expand but never re-gate.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlannedLanguageLesson {
+    pub level: String,
+    pub unit_slug: String,
+    pub unit_title: String,
+    pub phase: i64,
+    pub(crate) seed: StoredLesson,
+}
+
+pub fn plan_lesson(
+    conn: &Connection,
+    language: &str,
+    revisit: bool,
+) -> Result<PlannedLanguageLesson> {
+    if !valid_language(language) {
+        return Err(format!("unsupported language: {language}"));
+    }
+    let program = program_row(conn, language)?;
+    let curriculum = curriculum(language)?;
+    let level = level_spec(curriculum, &program.current_level)?;
+    let (unit, phase) = select_unit(conn, language, level, revisit)?;
+    let seed = build_lesson(language, &program.current_level, &unit, phase);
+    Ok(PlannedLanguageLesson {
+        level: program.current_level,
+        unit_slug: unit.slug.clone(),
+        unit_title: unit.title,
+        phase,
+        seed,
+    })
+}
+
+/// Render a stored lesson for a shared-runtime session.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn view_from_stored(
+    session_id: String,
+    language: &str,
+    level: &str,
+    unit_slug: &str,
+    phase: i64,
+    status: &str,
+    estimated_minutes: i64,
+    stored: StoredLesson,
+) -> Result<LanguageLessonView> {
+    lesson_view(
+        LessonMeta {
+            session_id,
+            language,
+            level,
+            unit_slug,
+            phase,
+            status,
+            estimated_minutes,
+        },
+        stored,
+    )
+}
+
+/// What a finished lesson contributes: strand evidence, unit progress, review
+/// timing and (when earned) the next band. Shared by both session stores.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LanguageOutcome {
+    pub passed: bool,
+    pub score: f64,
+    pub level_advanced_to: Option<String>,
+    pub current_level: String,
+}
+
+pub struct CompletionEvidence<'a> {
+    pub language: &'a str,
+    pub level: &'a str,
+    pub unit_slug: &'a str,
+    pub phase: i64,
+    /// (strand, correct) for every knowledge-check question.
+    pub strand_results: &'a [(String, bool)],
+    pub writing_response: &'a str,
+    pub speaking_completed: bool,
+    pub listened: bool,
+    pub confidence: i64,
+}
+
+pub fn project_completion(
+    conn: &Connection,
+    evidence: CompletionEvidence<'_>,
+    today: &str,
+) -> Result<LanguageOutcome> {
+    let language = evidence.language;
+    let mut correct_count = 0usize;
+    for (strand, correct) in evidence.strand_results {
+        correct_count += usize::from(*correct);
+        update_skill(
+            conn,
+            language,
+            strand,
+            if *correct { 1.0 } else { 0.0 },
+            today,
+        )?;
+    }
+    let total = evidence.strand_results.len().max(1);
+    let knowledge_score = correct_count as f64 / total as f64;
+    let writing_words = evidence.writing_response.split_whitespace().count();
+    let writing_evidence = if writing_words >= 12 {
+        (evidence.confidence.clamp(1, 5) as f64 / 5.0).max(0.6)
+    } else if writing_words > 0 {
+        0.35
+    } else {
+        0.0
+    };
+    update_skill(conn, language, "writing", writing_evidence, today)?;
+    if evidence.speaking_completed {
+        let spoken = (evidence.confidence.clamp(1, 5) as f64 / 5.0).max(0.6);
+        update_skill(conn, language, "spoken_production", spoken, today)?;
+        update_skill(conn, language, "spoken_interaction", spoken * 0.9, today)?;
+    }
+    if evidence.listened {
+        update_skill(conn, language, "listening", knowledge_score, today)?;
+    }
+    let production_score = (writing_evidence + f64::from(evidence.speaking_completed)) / 2.0;
+    let score = (knowledge_score * 0.8 + production_score * 0.2).clamp(0.0, 1.0);
+    let passed = knowledge_score >= 0.60;
+    let max_phase = level_spec(curriculum(language)?, evidence.level)?.sessions_per_unit as i64;
+    let next_review = parse_date(today)
+        + Duration::days(if score >= 0.85 {
+            7
+        } else if passed {
+            3
+        } else {
+            1
+        });
+    conn.execute(
+        "INSERT INTO language_unit_progress
+            (language, unit_slug, phase_completed, score_ema, encounters,
+             last_seen_date, next_review_date)
+         VALUES (?1, ?2, ?3, ?4, 1, ?5, ?6)
+         ON CONFLICT(language, unit_slug) DO UPDATE SET
+            phase_completed = MAX(
+                language_unit_progress.phase_completed,
+                excluded.phase_completed
+            ),
+            score_ema = CASE
+                WHEN language_unit_progress.encounters = 0 THEN excluded.score_ema
+                ELSE 0.65 * language_unit_progress.score_ema + 0.35 * excluded.score_ema
+            END,
+            encounters = language_unit_progress.encounters + 1,
+            last_seen_date = excluded.last_seen_date,
+            next_review_date = excluded.next_review_date",
+        params![
+            language,
+            evidence.unit_slug,
+            if passed {
+                evidence.phase.min(max_phase)
+            } else {
+                0
+            },
+            score,
+            today,
+            format_date(next_review)
+        ],
+    )
+    .map_err(|error| error.to_string())?;
+    let level_advanced_to = if passed {
+        maybe_advance_level(conn, language, evidence.level)?
+    } else {
+        None
+    };
+    let current_level = program_row(conn, language)?.current_level;
+    Ok(LanguageOutcome {
+        passed,
+        score,
+        level_advanced_to,
+        current_level,
+    })
 }
 
 pub fn start_session(
@@ -1282,7 +1472,7 @@ pub fn start_session(
     .map_err(|error| error.to_string())?;
     lesson_view(
         LessonMeta {
-            session_id: conn.last_insert_rowid(),
+            session_id: conn.last_insert_rowid().to_string(),
             language,
             level: &program.current_level,
             unit_slug: &unit.slug,
@@ -1347,17 +1537,6 @@ pub fn start_classroom_session(
     Ok(lesson)
 }
 
-pub(crate) fn stored_lesson(conn: &Connection, session_id: i64) -> Result<StoredLesson> {
-    let json = conn
-        .query_row(
-            "SELECT lesson_json FROM language_sessions WHERE id = ?1",
-            [session_id],
-            |row| row.get::<_, String>(0),
-        )
-        .map_err(|error| error.to_string())?;
-    serde_json::from_str(&json).map_err(|error| error.to_string())
-}
-
 pub(crate) fn validate_generated_lesson(
     seed: &StoredLesson,
     generated: &StoredLesson,
@@ -1402,22 +1581,6 @@ pub(crate) fn validate_generated_lesson(
     Ok(())
 }
 
-pub(crate) fn replace_stored_lesson(
-    conn: &Connection,
-    session_id: i64,
-    stored: &StoredLesson,
-) -> Result<LanguageLessonView> {
-    let json = serde_json::to_string(stored).map_err(|error| error.to_string())?;
-    conn.execute(
-        "UPDATE language_sessions SET lesson_json = ?2
-         WHERE id = ?1 AND status = 'in_progress'",
-        params![session_id, json],
-    )
-    .map_err(|error| error.to_string())?;
-    read_session(conn, "s.id = ?1", &session_id)?
-        .ok_or_else(|| "active language lesson could not be reloaded".into())
-}
-
 #[derive(Debug, Clone, Deserialize)]
 pub struct SubmitSessionInput {
     pub session_id: i64,
@@ -1440,7 +1603,7 @@ pub struct CorrectionView {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct LanguageSessionResult {
-    pub session_id: i64,
+    pub session_id: String,
     pub passed: bool,
     pub score: f64,
     pub corrections: Vec<CorrectionView>,
@@ -1559,24 +1722,15 @@ pub fn submit_session(
     if input.answers.len() != lesson.questions.len() {
         return Err("answer every knowledge check before submitting".into());
     }
-    let mut correct_count = 0;
     let mut corrections = Vec::new();
+    let mut strand_results = Vec::new();
     for (index, question) in lesson.questions.iter().enumerate() {
         let selected = input.answers[index];
         if selected >= question.choices.len() {
             return Err(format!("answer {} is invalid", index + 1));
         }
         let correct = selected == question.correct_index;
-        if correct {
-            correct_count += 1;
-        }
-        update_skill(
-            conn,
-            &language,
-            &question.strand,
-            if correct { 1.0 } else { 0.0 },
-            today,
-        )?;
+        strand_results.push((question.strand.clone(), correct));
         corrections.push(CorrectionView {
             question_id: question.id,
             prompt: question.prompt.clone(),
@@ -1586,63 +1740,22 @@ pub fn submit_session(
             explanation: question.explanation.clone(),
         });
     }
-    let knowledge_score = correct_count as f64 / lesson.questions.len() as f64;
-    let writing_words = input.writing_response.split_whitespace().count();
-    let writing_evidence = if writing_words >= 12 {
-        (input.confidence.clamp(1, 5) as f64 / 5.0).max(0.6)
-    } else if writing_words > 0 {
-        0.35
-    } else {
-        0.0
-    };
-    update_skill(conn, &language, "writing", writing_evidence, today)?;
-    if input.speaking_completed {
-        let spoken = (input.confidence.clamp(1, 5) as f64 / 5.0).max(0.6);
-        update_skill(conn, &language, "spoken_production", spoken, today)?;
-        update_skill(conn, &language, "spoken_interaction", spoken * 0.9, today)?;
-    }
-    if input.listened {
-        update_skill(conn, &language, "listening", knowledge_score, today)?;
-    }
-    let production_score = (writing_evidence + f64::from(input.speaking_completed)) / 2.0;
-    let score = (knowledge_score * 0.8 + production_score * 0.2).clamp(0.0, 1.0);
-    let passed = knowledge_score >= 0.60;
-    let max_phase = level_spec(curriculum(&language)?, &level)?.sessions_per_unit as i64;
-    let next_review = parse_date(today)
-        + Duration::days(if score >= 0.85 {
-            7
-        } else if passed {
-            3
-        } else {
-            1
-        });
-    conn.execute(
-        "INSERT INTO language_unit_progress
-            (language, unit_slug, phase_completed, score_ema, encounters,
-             last_seen_date, next_review_date)
-         VALUES (?1, ?2, ?3, ?4, 1, ?5, ?6)
-         ON CONFLICT(language, unit_slug) DO UPDATE SET
-            phase_completed = MAX(
-                language_unit_progress.phase_completed,
-                excluded.phase_completed
-            ),
-            score_ema = CASE
-                WHEN language_unit_progress.encounters = 0 THEN excluded.score_ema
-                ELSE 0.65 * language_unit_progress.score_ema + 0.35 * excluded.score_ema
-            END,
-            encounters = language_unit_progress.encounters + 1,
-            last_seen_date = excluded.last_seen_date,
-            next_review_date = excluded.next_review_date",
-        params![
-            language,
-            unit_slug,
-            if passed { phase.min(max_phase) } else { 0 },
-            score,
-            today,
-            format_date(next_review)
-        ],
-    )
-    .map_err(|error| error.to_string())?;
+    let outcome = project_completion(
+        conn,
+        CompletionEvidence {
+            language: &language,
+            level: &level,
+            unit_slug: &unit_slug,
+            phase,
+            strand_results: &strand_results,
+            writing_response: &input.writing_response,
+            speaking_completed: input.speaking_completed,
+            listened: input.listened,
+            confidence: i64::from(input.confidence),
+        },
+        today,
+    )?;
+    let (passed, score) = (outcome.passed, outcome.score);
     let response_json = serde_json::json!({
         "answers": input.answers,
         "writing_response": input.writing_response,
@@ -1658,19 +1771,13 @@ pub fn submit_session(
         params![input.session_id, score, response_json, now_iso()],
     )
     .map_err(|error| error.to_string())?;
-    let level_advanced_to = if passed {
-        maybe_advance_level(conn, &language, &level)?
-    } else {
-        None
-    };
-    let current_level = program_row(conn, &language)?.current_level;
     let result = LanguageSessionResult {
-        session_id: input.session_id,
+        session_id: input.session_id.to_string(),
         passed,
         score,
         corrections,
-        level_advanced_to,
-        current_level,
+        level_advanced_to: outcome.level_advanced_to,
+        current_level: outcome.current_level,
         progress: program_view(conn, &language, today)?,
     };
     transaction.commit().map_err(|error| error.to_string())?;

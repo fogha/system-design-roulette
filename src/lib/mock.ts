@@ -481,7 +481,13 @@ function mockLanguageLesson(language: LanguageId): LanguageLessonView {
   const german = language === 'german';
   const target = german ? 'Deutsch' : 'Italiano';
   return {
-    session_id: mockLanguageSessionId,
+    session_id: String(mockLanguageSessionId),
+    runtime: 'legacy',
+    lifecycle: 'in_progress',
+    revision: 0,
+    checkpoint: null,
+    check: null,
+    outcome: null,
     language,
     label: german ? 'German' : 'Italian',
     native_label: target,
@@ -1085,7 +1091,7 @@ export const mockApi = {
     if (subjectId === 'german' || subjectId === 'italian') {
       mockLanguageSessionId += 1;
       mockActiveLanguage = mockLanguageLesson(subjectId);
-      mockActiveLanguage.session_id = mockLanguageSessionId;
+      mockActiveLanguage.session_id = String(mockLanguageSessionId);
       return { kind: 'language', lesson: mockActiveLanguage };
     }
     mockEngineeringSessionId += 1;
@@ -1142,6 +1148,7 @@ export const mockApi = {
   saveClassLessonWork: async () => { throw new Error('Saved lesson work needs the desktop app.'); },
   saveClassCheckAnswer: async () => { throw new Error('Saved lesson work needs the desktop app.'); },
   submitClassCheck: async () => { throw new Error('Shared-runtime knowledge checks need the desktop app.'); },
+  submitClassLanguageCheck: async () => { throw new Error('Shared-runtime knowledge checks need the desktop app.'); },
   pauseClassLesson: async () => {},
   skipClassLesson: async (sessionId: string) => { if (mockActiveEngineering?.session_id === sessionId) mockActiveEngineering = null; },
   getExercise: async (owner: {
@@ -1257,14 +1264,14 @@ export const mockApi = {
     listened: boolean;
     confidence: number;
   }): Promise<LanguageSessionResult> => {
-    if (!mockActiveLanguage || input.session_id !== mockActiveLanguage.session_id) {
+    if (!mockActiveLanguage || String(input.session_id) !== mockActiveLanguage.session_id) {
       throw new Error('language session not found');
     }
     const correctIndexes = [0, 0, 0, 0, 0];
     const correct = input.answers.filter((answer, index) => answer === correctIndexes[index]).length;
     const score = correct / correctIndexes.length;
     const result: LanguageSessionResult = {
-      session_id: input.session_id,
+      session_id: String(input.session_id),
       passed: score >= 0.6,
       score,
       corrections: mockActiveLanguage.questions.map((question, index) => ({
