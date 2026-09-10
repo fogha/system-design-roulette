@@ -92,3 +92,27 @@ Nine regressions cover exact-byte retention, ambiguous ownership, schema/ledger
 validation, concurrent snapshots, legacy main/PR upgrades and stale-plan detection.
 This is preparation for the migration: it neither registers a migration nor
 switches production writers/readers to the shared runtime.
+
+## Engineering adapter
+
+`subjects/engineering.rs` is the first subject adapter on this runtime. `plan`
+selects the next topic on the accepted path (or an explicit revisit), validates a
+scheduled rule once per service date across both session stores, and records a
+planned session whose selection names the concept, appointment and reason.
+`prepare` claims the lease, runs `generate_classroom_course` with the tutor
+frozen in the session context and the path revision the session references,
+then publishes one lesson version or records the failure for retry. The
+knowledge check is an `exit_check` assessment attempt owned by the session,
+frozen from the published questions; `save_answer` and `submit` use its round
+and revision. `submit` moves the checkpoint to feedback, then `finish`es the
+session with a projection that records the submission, `classroom_exit_attempts`
+rows keyed by `study_session_id` (schema v8), and mastery. `skip` finishes
+without credit. Exercise drafts and completion are checkpoint work.
+
+Readers that must move together with this writer now include shared-runtime
+sessions: `slot_state`, `has_active_session`, `delete_slot`, `active_sessions`,
+`completed_lesson_count`, the Progress history/archive and the dossier's
+misconception feed. Legacy in-progress classroom rows remain resumable through
+the compatibility commands until they finish. The `study_fixture` example
+publishes a bundled reference lesson into a planned session (or fails the
+preparation with `--fail`) for desktop QA without a provider.

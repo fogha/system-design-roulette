@@ -196,3 +196,34 @@ also retained in this QA profile. Integrity and foreign-key checks passed.
 Evidence: `/tmp/principia-primary-final-before.json`,
 `/tmp/principia-primary-final-quit.json` and
 `/tmp/principia-primary-final-completed.json`.
+
+## Shared-runtime engineering lesson — 2026-09-10
+
+Isolated profile `com.darkmatter.principia-desk.qa`, upgraded v7→v8 on launch with
+a pre-upgrade backup and `integrity_check` = `ok`; `--debug-day`; the tutor
+executable overridden with `/usr/bin/false` so no provider ran.
+
+- TypeScript (active, 09:00 weekdays, no chosen starting point) → Learn now:
+  a foundations path and class row were created, the session was planned for
+  "Structural typing and excess property checking", preparation failed with
+  "agent exited with status 1", and the header showed Retry preparation and
+  Discard lesson while the sidebar read In progress. Discard lesson left the
+  session `skipped` and its preparation job `cancelled`.
+- With the app closed, `study_fixture` planned a new session and published the
+  bundled "Contextual typing and bidirectional inference" lesson (three checks).
+  After relaunch the header offered Resume; the lesson rendered with
+  `v1 · qa-fixture` provenance, the accepted-path framing and the frozen check.
+- Question 1 by pointer, question 2 by keyboard (deliberately wrong), question 3
+  by keyboard: `assessment_work` held revision 3 with answers `0,1,0`.
+- Cmd-Q with the lesson open, relaunch, Resume: the saved answers were restored
+  on screen. A reflection was typed and the check submitted: the session became
+  `completed` at revision 5, `study_results` stored the 67% result and the
+  reflection, `classroom_exit_attempts` held three rows (two correct) keyed by
+  the study session, one assessment submission existed, the attempt was
+  `completed`, and the concept's mastery row read `practicing` with one encounter.
+- Progress showed one completed session, TypeScript at 1 completed, the fixture
+  lesson with a readable link and 67%, and the discarded lesson as Skipped.
+
+Not covered here: live generation into the runtime, reading-position restore,
+language lessons (still legacy), Windows/Linux, enforcement. Screenshots for this
+pass were kept under `/tmp/principia-shots/` (20, 24–28, 30).
