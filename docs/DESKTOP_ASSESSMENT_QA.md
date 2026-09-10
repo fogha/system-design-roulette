@@ -256,3 +256,10 @@ qa-legacy`), accepted keyboard answers and completed through the compatibility
 submit: the row became `completed` with score 1.0, two `classroom_exit_attempts`
 rows kept their legacy `session_id`, no study session was created for the class,
 and SQLite integrity and foreign-key checks passed (screenshots 38, 39).
+
+Legacy import on the same profile (2026-09-10): launching the rebuilt app logged
+"legacy study import: 1 imported, 0 already imported, 0 retained for recovery,
+0 open". The skipped 9 September day now exists as a `daily_routine` runtime
+session under its original `primary-…` ID with a `primary_import` crosswalk row
+and a skipped result recording its last step; `integrity_check` returned `ok`
+and Progress listed the same six sessions as before (screenshot 40).
