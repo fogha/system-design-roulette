@@ -14,7 +14,9 @@ use system_design_roulette_lib::{
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<_> = std::env::args().skip(1).collect();
     if args.len() < 2 {
-        return Err("usage: study_fixture DISPOSABLE_QA_DATABASE SUBJECT_ID [--fail|--skip]".into());
+        return Err(
+            "usage: study_fixture DISPOSABLE_QA_DATABASE SUBJECT_ID [--fail|--skip]".into(),
+        );
     }
     let fail = args.iter().any(|arg| arg == "--fail");
     let skip = args.iter().any(|arg| arg == "--skip");
@@ -32,11 +34,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             engineering::resumable(&conn, subject)?
         };
         let Some(session) = resumable else {
-            println!("{}", serde_json::json!({"skipped": null, "note": "no resumable session"}));
+            println!(
+                "{}",
+                serde_json::json!({"skipped": null, "note": "no resumable session"})
+            );
             return Ok(());
         };
         engineering::skip(&conn, &session.id)?;
-        println!("{}", serde_json::json!({"skipped": session.id.0, "status": "skipped"}));
+        println!(
+            "{}",
+            serde_json::json!({"skipped": session.id.0, "status": "skipped"})
+        );
         return Ok(());
     }
     if program.kind == "language" {

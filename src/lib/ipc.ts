@@ -173,6 +173,23 @@ export interface ClassroomProgramView {
   language_progress: LanguageProgramView | null;
   /** Enforcement applied to sessions planned from now on. */
   focus_policy: FocusPolicy;
+  /** What the accepted route says about completion, demonstrated knowledge, review and what comes next. */
+  route: RouteSummary | null;
+}
+
+export interface RouteSummary {
+  revision: number;
+  entry_label: string;
+  required_total: number;
+  required_done: number;
+  coverage_total: number;
+  coverage_done: number;
+  /** Topics checked out with evidence (unit challenges) plus placement samples demonstrated. */
+  demonstrated: number;
+  /** Refreshers, accepted bridges and topics whose mastery decayed or struggles. */
+  needs_review: number;
+  /** The topic selection would serve next, and why. */
+  next: { slug: string; title: string; reason: string } | null;
 }
 
 export type CurriculumPhase =

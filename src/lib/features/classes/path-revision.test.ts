@@ -55,3 +55,21 @@ describe('bridge decisions in the browser preview', () => {
     expect(after.path?.bridges).toBe(1);
   });
 });
+
+describe('the overview route summary in the browser preview', () => {
+  beforeEach(() => { if (typeof localStorage !== 'undefined') localStorage.clear(); });
+
+  it('answers completed, demonstrated, review and next from the accepted route', async () => {
+    const accepted = await acceptFoundations('typescript');
+    const program = () => mockApi.getAppState().then((state) => state.classroom_programs.find((p) => p.subject_id === 'typescript')!);
+    const before = (await program()).route!;
+    expect(before).toMatchObject({ revision: accepted.revision, required_done: 0, coverage_done: 0, demonstrated: 0 });
+    expect(before.required_total).toBeGreaterThan(0);
+    expect(before.next?.reason).toBe('Next required topic on your accepted route.');
+    await mockApi.reviseClassPath({ course_id: 'typescript', expected_revision: accepted.revision, change: { kind: 'bypass', topics: [before.next!.slug] } });
+    const after = (await program()).route!;
+    expect(after.required_total).toBe(before.required_total - 1);
+    expect(after.next?.slug).not.toBe(before.next!.slug);
+    expect((await mockApi.getAppState()).classroom_programs.find((p) => p.subject_id === 'german')?.route).toBeNull();
+  });
+});

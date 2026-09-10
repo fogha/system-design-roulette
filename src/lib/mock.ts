@@ -1,5 +1,5 @@
 import { previewConfiguration, savePreviewConfiguration, previewRunners, previewModels, previewLocal, rememberPreviewModel, desktopRequired } from './features/runners/preview';
-import type { FocusPolicy, CurriculumConceptView } from './ipc';
+import type { FocusPolicy, CurriculumConceptView, RouteSummary } from './ipc';
 import type { RevisePath } from './contracts/classes';
 import type { AgentPolicy, RunnerId } from './contracts/agents';
 import type { AssessmentRoundId } from './contracts/assessments';
@@ -629,6 +629,30 @@ function applyPreviewPath(path: AcceptedPath | null) {
   }
   restoredPaths.set(id, path.reference.path_revision_id);
 }
+/** Preview counterpart of the native route summary: same denominators, no credit. */
+function previewRoute(subjectId: ClassroomSubjectId, acceptedPath: AcceptedPath | null): RouteSummary | null {
+  const plan = acceptedPath?.recommendation;
+  if (!acceptedPath || !plan) return null;
+  const listed = (list: { id: string }[] | undefined, slug: string) => !!list?.some((topic) => topic.id === slug);
+  const concepts = seedConcepts.filter((concept) => concept.focus === subjectId);
+  const setAside = (slug: string) => listed(plan.earlier_topics, slug) || listed(plan.bypassed, slug) || listed(plan.checked, slug);
+  const core = concepts.filter((concept) => concept.curriculum.core);
+  const order = ['foundations', 'mechanisms', 'production', 'synthesis', 'elective'];
+  const bridge = plan.bridges?.[0];
+  const candidate = bridge ? concepts.find((concept) => concept.slug === bridge.id) : [...core].sort((a, b) => order.indexOf(a.curriculum.phase) - order.indexOf(b.curriculum.phase) || a.tier - b.tier).find((concept) => !setAside(concept.slug));
+  return {
+    revision: acceptedPath.revision,
+    entry_label: plan.entry_label,
+    required_total: core.filter((concept) => !setAside(concept.slug)).length,
+    required_done: 0,
+    coverage_total: core.length,
+    coverage_done: 0,
+    demonstrated: (plan.checked?.length ?? 0) + plan.criteria.filter((row) => row.verdict === 'passed').length,
+    needs_review: plan.refreshers.length + (plan.bridges?.length ?? 0),
+    next: candidate ? { slug: candidate.slug, title: candidate.title, reason: bridge ? `Bridge lesson before ${bridge.reason.replace(/^Bridge before /, '').replace(/\.$/, '')}.` : 'Next required topic on your accepted route.' } : null,
+  };
+}
+
 function mockClassroomProgram(subjectId: ClassroomSubjectId): ClassroomProgramView {
   const acceptedPath = previewClassPath(subjectId);
   applyPreviewPath(acceptedPath);
@@ -652,6 +676,7 @@ function mockClassroomProgram(subjectId: ClassroomSubjectId): ClassroomProgramVi
     session_minutes: settings.sessionMinutes,
     learning_goal: settings.learningGoal,
     focus_policy: settings.focusPolicy,
+    route: previewRoute(subjectId, acceptedPath),
     target_weekly_minutes: settings.targetWeeklyMinutes,
     progress: languageProgress?.progress ?? 0,
     progress_label:
@@ -702,7 +727,7 @@ function mockEngineeringLesson(subjectId: FocusArea): EngineeringLessonView {
 }
 
 function appState(): AppStateView {
-  const inSetup = location.search.includes('setup') && !setupCompleted;
+  const inSetup = typeof location !== 'undefined' && location.search.includes('setup') && !setupCompleted;
   return {
     onboarded: !inSetup,
     session: session(),

@@ -725,12 +725,36 @@ fn pending_bridge(conn: &Connection, path: &AcceptedPath, slug: &str) -> Result<
         .any(|(_, taken, _, finished)| taken == slug && *finished >= accepted_at))
 }
 
+/// Why a topic is next: an accepted bridge, or the accepted route itself.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NextReason {
+    Bridge,
+    Route,
+}
+
 /// A manual/diagnostic bypass changes the route, not the mastery ledger. Earlier
 /// prerequisites are carried into the lesson as visible checks and refreshers.
 /// Accepted bridge lessons come first, once each, before regular selection.
 pub fn next_concept(conn: &Connection, course_id: &str, date: &str) -> Result<Option<db::Concept>> {
-    let Some(path) = current_path(conn, course_id)? else {
+    if current_path(conn, course_id)?.is_none() {
         return crate::roulette::draw(conn, date, course_id);
+    }
+    let next = peek_next_concept(conn, course_id)?.map(|(concept, _)| concept);
+    if let Some(concept) = &next {
+        db::mark_concept_picked(conn, concept.id, date)?;
+    }
+    Ok(next)
+}
+
+/// The topic selection would serve next on an accepted route, without
+/// recording a pick. `None` when the route has nothing left.
+pub fn peek_next_concept(
+    conn: &Connection,
+    course_id: &str,
+) -> Result<Option<(db::Concept, NextReason)>> {
+    let Some(path) = current_path(conn, course_id)? else {
+        return Ok(None);
     };
     for bridge in &path.recommendation.bridges {
         if pending_bridge(conn, &path, &bridge.id)? {
@@ -738,8 +762,7 @@ pub fn next_concept(conn: &Connection, course_id: &str, date: &str) -> Result<Op
                 .into_iter()
                 .find(|c| c.slug == bridge.id)
             {
-                db::mark_concept_picked(conn, concept.id, date)?;
-                return Ok(Some(concept));
+                return Ok(Some((concept, NextReason::Bridge)));
             }
         }
     }
@@ -818,9 +841,8 @@ pub fn next_concept(conn: &Connection, course_id: &str, date: &str) -> Result<Op
             c.id,
         )
     });
-    let next = candidates.into_iter().next();
-    if let Some(concept) = &next {
-        db::mark_concept_picked(conn, concept.id, date)?;
-    }
-    Ok(next)
+    Ok(candidates
+        .into_iter()
+        .next()
+        .map(|concept| (concept, NextReason::Route)))
 }

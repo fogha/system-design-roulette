@@ -194,6 +194,88 @@ pub struct ClassroomProgramView {
     pub accepted_path: Option<crate::domain::classes::PathSummary>,
     /// Enforcement for future sessions: advisory, focused or strict.
     pub focus_policy: String,
+    /// What the accepted route says about completion, demonstrated knowledge,
+    /// review and what comes next. Engineering classes with a path only.
+    pub route: Option<RouteSummary>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct NextTopic {
+    pub slug: String,
+    pub title: String,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RouteSummary {
+    pub revision: u32,
+    pub entry_label: String,
+    pub required_total: usize,
+    pub required_done: usize,
+    pub coverage_total: usize,
+    pub coverage_done: usize,
+    /// Topics checked out with evidence plus placement samples demonstrated.
+    pub demonstrated: usize,
+    /// Refreshers, accepted bridges and topics whose mastery decayed or struggles.
+    pub needs_review: usize,
+    pub next: Option<NextTopic>,
+}
+
+/// The five answers a class overview owes: goal, completed, demonstrated,
+/// review and next. Denominators come from the curriculum map.
+fn route_summary(conn: &Connection, subject_id: &str, kind: &str) -> Result<Option<RouteSummary>> {
+    if kind != "engineering" {
+        return Ok(None);
+    }
+    let Some(path) =
+        crate::domain::classes::current_path(conn, subject_id).map_err(|e| e.to_string())?
+    else {
+        return Ok(None);
+    };
+    let map = curriculum_map(conn, subject_id)?;
+    let Some(coverage) = map.path else {
+        return Ok(None);
+    };
+    let plan = &path.recommendation;
+    let next = crate::domain::classes::peek_next_concept(conn, subject_id)
+        .map_err(|e| e.to_string())?
+        .map(|(concept, reason)| NextTopic {
+            reason: match reason {
+                crate::domain::classes::NextReason::Bridge => plan
+                    .bridges
+                    .iter()
+                    .find(|t| t.id == concept.slug)
+                    .map(|t| format!("Bridge lesson: {}", t.reason))
+                    .unwrap_or_else(|| "Bridge lesson before dependent work.".into()),
+                crate::domain::classes::NextReason::Route => {
+                    "Next required topic on your accepted route.".into()
+                }
+            },
+            slug: concept.slug,
+            title: concept.title,
+        });
+    Ok(Some(RouteSummary {
+        revision: coverage.revision,
+        entry_label: coverage.entry_label,
+        required_total: coverage.required_total,
+        required_done: coverage.required_done,
+        coverage_total: coverage.coverage_total,
+        coverage_done: coverage.coverage_done,
+        demonstrated: coverage.checked
+            + plan
+                .criteria
+                .iter()
+                .filter(|row| row.verdict == crate::domain::placement::Verdict::Passed)
+                .count(),
+        needs_review: coverage.refreshers
+            + coverage.bridges
+            + map
+                .concepts
+                .iter()
+                .filter(|c| matches!(c.mastery_state.as_str(), "decayed" | "struggling"))
+                .count(),
+        next,
+    }))
 }
 
 pub fn program_views(conn: &Connection, today: &str) -> Result<Vec<ClassroomProgramView>> {
@@ -209,6 +291,7 @@ pub fn program_view(
     today: &str,
 ) -> Result<ClassroomProgramView> {
     let row = program_row(conn, subject_id)?;
+    let kind_for_route = row.kind.clone();
     let language_progress = if row.kind == "language" {
         Some(language::program_view(conn, subject_id, today)?)
     } else {
@@ -281,6 +364,7 @@ pub fn program_view(
                     .unwrap_or_else(|| "advisory".into())
             })
             .unwrap_or_else(|| "advisory".into()),
+        route: route_summary(conn, subject_id, &kind_for_route)?,
     })
 }
 

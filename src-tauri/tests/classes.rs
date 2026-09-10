@@ -812,3 +812,120 @@ fn a_failed_check_with_a_set_aside_prerequisite_proposes_a_bridge_served_first()
         .unwrap()
         .is_empty());
 }
+
+#[test]
+fn the_overview_route_answers_completed_demonstrated_review_and_next_without_picking() {
+    let (_, conn) = fixture();
+    assert!(classroom::program_view(&conn, "typescript", "2026-09-09")
+        .unwrap()
+        .route
+        .is_none());
+    let input = setup(&conn, "typescript", "mechanisms");
+    let accepted = classes::accept(&conn, &input, "2026-09-09").unwrap();
+    let view = classroom::program_view(&conn, "typescript", "2026-09-09").unwrap();
+    let route = view
+        .route
+        .clone()
+        .expect("engineering class with a path has a route");
+    assert_eq!(
+        (route.revision, route.required_done, route.coverage_done),
+        (1, 0, 0)
+    );
+    assert!(
+        route.required_total < route.coverage_total,
+        "earlier material leaves the route"
+    );
+    assert_eq!(route.needs_review, accepted.recommendation.refreshers.len());
+    let next = route.next.clone().expect("something is next");
+    assert_eq!(next.reason, "Next required topic on your accepted route.");
+    // Peeking never records a pick; the real pick serves the same topic.
+    let before: i64 = conn
+        .query_row(
+            "SELECT times_picked FROM concepts WHERE slug = ?1",
+            [&next.slug],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(before, 0);
+    assert_eq!(
+        classroom::program_view(&conn, "typescript", "2026-09-09")
+            .unwrap()
+            .route
+            .unwrap()
+            .next
+            .unwrap()
+            .slug,
+        next.slug
+    );
+    assert_eq!(
+        classes::next_concept(&conn, "typescript", "2026-09-09")
+            .unwrap()
+            .unwrap()
+            .slug,
+        next.slug
+    );
+    let after: i64 = conn
+        .query_row(
+            "SELECT times_picked FROM concepts WHERE slug = ?1",
+            [&next.slug],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(after, 1);
+    // A bypass shrinks the required work; an accepted bridge is announced as next.
+    let bypassed = revise(
+        &conn,
+        "typescript",
+        accepted.revision,
+        PathChange::Bypass {
+            topics: vec![next.slug.clone()],
+        },
+    )
+    .unwrap();
+    let route = classroom::program_view(&conn, "typescript", "2026-09-10")
+        .unwrap()
+        .route
+        .unwrap();
+    assert_eq!(
+        route.required_total + 1,
+        view.route.as_ref().unwrap().required_total
+    );
+    assert_ne!(route.next.as_ref().unwrap().slug, next.slug);
+    let map = classroom::curriculum_map(&conn, "typescript").unwrap();
+    let dependent = map
+        .concepts
+        .iter()
+        .find(|c| c.prerequisites.contains(&next.slug))
+        .map(|c| c.slug.clone())
+        .unwrap_or_else(|| map.concepts[0].slug.clone());
+    let bridged = revise(
+        &conn,
+        "typescript",
+        bypassed.revision,
+        PathChange::AcceptBridge {
+            topic: next.slug.clone(),
+            before: dependent,
+        },
+    )
+    .unwrap();
+    let route = classroom::program_view(&conn, "typescript", "2026-09-10")
+        .unwrap()
+        .route
+        .unwrap();
+    assert_eq!(route.revision, bridged.revision);
+    assert_eq!(route.next.as_ref().unwrap().slug, next.slug);
+    assert!(route
+        .next
+        .as_ref()
+        .unwrap()
+        .reason
+        .starts_with("Bridge lesson"));
+    assert_eq!(
+        route.needs_review,
+        accepted.recommendation.refreshers.len() + 1
+    );
+    assert!(classroom::program_view(&conn, "german", "2026-09-10")
+        .unwrap()
+        .route
+        .is_none());
+}
