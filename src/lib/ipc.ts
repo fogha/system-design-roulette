@@ -220,6 +220,27 @@ export interface ClassroomSlotView {
   next_fire_at: string;
   in_progress: boolean;
   source: 'manual' | 'planned';
+  /** Today's durable appointment for this rule, once materialized. */
+  occurrence_id: string | null;
+  disposition: string | null;
+}
+
+export type AppointmentDisposition = 'scheduled' | 'due' | 'started' | 'completed' | 'skipped' | 'missed';
+export interface AppointmentView {
+  id: string;
+  course_id: ClassroomSubjectId;
+  label: string;
+  short_code: string;
+  kind: ClassroomKind;
+  rule_id: number | null;
+  local_date: string;
+  local_time: string;
+  fires_at: string;
+  duration_minutes: number;
+  disposition: AppointmentDisposition;
+  session_ref: string | null;
+  /** A missed appointment can still be started as a make-up session. */
+  make_up: boolean;
 }
 
 export interface AvailabilityWindow {
@@ -388,6 +409,8 @@ export interface AppStateView {
   classroom_slots: ClassroomSlotView[];
   classroom_due_count: number;
   active_classroom_sessions: ActiveClassroomSessionView[];
+  /** Today's durable appointments plus recent missed ones awaiting make-up. */
+  appointments: AppointmentView[];
 }
 
 export interface QuizQuestionView {
@@ -716,12 +739,16 @@ const realApi = {
     subjectId: ClassroomSubjectId,
     slotId?: number | null,
     revisit?: boolean,
+    occurrenceId?: string | null,
   ) =>
     invoke<ClassroomSessionStart>('start_classroom_session', {
       subjectId,
       slotId: slotId ?? null,
       revisit: revisit ?? false,
+      occurrenceId: occurrenceId ?? null,
     }),
+  skipAppointment: (occurrenceId: string) => invoke<AppointmentView>('skip_appointment', { occurrenceId }),
+  getClassAppointments: (subjectId: ClassroomSubjectId) => invoke<AppointmentView[]>('get_class_appointments', { subjectId }),
   resumeClassroomSession: (subjectId: ClassroomSubjectId) =>
     invoke<ClassroomSessionStart | null>('resume_classroom_session', { subjectId }),
   submitClassroomEngineeringSession: (input: {

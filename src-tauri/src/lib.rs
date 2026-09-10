@@ -85,6 +85,7 @@ pub fn run() {
             let state = app.state::<AppState>();
             let classroom_slots = {
                 let conn = state.db.0.lock().unwrap();
+                let _ = classroom::refresh_appointments(&conn, &state.today());
                 classroom::slot_views(&conn, &state.today(), state.debug_day)
             };
             if let Ok(slots) = classroom_slots {
@@ -215,6 +216,7 @@ pub fn run() {
                     let state = handle.state::<AppState>();
                     let classroom_slots = {
                         let conn = state.db.0.lock().unwrap();
+                        let _ = classroom::refresh_appointments(&conn, &state.today());
                         classroom::slot_views(&conn, &state.today(), state.debug_day)
                     };
                     if let Ok(slots) = classroom_slots {
@@ -239,6 +241,7 @@ pub fn run() {
                     let state = handle.state::<AppState>();
                     let classroom_slots = {
                         let conn = state.db.0.lock().unwrap();
+                        let _ = classroom::refresh_appointments(&conn, &state.today());
                         classroom::slot_views(&conn, &state.today(), state.debug_day)
                     };
                     if let Ok(slots) = classroom_slots {
@@ -322,6 +325,8 @@ pub fn run() {
             commands::submit_class_language_check,
             commands::pause_class_lesson,
             commands::skip_class_lesson,
+            commands::skip_appointment,
+            commands::get_class_appointments,
             commands::submit_language_session,
             commands::set_kiosk_level,
             commands::set_model,

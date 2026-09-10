@@ -64,7 +64,7 @@ fn activate(conn: &Connection, language: &str, hour: u32) -> i64 {
 
 fn plan(conn: &Connection, language: &str, slot: Option<i64>) -> sessions::Session {
     let program = classroom::program_row(conn, language).unwrap();
-    adapter::plan(conn, &program, slot, TODAY, false).unwrap()
+    adapter::plan(conn, &program, slot, None, TODAY, false).unwrap()
 }
 
 fn correct_index(conn: &Connection, session: &sessions::Session, index: usize) -> usize {

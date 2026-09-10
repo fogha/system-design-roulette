@@ -23,7 +23,7 @@
   let opening = $state(false);
   /** A shared-runtime lesson whose preparation has not finished: Learn now retries it. */
   const pending = $derived(!!active && active.runtime === 'study' && ['planned', 'preparing'].includes(active.lifecycle));
-  async function open(slotId: number | null = null) { if (opening) return; opening = true; try { if (active && !pending) await app.resumeClass(program.subject_id); else await app.startClass(program.subject_id, slotId, program.completed); } finally { opening = false; } }
+  async function open(slotId: number | null = null, occurrenceId: string | null = null) { if (opening) return; opening = true; try { if (active && !pending) await app.resumeClass(program.subject_id); else await app.startClass(program.subject_id, slotId, program.completed, occurrenceId); } finally { opening = false; } }
   let busy = $state(false), error = $state('');
   async function discard() {
     if (!active || busy) return;
@@ -82,7 +82,7 @@
             {#if pending}<p class="notice">Lesson preparation did not finish: <strong>{active?.title}</strong>. Retry it or discard it from the class header; nothing was graded.</p>{:else if active}<p class="notice">Saved session: <strong>{active.title}</strong>. Resume from the class header.</p>{:else if !program.enabled}<p class="notice">Set your starting point and add a study time, then activate this class when you’re ready.</p>{/if}
           </div>
         {:else if item.id === 'settings'}<ClassSettings {program} />
-        {:else if item.id === 'schedule'}<ClassSchedule {program} opening={opening || preparing} onstart={open} />
+        {:else if item.id === 'schedule'}<ClassSchedule {program} opening={opening || preparing} onstart={open} onmakeup={(id) => open(null, id)} />
         {:else if item.id === 'entry'}
           {#if pathLoading}<p class="loading" role="status">Loading your starting point…</p>{:else if pathError}<p class="error" role="alert">{pathError}</p><button class="ghost mono-ghost" onclick={loadPath}>Retry</button>{:else if pathLoaded}
             {#if path && !editingPath}<PathPreview embedded path={path.recommendation} acceptedRevision={path.revision} onclose={() => select('overview')} onfoundations={() => editingPath = true} />{:else}<EnrollmentSetup embedded courseId={program.subject_id} onclose={setupClosed} />{/if}

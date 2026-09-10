@@ -5,10 +5,16 @@
   import TimePicker from '../../components/TimePicker.svelte';
   import { Plus, Pencil, Trash2, Clock3, CalendarClock, ArrowRight, AlertTriangle } from 'lucide-svelte';
   import { scheduleConflicts, describeConflict, WEEKDAY_NAMES } from './schedule-conflicts';
-  let { program, onstart, opening = false }: { program: ClassroomProgramView; onstart: (slotId: number) => void; opening?: boolean } = $props();
+  let { program, onstart, onmakeup, opening = false }: { program: ClassroomProgramView; onstart: (slotId: number) => void; onmakeup?: (occurrenceId: string) => void; opening?: boolean } = $props();
   const uid = $props.id();
   const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
   const slots = $derived(app.state?.classroom_slots.filter(s => s.subject_id === program.subject_id) ?? []);
+  const appointments = $derived((app.state?.appointments ?? []).filter(a => a.course_id === program.subject_id));
+  async function skipAppointment(id: string) {
+    if (busy) return;
+    busy = true; error = ''; message = '';
+    try { await api.skipAppointment(id); await app.refresh(); message = 'Appointment skipped.'; } catch (cause) { error = String(cause); } finally { busy = false; }
+  }
   let view = $state<'times' | 'plan'>('times');
   let editing = $state(false), slotId = $state<number | null>(null), slotTime = $state('07:30'), slotDays = $state([1,2,3,4,5]);
   let busy = $state(false), error = $state(''), message = $state('');
@@ -78,6 +84,7 @@
       </div>
     {/if}
     <ul class="slot-list">{#each slots as slot (slot.id)}<li><div class="slot-time mono">{time(slot.hour,slot.minute)}</div><div class="slot-copy"><strong>{days(slot.weekdays)}</strong><small>{slot.in_progress ? 'Session in progress' : slot.owed ? 'Due now' : !program.enabled || !slot.enabled ? 'Paused' : `Next: ${slot.next_fire_at}`}<span class="source">{slot.source === 'manual' ? 'Manual' : 'Planned'}</span></small></div><div class="slot-actions">{#if slot.owed}<button class="ghost mono-ghost" disabled={opening || busy || !program.enabled} onclick={() => onstart(slot.id)}>Start<ArrowRight size={12} /></button>{/if}<button class="icon" aria-label={`Edit ${days(slot.weekdays)} at ${time(slot.hour,slot.minute)}`} disabled={busy || editing} onclick={() => edit(slot.id)}><Pencil size={14} /></button><button class="icon" aria-label={`Delete ${days(slot.weekdays)} at ${time(slot.hour,slot.minute)}`} disabled={busy} onclick={() => remove(slot.id)}><Trash2 size={14} /></button></div></li>{:else}{#if !editing}<li class="empty"><CalendarClock size={28} /><h4>Your week starts here</h4><p>Add a recurring time or let the planner fit sessions into your availability.</p><button class="cta mono-cta" onclick={() => edit()}><Plus size={13} />Add your first study time</button></li>{/if}{/each}</ul>
+    {#if appointments.length}<div class="list-heading"><span class="mono">APPOINTMENTS · TODAY AND MISSED</span></div><ul class="appointment-list">{#each appointments as appointment (appointment.id)}<li><span class="mono">{appointment.local_date} {appointment.local_time}</span><span class="disposition" class:missed={appointment.disposition === 'missed'} class:done={appointment.disposition === 'completed'}>{appointment.disposition}</span>{#if appointment.make_up}<span class="appointment-actions"><button class="ghost mono-ghost" disabled={opening || busy || !program.enabled} onclick={() => onmakeup?.(appointment.id)}>Make up</button><button class="ghost mono-ghost" disabled={busy} onclick={() => skipAppointment(appointment.id)}>Skip</button></span>{/if}</li>{/each}</ul>{/if}
   </div>
   <div id={`${uid}-plan-panel`} role="tabpanel" aria-labelledby={`${uid}-plan`} hidden={view !== 'plan'} tabindex="0">
     <p class="planner-intro">Set a weekly target and the times you’re free. Preview a timetable before saving. A saved plan replaces this class’s planned times and keeps manual times.</p>
@@ -99,6 +106,7 @@
   .notice, .message { padding: 12px 14px; border-left: 2px solid var(--accent); background: var(--surface); margin-bottom: 18px; font-size: 12px; } .message { border-color: var(--led-ok); } .error { color: var(--led-err); font-size: 12px; margin: 12px 0; overflow-wrap: anywhere; }
   .list-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 18px 0 12px; } .list-heading > span { font-size: 10px; color: var(--muted); letter-spacing: .7px; } .list-heading button { font-size: 11px; }
   .slot-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; } .slot-list li { display: flex; align-items: center; gap: 18px; padding: 16px; background: var(--bg); border: 1px solid var(--node-border); border-radius: var(--radius-panel); } .slot-time { color: var(--accent); font-size: 20px; letter-spacing: -1px; } .slot-copy { min-width: 0; flex: 1; } .slot-copy strong { font-size: 13px; font-weight: 500; } .slot-copy small { display: flex; flex-wrap: wrap; gap: 8px; color: var(--muted); font-size: 11px; line-height: 1.5; margin-top: 6px; } .source { color: var(--violet-fg); } .slot-actions { display: flex; gap: 6px; }
+  .appointment-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; } .appointment-list li { display: flex; align-items: center; gap: 12px; font-size: 12px; color: var(--muted); } .disposition { color: var(--fg); font-size: 11px; } .disposition.missed { color: var(--accent); } .disposition.done { color: var(--led-ok); } .appointment-actions { display: flex; gap: 6px; margin-left: auto; } .appointment-actions button { font-size: 10px; }
   .icon { display: inline-grid; place-items: center; width: 32px; height: 32px; border: 1px solid var(--node-border); border-radius: var(--radius-control); background: var(--node-bg); color: var(--muted); cursor: pointer; }
   .slot-list li.empty { display: flex; flex-direction: column; text-align: center; gap: 12px; padding: 42px 24px; border-style: dashed; } .empty :global(svg) { color: var(--accent); } .empty h4 { font: 22px var(--font-display); margin: 0; } .empty p { max-width: 350px; } .empty button { margin-top: 8px; }
   .editor { background: var(--surface); border: 1px solid var(--violet); border-radius: var(--radius-panel); padding: 20px; margin-bottom: 18px; } h4 { margin: 0 0 18px; font: 19px var(--font-display); } fieldset { padding: 0; margin: 0; border: 0; min-width: 0; } .editor-grid { display: flex; flex-wrap: wrap; gap: 24px; align-items: center; } .label, label > span { display: block; color: var(--muted); font-size: 12px; margin-bottom: 10px; }

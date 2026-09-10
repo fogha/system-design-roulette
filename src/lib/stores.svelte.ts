@@ -135,14 +135,14 @@ class AppStore {
     this.route();
   }
 
-  async startClass(subjectId: ClassroomSubjectId, slotId?: number | null, revisit = false) {
+  async startClass(subjectId: ClassroomSubjectId, slotId?: number | null, revisit = false, occurrenceId?: string | null) {
     if (this.preparingClass) return;
     const program = this.state?.classroom_programs.find(p => p.subject_id === subjectId);
     this.preparingClass = { subjectId, label: program?.label ?? subjectId, agent: program?.agent ?? '', model: program?.model ?? '', startedAt: Date.now() };
     this.error = '';
     this.genLog = [];
     try {
-      const session = await api.startClassroomSession(subjectId, slotId, revisit);
+      const session = await api.startClassroomSession(subjectId, slotId, revisit, occurrenceId);
       if (session.kind === 'language') {
         this.languageLesson = session.lesson;
         this.screen = 'language';

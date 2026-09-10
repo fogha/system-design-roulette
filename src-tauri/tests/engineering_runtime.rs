@@ -70,7 +70,7 @@ fn activate(conn: &Connection, subject_id: &str, hour: u32) -> i64 {
 
 fn plan(conn: &Connection, subject_id: &str, slot: Option<i64>) -> Session {
     let program = classroom::program_row(conn, subject_id).unwrap();
-    engineering::plan(conn, &program, slot, TODAY, false).unwrap()
+    engineering::plan(conn, &program, slot, None, TODAY, false).unwrap()
 }
 
 fn lesson_for(session: &Session) -> StoredEngineeringLesson {
@@ -191,7 +191,7 @@ fn an_unfinished_starting_point_draft_blocks_the_default_path() {
     )
     .unwrap();
     let program = classroom::program_row(&conn, "typescript").unwrap();
-    let error = engineering::plan(&conn, &program, None, TODAY, false).unwrap_err();
+    let error = engineering::plan(&conn, &program, None, None, TODAY, false).unwrap_err();
     assert!(error.contains("starting point"), "{error}");
     assert!(classes::current_path(&conn, "typescript")
         .unwrap()

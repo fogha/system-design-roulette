@@ -35,6 +35,7 @@ function state(overrides: Partial<AppStateView> = {}): AppStateView {
     classroom_slots: [],
     classroom_due_count: 0,
     active_classroom_sessions: [],
+    appointments: [],
     ...overrides,
   };
 }
@@ -57,6 +58,8 @@ function classroomSlot(
     next_fire_at: at.toISOString(),
     in_progress: false,
     source: 'manual',
+    occurrence_id: null,
+    disposition: null,
     ...overrides,
   };
 }

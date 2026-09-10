@@ -102,6 +102,15 @@ const MIGRATIONS: &[Migration] = &[
             Ok(())
         },
     },
+    Migration {
+        version: 9,
+        name: "occurrences",
+        sources: &[include_str!("009_occurrences.sql")],
+        apply: |conn| {
+            conn.execute_batch(include_str!("009_occurrences.sql"))?;
+            Ok(())
+        },
+    },
 ];
 
 pub fn enable_foreign_keys(conn: &Connection) -> Result<()> {

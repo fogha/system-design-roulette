@@ -231,9 +231,9 @@ pub fn inspect(conn: &Connection) -> Result<PrimaryImport> {
     }
     let version: u32 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
     // v8 only rebuilt classroom check evidence; the primary tables are the v7 shape.
-    if !(7..=8).contains(&version) {
+    if !(7..=9).contains(&version) {
         return Err(invalid(format!(
-            "Primary import requires schema v7 or v8, found v{version}."
+            "Primary import requires schema v7 to v9, found v{version}."
         )));
     }
     super::migrations::validate_recorded_schema(conn)?;

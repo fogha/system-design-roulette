@@ -405,6 +405,8 @@ let mockClassroomSlots: ClassroomSlotView[] = requestedClass
         next_fire_at: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString().slice(0, 19),
         in_progress: false,
         source: 'manual',
+      occurrence_id: null,
+      disposition: null,
       },
     ]
   : [];
@@ -714,6 +716,7 @@ function appState(): AppStateView {
     classroom_programs: CLASSROOM_CATALOG.map((item) => mockClassroomProgram(item.id)),
     classroom_slots: mockClassroomSlots,
     classroom_due_count: mockClassroomSlots.filter((slot) => slot.owed).length,
+    appointments: [],
     active_classroom_sessions: [
       ...(mockActiveLanguage
         ? [
@@ -975,6 +978,8 @@ export const mockApi = {
       in_progress: false,
       next_fire_at: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 19),
       source: 'manual',
+      occurrence_id: null,
+      disposition: null,
     };
     const existing = mockClassroomSlots.findIndex((candidate) => candidate.id === id);
     if (input.id != null && (existing < 0 || mockClassroomSlots[existing].subject_id !== input.subject_id)) throw new Error('classroom slot was not found');
@@ -1066,6 +1071,8 @@ export const mockApi = {
         in_progress: false,
         next_fire_at: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 19),
         source: 'planned' as const,
+        occurrence_id: null,
+        disposition: null,
       })),
     ];
     return {
@@ -1149,6 +1156,8 @@ export const mockApi = {
   saveClassCheckAnswer: async () => { throw new Error('Saved lesson work needs the desktop app.'); },
   submitClassCheck: async () => { throw new Error('Shared-runtime knowledge checks need the desktop app.'); },
   submitClassLanguageCheck: async () => { throw new Error('Shared-runtime knowledge checks need the desktop app.'); },
+  skipAppointment: async () => { throw new Error('Appointments need the desktop app.'); },
+  getClassAppointments: async () => [],
   pauseClassLesson: async () => {},
   skipClassLesson: async (sessionId: string) => { if (mockActiveEngineering?.session_id === sessionId) mockActiveEngineering = null; },
   getExercise: async (owner: {

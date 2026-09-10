@@ -27,7 +27,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         use system_design_roulette_lib::subjects::language;
         let session = match language::resumable(&conn, subject)? {
             Some(session) => session,
-            None => language::plan(&conn, &program, None, &today, false)?,
+            None => language::plan(&conn, &program, None, None, &today, false)?,
         };
         let published = language::publish_curated(&conn, &session.id)?;
         println!(
@@ -38,7 +38,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let session = match engineering::resumable(&conn, subject)? {
         Some(session) => session,
-        None => engineering::plan(&conn, &program, None, &today, false)?,
+        None => engineering::plan(&conn, &program, None, None, &today, false)?,
     };
     if !matches!(session.status, Status::Planned | Status::Preparing) {
         println!(

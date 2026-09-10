@@ -5,4 +5,5 @@ pub mod classes;
 pub mod enrollment;
 pub mod placement;
 pub mod primary_quiz;
+pub mod schedule;
 pub mod sessions;

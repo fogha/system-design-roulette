@@ -40,6 +40,8 @@ pub struct Selection {
     pub title: String,
     pub phase: i64,
     pub slot_id: Option<i64>,
+    #[serde(default)]
+    pub occurrence_id: Option<String>,
     pub service_date: String,
     pub revisit: bool,
     pub reason: String,
@@ -60,6 +62,7 @@ pub fn plan(
     conn: &Connection,
     program: &ProgramRow,
     slot_id: Option<i64>,
+    occurrence_id: Option<String>,
     today: &str,
     revisit: bool,
 ) -> Result<Session> {
@@ -89,6 +92,7 @@ pub fn plan(
         title: planned.seed.title.clone(),
         phase: planned.phase,
         slot_id,
+        occurrence_id,
         service_date: today.into(),
         revisit,
         reason: format!(
@@ -458,6 +462,7 @@ pub fn submit(
                 "progress": progress,
             });
             assessments::submit_in_transaction(tx, &owner, &round, &result, true)?;
+            crate::domain::schedule::resolve(tx, &format!("study:{}", id.0), true, Utc::now())?;
             Ok(json!({
                 "kind": "completed",
                 "level": chosen.level,

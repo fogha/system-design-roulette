@@ -44,6 +44,9 @@ pub struct Selection {
     pub title: String,
     pub category: String,
     pub slot_id: Option<i64>,
+    /// Durable appointment this lesson serves, when started from one.
+    #[serde(default)]
+    pub occurrence_id: Option<String>,
     pub service_date: String,
     pub revisit: bool,
     pub reason: String,
@@ -101,6 +104,7 @@ pub fn plan(
     conn: &Connection,
     program: &ProgramRow,
     slot_id: Option<i64>,
+    occurrence_id: Option<String>,
     today: &str,
     revisit: bool,
 ) -> Result<Session> {
@@ -144,6 +148,7 @@ pub fn plan(
         title: concept.title.clone(),
         category: concept.category.clone(),
         slot_id,
+        occurrence_id,
         service_date: today.into(),
         revisit,
         reason: if revisit {
@@ -775,6 +780,7 @@ pub fn submit(
             }
             mastery::record_course_read(tx, concept_id, &today)?;
             mastery::record_quiz_outcome(tx, concept_id, &today, score)?;
+            crate::domain::schedule::resolve(tx, &format!("study:{}", id.0), true, Utc::now())?;
             Ok(json!({"kind": "completed", "concept_id": concept_id, "result": result_value}))
         },
     )
@@ -796,7 +802,10 @@ pub fn skip(conn: &Connection, id: &SessionId) -> Result<Session> {
         session.checkpoint.revision,
         Disposition::Skipped,
         Utc::now(),
-        |_, _| Ok(json!({"kind": "skipped"})),
+        |tx, _| {
+            crate::domain::schedule::resolve(tx, &format!("study:{}", id.0), false, Utc::now())?;
+            Ok(json!({"kind": "skipped"}))
+        },
     )
     .map_err(e)?;
     sessions::get(conn, id).map_err(e)

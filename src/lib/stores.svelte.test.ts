@@ -34,6 +34,7 @@ function state(overrides: Partial<AppStateView> = {}): AppStateView {
     classroom_slots: [],
     classroom_due_count: 0,
     active_classroom_sessions: [],
+    appointments: [],
     ...overrides,
   };
 }

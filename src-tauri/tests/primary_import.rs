@@ -669,7 +669,7 @@ fn apply_keeps_the_active_class_session_in_the_foreground() {
     )
     .unwrap();
     let program = classroom::program_row(&conn, "javascript").unwrap();
-    let planned = engineering::plan(&conn, &program, None, "2026-09-10", false).unwrap();
+    let planned = engineering::plan(&conn, &program, None, None, "2026-09-10", false).unwrap();
     let chosen = engineering::selection(&planned).unwrap();
     let lease = sessions::claim_preparation(&conn, &planned.id, chrono::Utc::now(), 60)
         .unwrap()

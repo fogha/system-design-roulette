@@ -699,7 +699,8 @@ pub fn upsert_slot(conn: &Connection, input: &UpsertClassroomSlotInput) -> Resul
             .execute(
                 "UPDATE classroom_schedule_slots
                  SET hour = ?3, minute = ?4,
-                     weekdays_json = ?5, enabled = ?6, source = 'manual'
+                     weekdays_json = ?5, enabled = ?6, source = 'manual',
+                     revision = revision + 1
                  WHERE id = ?1 AND subject_id = ?2",
                 params![
                     id,
@@ -820,6 +821,7 @@ pub fn delete_slot(conn: &Connection, id: i64) -> Result<()> {
         [id],
     )
     .map_err(|error| error.to_string())?;
+    crate::domain::schedule::detach_rule(conn, id).map_err(|error| error.to_string())?;
     conn.execute("DELETE FROM classroom_schedule_slots WHERE id = ?1", [id])
         .map_err(|error| error.to_string())?;
     if let Some(subject_id) = subject_id {
@@ -1139,6 +1141,14 @@ fn slot_state(conn: &Connection, slot: &SlotRow, today: &str) -> Result<(bool, b
     if let Some(status) = status {
         return Ok((true, status == "in_progress"));
     }
+    // A started, completed or skipped appointment consumes the rule for the day.
+    if let Some(occurrence) = crate::domain::schedule::today_for_rule(conn, slot.id, today)
+        .map_err(|error| error.to_string())?
+    {
+        if occurrence.consumed() {
+            return Ok((true, occurrence.disposition == "started"));
+        }
+    }
     // Shared-runtime lessons planned for this rule consume it for the day.
     match crate::subjects::engineering::slot_session_status(conn, slot.id, today)? {
         Some(status) => Ok((true, !matches!(status.as_str(), "completed" | "skipped"))),
@@ -1271,6 +1281,87 @@ pub struct ClassroomSlotView {
     pub next_fire_at: String,
     pub in_progress: bool,
     pub source: String,
+    /// Today's durable appointment for this rule, once materialized.
+    pub occurrence_id: Option<String>,
+    pub disposition: Option<String>,
+}
+
+/// An appointment as Today and the class schedule show it.
+#[derive(Debug, Clone, Serialize)]
+pub struct AppointmentView {
+    pub id: String,
+    pub course_id: String,
+    pub label: String,
+    pub short_code: String,
+    pub kind: String,
+    pub rule_id: Option<i64>,
+    pub local_date: String,
+    pub local_time: String,
+    pub fires_at: String,
+    pub duration_minutes: i64,
+    pub disposition: String,
+    pub session_ref: Option<String>,
+    /// A missed appointment can still be started as a make-up session.
+    pub make_up: bool,
+}
+
+fn appointment_view(
+    conn: &Connection,
+    occurrence: crate::domain::schedule::Occurrence,
+) -> Result<AppointmentView> {
+    let program = program_row(conn, &occurrence.course_id)?;
+    Ok(AppointmentView {
+        make_up: occurrence.disposition == "missed",
+        id: occurrence.id,
+        course_id: occurrence.course_id,
+        label: program.label,
+        short_code: program.short_code,
+        kind: program.kind,
+        rule_id: occurrence.rule_id,
+        local_date: occurrence.local_date,
+        local_time: occurrence.local_time,
+        fires_at: occurrence.fires_at,
+        duration_minutes: occurrence.duration_minutes,
+        disposition: occurrence.disposition,
+        session_ref: occurrence.session_ref,
+    })
+}
+
+/// Materialize today's appointments and mark missed ones for the learner's
+/// clock. Paused scheduling creates no new appointments.
+pub fn refresh_appointments(conn: &Connection, today: &str) -> Result<Vec<AppointmentView>> {
+    use crate::domain::schedule::{self, Clock, SystemZone};
+    let paused = matches!(db::get_config(conn, "schedule_paused"), Ok(Some(value)) if value == "1");
+    let date =
+        chrono::NaiveDate::parse_from_str(today, "%Y-%m-%d").map_err(|error| error.to_string())?;
+    let clock = Clock {
+        zone: &SystemZone,
+        now: chrono::Utc::now(),
+        today: date,
+    };
+    schedule::materialize(conn, &clock, paused)
+        .map_err(|error| error.to_string())?
+        .into_iter()
+        .map(|occurrence| appointment_view(conn, occurrence))
+        .collect()
+}
+
+/// Today's appointments plus recent missed ones, without materializing.
+pub fn appointment_views(conn: &Connection, today: &str) -> Result<Vec<AppointmentView>> {
+    crate::domain::schedule::agenda(conn, today)
+        .map_err(|error| error.to_string())?
+        .into_iter()
+        .map(|occurrence| appointment_view(conn, occurrence))
+        .collect()
+}
+
+/// Appointment history of one class, newest first.
+pub fn appointment_history(conn: &Connection, course_id: &str) -> Result<Vec<AppointmentView>> {
+    crate::domain::schedule::history(conn, course_id, 30)
+        .map_err(|error| error.to_string())?
+        .into_iter()
+        .map(|occurrence| appointment_view(conn, occurrence))
+        .collect()
 }
 
 pub fn slot_views(
@@ -1285,11 +1376,23 @@ pub fn slot_views(
         .map(|slot| {
             let (consumed, in_progress) = slot_state(conn, &slot, today)?;
             let available = slot.enabled && slot.program_enabled && !paused;
+            let occurrence = crate::domain::schedule::today_for_rule(conn, slot.id, today)
+                .map_err(|error| error.to_string())?;
             let owed = available
                 && !consumed
-                && (debug_day || slot_due_at(slot.hour, slot.minute, &slot.weekdays, now, false));
+                && match &occurrence {
+                    Some(occurrence) => {
+                        occurrence.disposition == "due"
+                            || (debug_day && occurrence.disposition == "scheduled")
+                    }
+                    None => {
+                        debug_day || slot_due_at(slot.hour, slot.minute, &slot.weekdays, now, false)
+                    }
+                };
             let next_fire = next_fire_at(&slot, now, consumed);
             Ok(ClassroomSlotView {
+                occurrence_id: occurrence.as_ref().map(|o| o.id.clone()),
+                disposition: occurrence.as_ref().map(|o| o.disposition.clone()),
                 id: slot.id,
                 subject_id: slot.subject_id,
                 label: slot.label,
@@ -1670,6 +1773,12 @@ pub fn validate_slot_start(
         )
         .map_err(|error| error.to_string())?;
     if consumed > 0 || crate::subjects::engineering::slot_consumed(conn, slot_id, today)? {
+        return Err("this class slot is already complete for today".into());
+    }
+    if crate::domain::schedule::today_for_rule(conn, slot_id, today)
+        .map_err(|error| error.to_string())?
+        .is_some_and(|occurrence| occurrence.consumed())
+    {
         return Err("this class slot is already complete for today".into());
     }
     Ok(())

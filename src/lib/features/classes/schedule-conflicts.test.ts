@@ -6,7 +6,7 @@ function program(subject_id: string, label: string, enabled: boolean, session_mi
   return { subject_id: subject_id as ClassroomProgramView['subject_id'], kind: 'engineering', label, native_label: '', short_code: 'X', enabled, agent: 'claude', model: 'sonnet', custom_agent_bin: '', prompt_profile: '', prompt_version: 'v1', session_minutes, learning_goal: '', target_weekly_minutes: 0, progress: 0, progress_label: '', completed: false, language_progress: null };
 }
 function slot(id: number, subject_id: string, label: string, hour: number, minute: number, weekdays: number[], source: 'manual' | 'planned' = 'manual', enabled = true): ClassroomSlotView {
-  return { id, subject_id: subject_id as ClassroomSlotView['subject_id'], label, short_code: 'X', kind: 'engineering', hour, minute, weekdays, enabled, owed: false, next_fire_at: '', in_progress: false, source };
+  return { id, subject_id: subject_id as ClassroomSlotView['subject_id'], label, short_code: 'X', kind: 'engineering', hour, minute, weekdays, enabled, owed: false, next_fire_at: '', in_progress: false, source, occurrence_id: null, disposition: null };
 }
 const programs = [program('linux-bash', 'Linux Bash', true), program('typescript', 'TypeScript', false, 45)];
 const slots = [slot(1, 'linux-bash', 'Linux Bash', 9, 0, [1, 3, 5]), slot(2, 'linux-bash', 'Linux Bash', 0, 10, [1]), slot(3, 'typescript', 'TypeScript', 14, 0, [2], 'planned')];

@@ -93,6 +93,8 @@ pub struct AppStateView {
     pub classroom_slots: Vec<crate::classroom::ClassroomSlotView>,
     pub classroom_due_count: usize,
     pub active_classroom_sessions: Vec<crate::classroom::ActiveClassroomSessionView>,
+    /// Today's durable appointments plus recent missed ones awaiting make-up.
+    pub appointments: Vec<crate::classroom::AppointmentView>,
 }
 
 fn valid_agent(agent: &str) -> bool {
@@ -239,12 +241,18 @@ pub fn get_app_state(state: State<'_, AppState>) -> CmdResult<AppStateView> {
                 }),
         )
     };
-    let (classroom_programs, classroom_slots, active_classroom_sessions) = {
+    let (classroom_programs, classroom_slots, active_classroom_sessions, appointments) = {
         let conn = state.db.0.lock().unwrap();
+        let appointments = if onboarded {
+            crate::classroom::refresh_appointments(&conn, &state.today()).map_err(err)?
+        } else {
+            Vec::new()
+        };
         (
             crate::classroom::program_views(&conn, &state.today()).map_err(err)?,
             crate::classroom::slot_views(&conn, &state.today(), state.debug_day).map_err(err)?,
             crate::classroom::active_sessions(&conn).map_err(err)?,
+            appointments,
         )
     };
     let classroom_due_count = classroom_slots.iter().filter(|slot| slot.owed).count();
@@ -269,7 +277,71 @@ pub fn get_app_state(state: State<'_, AppState>) -> CmdResult<AppStateView> {
         classroom_slots,
         classroom_due_count,
         active_classroom_sessions,
+        appointments,
     })
+}
+
+/// Skip an open appointment without starting a session. It is consumed once.
+#[tauri::command]
+pub fn skip_appointment(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    occurrence_id: String,
+) -> CmdResult<crate::classroom::AppointmentView> {
+    let view = {
+        let conn = state.db.0.lock().unwrap();
+        let skipped = crate::domain::schedule::skip(&conn, &occurrence_id, chrono::Utc::now())
+            .map_err(err)?;
+        crate::classroom::appointment_views(&conn, &state.today())
+            .map_err(err)?
+            .into_iter()
+            .find(|view| view.id == skipped.id)
+            .ok_or("The skipped appointment could not be read.")?
+    };
+    let _ = app.emit("classroom:state", &view);
+    Ok(view)
+}
+
+/// Appointment history of one class, newest first.
+#[tauri::command]
+pub fn get_class_appointments(
+    state: State<'_, AppState>,
+    subject_id: String,
+) -> CmdResult<Vec<crate::classroom::AppointmentView>> {
+    let conn = state.db.0.lock().unwrap();
+    crate::classroom::appointment_history(&conn, subject_id.trim()).map_err(err)
+}
+
+/// A newly planned session starts its appointment; a resumed session that was
+/// planned for another appointment leaves this one open.
+fn claim_appointment(
+    conn: &rusqlite::Connection,
+    appointment: &Option<crate::domain::schedule::Occurrence>,
+    course_id: &str,
+    session_id: &str,
+) -> CmdResult<()> {
+    let Some(found) = appointment else {
+        return Ok(());
+    };
+    let planned_for: Option<String> = conn
+        .query_row(
+            "SELECT json_extract(context_json,'$.selection.occurrence_id') FROM study_sessions WHERE id=?1",
+            [session_id],
+            |r| r.get(0),
+        )
+        .map_err(err)?;
+    if planned_for.as_deref() != Some(found.id.as_str()) {
+        return Ok(());
+    }
+    crate::domain::schedule::claim(
+        conn,
+        &found.id,
+        course_id,
+        &format!("study:{session_id}"),
+        chrono::Utc::now(),
+    )
+    .map_err(err)?;
+    Ok(())
 }
 
 fn refresh_os_schedule(state: &AppState) -> CmdResult<()> {
@@ -495,17 +567,39 @@ pub async fn start_classroom_session(
     subject_id: String,
     slot_id: Option<i64>,
     revisit: Option<bool>,
+    occurrence_id: Option<String>,
 ) -> CmdResult<serde_json::Value> {
     let _start = state.class_start_gate.try_lock()
         .map_err(|_| "A class lesson is already being prepared. Wait for it to finish before starting another.".to_string())?;
-    {
-        let conn = state.db.0.lock().unwrap();
-        if !crate::classroom::has_enabled_schedule(&conn, subject_id.trim()).map_err(err)? {
-            return Err("Add a study time in this class's Schedule tab before starting it.".into());
-        }
-    }
     let revisit = revisit.unwrap_or(false);
     let spec = crate::classroom::subject(subject_id.trim()).map_err(err)?;
+    // Resolve the appointment this start serves: an explicit one (including a
+    // missed make-up) or today's appointment of the chosen rule.
+    let appointment = {
+        let conn = state.db.0.lock().unwrap();
+        if !crate::classroom::has_enabled_schedule(&conn, spec.id).map_err(err)? {
+            return Err("Add a study time in this class's Schedule tab before starting it.".into());
+        }
+        let today = state.today();
+        let _ = crate::classroom::refresh_appointments(&conn, &today);
+        let found = match (&occurrence_id, slot_id) {
+            (Some(id), _) => Some(crate::domain::schedule::get(&conn, id).map_err(err)?),
+            (None, Some(rule)) => {
+                crate::domain::schedule::today_for_rule(&conn, rule, &today).map_err(err)?
+            }
+            (None, None) => None,
+        };
+        if let Some(found) = &found {
+            if found.course_id != spec.id {
+                return Err("This appointment belongs to another class.".into());
+            }
+            if found.consumed() {
+                return Err("This appointment was already started or resolved.".into());
+            }
+        }
+        found
+    };
+    let appointment_id = appointment.as_ref().map(|found| found.id.clone());
     let value = match spec.kind {
         crate::classroom::SubjectKind::Language => {
             // A legacy in-progress row resumes as it was; every new lesson runs
@@ -521,9 +615,11 @@ pub async fn start_classroom_session(
                         &conn,
                         &program,
                         slot_id,
+                        appointment_id.clone(),
                         &state.today(),
                         revisit,
                     )?;
+                    claim_appointment(&conn, &appointment, spec.id, &planned.id.0)?;
                     (None, Some(planned))
                 }
             };
@@ -559,9 +655,11 @@ pub async fn start_classroom_session(
                         &conn,
                         &program,
                         slot_id,
+                        appointment_id.clone(),
                         &state.today(),
                         revisit,
                     )?;
+                    claim_appointment(&conn, &appointment, spec.id, &planned.id.0)?;
                     (None, Some(planned))
                 }
             };
