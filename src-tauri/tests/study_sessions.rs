@@ -32,12 +32,17 @@ fn fixture() -> (std::path::PathBuf, Connection) {
 }
 fn request(conn: &Connection, course: &str, entry: &str) -> PlanSession {
     if !classroom::has_enabled_schedule(conn, course).unwrap() {
+        // Active classes may not overlap, so each course keeps its own hour.
+        let hour = 6 + system_design_roulette_lib::catalog::COURSES
+            .iter()
+            .position(|c| c.id == course)
+            .unwrap_or(0) as u32;
         classroom::upsert_slot(
             conn,
             &classroom::UpsertClassroomSlotInput {
                 id: None,
                 subject_id: course.into(),
-                hour: 9,
+                hour,
                 minute: 0,
                 weekdays: vec![1, 3, 5],
                 enabled: true,

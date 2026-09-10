@@ -339,6 +339,13 @@ pub fn configure_program(
     if !input.enabled && has_active_session(conn, &input.subject_id)? {
         return Err("finish the active class session before disabling it".into());
     }
+    let current = program_row(conn, spec.id)?;
+    if input.enabled && (!current.enabled || input.session_minutes > current.session_minutes) {
+        let conflicts = activation_conflicts(conn, spec.id, input.session_minutes)?;
+        if !conflicts.is_empty() {
+            return Err(conflict_message(&conflicts));
+        }
+    }
     if spec.kind == SubjectKind::Engineering
         && (input.start_level.is_some()
             || input.target_level.is_some()
@@ -392,6 +399,264 @@ pub struct UpsertClassroomSlotInput {
     pub enabled: bool,
 }
 
+/// Minutes in one recurring week. Study times occupy a circular interval, so a
+/// late Sunday session can overlap an early Monday appointment.
+const WEEK_MINUTES: i64 = 7 * 24 * 60;
+const WEEKDAY_NAMES: [&str; 7] = [
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
+];
+
+/// One proposed appointment that overlaps an existing enabled study time.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct ScheduleConflict {
+    pub weekday: u8,
+    pub hour: u32,
+    pub minute: u32,
+    pub subject_id: String,
+    pub label: String,
+    pub with_slot_id: i64,
+    pub with_subject_id: String,
+    pub with_label: String,
+    pub with_weekday: u8,
+    pub with_hour: u32,
+    pub with_minute: u32,
+    pub with_session_minutes: i64,
+}
+
+/// A recurring study time to validate before it is saved or activated.
+#[derive(Debug, Clone)]
+pub struct ScheduleCandidate {
+    pub subject_id: String,
+    pub hour: u32,
+    pub minute: u32,
+    pub weekdays: Vec<u8>,
+    pub session_minutes: i64,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ConflictScope {
+    /// Rules being edited or replaced never conflict with themselves.
+    pub excluded_slot_ids: Vec<i64>,
+    /// Planning replaces this class's planned rules; ignore them.
+    pub exclude_planned_for: Option<String>,
+}
+
+struct Occupancy {
+    slot_id: i64,
+    subject_id: String,
+    label: String,
+    weekday: u8,
+    hour: u32,
+    minute: u32,
+    session_minutes: i64,
+    interval: (i64, i64),
+}
+
+fn week_interval(weekday: u8, hour: u32, minute: u32, session_minutes: i64) -> (i64, i64) {
+    let start = (i64::from(weekday) - 1) * 1440 + i64::from(hour) * 60 + i64::from(minute);
+    (start, start + session_minutes.max(1))
+}
+
+/// Half-open intervals on a circular week: compare against the neighbouring
+/// week copies so wraparound past Sunday midnight is detected.
+fn week_intervals_overlap(a: (i64, i64), b: (i64, i64)) -> bool {
+    [-WEEK_MINUTES, 0, WEEK_MINUTES]
+        .into_iter()
+        .any(|shift| a.0 < b.1 + shift && b.0 + shift < a.1)
+}
+
+/// Enabled study times that would fire alongside `subject_id`'s appointments:
+/// every active class plus this class's own other times.
+fn occupancies(
+    conn: &Connection,
+    subject_id: &str,
+    scope: &ConflictScope,
+) -> Result<Vec<Occupancy>> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT s.id, s.subject_id, p.label, s.hour, s.minute, s.weekdays_json,
+                    p.session_minutes, p.enabled, s.source
+             FROM classroom_schedule_slots s
+             JOIN classroom_programs p ON p.subject_id = s.subject_id
+             WHERE s.enabled = 1
+             ORDER BY s.id",
+        )
+        .map_err(|error| error.to_string())?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, i64>(3)? as u32,
+                row.get::<_, i64>(4)? as u32,
+                row.get::<_, String>(5)?,
+                row.get::<_, i64>(6)?,
+                row.get::<_, i64>(7)? != 0,
+                row.get::<_, String>(8)?,
+            ))
+        })
+        .map_err(|error| error.to_string())?;
+    let mut occupied = Vec::new();
+    for row in rows {
+        let (
+            id,
+            owner,
+            label,
+            hour,
+            minute,
+            weekdays_json,
+            session_minutes,
+            program_enabled,
+            source,
+        ) = row.map_err(|error| error.to_string())?;
+        let own = owner == subject_id;
+        if (!program_enabled && !own)
+            || scope.excluded_slot_ids.contains(&id)
+            || (own
+                && source == "planned"
+                && scope.exclude_planned_for.as_deref() == Some(subject_id))
+        {
+            continue;
+        }
+        let weekdays: Vec<u8> = serde_json::from_str(&weekdays_json).unwrap_or_default();
+        for weekday in weekdays {
+            occupied.push(Occupancy {
+                slot_id: id,
+                subject_id: owner.clone(),
+                label: label.clone(),
+                weekday,
+                hour,
+                minute,
+                session_minutes,
+                interval: week_interval(weekday, hour, minute, session_minutes),
+            });
+        }
+    }
+    Ok(occupied)
+}
+
+/// Overlaps between proposed study times and the appointments that would fire
+/// alongside them. All candidates belong to one class. Paused classes do not
+/// block other classes, but their own saved times are checked again on activation.
+pub fn schedule_conflicts(
+    conn: &Connection,
+    candidates: &[ScheduleCandidate],
+    scope: &ConflictScope,
+) -> Result<Vec<ScheduleConflict>> {
+    let Some(first) = candidates.first() else {
+        return Ok(Vec::new());
+    };
+    if candidates.iter().any(|c| c.subject_id != first.subject_id) {
+        return Err("schedule conflicts are validated for one class at a time".into());
+    }
+    let label = program_row(conn, &first.subject_id)?.label;
+    let existing = occupancies(conn, &first.subject_id, scope)?;
+    let mut conflicts = Vec::new();
+    for candidate in candidates {
+        for weekday in &candidate.weekdays {
+            let interval = week_interval(
+                *weekday,
+                candidate.hour,
+                candidate.minute,
+                candidate.session_minutes,
+            );
+            for other in &existing {
+                if week_intervals_overlap(interval, other.interval) {
+                    conflicts.push(ScheduleConflict {
+                        weekday: *weekday,
+                        hour: candidate.hour,
+                        minute: candidate.minute,
+                        subject_id: candidate.subject_id.clone(),
+                        label: label.clone(),
+                        with_slot_id: other.slot_id,
+                        with_subject_id: other.subject_id.clone(),
+                        with_label: other.label.clone(),
+                        with_weekday: other.weekday,
+                        with_hour: other.hour,
+                        with_minute: other.minute,
+                        with_session_minutes: other.session_minutes,
+                    });
+                }
+            }
+        }
+    }
+    conflicts.sort_by_key(|c| (c.weekday, c.hour, c.minute, c.with_slot_id, c.with_weekday));
+    conflicts.dedup();
+    Ok(conflicts)
+}
+
+/// This class's saved study times checked against every active class, using
+/// the session length that activation would apply.
+pub fn activation_conflicts(
+    conn: &Connection,
+    subject_id: &str,
+    session_minutes: i64,
+) -> Result<Vec<ScheduleConflict>> {
+    let own: Vec<SlotRow> = slot_rows(conn)?
+        .into_iter()
+        .filter(|slot| slot.subject_id == subject_id && slot.enabled)
+        .collect();
+    let candidates: Vec<ScheduleCandidate> = own
+        .iter()
+        .map(|slot| ScheduleCandidate {
+            subject_id: subject_id.into(),
+            hour: slot.hour,
+            minute: slot.minute,
+            weekdays: slot.weekdays.clone(),
+            session_minutes,
+        })
+        .collect();
+    schedule_conflicts(
+        conn,
+        &candidates,
+        &ConflictScope {
+            excluded_slot_ids: own.iter().map(|slot| slot.id).collect(),
+            exclude_planned_for: None,
+        },
+    )
+}
+
+fn weekday_name(weekday: u8) -> &'static str {
+    WEEKDAY_NAMES
+        .get(usize::from(weekday.saturating_sub(1)))
+        .copied()
+        .unwrap_or("that day")
+}
+
+pub fn conflict_message(conflicts: &[ScheduleConflict]) -> String {
+    let Some(first) = conflicts.first() else {
+        return String::new();
+    };
+    let more = match conflicts.len() {
+        1 => String::new(),
+        n => format!(
+            " and {} other overlap{}",
+            n - 1,
+            if n == 2 { "" } else { "s" }
+        ),
+    };
+    format!(
+        "{} on {} at {:02}:{:02} overlaps {} on {} at {:02}:{:02} ({} min){}. Choose another time or shorten a session.",
+        first.label,
+        weekday_name(first.weekday),
+        first.hour,
+        first.minute,
+        first.with_label,
+        weekday_name(first.with_weekday),
+        first.with_hour,
+        first.with_minute,
+        first.with_session_minutes,
+        more
+    )
+}
+
 pub fn upsert_slot(conn: &Connection, input: &UpsertClassroomSlotInput) -> Result<i64> {
     let transaction =
         rusqlite::Transaction::new_unchecked(conn, rusqlite::TransactionBehavior::Immediate)
@@ -407,6 +672,26 @@ pub fn upsert_slot(conn: &Connection, input: &UpsertClassroomSlotInput) -> Resul
         return Err("select at least one valid weekday".into());
     }
     let weekdays_json = serde_json::to_string(&weekdays).map_err(|error| error.to_string())?;
+    if input.enabled {
+        let program = program_row(conn, &input.subject_id)?;
+        let conflicts = schedule_conflicts(
+            conn,
+            &[ScheduleCandidate {
+                subject_id: input.subject_id.clone(),
+                hour: input.hour,
+                minute: input.minute,
+                weekdays: weekdays.clone(),
+                session_minutes: program.session_minutes,
+            }],
+            &ConflictScope {
+                excluded_slot_ids: input.id.into_iter().collect(),
+                exclude_planned_for: None,
+            },
+        )?;
+        if !conflicts.is_empty() {
+            return Err(conflict_message(&conflicts));
+        }
+    }
     let id = if let Some(id) = input.id {
         // Hand-editing a slot "claims" it as manual, even if the schedule
         // planner originally created it — re-planning never touches it again.
@@ -570,6 +855,9 @@ pub struct ClassroomPlanView {
     pub total_weekly_minutes: i64,
     pub target_weekly_minutes: i64,
     pub meets_target: bool,
+    /// Overlaps with other active classes or this class's manual times. A
+    /// preview shows them; committing a conflicting plan is refused.
+    pub conflicts: Vec<ScheduleConflict>,
     pub program: Option<ClassroomProgramView>,
     pub schedule: Option<Vec<ClassroomSlotView>>,
 }
@@ -658,6 +946,27 @@ pub fn plan_schedule(
         .sum();
     let meets_target =
         input.target_weekly_minutes == 0 || total_weekly_minutes >= input.target_weekly_minutes;
+    let candidates: Vec<ScheduleCandidate> = slots
+        .iter()
+        .map(|slot| ScheduleCandidate {
+            subject_id: input.subject_id.clone(),
+            hour: slot.hour,
+            minute: slot.minute,
+            weekdays: slot.weekdays.clone(),
+            session_minutes: program.session_minutes,
+        })
+        .collect();
+    let conflicts = schedule_conflicts(
+        conn,
+        &candidates,
+        &ConflictScope {
+            excluded_slot_ids: Vec::new(),
+            exclude_planned_for: Some(input.subject_id.clone()),
+        },
+    )?;
+    if input.commit && !conflicts.is_empty() {
+        return Err(conflict_message(&conflicts));
+    }
 
     let (view_program, view_schedule) = if input.commit {
         conn.execute(
@@ -730,6 +1039,7 @@ pub fn plan_schedule(
         total_weekly_minutes,
         target_weekly_minutes: input.target_weekly_minutes,
         meets_target,
+        conflicts,
         program: view_program,
         schedule: view_schedule,
     })

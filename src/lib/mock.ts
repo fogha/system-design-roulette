@@ -6,6 +6,7 @@ import { getPreviewPlacement, startPreviewPlacement, savePreviewPlacement, submi
 import type { SaveEnrollmentDraft } from './contracts/enrollment';
 import type { AcceptedPath, AcceptPath } from './contracts/classes';
 import { acceptPreviewClassPath, previewClassPath, previewPathSummary } from './class-preview';
+import { scheduleConflicts, conflictMessage, type ScheduleCandidate, type ConflictScope } from './features/classes/schedule-conflicts';
 import { COURSES, courseDefinition } from './catalog';
 import seedConcepts from '../../src-tauri/seed/concepts.json';
 /**
@@ -813,6 +814,13 @@ function savePreviewQuiz() {
 
 let previewFreeOnly = true;
 
+function mockPrograms(): ClassroomProgramView[] {
+  return CLASSROOM_CATALOG.map((item) => mockClassroomProgram(item.id as ClassroomSubjectId));
+}
+function rejectMockConflicts(candidates: ScheduleCandidate[], scope: ConflictScope = {}) {
+  const conflicts = scheduleConflicts(candidates, mockClassroomSlots, mockPrograms(), scope);
+  if (conflicts.length) throw new Error(conflictMessage(conflicts));
+}
 function pauseMockClassWithoutSchedule(subjectId: ClassroomSubjectId) {
   if (mockClassroomSlots.some(slot => slot.subject_id === subjectId && slot.enabled)) return;
   mockClassroomSettings[subjectId].enabled = false;
@@ -907,6 +915,10 @@ export const mockApi = {
   }) => {
     const settings = mockClassroomSettings[input.subject_id];
     if (input.enabled && !mockClassroomSlots.some(slot => slot.subject_id === input.subject_id && slot.enabled)) throw new Error("Add a study time in this class's Schedule tab before activating it.");
+    if (input.enabled && (!settings.enabled || input.session_minutes > settings.sessionMinutes)) {
+      const own = mockClassroomSlots.filter((slot) => slot.subject_id === input.subject_id && slot.enabled);
+      rejectMockConflicts(own.map((slot) => ({ subject_id: input.subject_id, hour: slot.hour, minute: slot.minute, weekdays: slot.weekdays, session_minutes: input.session_minutes })), { excludedSlotIds: own.map((slot) => slot.id) });
+    }
     settings.enabled = input.enabled;
     settings.agent = input.agent;
     settings.model = input.model;
@@ -949,6 +961,7 @@ export const mockApi = {
     };
     const existing = mockClassroomSlots.findIndex((candidate) => candidate.id === id);
     if (input.id != null && (existing < 0 || mockClassroomSlots[existing].subject_id !== input.subject_id)) throw new Error('classroom slot was not found');
+    if (input.enabled) rejectMockConflicts([{ subject_id: input.subject_id, hour: input.hour, minute: input.minute, weekdays: input.weekdays, session_minutes: mockClassroomSettings[input.subject_id].sessionMinutes }], { excludedSlotIds: input.id != null ? [input.id] : [] });
     if (existing >= 0) mockClassroomSlots[existing] = slot;
     else mockClassroomSlots = [...mockClassroomSlots, slot];
     pauseMockClassWithoutSchedule(input.subject_id);
@@ -1000,12 +1013,15 @@ export const mockApi = {
       0,
     );
     const meetsTarget = input.target_weekly_minutes === 0 || totalWeeklyMinutes >= input.target_weekly_minutes;
+    const conflicts = scheduleConflicts(slots.map((slot) => ({ subject_id: input.subject_id, hour: slot.hour, minute: slot.minute, weekdays: slot.weekdays, session_minutes: settings.sessionMinutes })), mockClassroomSlots, mockPrograms(), { excludePlannedFor: input.subject_id });
+    if (input.commit && conflicts.length) throw new Error(conflictMessage(conflicts));
     if (!input.commit) {
       return {
         slots,
         total_weekly_minutes: totalWeeklyMinutes,
         target_weekly_minutes: input.target_weekly_minutes,
         meets_target: meetsTarget,
+        conflicts,
         program: null,
         schedule: null,
       };
@@ -1040,6 +1056,7 @@ export const mockApi = {
       total_weekly_minutes: totalWeeklyMinutes,
       target_weekly_minutes: input.target_weekly_minutes,
       meets_target: meetsTarget,
+      conflicts,
       program: mockClassroomProgram(input.subject_id),
       schedule: mockClassroomSlots.filter((slot) => slot.subject_id === input.subject_id),
     };

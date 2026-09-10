@@ -200,9 +200,17 @@ pub fn accept(conn: &Connection, input: &AcceptPath, today: &str) -> Result<Acce
     let path_id = format!("path-{:032x}", rand::random::<u128>());
     let now = chrono::Utc::now().to_rfc3339();
     let configuration_json = serde_json::to_string(&draft.configuration)?;
-    // Save an accepted path without activating an unscheduled class.
-    let scheduled =
-        crate::classroom::has_enabled_schedule(&tx, course.id).map_err(DbError::Invalid)?;
+    // Save an accepted path without activating an unscheduled class, or one
+    // whose study times overlap another active class.
+    let scheduled = crate::classroom::has_enabled_schedule(&tx, course.id)
+        .map_err(DbError::Invalid)?
+        && crate::classroom::activation_conflicts(
+            &tx,
+            course.id,
+            i64::from(draft.configuration.pace.session_minutes),
+        )
+        .map_err(DbError::Invalid)?
+        .is_empty();
     let status = if scheduled { "active" } else { "paused" };
     let changed = tx.execute("UPDATE classroom_programs SET enabled=?9, agent=?2, model=?3, custom_agent_bin=?4, session_minutes=?5, learning_goal=?6, target_weekly_minutes=COALESCE(?7,target_weekly_minutes), updated_at=?8 WHERE subject_id=?1",
         params![course.id,draft.configuration.tutor.provider,draft.configuration.tutor.model,draft.configuration.tutor.custom_agent_bin.as_deref().unwrap_or(""),draft.configuration.pace.session_minutes,

@@ -229,11 +229,28 @@ export interface PlannedSlot {
   weekdays: number[];
 }
 
+export interface ScheduleConflict {
+  weekday: number;
+  hour: number;
+  minute: number;
+  subject_id: string;
+  label: string;
+  with_slot_id: number;
+  with_subject_id: string;
+  with_label: string;
+  with_weekday: number;
+  with_hour: number;
+  with_minute: number;
+  with_session_minutes: number;
+}
+
 export interface ClassroomPlanView {
   slots: PlannedSlot[];
   total_weekly_minutes: number;
   target_weekly_minutes: number;
   meets_target: boolean;
+  /** Overlaps with other active classes or this class's manual times; a commit is refused while any remain. */
+  conflicts: ScheduleConflict[];
   program: ClassroomProgramView | null;
   schedule: ClassroomSlotView[] | null;
 }

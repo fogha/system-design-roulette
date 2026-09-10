@@ -1075,3 +1075,270 @@ fn dormant_daily_generation_jobs_remain_archived_while_saved_work_can_resume() {
         "pending"
     );
 }
+
+// ── Cross-class schedule overlap validation ────────────────────────────────
+
+fn study_time(
+    conn: &rusqlite::Connection,
+    subject_id: &str,
+    hour: u32,
+    minute: u32,
+    weekdays: Vec<u8>,
+) -> Result<i64, String> {
+    classroom::upsert_slot(
+        conn,
+        &UpsertClassroomSlotInput {
+            id: None,
+            subject_id: subject_id.into(),
+            hour,
+            minute,
+            weekdays,
+            enabled: true,
+        },
+    )
+}
+
+fn set_class(
+    conn: &rusqlite::Connection,
+    subject_id: &str,
+    enabled: bool,
+    session_minutes: i64,
+) -> Result<(), String> {
+    classroom::configure_program(
+        conn,
+        &ConfigureClassroomInput {
+            subject_id: subject_id.into(),
+            enabled,
+            agent: "claude".into(),
+            model: "sonnet".into(),
+            custom_agent_bin: String::new(),
+            session_minutes,
+            start_level: None,
+            target_level: None,
+            weekly_minutes: None,
+        },
+        "2026-07-21",
+    )
+}
+
+fn program_enabled(conn: &rusqlite::Connection, subject_id: &str) -> bool {
+    conn.query_row(
+        "SELECT enabled FROM classroom_programs WHERE subject_id=?1",
+        [subject_id],
+        |r| r.get::<_, i64>(0),
+    )
+    .unwrap()
+        == 1
+}
+
+#[test]
+fn overlapping_study_times_across_active_classes_are_rejected_and_name_the_conflict() {
+    let conn = test_db();
+    study_time(&conn, "linux-bash", 9, 0, vec![1, 2, 3, 4, 5]).unwrap();
+    set_class(&conn, "linux-bash", true, 30).unwrap();
+    // 09:15 on Wednesday falls inside the 09:00–09:30 Linux Bash session.
+    let error = study_time(&conn, "typescript", 9, 15, vec![3]).unwrap_err();
+    assert!(error.contains("TypeScript"), "{error}");
+    assert!(error.contains("Wednesday"), "{error}");
+    assert!(error.contains("Linux Bash"), "{error}");
+    assert!(error.contains("09:00"), "{error}");
+    // Adjacent times do not overlap; other weekdays are free.
+    study_time(&conn, "typescript", 9, 30, vec![3]).unwrap();
+    study_time(&conn, "typescript", 9, 15, vec![6]).unwrap();
+    // A class also cannot overlap its own other study time.
+    let own = study_time(&conn, "typescript", 9, 45, vec![3]).unwrap_err();
+    assert!(own.contains("TypeScript") && own.contains("09:30"), "{own}");
+    assert_eq!(
+        classroom::slot_views(&conn, "2026-07-21", false)
+            .unwrap()
+            .iter()
+            .filter(|slot| slot.subject_id == "typescript")
+            .count(),
+        2
+    );
+}
+
+#[test]
+fn schedule_overlap_detection_wraps_around_the_end_of_the_week() {
+    let conn = test_db();
+    study_time(&conn, "linux-bash", 0, 10, vec![1]).unwrap();
+    set_class(&conn, "linux-bash", true, 30).unwrap();
+    // Sunday 23:45 + 30 minutes runs into Monday 00:10.
+    let error = study_time(&conn, "typescript", 23, 45, vec![7]).unwrap_err();
+    assert!(
+        error.contains("Sunday") && error.contains("Monday") && error.contains("00:10"),
+        "{error}"
+    );
+    // Saturday 23:45 ends at Sunday 00:15, which is free.
+    study_time(&conn, "typescript", 23, 45, vec![6]).unwrap();
+}
+
+#[test]
+fn paused_classes_do_not_block_others_but_cannot_activate_into_an_overlap() {
+    let conn = test_db();
+    study_time(&conn, "typescript", 9, 0, vec![1, 3, 5]).unwrap();
+    // TypeScript is still paused, so Linux Bash may take the same time.
+    study_time(&conn, "linux-bash", 9, 0, vec![1, 3, 5]).unwrap();
+    set_class(&conn, "linux-bash", true, 30).unwrap();
+    let error = set_class(&conn, "typescript", true, 30).unwrap_err();
+    assert!(
+        error.contains("Linux Bash") && error.contains("Monday"),
+        "{error}"
+    );
+    assert!(!program_enabled(&conn, "typescript"));
+    // Moving the time resolves the overlap and activation proceeds.
+    let id = classroom::slot_views(&conn, "2026-07-21", false)
+        .unwrap()
+        .into_iter()
+        .find(|slot| slot.subject_id == "typescript")
+        .unwrap()
+        .id;
+    classroom::upsert_slot(
+        &conn,
+        &UpsertClassroomSlotInput {
+            id: Some(id),
+            subject_id: "typescript".into(),
+            hour: 10,
+            minute: 0,
+            weekdays: vec![1, 3, 5],
+            enabled: true,
+        },
+    )
+    .unwrap();
+    set_class(&conn, "typescript", true, 30).unwrap();
+    assert!(program_enabled(&conn, "typescript"));
+    let status: String = conn
+        .query_row(
+            "SELECT COALESCE((SELECT status FROM classes WHERE course_id='typescript'),'none')",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(status, "none", "settings alone never create a class record");
+}
+
+#[test]
+fn lengthening_a_session_into_another_active_class_is_rejected() {
+    let conn = test_db();
+    study_time(&conn, "linux-bash", 9, 0, vec![1]).unwrap();
+    set_class(&conn, "linux-bash", true, 30).unwrap();
+    study_time(&conn, "typescript", 9, 30, vec![1]).unwrap();
+    set_class(&conn, "typescript", true, 30).unwrap();
+    let error = set_class(&conn, "linux-bash", true, 45).unwrap_err();
+    assert!(
+        error.contains("TypeScript") && error.contains("09:30"),
+        "{error}"
+    );
+    let minutes: i64 = conn
+        .query_row(
+            "SELECT session_minutes FROM classroom_programs WHERE subject_id='linux-bash'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(minutes, 30, "a rejected change writes nothing");
+    set_class(&conn, "linux-bash", true, 20).unwrap();
+    set_class(&conn, "linux-bash", true, 30).unwrap();
+}
+
+#[test]
+fn planner_previews_conflicts_without_writing_and_refuses_to_commit_them() {
+    let conn = test_db();
+    study_time(&conn, "linux-bash", 9, 0, vec![1, 3, 5]).unwrap();
+    set_class(&conn, "linux-bash", true, 30).unwrap();
+    let plan = |commit: bool, start_hour: u32| {
+        classroom::plan_schedule(
+            &conn,
+            &PlanClassroomScheduleInput {
+                subject_id: "typescript".into(),
+                learning_goal: String::new(),
+                target_weekly_minutes: 60,
+                commit,
+                windows: vec![window(vec![1, 2], (start_hour, 15), (start_hour + 1, 0))],
+            },
+            "2026-07-21",
+        )
+    };
+    let preview = plan(false, 9).unwrap();
+    assert_eq!(preview.conflicts.len(), 1);
+    assert_eq!(
+        (
+            preview.conflicts[0].weekday,
+            preview.conflicts[0].with_label.as_str(),
+            preview.conflicts[0].with_hour
+        ),
+        (1, "Linux Bash", 9)
+    );
+    let before = classroom::slot_views(&conn, "2026-07-21", false)
+        .unwrap()
+        .len();
+    let error = plan(true, 9).unwrap_err();
+    assert!(error.contains("Linux Bash"), "{error}");
+    assert_eq!(
+        classroom::slot_views(&conn, "2026-07-21", false)
+            .unwrap()
+            .len(),
+        before
+    );
+    let clear = plan(false, 10).unwrap();
+    assert!(clear.conflicts.is_empty());
+    let committed = plan(true, 10).unwrap();
+    assert!(committed.conflicts.is_empty());
+    assert_eq!(committed.schedule.unwrap().len(), 1);
+    // Replanning ignores this class's own planned times but still respects
+    // its manual ones and other active classes.
+    let replanned = plan(false, 10).unwrap();
+    assert!(replanned.conflicts.is_empty());
+}
+
+#[test]
+fn accepting_a_path_saves_it_without_activating_an_overlapping_class() {
+    use system_design_roulette_lib::domain::{
+        classes::{self, AcceptPath},
+        enrollment::{self, SaveEnrollmentDraft},
+        placement,
+    };
+    let conn = test_db();
+    // The paused TypeScript time was saved first; Linux Bash then took the
+    // same time and activated, which a paused class cannot block.
+    study_time(&conn, "typescript", 9, 0, vec![2]).unwrap();
+    study_time(&conn, "linux-bash", 9, 0, vec![1, 2, 3, 4, 5]).unwrap();
+    set_class(&conn, "linux-bash", true, 30).unwrap();
+    let options = enrollment::options("typescript").unwrap();
+    let draft = enrollment::save_draft(
+        &conn,
+        &SaveEnrollmentDraft {
+            id: None,
+            expected_revision: None,
+            course: options.course,
+            configuration: options.default_configuration,
+        },
+    )
+    .unwrap();
+    let recommendation = placement::recommend(&conn, &draft.id, draft.revision).unwrap();
+    let accepted = classes::accept(
+        &conn,
+        &AcceptPath {
+            draft_id: draft.id,
+            expected_revision: draft.revision,
+            recommendation_id: recommendation.id,
+        },
+        "2026-07-21",
+    )
+    .unwrap();
+    assert_eq!(accepted.revision, 1);
+    let status: String = conn
+        .query_row(
+            "SELECT status FROM classes WHERE course_id='typescript'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(status, "paused");
+    assert!(!program_enabled(&conn, "typescript"));
+    let error = set_class(&conn, "typescript", true, 30).unwrap_err();
+    assert!(
+        error.contains("Linux Bash") && error.contains("Tuesday"),
+        "{error}"
+    );
+}

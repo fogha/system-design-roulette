@@ -48,3 +48,26 @@ Native testing uses `--debug-day` to suppress kiosk and OS scheduler changes.
 This pass does not certify hard enforcement, live provider generation, signing,
 notarization, or Windows/Linux runtime behavior. It verifies the packaged macOS
 UI, native persistence and the changed controls.
+
+## Schedule overlap verification — 2026-09-10
+
+Rebuilt the packaged debug app with the QA identifier and opened the existing
+isolated profile, which upgraded from schema v2 to v7 with a pre-upgrade backup;
+SQLite integrity returned `ok`. Driven through the native window with
+AppleScript clicks, direct-digit time entry and accessibility focus:
+
+- TypeScript: Schedule → Add study time → 09:00 Mon–Fri saved; Activate class
+  succeeded and the header showed Active with the time listed as due.
+- JavaScript & Browser: 09:15 Mon–Fri showed the OVERLAPS ANOTHER STUDY TIME
+  block listing all five weekdays against TypeScript 09:00 (30 min) and kept
+  Save disabled; changing the minutes to 30 cleared it, the 09:30 time saved and
+  the class activated. SQLite held both manual rules.
+- TypeScript Settings: 45 minutes per session submitted the form and displayed
+  "TypeScript on Monday at 09:00 overlaps JavaScript & Browser on Monday at
+  09:30 (30 min) and 4 other overlaps"; `session_minutes` stayed 30.
+
+The planner's conflict preview and commit refusal are covered by native tests
+(`planner_previews_conflicts_without_writing_and_refuses_to_commit_them`) and
+the shared frontend helper tests; its rendering reuses the editor's block and
+was not separately captured. Screenshots for this pass were kept under
+`/tmp/principia-shots/` (13-js-conflict, 15-js-saved, 19-ts-length-conflict).
