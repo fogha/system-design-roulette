@@ -73,6 +73,70 @@ fn read_path(conn: &Connection, path_id: &str) -> Result<AcceptedPath> {
         accepted_at: row.6,
     })
 }
+pub fn path_by_id(conn: &Connection, path_id: &str) -> Result<AcceptedPath> {
+    read_path(conn, path_id)
+}
+
+/// A class that was activated from its settings without choosing a starting
+/// point begins at the foundations. This never touches a learner's pending
+/// setup draft: an unfinished starting-point choice must be completed first.
+pub fn ensure_default_path(
+    conn: &Connection,
+    course_id: &str,
+    today: &str,
+) -> Result<AcceptedPath> {
+    use super::enrollment::{SaveEnrollmentDraft, TutorPreference};
+    if let Some(path) = current_path(conn, course_id)? {
+        return Ok(path);
+    }
+    if enrollment::draft_for_course(conn, course_id)?.is_some() {
+        return Err(DbError::Invalid(
+            "Finish choosing this class's starting point, or accept its suggested path, before starting a lesson.".into(),
+        ));
+    }
+    let options = enrollment::options(course_id)?;
+    let program = crate::classroom::program_row(conn, course_id).map_err(DbError::Invalid)?;
+    let mut configuration = options.default_configuration.clone();
+    configuration.tutor = TutorPreference {
+        provider: program.agent,
+        model: program.model,
+        custom_agent_bin: (!program.custom_agent_bin.is_empty())
+            .then_some(program.custom_agent_bin),
+    };
+    configuration.pace.session_minutes = program.session_minutes as u32;
+    configuration.pace.weekly_minutes =
+        (program.target_weekly_minutes > 0).then_some(program.target_weekly_minutes as u32);
+    match &mut configuration.goal {
+        LearningGoal::CourseOutcome { note } => *note = program.learning_goal,
+        LearningGoal::LanguageLevel { target_level, note } => {
+            let language =
+                crate::language::program_view(conn, course_id, today).map_err(DbError::Invalid)?;
+            *target_level = language.target_level;
+            *note = program.learning_goal;
+            configuration.pace.weekly_minutes = Some(language.weekly_minutes as u32);
+        }
+    }
+    let draft = enrollment::save_draft(
+        conn,
+        &SaveEnrollmentDraft {
+            id: None,
+            expected_revision: None,
+            course: options.course,
+            configuration,
+        },
+    )?;
+    let recommendation = placement::recommend(conn, &draft.id, draft.revision)?;
+    accept(
+        conn,
+        &AcceptPath {
+            draft_id: draft.id,
+            expected_revision: draft.revision,
+            recommendation_id: recommendation.id,
+        },
+        today,
+    )
+}
+
 pub fn current_path(conn: &Connection, course_id: &str) -> Result<Option<AcceptedPath>> {
     let id: Option<String> = conn
         .query_row(

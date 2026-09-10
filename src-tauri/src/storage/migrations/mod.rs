@@ -93,6 +93,15 @@ const MIGRATIONS: &[Migration] = &[
             Ok(())
         },
     },
+    Migration {
+        version: 8,
+        name: "check_evidence",
+        sources: &[include_str!("008_check_evidence.sql")],
+        apply: |conn| {
+            conn.execute_batch(include_str!("008_check_evidence.sql"))?;
+            Ok(())
+        },
+    },
 ];
 
 pub fn enable_foreign_keys(conn: &Connection) -> Result<()> {

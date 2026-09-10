@@ -18,6 +18,7 @@ pub mod scheduler;
 pub mod session;
 pub mod state;
 pub mod storage;
+pub mod subjects;
 
 use state::AppState;
 use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};

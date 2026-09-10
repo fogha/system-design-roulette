@@ -1952,6 +1952,7 @@ pub fn get_exercise(
     Ok(Some(db::ExerciseView {
         course_id: Some(exercise.course_id),
         classroom_session_id: None,
+        study_session_id: None,
         title: exercise.title,
         instructions: exercise.instructions,
         starter_code: exercise.starter_code,

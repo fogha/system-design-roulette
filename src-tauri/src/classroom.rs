@@ -795,7 +795,16 @@ pub fn delete_slot(conn: &Connection, id: i64) -> Result<()> {
             |row| row.get(0),
         )
         .map_err(|error| error.to_string())?;
-    if active_engineering + active_language > 0 {
+    let active_study: bool = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM study_sessions
+             WHERE status NOT IN ('completed','skipped')
+               AND json_extract(context_json, '$.selection.slot_id') = ?1)",
+            [id],
+            |row| row.get(0),
+        )
+        .map_err(|error| error.to_string())?;
+    if active_engineering + active_language > 0 || active_study {
         return Err("finish the active class before deleting this slot".into());
     }
     // Completed sessions keep their history; only the schedule link is cut.
@@ -1126,12 +1135,15 @@ fn slot_state(conn: &Connection, slot: &SlotRow, today: &str) -> Result<(bool, b
         )
         .optional()
     };
-    status
-        .map(|status| {
-            let in_progress = status.as_deref() == Some("in_progress");
-            (status.is_some(), in_progress)
-        })
-        .map_err(|error| error.to_string())
+    let status = status.map_err(|error| error.to_string())?;
+    if let Some(status) = status {
+        return Ok((true, status == "in_progress"));
+    }
+    // Shared-runtime lessons planned for this rule consume it for the day.
+    match crate::subjects::engineering::slot_session_status(conn, slot.id, today)? {
+        Some(status) => Ok((true, !matches!(status.as_str(), "completed" | "skipped"))),
+        None => Ok((false, false)),
+    }
 }
 
 fn next_fire_at(slot: &SlotRow, now: NaiveDateTime, consumed_today: bool) -> String {
@@ -1233,16 +1245,7 @@ pub fn curriculum_map(conn: &Connection, focus: &str) -> Result<CurriculumMapVie
         })
         .unwrap_or("elective")
         .to_string();
-    let completed_sessions: i64 = conn
-        .query_row(
-            "SELECT
-                (SELECT COUNT(*) FROM sessions WHERE status = 'completed' AND focus = ?1)
-              + (SELECT COUNT(*) FROM classroom_sessions
-                 WHERE status = 'completed' AND subject_id = ?1)",
-            [focus],
-            |row| row.get(0),
-        )
-        .map_err(|error| error.to_string())?;
+    let completed_sessions = completed_lesson_count(conn, focus)?;
     Ok(CurriculumMapView {
         focus: focus.into(),
         label: crate::focus::label(focus).into(),
@@ -1338,34 +1341,36 @@ fn has_active_session(conn: &Connection, subject_id: &str) -> Result<bool> {
     } else {
         0
     };
-    Ok(engineering + language > 0)
+    Ok(engineering + language > 0
+        || crate::subjects::engineering::has_open_session(conn, subject_id)?)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct StoredQuestion {
-    id: usize,
-    prompt: String,
-    choices: Vec<String>,
-    correct_index: usize,
-    explanation: String,
+pub struct StoredQuestion {
+    pub id: usize,
+    pub prompt: String,
+    pub choices: Vec<String>,
+    pub correct_index: usize,
+    pub explanation: String,
     #[serde(default)]
-    section: String,
-    learning_objective: String,
+    pub section: String,
+    pub learning_objective: String,
 }
 
+/// Immutable lesson payload shared by legacy classroom rows and lesson versions.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct StoredEngineeringLesson {
-    concept_id: i64,
-    concept_title: String,
-    category: String,
-    title: String,
-    markdown: String,
-    resources: Vec<Resource>,
-    questions: Vec<StoredQuestion>,
-    exercise: Option<Exercise>,
-    source: String,
+pub struct StoredEngineeringLesson {
+    pub concept_id: i64,
+    pub concept_title: String,
+    pub category: String,
+    pub title: String,
+    pub markdown: String,
+    pub resources: Vec<Resource>,
+    pub questions: Vec<StoredQuestion>,
+    pub exercise: Option<Exercise>,
+    pub source: String,
     #[serde(default)]
-    path: Option<crate::domain::classes::PathReference>,
+    pub path: Option<crate::domain::classes::PathReference>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1377,9 +1382,27 @@ pub struct ClassroomQuestionView {
     pub learning_objective: String,
 }
 
+/// Saved knowledge-check answers for a shared-runtime lesson.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CheckView {
+    pub round_id: crate::domain::assessments::RoundId,
+    pub revision: u32,
+    pub responses: std::collections::BTreeMap<String, crate::domain::assessments::Response>,
+    pub submitted: bool,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct EngineeringLessonView {
-    pub session_id: i64,
+    /// Legacy classroom row ID or shared-runtime `study-…` ID; see `runtime`.
+    pub session_id: String,
+    /// `legacy` rows finish through the compatibility submit; `study` lessons
+    /// carry saved work, a frozen check round and their lifecycle.
+    pub runtime: String,
+    pub lifecycle: String,
+    pub revision: u32,
+    pub checkpoint: Option<crate::domain::sessions::Checkpoint>,
+    pub check: Option<CheckView>,
+    pub outcome: Option<EngineeringSessionResult>,
     pub subject_id: String,
     pub label: String,
     pub short_code: String,
@@ -1452,23 +1475,19 @@ fn engineering_view(conn: &Connection, session_id: i64) -> Result<Option<Enginee
                     |row| row.get(0),
                 )
                 .map_err(|error| error.to_string())?;
-            let session_index: i64 = conn
-                .query_row(
-                    "SELECT
-                        (SELECT COUNT(*) FROM sessions
-                         WHERE status = 'completed' AND focus = ?1)
-                      + (SELECT COUNT(*) FROM classroom_sessions
-                         WHERE status = 'completed' AND subject_id = ?1) + 1",
-                    [&subject_id],
-                    |row| row.get(0),
-                )
-                .map_err(|error| error.to_string())?;
+            let session_index = completed_lesson_count(conn, &subject_id)? + 1;
             let why_now = format!(
                 "Session {session_index} advances the {} phase: {}",
                 concept.curriculum.phase, concept.curriculum.learner_outcome
             );
             Ok(EngineeringLessonView {
-                session_id,
+                session_id: session_id.to_string(),
+                runtime: "legacy".into(),
+                lifecycle: status.clone(),
+                revision: 0,
+                checkpoint: None,
+                check: None,
+                outcome: None,
                 subject_id,
                 label,
                 short_code,
@@ -1562,6 +1581,7 @@ pub fn classroom_exercise(conn: &Connection, session_id: i64) -> Result<Option<d
     Ok(stored.exercise.map(|exercise| db::ExerciseView {
         course_id: None,
         classroom_session_id: Some(session_id),
+        study_session_id: None,
         title: exercise.title,
         instructions: exercise.instructions,
         starter_code: exercise.starter_code,
@@ -1622,6 +1642,55 @@ pub fn contract_with_goal(program: &ProgramRow, base_contract: &str) -> String {
     }
 }
 
+/// A scheduled start must name one of this class's own rules, and a rule fires
+/// at most once per service date across both session stores.
+pub fn validate_slot_start(
+    conn: &Connection,
+    subject_id: &str,
+    slot_id: i64,
+    today: &str,
+) -> Result<()> {
+    let owner: Option<String> = conn
+        .query_row(
+            "SELECT subject_id FROM classroom_schedule_slots WHERE id = ?1",
+            [slot_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|error| error.to_string())?;
+    if owner.as_deref() != Some(subject_id) {
+        return Err("classroom slot does not belong to this subject".into());
+    }
+    let consumed: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM classroom_sessions WHERE slot_id = ?1 AND session_date = ?2",
+            params![slot_id, today],
+            |row| row.get(0),
+        )
+        .map_err(|error| error.to_string())?;
+    if consumed > 0 || crate::subjects::engineering::slot_consumed(conn, slot_id, today)? {
+        return Err("this class slot is already complete for today".into());
+    }
+    Ok(())
+}
+
+/// Completed lessons for a class across the retired daily routine, legacy
+/// classroom rows and shared-runtime sessions.
+pub fn completed_lesson_count(conn: &Connection, subject_id: &str) -> Result<i64> {
+    let legacy: i64 = conn
+        .query_row(
+            "SELECT
+                (SELECT COUNT(*) FROM sessions
+                 WHERE status = 'completed' AND focus = ?1)
+              + (SELECT COUNT(*) FROM classroom_sessions
+                 WHERE status = 'completed' AND subject_id = ?1)",
+            [subject_id],
+            |row| row.get(0),
+        )
+        .map_err(|error| error.to_string())?;
+    Ok(legacy + crate::subjects::engineering::completed_count(conn, subject_id)?)
+}
+
 pub async fn start_engineering_session(
     state: &AppState,
     subject_id: &str,
@@ -1642,28 +1711,7 @@ pub async fn start_engineering_session(
             return Ok(active);
         }
         if let Some(id) = slot_id {
-            let owner: Option<String> = conn
-                .query_row(
-                    "SELECT subject_id FROM classroom_schedule_slots WHERE id = ?1",
-                    [id],
-                    |row| row.get(0),
-                )
-                .optional()
-                .map_err(|error| error.to_string())?;
-            if owner.as_deref() != Some(subject_id) {
-                return Err("classroom slot does not belong to this subject".into());
-            }
-            let consumed: i64 = conn
-                .query_row(
-                    "SELECT COUNT(*) FROM classroom_sessions
-                     WHERE slot_id = ?1 AND session_date = ?2",
-                    params![id, state.today()],
-                    |row| row.get(0),
-                )
-                .map_err(|error| error.to_string())?;
-            if consumed > 0 {
-                return Err("this class slot is already complete for today".into());
-            }
+            validate_slot_start(&conn, subject_id, id, &state.today())?;
         }
         let concept = {
             let drawn = if revisit {
@@ -1742,7 +1790,7 @@ struct EngineeringSessionMeta<'a> {
 /// `correct_answer` string to exactly one choice position. Fails closed: a
 /// generated check whose correct answer matches zero or several choices is a
 /// validation error, never a silently mis-graded session.
-fn stored_questions(course: &GeneratedCourse) -> Result<Vec<StoredQuestion>> {
+pub fn stored_questions(course: &GeneratedCourse) -> Result<Vec<StoredQuestion>> {
     let questions = course
         .exit_questions
         .iter()
@@ -1844,7 +1892,7 @@ pub struct SubmitEngineeringInput {
     pub reflection: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClassroomCorrectionView {
     pub question_id: usize,
     pub prompt: String,
@@ -1854,9 +1902,9 @@ pub struct ClassroomCorrectionView {
     pub explanation: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EngineeringSessionResult {
-    pub session_id: i64,
+    pub session_id: String,
     pub subject_id: String,
     pub passed: bool,
     pub score: f64,
@@ -1958,7 +2006,7 @@ pub fn submit_engineering_session(
     .map_err(|error| error.to_string())?;
     transaction.commit().map_err(|error| error.to_string())?;
     Ok(EngineeringSessionResult {
-        session_id: input.session_id,
+        session_id: input.session_id.to_string(),
         subject_id,
         passed: score >= 0.8,
         score,
@@ -1968,11 +2016,15 @@ pub fn submit_engineering_session(
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ActiveClassroomSessionView {
-    pub session_id: i64,
+    /// Legacy row ID or shared-runtime `study-…` ID; see `runtime`.
+    pub session_id: String,
     pub subject_id: String,
     pub kind: String,
     pub label: String,
     pub title: String,
+    pub runtime: String,
+    /// Shared-runtime lifecycle, or `in_progress` for legacy rows.
+    pub lifecycle: String,
 }
 
 pub fn active_sessions(conn: &Connection) -> Result<Vec<ActiveClassroomSessionView>> {
@@ -1989,11 +2041,13 @@ pub fn active_sessions(conn: &Connection) -> Result<Vec<ActiveClassroomSessionVi
     let rows = stmt
         .query_map([], |row| {
             Ok(ActiveClassroomSessionView {
-                session_id: row.get(0)?,
+                session_id: row.get::<_, i64>(0)?.to_string(),
                 subject_id: row.get(1)?,
                 kind: "engineering".into(),
                 label: row.get(2)?,
                 title: row.get(3)?,
+                runtime: "legacy".into(),
+                lifecycle: "in_progress".into(),
             })
         })
         .map_err(|error| error.to_string())?;
@@ -2002,13 +2056,16 @@ pub fn active_sessions(conn: &Connection) -> Result<Vec<ActiveClassroomSessionVi
     }
     for language in language::active_summaries(conn)? {
         active.push(ActiveClassroomSessionView {
-            session_id: language.session_id,
+            session_id: language.session_id.to_string(),
             subject_id: language.language,
             kind: "language".into(),
             label: language.label,
             title: language.title,
+            runtime: "legacy".into(),
+            lifecycle: "in_progress".into(),
         });
     }
+    active.extend(crate::subjects::engineering::active_summaries(conn)?);
     Ok(active)
 }
 

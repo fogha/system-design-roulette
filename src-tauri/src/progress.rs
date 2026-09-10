@@ -19,6 +19,16 @@ const HISTORY: &str = r#"WITH history AS (
  SELECT 'language',CAST(id AS TEXT),session_date,language,
  CASE WHEN json_valid(lesson_json) THEN COALESCE(json_extract(lesson_json,'$.title'),unit_slug) ELSE unit_slug END,
  status,score,NULL,started_at FROM language_sessions
+ UNION ALL
+ SELECT 'study',s.id,json_extract(s.context_json,'$.selection.service_date'),cl.course_id,
+ COALESCE(json_extract(v.content_json,'$.title'),json_extract(s.context_json,'$.selection.title')),
+ CASE s.status WHEN 'completed' THEN 'completed' WHEN 'skipped' THEN 'skipped' ELSE 'in_progress' END,
+ json_extract(r.outcome_json,'$.result.score'),
+ CASE WHEN v.id IS NULL THEN NULL ELSE 1 END, s.created_at
+ FROM study_sessions s JOIN classes cl ON cl.id=s.class_id
+ LEFT JOIN lesson_versions v ON v.id=s.lesson_version_id
+ LEFT JOIN study_results r ON r.session_id=s.id
+ WHERE s.owner_kind='class'
 )"#;
 
 #[derive(Debug, Default, Deserialize)]
@@ -138,7 +148,7 @@ pub fn read(
             .page
             .max(0)
             .min((history_total - 1).max(0) / PAGE_SIZE);
-        let mut statement = conn.prepare(&format!("{HISTORY} SELECT source,owner_id,date,subject_id,title,status,score,source!='primary' OR course_id IS NOT NULL FROM history {filter} ORDER BY date DESC,started_at DESC,source,owner_id DESC LIMIT ?4 OFFSET ?5"))?;
+        let mut statement = conn.prepare(&format!("{HISTORY} SELECT source,owner_id,date,subject_id,title,status,score,source IN ('classroom','language') OR course_id IS NOT NULL FROM history {filter} ORDER BY date DESC,started_at DESC,source,owner_id DESC LIMIT ?4 OFFSET ?5"))?;
         let history = statement
             .query_map(
                 params![
@@ -209,6 +219,7 @@ pub struct ProgressLesson {
     pub markdown: String,
     pub course_id: Option<i64>,
     pub classroom_session_id: Option<i64>,
+    pub study_session_id: Option<String>,
 }
 
 /// Resolve an immutable owner, never a date supplied by an archive row.
@@ -218,7 +229,11 @@ pub fn lesson(
     owner_id: &str,
 ) -> Result<Option<ProgressLesson>, String> {
     if source == "primary" {
-        return conn.query_row("SELECT c.id,s.date,COALESCE(k.title,'Saved study session'),c.markdown FROM primary_session_ids i JOIN sessions s ON s.date=i.legacy_date JOIN courses c ON c.session_date=s.date AND c.concept_id=s.concept_id LEFT JOIN concepts k ON k.id=c.concept_id WHERE i.session_id=?1 ORDER BY c.id DESC LIMIT 1",[owner_id],|r|Ok(ProgressLesson {course_id:Some(r.get(0)?),classroom_session_id:None,date:r.get(1)?,title:r.get(2)?,markdown:r.get(3)?})).optional().map_err(|e|e.to_string());
+        return conn.query_row("SELECT c.id,s.date,COALESCE(k.title,'Saved study session'),c.markdown FROM primary_session_ids i JOIN sessions s ON s.date=i.legacy_date JOIN courses c ON c.session_date=s.date AND c.concept_id=s.concept_id LEFT JOIN concepts k ON k.id=c.concept_id WHERE i.session_id=?1 ORDER BY c.id DESC LIMIT 1",[owner_id],|r|Ok(ProgressLesson {course_id:Some(r.get(0)?),classroom_session_id:None,study_session_id:None,date:r.get(1)?,title:r.get(2)?,markdown:r.get(3)?})).optional().map_err(|e|e.to_string());
+    }
+    if source == "study" {
+        // The immutable lesson version, never a regenerated substitute.
+        return conn.query_row("SELECT json_extract(s.context_json,'$.selection.service_date'),json_extract(v.content_json,'$.title'),json_extract(v.content_json,'$.body.markdown') FROM study_sessions s JOIN lesson_versions v ON v.id=s.lesson_version_id WHERE s.id=?1",[owner_id],|r|Ok(ProgressLesson {course_id:None,classroom_session_id:None,study_session_id:Some(owner_id.to_string()),date:r.get(0)?,title:r.get(1)?,markdown:r.get(2)?})).optional().map_err(|e|e.to_string());
     }
     let sql = match source {
         "classroom" => "SELECT session_date,title,payload_json FROM classroom_sessions WHERE id=?1",
@@ -251,6 +266,7 @@ pub fn lesson(
             markdown,
             course_id: None,
             classroom_session_id: (source == "classroom").then_some(id),
+            study_session_id: None,
         })
     })
     .transpose()

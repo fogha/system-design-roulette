@@ -260,14 +260,8 @@ pub fn set_profile(conn: &Connection, key: &str, value: &str) -> Result<()> {
 /// The learner dossier: ~1 page of markdown compiled fresh from the ledger,
 /// prepended to every Teacher call. This is the agent's entire memory.
 pub fn build_dossier(conn: &Connection, today: &str, focus: &str) -> Result<String> {
-    let days_taught: i64 = conn.query_row(
-        "SELECT
-            (SELECT COUNT(*) FROM sessions WHERE status = 'completed' AND focus = ?1)
-          + (SELECT COUNT(*) FROM classroom_sessions
-             WHERE status = 'completed' AND subject_id = ?1)",
-        params![focus],
-        |r| r.get(0),
-    )?;
+    let days_taught: i64 =
+        crate::classroom::completed_lesson_count(conn, focus).map_err(DbError::Invalid)?;
     let streak = crate::db::streak(conn, today).unwrap_or(0);
     let all = overview(conn, focus)?;
 
@@ -379,6 +373,14 @@ pub fn build_dossier(conn: &Connection, today: &str, focus: &str) -> Result<Stri
              JOIN classroom_sessions cs ON cs.id = cea.session_id
              JOIN concepts c ON c.id = cea.concept_id
              WHERE cs.subject_id = ?1 AND cea.correct = 0
+             UNION ALL
+             SELECT json_extract(ss.context_json, '$.selection.service_date'), c.slug,
+                    cea.section, cea.learning_objective, cea.misconception, cea.attempted_at
+             FROM classroom_exit_attempts cea
+             JOIN study_sessions ss ON ss.id = cea.study_session_id
+             JOIN classes cl ON cl.id = ss.class_id
+             JOIN concepts c ON c.id = cea.concept_id
+             WHERE cl.course_id = ?1 AND cea.correct = 0
          )
          ORDER BY attempted_at DESC
          LIMIT 20",

@@ -516,6 +516,8 @@ pub struct CourseExercise {
 pub struct ExerciseView {
     pub course_id: Option<i64>,
     pub classroom_session_id: Option<i64>,
+    /// Shared-runtime lesson whose checkpoint holds the draft and completion.
+    pub study_session_id: Option<String>,
     pub title: String,
     pub instructions: String,
     pub starter_code: Option<String>,
