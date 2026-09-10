@@ -227,3 +227,9 @@ executable overridden with `/usr/bin/false` so no provider ran.
 Not covered here: live generation into the runtime, reading-position restore,
 language lessons (still legacy), Windows/Linux, enforcement. Screenshots for this
 pass were kept under `/tmp/principia-shots/` (20, 24–28, 30).
+
+Reading-position follow-up on the same profile: a second fixture lesson
+("Session 2", concept `ts-unknown-any-never`) was scrolled to its first check
+question, the app was quit, and `study_checkpoints` held revision 1 with stage
+`practice` and reading offset 4420. Relaunch and Resume reopened the lesson at
+the exercise hints with the check just below (screenshot 31).
