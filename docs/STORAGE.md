@@ -9,6 +9,9 @@ Principia Desk keeps the existing application data location and SQLite database.
 - v1 brings original-main, PR-head and intermediate schemas to the legacy baseline, preserving their IDs and values. Missing columns are detected explicitly. Course-source and exercise-owner rebuilds copy records before replacing a table.
 - v2 adds immutable curriculum snapshots, enrollment drafts, classes, accepted path revisions and namespaced legacy crosswalks. It does not enroll a learner, alter an existing program, create schedules or manufacture assessment evidence.
 - v3 adds shared assessment attempts, frozen rounds, revisioned answer drafts and immutable submissions. It preserves the original quiz config bytes and prevents further writes through the retired quiz keys.
+- v4 records runner call metadata; v5 widens class tutor identities; v6 adds the shared study runtime tables; v7 assigns stable primary session identities.
+- v8 rebuilds classroom check evidence so a row belongs to either a legacy classroom session or a shared-runtime study session.
+- v9 adds rule revisions and `schedule_occurrences`: one durable appointment per rule per local service date with its resolved instant and a disposition consumed exactly once.
 
 Migration SQL and the frozen `legacy_v1.rs` implementation contribute to their checksums. Once committed, do not edit these sources, even for formatting. Add a new migration for later changes. The runner itself may evolve without changing an already-applied migration's meaning.
 
