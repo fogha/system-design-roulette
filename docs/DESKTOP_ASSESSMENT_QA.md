@@ -263,3 +263,26 @@ Legacy import on the same profile (2026-09-10): launching the rebuilt app logged
 session under its original `primary-…` ID with a `primary_import` crosswalk row
 and a skipped result recording its last step; `integrity_check` returned `ok`
 and Progress listed the same six sessions as before (screenshot 40).
+
+## Durable appointments — 2026-09-10
+
+Same isolated profile, upgraded to schema v9 on launch. With TypeScript (09:00),
+JavaScript & Browser (09:30) and German (10:00) active on weekdays:
+
+- A normal launch materialized one appointment per rule for the day, all `due`
+  with the `+01:00` offset snapshot, and Today's scheduler read "due now" for
+  the three classes (screenshot 41).
+- Relaunching under `SDR_DATE=2026-09-11` marked the three unstarted
+  appointments `missed` and created the new day's three as `scheduled`. Today's
+  agenda listed the missed rows with Make up and Skip beneath the new day's
+  due rows (screenshot 43).
+- Skip on the JavaScript row consumed it (`skipped`, resolved) in SQLite. The
+  first build then reported "The skipped appointment could not be read" because
+  the response lookup searched the agenda that no longer contained it; the fix
+  returns the skipped row directly.
+- Make up on the German row planned a runtime session whose selection records
+  the appointment, claimed the appointment as `started` with the session
+  reference, and opened the curated A1 lesson (screenshot 45).
+- With the fix, Skip on the remaining TypeScript row consumed it and the agenda
+  refreshed to no missed rows; both TypeScript and German runtime sessions
+  stayed listed as resumable (screenshot 46). SQLite: two skipped, one started.
