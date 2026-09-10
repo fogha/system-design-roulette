@@ -73,3 +73,22 @@ Still required: migrate primary state and content into `study_sessions` and
 `lesson_versions`, bind the preparation worker and assessment ownership to that
 runtime, cut over due/consumed/history projections together, and support legacy
 assignment and multiple voluntary sessions without using a date as identity.
+# Primary import preflight
+
+`storage/primary_import.rs` now inspects schema-v7 primary learning records in one
+read-only SQLite snapshot. It validates the frozen migration ledger and identity
+crosswalks, retains original SQLite types/bytes (including unfamiliar JSON), and
+reports ambiguous content or missing provenance as recovery work. Pending days
+do not acquire a subject from a pre-drawn topic or the current configuration.
+Unattached archive documents and unfinished assessment/exercise work are retained.
+
+The fingerprint can be checked again under the eventual cutover's write
+reservation. A timer tick, draft save or worker publication invalidates an older
+snapshot; edits to another class do not. `primary_import_report` takes an explicit
+database path and prints ownership/recovery metadata without lesson bodies,
+answers or credentials.
+
+Nine regressions cover exact-byte retention, ambiguous ownership, schema/ledger
+validation, concurrent snapshots, legacy main/PR upgrades and stale-plan detection.
+This is preparation for the migration: it neither registers a migration nor
+switches production writers/readers to the shared runtime.

@@ -185,6 +185,12 @@ fn integrity_check(conn: &Connection, foreign_keys: bool) -> Result<()> {
     Ok(())
 }
 
+/// Read-only validation for migration inspection; never upgrade or seed here.
+pub(super) fn validate_recorded_schema(conn: &Connection) -> Result<()> {
+    applied_count(conn, MIGRATIONS)?;
+    integrity_check(conn, true)
+}
+
 /// The migration connection already holds the write reservation. A separate
 /// read connection sees the committed pre-migration snapshot, including WAL
 /// pages, while no concurrent writer can race between backup and migration.
