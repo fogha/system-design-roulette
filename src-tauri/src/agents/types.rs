@@ -169,6 +169,9 @@ pub struct RunRequest {
     pub system: Option<String>,
     pub prompt: String,
     pub json: bool,
+    /// Optional output contract. Adapters send it only where structured output
+    /// is supported; callers still validate the returned value themselves.
+    pub output_schema: Option<serde_json::Value>,
     pub allow_web: bool,
     pub max_tokens: u32,
     pub timeout: Duration,
@@ -184,6 +187,7 @@ impl RunRequest {
             system: None,
             prompt: prompt.into(),
             json: true,
+            output_schema: None,
             allow_web: false,
             max_tokens: 16_384,
             timeout: Duration::from_secs(300),

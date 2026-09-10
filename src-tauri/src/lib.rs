@@ -66,6 +66,13 @@ pub fn run() {
     let args: Vec<String> = std::env::args().collect();
     let triggered = args.iter().any(|a| a == "--triggered");
     let debug_day = args.iter().any(|a| a == "--debug-day");
+    let context = tauri::generate_context!();
+    log::info!(
+        "starting {} with {} configured window(s); debug study mode: {}",
+        context.config().identifier,
+        context.config().app.windows.len(),
+        debug_day
+    );
 
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
@@ -91,6 +98,7 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_opener::init())
         .setup(move |app| {
+            log::info!("initializing local study storage");
             let data_dir = app.path().app_data_dir().expect("app data dir resolvable");
             std::fs::create_dir_all(&data_dir)?;
             let conn = db::open(&data_dir.join("roulette.db"))?;
@@ -233,6 +241,7 @@ pub fn run() {
                     state.gen_notify.notify_one();
                 });
             }
+            log::info!("local study runtime ready");
             Ok(())
         })
         .on_window_event(|window, event| match event {
@@ -328,9 +337,18 @@ pub fn run() {
             commands::get_chat,
             commands::send_chat_message,
         ])
-        .build(tauri::generate_context!())
+        .build(context)
         .expect("error while building tauri application")
         .run(|app, event| {
+            if let tauri::RunEvent::Ready = event {
+                for (label, window) in app.webview_windows() {
+                    log::info!(
+                        "desktop window {label}: visible={:?}, size={:?}",
+                        window.is_visible(),
+                        window.inner_size()
+                    );
+                }
+            }
             if let tauri::RunEvent::ExitRequested { api, .. } = event {
                 let state = app.state::<AppState>();
                 if !state.debug_day && state.locked.load(Ordering::SeqCst) {

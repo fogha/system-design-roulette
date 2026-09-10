@@ -525,13 +525,16 @@ impl Researcher {
         let target = normalize_fetch_url(url);
         match self.client.head(&target).send().await {
             Ok(response) if response.status().is_success() => true,
-            // Some documentation hosts reject HEAD; fall back to a GET.
-            _ => self
+            // Some documentation hosts reject HEAD; fall back to a GET when
+            // the host answered. A transport timeout already spent the request
+            // budget; repeating it doubles the delay during an outage.
+            Ok(_) => self
                 .client
                 .get(&target)
                 .send()
                 .await
                 .is_ok_and(|response| response.status().is_success()),
+            Err(_) => false,
         }
     }
 }

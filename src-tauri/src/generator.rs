@@ -12,6 +12,8 @@ pub enum GenError {
     BadExit(i32, String),
     #[error("could not parse agent output: {0}")]
     Parse(String),
+    #[error("lesson did not pass review: {0}")]
+    Quality(String),
     #[error("provider returned an unusable response ({model}): {reason}")]
     ProviderResponse {
         model: String,
@@ -84,7 +86,7 @@ impl CourseQualityScores {
             Ok(())
         } else {
             Err(format!(
-                "editor returned a revised course below the 4/5 quality floor: {}",
+                "editor rated the submitted course below the 4/5 quality floor: {}",
                 weak.join(", ")
             ))
         }
@@ -94,12 +96,79 @@ impl CourseQualityScores {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct CourseEditorialReview {
     scores: CourseQualityScores,
-    /// The prompt permits free-form editorial notes, including named claims and
-    /// reasons in objects. Preserve that metadata without treating its shape as
-    /// a lesson failure. Scores and the revised course remain strictly typed.
+    /// Blocking issues in the submitted draft, not a re-emission of its prose.
+    issues: Vec<CourseEditorialIssue>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct CourseEditorialIssue {
+    section: String,
+    reason: String,
+}
+
+/// Keep long Markdown out of model-authored JSON. Quotes, shell escapes and
+/// fenced examples remain prose; only the small machine-consumed part is JSON.
+#[derive(Debug, Serialize, Deserialize)]
+struct CourseMetadata {
+    title: String,
     #[serde(default)]
-    unsupported_claims_removed: serde_json::Value,
-    revised_course: GeneratedCourse,
+    resources: Vec<Resource>,
+    #[serde(default)]
+    key_takeaways: Vec<String>,
+    exit_questions: Vec<ExitCheck>,
+    exercise: Exercise,
+}
+
+impl CourseMetadata {
+    fn with_markdown(self, markdown: String) -> GeneratedCourse {
+        GeneratedCourse {
+            title: self.title,
+            markdown,
+            resources: self.resources,
+            key_takeaways: self.key_takeaways,
+            exit_questions: self.exit_questions,
+            exercise: Some(self.exercise),
+        }
+    }
+}
+
+fn object_schema(properties: serde_json::Value) -> serde_json::Value {
+    let required: Vec<_> = properties
+        .as_object()
+        .expect("schema properties")
+        .keys()
+        .cloned()
+        .collect();
+    serde_json::json!({"type":"object","properties":properties,"required":required,"additionalProperties":false})
+}
+
+fn course_metadata_schema() -> serde_json::Value {
+    use serde_json::json;
+    let text = json!({"type":"string"});
+    let strings = json!({"type":"array","items":text});
+    let resource = object_schema(json!({"title":text,"url":text,"type":text,"why":text}));
+    let question = object_schema(
+        json!({"prompt":text,"choices":{"type":"array","items":text,"minItems":4,"maxItems":4},"correct_answer":text,"explanation":text,"section":text,"learning_objective":text}),
+    );
+    let exercise = object_schema(
+        json!({"title":text,"instructions":text,"starter_code":{"type":["string","null"]},"deliverable":text,"hints":{"type":"array","items":text,"minItems":1,"maxItems":3}}),
+    );
+    object_schema(
+        json!({"title":text,"resources":{"type":"array","items":resource},"key_takeaways":strings,"exit_questions":{"type":"array","items":question,"minItems":5,"maxItems":5},"exercise":exercise}),
+    )
+}
+
+fn course_audit_schema() -> serde_json::Value {
+    let score = serde_json::json!({"type":"integer","minimum":1,"maximum":5});
+    let scores = object_schema(
+        serde_json::json!({"coverage_depth":score,"mechanism_depth":score,"specificity":score,"production_transfer":score,"dossier_adherence":score,"exercise_alignment":score,"source_discipline":score}),
+    );
+    let mut targets = REQUIRED_COURSE_SECTION_TITLES.to_vec();
+    targets.push("Assessment");
+    let issue = object_schema(
+        serde_json::json!({"section":{"type":"string","enum":targets},"reason":{"type":"string"}}),
+    );
+    object_schema(serde_json::json!({"scores":scores,"issues":{"type":"array","items":issue}}))
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -224,16 +293,33 @@ fn usable_mcq(
     correct_answer: &str,
     explanation: &str,
 ) -> bool {
-    let Some(choices) = choices else {
-        return false;
-    };
-    !prompt.trim().is_empty()
-        && choices.len() == 4
-        && choices.iter().all(|choice| !choice.trim().is_empty())
-        && choices
-            .iter()
-            .any(|choice| choice.trim() == correct_answer.trim())
-        && !explanation.trim().is_empty()
+    validate_mcq(prompt, choices, correct_answer, explanation).is_ok()
+}
+
+fn validate_mcq(
+    prompt: &str,
+    choices: Option<&[String]>,
+    correct_answer: &str,
+    explanation: &str,
+) -> std::result::Result<(), String> {
+    if prompt.trim().is_empty() {
+        return Err("prompt must be nonempty".into());
+    }
+    let choices = choices.ok_or("choices must be an array of four strings")?;
+    if choices.len() != 4 || choices.iter().any(|choice| choice.trim().is_empty()) {
+        return Err("choices must contain exactly four nonempty strings".into());
+    }
+    let distinct: std::collections::HashSet<_> = choices.iter().map(|c| c.trim()).collect();
+    if distinct.len() != 4 {
+        return Err("the four choices must be distinct".into());
+    }
+    if !distinct.contains(correct_answer.trim()) {
+        return Err("correct_answer must equal the full text of exactly one choice, not its letter or index".into());
+    }
+    if explanation.trim().is_empty() {
+        return Err("explanation must identify the misconception and correct mental model".into());
+    }
+    Ok(())
 }
 
 /// Deterministic quality floor for model-authored quizzes. The prompt is not
@@ -354,8 +440,12 @@ fn course_section_word_counts(markdown: &str) -> std::result::Result<[usize; 10]
             }) {
                 if index != next_required {
                     return Err(format!(
-                        "course section ## {} is out of order",
-                        REQUIRED_COURSE_SECTION_TITLES[index]
+                        "course section ## {} is out of order; expected {}",
+                        REQUIRED_COURSE_SECTION_TITLES[index],
+                        REQUIRED_COURSE_SECTION_TITLES
+                            .get(next_required)
+                            .map(|title| format!("## {title}"))
+                            .unwrap_or_else(|| "the end of the lesson".into())
                     ));
                 }
                 current = Some(index);
@@ -630,9 +720,11 @@ fn course_depth_report(markdown: &str) -> String {
 }
 
 pub fn validate_generated_course(course: &GeneratedCourse) -> std::result::Result<(), String> {
-    if course.title.trim().is_empty() {
-        return Err("course title is empty".into());
-    }
+    validate_course_body(course)?;
+    validate_course_metadata(course)
+}
+
+fn validate_course_body(course: &GeneratedCourse) -> std::result::Result<(), String> {
     let word_count = course.markdown.split_whitespace().count();
     if word_count < MIN_COURSE_WORDS {
         return Err(format!(
@@ -664,6 +756,13 @@ pub fn validate_generated_course(course: &GeneratedCourse) -> std::result::Resul
     if !simple_section.contains("analogy breaks") {
         return Err("simple explanation does not state where its analogy breaks".into());
     }
+    Ok(())
+}
+
+fn validate_course_metadata(course: &GeneratedCourse) -> std::result::Result<(), String> {
+    if course.title.trim().is_empty() {
+        return Err("course title is empty".into());
+    }
     if course.exit_questions.len() != 5 {
         return Err(format!(
             "expected 5 exit questions, got {}",
@@ -671,15 +770,18 @@ pub fn validate_generated_course(course: &GeneratedCourse) -> std::result::Resul
         ));
     }
     for (index, check) in course.exit_questions.iter().enumerate() {
-        if !usable_mcq(
+        validate_mcq(
             &check.prompt,
             Some(&check.choices),
             &check.correct_answer,
             &check.explanation,
-        ) || check.section.trim().is_empty()
-            || check.learning_objective.trim().is_empty()
-        {
-            return Err(format!("exit question {} is incomplete", index + 1));
+        )
+        .map_err(|reason| format!("exit question {}: {reason}", index + 1))?;
+        if check.section.trim().is_empty() || check.learning_objective.trim().is_empty() {
+            return Err(format!(
+                "exit question {}: section and learning_objective must be nonempty",
+                index + 1
+            ));
         }
     }
     let exercise = course
@@ -693,8 +795,9 @@ pub fn validate_generated_course(course: &GeneratedCourse) -> std::result::Resul
             .as_deref()
             .is_none_or(|deliverable| deliverable.trim().is_empty())
         || exercise.hints.is_empty()
+        || exercise.hints.iter().any(|hint| hint.trim().is_empty())
     {
-        return Err("structured exercise is incomplete".into());
+        return Err("structured exercise needs a title, instructions of at least 60 words, a nonempty deliverable and at least one hint".into());
     }
     if course.resources.iter().any(|resource| {
         let url = resource.url.trim();
@@ -759,6 +862,7 @@ pub struct Generator {
     pub runner: crate::agents::Runner,
     purpose: String,
     owner: Option<String>,
+    output_schema: Option<serde_json::Value>,
 }
 
 /// Immutable generation routing for one classroom subject. Subject profiles
@@ -1025,6 +1129,7 @@ impl Generator {
             runner,
             purpose: "generation".into(),
             owner: None,
+            output_schema: None,
             claude_bin,
             codex_bin,
             scratch_dir,
@@ -1056,6 +1161,56 @@ impl Generator {
         }
     }
 
+    async fn course_metadata(
+        &self,
+        markdown: &str,
+        agent: &str,
+        custom_bin: &str,
+        model: &str,
+        context: &str,
+        failure: &str,
+    ) -> Result<GeneratedCourse> {
+        let prompt = format!(
+            "{}\n\nCOURSE_CONTEXT: {context}\nVALIDATION_FEEDBACK: {failure}\n\nLESSON_BODY:\n{markdown}",
+            include_str!("../prompts/course-metadata.txt")
+        );
+        let mut structured = self.clone();
+        structured.output_schema = Some(course_metadata_schema());
+        let (metadata, _) = structured
+            .run_exact_for::<CourseMetadata>(
+                agent,
+                custom_bin,
+                &prompt,
+                false,
+                Duration::from_secs(300),
+                model,
+            )
+            .await?;
+        Ok(metadata.with_markdown(markdown.to_owned()))
+    }
+
+    async fn write_course(
+        &self,
+        prompt: &str,
+        agent: &str,
+        custom_bin: &str,
+        model: &str,
+        context: &str,
+    ) -> Result<GeneratedCourse> {
+        let markdown = self
+            .run_prose_for(agent, custom_bin, prompt, Duration::from_secs(720), model)
+            .await?;
+        self.course_metadata(
+            &markdown,
+            agent,
+            custom_bin,
+            model,
+            context,
+            "Initial assessment; follow the exact schema.",
+        )
+        .await
+    }
+
     async fn ensure_course_quality(
         &self,
         mut course: GeneratedCourse,
@@ -1065,78 +1220,43 @@ impl Generator {
         context: &str,
     ) -> Result<GeneratedCourse> {
         course.markdown = normalize_course_headings(&course.markdown);
-        let Err(mut reason) = validate_generated_course(&course) else {
-            return Ok(course);
-        };
-
-        // Thin prose is the common failure. Re-emitting the whole course JSON
-        // (questions, exercise, resources) crowds out the prose budget and the
-        // model compresses, so depth is repaired in markdown-only passes.
-        let mut candidate = course;
-        for attempt in 1..=MAX_QUALITY_CORRECTIONS {
-            if !is_depth_failure(&reason) {
+        // Body corrections cannot replace already valid questions or exercises.
+        for attempt in 0..=MAX_QUALITY_CORRECTIONS {
+            let Err(reason) = validate_course_body(&course) else {
                 break;
+            };
+            if attempt == MAX_QUALITY_CORRECTIONS {
+                return Err(GenError::Quality(format!("{context} failed body validation after {attempt} same-provider corrections: {reason}")));
             }
-            self.log(format!(
-                "{agent} course is too thin (expansion {attempt} of {MAX_QUALITY_CORRECTIONS}): \
-                 {reason}"
-            ));
-            let expanded = self
-                .expand_course_body(&candidate, agent, custom_bin, model, context)
-                .await?;
-            candidate.markdown = normalize_course_headings(&expanded);
-            match validate_generated_course(&candidate) {
-                Ok(()) => return Ok(candidate),
-                Err(remaining) => reason = remaining,
-            }
+            self.log(format!("{agent} is correcting lesson prose: {reason}"));
+            let markdown = if is_depth_failure(&reason) {
+                self.expand_course_body(&course, agent, custom_bin, model, context)
+                    .await?
+            } else {
+                let prompt = format!(
+                    "Correct only this lesson's Markdown. Return plain Markdown, never JSON.\n\nCOURSE_CONTEXT: {context}\nQUALITY_GATE_FAILURE: {reason}\nREQUIRED_SECTION_ORDER (exact headings, no numbering or subtitles):\n{}\nDEPTH REQUIREMENTS:\n{}\n\nPreserve the topic, worked examples, code, citations and section depth. Use the canonical section order. In The simple version include an explicit sentence beginning `Where the analogy breaks:`. Do not add assessment metadata.\n\nLESSON_BODY:\n{}",
+                    REQUIRED_COURSE_SECTION_TITLES.map(|title| format!("## {title}")).join("\n"), course_depth_report(&course.markdown), course.markdown
+                );
+                self.run_prose_for(agent, custom_bin, &prompt, Duration::from_secs(720), model)
+                    .await?
+            };
+            course.markdown = normalize_course_headings(&markdown);
         }
-        for attempt in 1..=MAX_QUALITY_CORRECTIONS {
-            self.log(format!(
-                "{agent} course missed a quality gate (correction {attempt} of \
-                 {MAX_QUALITY_CORRECTIONS}): {reason}"
-            ));
-            let original = serde_json::to_string(&candidate)
-                .map_err(|error| GenError::Parse(format!("could not serialize course: {error}")))?;
-            let prompt = format!(
-                "You are correcting a course generated by this same provider. The JSON parsed, but a \
-                 deterministic quality gate rejected it.\n\nCOURSE_CONTEXT: {context}\nQUALITY_GATE_FAILURE: \
-                 {reason}\n\nCURRENT DEPTH MEASUREMENT:\n{}\n\nReturn the complete corrected course as one \
-                 valid bare JSON object. Fix the reported defect while preserving the subject, technical \
-                 claims, existing depth, resources, inline source citations, five exit questions, and \
-                 structured exercise. Do not summarize or substitute another lesson.\n\
-                 If a section is short, expand that specific section to its target by adding real \
-                 substance — a further step of the mechanism, a worked trace with expected output, a \
-                 concrete production decision and its evidence, or a failure mode and how it is \
-                 detected. Never pad with restatement, filler, or a longer summary; a padded section \
-                 fails the same gate again.\n\
-                 If the failure concerns the opening analogy, add an explicit sentence beginning exactly \
-                 `Where the analogy breaks:` inside `## The simple version`. Preserve the required section \
-                 order and use canonical `##` headings.\n\nCOURSE_TO_CORRECT:\n{original}",
-                course_depth_report(&candidate.markdown)
-            );
-            let (mut corrected, _) = self
-                .run_exact_for::<GeneratedCourse>(
-                    agent,
-                    custom_bin,
-                    &prompt,
-                    false,
-                    Duration::from_secs(420),
-                    model,
-                )
-                .await?;
-            corrected.markdown = normalize_course_headings(&corrected.markdown);
-            match validate_generated_course(&corrected) {
-                Ok(()) => return Ok(corrected),
-                Err(remaining) => {
-                    reason = remaining;
-                    candidate = corrected;
-                }
+        // Report the exact field contract and repair the small assessment only.
+        // Never guess which choice a letter/index was supposed to identify.
+        for attempt in 0..=MAX_QUALITY_CORRECTIONS {
+            let Err(reason) = validate_course_metadata(&course) else {
+                return Ok(course);
+            };
+            if attempt == MAX_QUALITY_CORRECTIONS {
+                return Err(GenError::Quality(format!("{context} failed assessment validation after {attempt} same-provider corrections: {reason}")));
             }
+            self.log(format!("{agent} is correcting lesson assessment: {reason}"));
+            course = self
+                .course_metadata(&course.markdown, agent, custom_bin, model, context, &reason)
+                .await?;
         }
-        Err(GenError::Parse(format!(
-            "{context} failed quality validation after {MAX_QUALITY_CORRECTIONS} same-provider \
-             corrections: {reason}"
-        )))
+        unreachable!("bounded validation returns a course or an error")
     }
 
     /// Deepen only the sections that fall short, one prose call each. A request
@@ -1152,13 +1272,14 @@ impl Generator {
     ) -> Result<String> {
         let (preamble, mut sections) = split_course_sections(&course.markdown);
         let mut deepened = 0;
+        let mut total = course.markdown.split_whitespace().count();
         for index in 0..sections.len() {
             let words = sections[index].split_whitespace().count();
             let target = MIN_COURSE_SECTION_WORDS[index];
             // Sections at their floor still need the course to clear its total,
             // so ask for a margin rather than the bare minimum.
             let goal = target + target / 4;
-            if words >= goal {
+            if words >= target && (total >= MIN_COURSE_WORDS || words >= goal) {
                 continue;
             }
             // A one-section request tends to overshoot badly, and a course the
@@ -1194,13 +1315,15 @@ impl Generator {
                     .await?,
             );
             // A shorter answer than we started with is a regression, not a fix.
-            if rewritten.split_whitespace().count() > words {
+            let rewritten_words = rewritten.split_whitespace().count();
+            if rewritten_words > words {
+                total += rewritten_words - words;
                 sections[index] = rewritten;
                 deepened += 1;
             }
         }
         if deepened == 0 {
-            return Err(GenError::Parse(format!(
+            return Err(GenError::Quality(format!(
                 "{context} stayed too thin: the provider returned no longer text for any short \
                  section"
             )));
@@ -1211,63 +1334,141 @@ impl Generator {
 
     async fn edit_course_quality(
         &self,
-        course: GeneratedCourse,
+        mut course: GeneratedCourse,
         context: CourseEditContext<'_>,
+        sources: &[crate::research::ResearchSource],
     ) -> Result<GeneratedCourse> {
-        let scoped = self.scoped("quality-review");
+        let mut scoped = self.scoped("quality-review");
+        scoped.output_schema = Some(course_audit_schema());
         let brief = serde_json::to_string(context.curriculum)
             .map_err(|error| GenError::Parse(format!("could not serialize curriculum: {error}")))?;
-        let draft = serde_json::to_string(&course)
-            .map_err(|error| GenError::Parse(format!("could not serialize course: {error}")))?;
-        let prompt = format!(
-            "Act as the final senior curriculum editor for this generated engineering course. \
-             Review and revise the draft using the exact same provider and model that wrote it. \
-             Do not substitute a different topic. Return one bare JSON object with exactly \
-             `scores`, `unsupported_claims_removed`, and `revised_course`. `scores` must contain \
-             integer 1-5 values for `coverage_depth`, `mechanism_depth`, `specificity`, \
-             `production_transfer`, `dossier_adherence`, `exercise_alignment`, and \
-             `source_discipline`, and must score the \
-             REVISED course, not the draft. Revise until every dimension honestly reaches at least \
-             4/5. The course must derive the named mechanisms, diagnose a realistic failure, make \
-             a production decision, include a runnable browser/runtime/compiler/tool experiment, \
-             use the learner evidence rather than repeating it, cite primary sources for \
-             version-sensitive claims, contain exactly five aligned checks, and advance the named \
-             cumulative artifact. The revised markdown must contain 3,500-4,500 words with \
-             substantive depth distributed across every required section; never pad one section \
-             with repeated summaries to satisfy length. Remove or qualify unsupported claims. Keep \
-             every inline citation link to the retrieved source URLs, and add attribution where a \
-             version-sensitive claim has none. Preserve all required \
-             canonical markdown sections and the complete GeneratedCourse JSON schema.\n\n\
-             COURSE_CONTEXT: {label}\n\
-             CURRICULUM_BRIEF: {brief}\n\
-             LEARNER_DOSSIER:\n{dossier}\n\n\
-             DRAFT_COURSE: {draft}",
-            label = context.label,
-            dossier = context.dossier,
-        );
-        scoped.log(format!(
-            "{} is running the same-provider curriculum editor for {}",
-            context.agent, context.label
-        ));
-        let (mut review, _) = scoped
-            .run_exact_for::<CourseEditorialReview>(
-                context.agent,
-                context.custom_bin,
-                &prompt,
-                false,
-                Duration::from_secs(720),
-                context.model,
-            )
-            .await?;
-        review.scores.validate().map_err(GenError::Parse)?;
-        review.revised_course.markdown = normalize_course_headings(&review.revised_course.markdown);
-        validate_generated_course(&review.revised_course).map_err(|reason| {
-            GenError::Parse(format!(
-                "{} failed deterministic validation after its same-provider editor pass: {reason}",
-                context.label
-            ))
-        })?;
-        Ok(review.revised_course)
+        for attempt in 0..=MAX_QUALITY_CORRECTIONS {
+            let draft = serde_json::to_string(&course)
+                .map_err(|error| GenError::Parse(format!("could not serialize course: {error}")))?;
+            let prompt = format!(
+                "{}\n\nCOURSE_CONTEXT: {}\nCURRICULUM_BRIEF: {brief}\nLEARNER_DOSSIER:\n{}\nDEPTH MEASUREMENT:\n{}\nRETRIEVED SOURCE MATERIAL:\n{}\nDRAFT_COURSE:\n{draft}",
+                include_str!("../prompts/course-audit.txt"), context.label, context.dossier, course_depth_report(&course.markdown),
+                crate::research::format_source_material(sources),
+            );
+            scoped.log(format!(
+                "{} is auditing the prepared lesson for {}",
+                context.agent, context.label
+            ));
+            let (review, _) = scoped
+                .run_exact_for::<CourseEditorialReview>(
+                    context.agent,
+                    context.custom_bin,
+                    &prompt,
+                    false,
+                    Duration::from_secs(420),
+                    context.model,
+                )
+                .await?;
+            let score_result = review.scores.validate();
+            if score_result.is_ok() && review.issues.is_empty() {
+                validate_generated_course(&course).map_err(GenError::Quality)?;
+                return Ok(course);
+            }
+            let reason = format!(
+                "{}; {}",
+                score_result.err().unwrap_or_default(),
+                review
+                    .issues
+                    .iter()
+                    .map(|issue| format!("{}: {}", issue.section, issue.reason))
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            );
+            if attempt == MAX_QUALITY_CORRECTIONS {
+                return Err(GenError::Quality(format!(
+                    "{} failed its final editorial audit: {reason}",
+                    context.label
+                )));
+            }
+            scoped.log(format!(
+                "{} editor requested a correction: {reason}",
+                context.agent
+            ));
+            if review.issues.is_empty()
+                || review.issues.iter().any(|issue| {
+                    issue.reason.trim().is_empty()
+                        || (issue.section != "Assessment"
+                            && !REQUIRED_COURSE_SECTION_TITLES.contains(&issue.section.as_str()))
+                })
+            {
+                return Err(GenError::Quality("The editor did not identify a valid section and concrete correction for its failing scores.".into()));
+            }
+            let (preamble, mut sections) = split_course_sections(&course.markdown);
+            let mut changed_body = false;
+            for (index, title) in REQUIRED_COURSE_SECTION_TITLES.iter().enumerate() {
+                let issues = review
+                    .issues
+                    .iter()
+                    .filter(|issue| issue.section == *title)
+                    .map(|issue| issue.reason.as_str())
+                    .collect::<Vec<_>>();
+                if issues.is_empty() {
+                    continue;
+                }
+                let minimum = MIN_COURSE_SECTION_WORDS[index];
+                let correction = format!(
+                    "Correct only the `{title}` section of this lesson. Return that section's Markdown body only, without its heading, any other section, or JSON. Resolve each listed defect while preserving useful mechanisms, code and citations. Keep at least {minimum} substantive words. Do not rewrite or summarize other sections.\n\nEDITOR_FEEDBACK:\n{}\nCURRICULUM_BRIEF: {brief}\nLEARNER_DOSSIER: {}\nRETRIEVED SOURCE MATERIAL:\n{}\nCURRENT_SECTION:\n{}\nFULL_LESSON_FOR_CONTEXT:\n{}",
+                    issues.join("\n"), context.dossier, crate::research::format_source_material(sources), sections[index], course.markdown,
+                );
+                let replacement = self
+                    .run_prose_for(
+                        context.agent,
+                        context.custom_bin,
+                        &correction,
+                        Duration::from_secs(420),
+                        context.model,
+                    )
+                    .await?;
+                let replacement = extract_single_section(&replacement);
+                if replacement.is_empty() {
+                    return Err(GenError::Quality(format!(
+                        "The editor returned no corrected text for {title}."
+                    )));
+                }
+                sections[index] = replacement;
+                changed_body = true;
+            }
+            if changed_body {
+                course.markdown = rebuild_course_body(&preamble, &sections);
+            }
+            course = self
+                .course_metadata(
+                    &course.markdown,
+                    context.agent,
+                    context.custom_bin,
+                    context.model,
+                    context.label,
+                    &reason,
+                )
+                .await?;
+            course = self
+                .ensure_course_quality(
+                    course,
+                    context.agent,
+                    context.custom_bin,
+                    context.model,
+                    context.label,
+                )
+                .await?;
+            course = self
+                .ensure_source_grounding(
+                    course,
+                    sources,
+                    context.agent,
+                    context.custom_bin,
+                    context.model,
+                    context.label,
+                )
+                .await?;
+            // The corrected result must pass another audit; a score for an older
+            // draft never certifies newly generated prose or assessments.
+        }
+        unreachable!("bounded editorial audit returns a course or an error")
     }
 
     /// Fetch the primary documentation for one lesson before any provider call.
@@ -1313,20 +1514,34 @@ impl Generator {
         sources: &[crate::research::ResearchSource],
     ) -> Vec<Resource> {
         let mut reading_list: Vec<Resource> = Vec::new();
-        for resource in course_resources {
-            let url = resource.url.trim();
-            if reading_list.iter().any(|kept| kept.url == url) {
-                continue;
-            }
-            if self.researcher.url_resolves(url).await {
-                reading_list.push(Resource {
-                    title: resource.title.clone(),
-                    url: url.to_string(),
-                    kind: resource.kind.clone(),
-                    why: resource.why.clone(),
-                });
-            } else {
-                self.log(format!("research: dropped unverifiable link {url}"));
+        let mut seen = std::collections::HashSet::new();
+        let resources: Vec<_> = course_resources
+            .iter()
+            .filter(|resource| seen.insert(resource.url.trim().to_owned()))
+            .collect();
+        // A documentation outage must not multiply its timeout by every link.
+        // Bound parallel checks and retain the author's deterministic order.
+        for chunk in resources.chunks(4) {
+            let handles: Vec<_> = chunk
+                .iter()
+                .map(|resource| {
+                    let researcher = self.researcher.clone();
+                    let url = resource.url.trim().to_owned();
+                    tokio::spawn(async move { researcher.url_resolves(&url).await })
+                })
+                .collect();
+            for (resource, handle) in chunk.iter().zip(handles) {
+                let url = resource.url.trim();
+                if handle.await.unwrap_or(false) {
+                    reading_list.push(Resource {
+                        title: resource.title.clone(),
+                        url: url.to_owned(),
+                        kind: resource.kind.clone(),
+                        why: resource.why.clone(),
+                    });
+                } else {
+                    self.log(format!("research: dropped unverifiable link {url}"));
+                }
             }
         }
         for source in sources {
@@ -1381,38 +1596,19 @@ impl Generator {
             .map(|source| format!("- {} ({})", source.url, source.title))
             .collect::<Vec<_>>()
             .join("\n");
-        let original = serde_json::to_string(&course)
-            .map_err(|error| GenError::Parse(format!("could not serialize course: {error}")))?;
         let prompt = format!(
-            "You are correcting a course you just wrote. It teaches claims without attributing \
-             them to the documentation that was retrieved for it.\n\nCOURSE_CONTEXT: {context}\n\n\
-             RETRIEVED SOURCES THAT MUST BE CITED INLINE (use these exact URLs as markdown \
-             links inside the course body):\n{url_list}\n\nReturn the complete corrected course \
-             as one valid bare JSON object. Add inline markdown links to at least \
-             {required} different URLs above, placed where each claim is actually \
-             made — standards and version-sensitive statements first. Do not invent URLs, do not \
-             change the topic, and preserve the existing depth, section order, five exit \
-             questions, and structured exercise.\n\nCOURSE_TO_CORRECT:\n{original}"
+            "Correct attribution in this lesson. Return the complete Markdown body only, never JSON.\n\nCOURSE_CONTEXT: {context}\nRETRIEVED SOURCES (use exact URLs):\n{url_list}\n{}\n\nAdd inline markdown links to at least {required} different retrieved URLs at the claims they support. Do not invent sources or change the topic. Preserve examples, section order and depth. The questions and structured exercise are held separately by the application.\n\nLESSON_BODY:\n{}",
+            crate::research::format_source_material(sources), course.markdown,
         );
-        let (mut corrected, _) = self
-            .run_exact_for::<GeneratedCourse>(
-                agent,
-                custom_bin,
-                &prompt,
-                false,
-                Duration::from_secs(720),
-                model,
-            )
+        course.markdown = self
+            .run_prose_for(agent, custom_bin, &prompt, Duration::from_secs(720), model)
             .await?;
-        corrected.markdown = normalize_course_headings(&corrected.markdown);
-        validate_generated_course(&corrected).map_err(|reason| {
-            GenError::Parse(format!(
-                "{context} failed validation after its citation correction: {reason}"
-            ))
-        })?;
+        let mut corrected = self
+            .ensure_course_quality(course, agent, custom_bin, model, context)
+            .await?;
         let cited = crate::research::cited_source_count(&corrected.markdown, sources);
         if cited < required {
-            return Err(GenError::Parse(format!(
+            return Err(GenError::Quality(format!(
                 "{context} still cites only {cited} of the {required} retrieved sources it must \
                  attribute, after one same-provider correction"
             )));
@@ -1445,21 +1641,15 @@ impl Generator {
         let agent = scoped.current_agent();
         let custom_bin = scoped.current_custom_bin();
         let model = scoped.current_model();
-        let (course, source) = scoped
-            .run_exact_for::<GeneratedCourse>(
-                &agent,
-                &custom_bin,
-                &prompt,
-                // Research was already retrieved by the app. The writing turn
-                // must not start a second, unbounded CLI research workflow.
-                false,
-                Duration::from_secs(720),
-                &model,
-            )
-            .await?;
         let context = format!("primary {} course", request.focus);
         let course = scoped
+            .write_course(&prompt, &agent, &custom_bin, &model, &context)
+            .await?;
+        let course = scoped
             .ensure_course_quality(course, &agent, &custom_bin, &model, &context)
+            .await?;
+        let course = scoped
+            .ensure_source_grounding(course, &sources, &agent, &custom_bin, &model, &context)
             .await?;
         let course = scoped
             .edit_course_quality(
@@ -1472,12 +1662,10 @@ impl Generator {
                     model: &model,
                     label: &context,
                 },
+                &sources,
             )
             .await?;
-        let course = scoped
-            .ensure_source_grounding(course, &sources, &agent, &custom_bin, &model, &context)
-            .await?;
-        Ok((course, source))
+        Ok((course, agent))
     }
 
     /// Generate an advisory classroom lesson with a subject-owned provider,
@@ -1504,20 +1692,29 @@ impl Generator {
                 .replace("{{CATEGORY}}", request.category)
         );
         let prompt = with_teacher(request.dossier, &task, request.focus);
-        let (course, source) = scoped
-            .run_exact_for::<GeneratedCourse>(
+        let context = format!("classroom course for {}", profile.subject_id);
+        let course = scoped
+            .write_course(
+                &prompt,
                 &profile.agent,
                 &profile.custom_bin,
-                &prompt,
-                false,
-                Duration::from_secs(720),
                 &profile.model,
+                &context,
             )
             .await?;
-        let context = format!("classroom course for {}", profile.subject_id);
         let course = scoped
             .ensure_course_quality(
                 course,
+                &profile.agent,
+                &profile.custom_bin,
+                &profile.model,
+                &context,
+            )
+            .await?;
+        let course = scoped
+            .ensure_source_grounding(
+                course,
+                &sources,
                 &profile.agent,
                 &profile.custom_bin,
                 &profile.model,
@@ -1535,19 +1732,10 @@ impl Generator {
                     model: &profile.model,
                     label: &context,
                 },
-            )
-            .await?;
-        let course = scoped
-            .ensure_source_grounding(
-                course,
                 &sources,
-                &profile.agent,
-                &profile.custom_bin,
-                &profile.model,
-                &context,
             )
             .await?;
-        Ok((course, source))
+        Ok((course, profile.agent.clone()))
     }
 
     pub(crate) async fn enrich_classroom_language_lesson(
@@ -2099,9 +2287,8 @@ CURATED_LESSON:
         .await
     }
 
-    /// Ask for prose instead of a JSON object. DeepSeek's JSON mode cuts a
-    /// long answer to roughly a third of its length, so the course body is
-    /// written as plain markdown and only structured payloads use JSON.
+    /// Long lesson bodies are plain Markdown; only the smaller structured
+    /// payloads use JSON. This also preserves code without JSON string escaping.
     async fn run_prose_for(
         &self,
         agent: &str,
@@ -2154,6 +2341,9 @@ CURATED_LESSON:
             request.system = Some("You are writing teaching material for an application. Return only the requested text or JSON. Use the source excerpts supplied in the request; qualify claims they do not support. Describe experiments and exercises for the learner to perform, but do not execute them, create files, delegate tasks, or start another research workflow.".into());
         }
         request.json = matches!(call.wire, Wire::Json);
+        if request.json {
+            request.output_schema = self.output_schema.clone();
+        }
         request.allow_web = call.web_tools;
         request.timeout = call.timeout;
         request.purpose = self.purpose.clone();
@@ -2537,34 +2727,17 @@ mod quality_gate_tests {
     }
 
     #[test]
-    fn editor_notes_preserve_structured_claims_without_relaxing_quality_scores() {
-        let course = GeneratedCourse {
-            title: "A reviewed course".into(),
-            markdown: complete_course_markdown(),
-            resources: Vec::new(),
-            key_takeaways: Vec::new(),
-            exit_questions: Vec::new(),
-            exercise: None,
-        };
-        for notes in [
-            serde_json::Value::Null,
-            serde_json::json!(""),
-            serde_json::json!("qualified one claim"),
-            serde_json::json!([]),
-            serde_json::json!([{"claim":"Version-specific behavior","reason":"Not covered by the supplied source"}]),
-            serde_json::json!({"removed":[],"qualified":["Availability depends on the installed version"]}),
-        ] {
-            let mut value = serde_json::json!({
-                "scores":{"coverage_depth":5,"mechanism_depth":5,"specificity":5,"production_transfer":5,"dossier_adherence":5,"exercise_alignment":5,"source_discipline":5},
-                "unsupported_claims_removed":notes,"revised_course":course
-            });
-            let review: super::CourseEditorialReview =
-                serde_json::from_value(value.clone()).unwrap();
-            assert_eq!(review.unsupported_claims_removed, notes);
-            assert_eq!(review.revised_course.markdown, course.markdown);
-            review.scores.validate().unwrap();
-            value["scores"]["source_discipline"] = serde_json::json!(2);
-            let weak: super::CourseEditorialReview = serde_json::from_value(value).unwrap();
+    fn editorial_audit_requires_valid_scores_and_explicit_issues() {
+        let mut value = serde_json::json!({
+            "scores":{"coverage_depth":5,"mechanism_depth":5,"specificity":5,"production_transfer":5,"dossier_adherence":5,"exercise_alignment":5,"source_discipline":5},
+            "issues":[]
+        });
+        let review: super::CourseEditorialReview = serde_json::from_value(value.clone()).unwrap();
+        review.scores.validate().unwrap();
+        assert!(review.issues.is_empty());
+        for invalid in [0, 2, 6] {
+            value["scores"]["source_discipline"] = serde_json::json!(invalid);
+            let weak: super::CourseEditorialReview = serde_json::from_value(value.clone()).unwrap();
             assert!(weak.scores.validate().is_err());
         }
     }
@@ -2668,6 +2841,257 @@ mod generation_policy_tests {
         }
     }
 
+    struct WritingProvider {
+        dir: std::path::PathBuf,
+        command: String,
+    }
+
+    impl WritingProvider {
+        fn new(responses: &[String]) -> Self {
+            let dir = std::env::temp_dir()
+                .join(format!("principia-writing-{:032x}", rand::random::<u128>()));
+            std::fs::create_dir(&dir).unwrap();
+            for (index, response) in responses.iter().enumerate() {
+                std::fs::write(dir.join(format!("response-{index}")), response).unwrap();
+            }
+            let script = dir.join("provider.py");
+            std::fs::write(
+                &script,
+                r#"#!/usr/bin/env python3
+import sys,pathlib
+root=pathlib.Path(__file__).parent
+counter=root/'count'
+index=int(counter.read_text()) if counter.exists() else 0
+counter.write_text(str(index+1))
+(root/f'prompt-{index}').write_text(sys.argv[-1])
+print((root/f'response-{index}').read_text(),end='')
+"#,
+            )
+            .unwrap();
+            std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
+            Self {
+                command: script.to_str().unwrap().to_owned(),
+                dir,
+            }
+        }
+
+        fn calls(&self) -> usize {
+            std::fs::read_to_string(self.dir.join("count"))
+                .unwrap()
+                .parse()
+                .unwrap()
+        }
+
+        fn prompt(&self, index: usize) -> String {
+            std::fs::read_to_string(self.dir.join(format!("prompt-{index}"))).unwrap()
+        }
+    }
+
+    impl Drop for WritingProvider {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.dir);
+        }
+    }
+
+    fn metadata_json(course: &GeneratedCourse) -> String {
+        let mut metadata = serde_json::to_value(course).unwrap();
+        metadata.as_object_mut().unwrap().remove("markdown");
+        metadata.to_string()
+    }
+
+    fn audit_json(score: u8) -> String {
+        serde_json::json!({"scores":{"coverage_depth":score,"mechanism_depth":score,"specificity":score,"production_transfer":score,"dossier_adherence":score,"exercise_alignment":score,"source_discipline":score},"issues":if score<4 {vec![serde_json::json!({"section":"Core mechanics","reason":"Derive the permission check before describing its consequences."})]} else {vec![]}}).to_string()
+    }
+
+    #[test]
+    fn structured_schemas_require_the_real_metadata_and_audit_fields() {
+        fn check(value: &serde_json::Value, schema: &serde_json::Value) {
+            if let Some(object) = value.as_object() {
+                let actual: std::collections::BTreeSet<_> = object.keys().collect();
+                let properties = schema["properties"].as_object().unwrap();
+                assert_eq!(actual, properties.keys().collect());
+                let required = schema["required"].as_array().unwrap();
+                assert_eq!(actual.len(), required.len());
+                for key in object.keys() {
+                    assert!(required.contains(&serde_json::json!(key)));
+                    check(&object[key], &properties[key]);
+                }
+            } else if let Some(items) = value.as_array() {
+                for item in items {
+                    check(item, &schema["items"]);
+                }
+            }
+        }
+        let mut course = corrected_course();
+        course.resources.push(Resource {
+            title: "Manual".into(),
+            url: "https://www.gnu.org/".into(),
+            kind: "docs".into(),
+            why: "Primary reference".into(),
+        });
+        check(
+            &serde_json::from_str::<serde_json::Value>(&metadata_json(&course)).unwrap(),
+            &super::course_metadata_schema(),
+        );
+        check(
+            &serde_json::from_str::<serde_json::Value>(&audit_json(5)).unwrap(),
+            &super::course_audit_schema(),
+        );
+        let schema = super::course_metadata_schema();
+        assert_eq!(schema["properties"]["exit_questions"]["minItems"], 5);
+        assert_eq!(
+            schema["properties"]["exit_questions"]["items"]["properties"]["choices"]["minItems"],
+            4
+        );
+    }
+
+    #[tokio::test]
+    async fn writing_and_read_only_audit_preserve_literal_shell_prose() {
+        let mut expected = corrected_course();
+        expected
+            .markdown
+            .push_str("\n```bash\nprintf '%s\\n' \"${value}\" '{model}' '{prompt}'\n```\n");
+        let provider = WritingProvider::new(&[
+            expected.markdown.clone(),
+            metadata_json(&expected),
+            audit_json(5),
+        ]);
+        let generator = test_generator();
+        let course = generator
+            .write_course(
+                "Write a Bash lesson as Markdown.",
+                "custom",
+                &provider.command,
+                "saved-model",
+                "Linux Bash",
+            )
+            .await
+            .unwrap();
+        assert_eq!(course.markdown.trim(), expected.markdown.trim());
+        super::validate_generated_course(&course).unwrap();
+        let brief = crate::db::CurriculumBrief::default();
+        let accepted = generator
+            .edit_course_quality(
+                course,
+                super::CourseEditContext {
+                    curriculum: &brief,
+                    dossier: "knows pipelines",
+                    agent: "custom",
+                    custom_bin: &provider.command,
+                    model: "saved-model",
+                    label: "Linux Bash",
+                },
+                &[],
+            )
+            .await
+            .unwrap();
+        assert_eq!(accepted.markdown.trim(), expected.markdown.trim());
+        assert_eq!(provider.calls(), 3);
+        assert!(provider.prompt(1).contains("FULL TEXT"));
+        assert!(provider.prompt(2).contains("knows pipelines"));
+    }
+
+    #[tokio::test]
+    async fn invalid_assessment_repair_keeps_valid_body_and_names_exact_answer_contract() {
+        let mut invalid = corrected_course();
+        invalid.exit_questions[0].choices = vec![
+            "Allow access".into(),
+            "Deny access".into(),
+            "Change owner".into(),
+            "Remove group".into(),
+        ];
+        invalid.exit_questions[0].correct_answer = "A".into();
+        let markdown = invalid.markdown.clone();
+        let mut valid = invalid.clone();
+        valid.exit_questions[0].correct_answer = "Deny access".into();
+        let provider = WritingProvider::new(&[metadata_json(&valid)]);
+        let repaired = test_generator()
+            .ensure_course_quality(
+                invalid,
+                "custom",
+                &provider.command,
+                "saved-model",
+                "Linux Bash",
+            )
+            .await
+            .unwrap();
+        assert_eq!(repaired.markdown, markdown);
+        assert_eq!(repaired.exit_questions[0].correct_answer, "Deny access");
+        assert_eq!(provider.calls(), 1);
+        assert!(provider
+            .prompt(0)
+            .contains("exit question 1: correct_answer must equal the full text"));
+        valid.exit_questions[0].choices[1] = " Allow access ".into();
+        assert!(super::validate_generated_course(&valid)
+            .unwrap_err()
+            .contains("distinct"));
+    }
+
+    #[tokio::test]
+    async fn one_short_section_does_not_rewrite_other_valid_sections() {
+        let mut course = corrected_course();
+        let (preamble, mut sections) = super::split_course_sections(&course.markdown);
+        sections[5] = "production decision evidence ".repeat(124);
+        let original_sections = sections.clone();
+        course.markdown = super::rebuild_course_body(&preamble, &sections);
+        assert!(course.markdown.split_whitespace().count() > super::MIN_COURSE_WORDS);
+        let provider =
+            WritingProvider::new(&["ownership boundary observation rollback ".repeat(130)]);
+        let repaired = test_generator()
+            .ensure_course_quality(course, "custom", &provider.command, "saved-model", "Bash")
+            .await
+            .unwrap();
+        let (_, final_sections) = super::split_course_sections(&repaired.markdown);
+        for index in 0..10 {
+            if index != 5 {
+                assert_eq!(
+                    final_sections[index].trim(),
+                    original_sections[index].trim()
+                );
+            }
+        }
+        assert_eq!(provider.calls(), 1);
+    }
+
+    #[tokio::test]
+    async fn editorial_corrections_require_an_audit_of_the_new_draft() {
+        let course = corrected_course();
+        let mut revised = course.clone();
+        let (preamble, mut sections) = super::split_course_sections(&revised.markdown);
+        sections[2].push_str("\nA corrected permission-check derivation.\n");
+        let revised_section = sections[2].clone();
+        revised.markdown = super::rebuild_course_body(&preamble, &sections);
+        let provider = WritingProvider::new(&[
+            audit_json(2),
+            revised_section,
+            metadata_json(&revised),
+            audit_json(5),
+        ]);
+        let brief = crate::db::CurriculumBrief::default();
+        let accepted = test_generator()
+            .edit_course_quality(
+                course,
+                super::CourseEditContext {
+                    curriculum: &brief,
+                    dossier: "",
+                    agent: "custom",
+                    custom_bin: &provider.command,
+                    model: "saved-model",
+                    label: "Bash",
+                },
+                &[],
+            )
+            .await
+            .unwrap();
+        assert!(accepted
+            .markdown
+            .contains("corrected permission-check derivation"));
+        assert!(provider
+            .prompt(3)
+            .contains("corrected permission-check derivation"));
+        assert_eq!(provider.calls(), 4);
+    }
+
     #[tokio::test]
     async fn classroom_course_does_not_substitute_another_provider_or_bundled_content() {
         let generator = test_generator();
@@ -2768,7 +3192,7 @@ else:
                 script.to_str().unwrap(),
                 "exit_questions must contain full question objects, plus markdown",
                 false,
-                Duration::from_secs(5),
+                Duration::from_secs(30),
                 "same-model",
             )
             .await
@@ -2790,11 +3214,8 @@ else:
             std::process::id()
         ));
         std::fs::write(&script, "#!/bin/sh\ncat \"$1\"\n").expect("write fake provider");
-        std::fs::write(
-            &response,
-            serde_json::to_string(&corrected_course()).expect("serialize corrected course"),
-        )
-        .expect("write fake provider response");
+        std::fs::write(&response, corrected_course().markdown)
+            .expect("write fake provider response");
         let mut permissions = std::fs::metadata(&script)
             .expect("read fake provider metadata")
             .permissions();
@@ -2911,11 +3332,8 @@ else:
         ));
         std::fs::write(&script, "#!/bin/sh\ncat \"$1\"\n").expect("write fake provider");
         // The provider returns a structurally valid course that still cites nothing.
-        std::fs::write(
-            &response,
-            serde_json::to_string(&corrected_course()).expect("serialize corrected course"),
-        )
-        .expect("write fake provider response");
+        std::fs::write(&response, corrected_course().markdown)
+            .expect("write fake provider response");
         let mut permissions = std::fs::metadata(&script)
             .expect("read fake provider metadata")
             .permissions();
@@ -2951,7 +3369,7 @@ else:
             .expect_err("an uncited course must not reach the learner");
 
         assert!(
-            matches!(&error, GenError::Parse(reason) if reason.contains("still cites only 0")),
+            matches!(&error, GenError::Quality(reason) if reason.contains("still cites only 0")),
             "unexpected error: {error:?}"
         );
         let _ = std::fs::remove_file(script);

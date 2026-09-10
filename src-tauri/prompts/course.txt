@@ -37,32 +37,16 @@ Requirements:
 - If the learner dossier shows prior mastery, transfer it into today's mechanism instead of reteaching it. If it shows a failed objective or misconception, repair that exact mental model and make one exit check verify the repair.
 - Write a detailed course readable in roughly 30 minutes (3500-4500 words of markdown). A deterministic gate rejects anything below 3200 words and rejects thin required sections. Depth must come from worked mechanisms, production examples, and decisions—not repeated summaries or padded restatements.
 - Distribute that depth deliberately: `Core mechanics` must carry the main derivation; `Production architecture lens` must work through the complete scenario; `Trade-offs and failure modes` and `Migration and observability` must contain operational decisions and evidence; `Runnable experiment` and `Practical exercise` must be independently actionable. Do not hide most of the word count in one section.
-- Structure: ## Why this matters → ## The simple version (plain language + analogy + where it breaks) → ## Core mechanics (deep dive, diagrams where useful) → ## Mental model → ## Runnable experiment → ## Production architecture lens → ## Trade-offs and failure modes → ## Migration and observability → ## Practical exercise → ## Key takeaways.
+- Use these exact level-two headings, in this exact order, with no numbering or subtitles: ## Why this matters → ## The simple version → ## Core mechanics → ## Mental model → ## Runnable experiment → ## Production architecture lens → ## Trade-offs and failure modes → ## Migration and observability → ## Practical exercise → ## Key takeaways.
 - Inside `## The simple version`, include a standalone sentence beginning exactly `Where the analogy breaks:` and explain the analogy's concrete limit before introducing core mechanics.
 - Include one worked production scenario with concrete constraints (users, routes, bundle/runtime budget, team ownership, failure or migration pressure). Follow one request or interaction through the relevant boundaries.
 - When code is central, show a small "naive version" and a production-ready revision, then explain the architectural difference. All code must be fenced with an accurate language tag.
 - Make the practical exercise a 30-60 minute deliberate-practice task with 3-5 observable acceptance criteria inside its instructions. It should create a reusable piece of the track's 30-day proof of skill, not a disposable kata. On dossier days 7, 14, 21, and 30, require the exercise to integrate at least two earlier concepts.
 - End the practical exercise with a short self-review: what evidence proves it works, which trade-off was chosen, and what would fail at 10x scale or team size.
 - Tone: direct, technical, no fluff. Match explanations to the learner's accepted starting point and recorded evidence. Use precise words a newcomer can follow while letting experienced learners transfer what they already know.
-- Populate `resources` from the primary documentation already retrieved by the app. Include the supplied URLs you actually used; do not start another research task to reach an arbitrary source count. Every URL is checked before the learner sees it. If evidence is unavailable, qualify the affected claims instead of inventing sources.
 - Cite three different retrieved URLs as inline markdown links on the claims they support. If fewer than three sources were provided, cite the available ones; do not invent another source to satisfy the count. Do not collect citations in a footer.
-- Include exactly 5 exit_questions spanning the course's major sections. Each explanation must: (1) name the specific misconception a wrong answer reveals, (2) restate the correct mental model in plain language, ideally with a short analogy, (3) stay under 4 sentences.
-- The "exercise" field must be a self-contained, structured exercise separate from (but consistent with) the ## Practical exercise markdown section: a short title, clear instructions written as markdown, an optional starter code block the reader edits, a one-sentence "deliverable" describing what done looks like, and 1-3 short hints ordered from vaguest to most direct. This is worked on separately from the reading — do not require finishing it to understand the rest of the course.
 
-Your entire final reply must be exactly one valid JSON object matching this schema, with no commentary before or after it. Escape every quotation mark, backslash, control character, and newline that appears inside a JSON string. A provider-specific instruction to return bare JSON takes precedence over markdown fencing:
-{
-  "title": string,
-  "markdown": string,
-  "resources": [ { "title": string, "url": string, "type": "article"|"paper"|"video"|"docs", "why": string } ],
-  "key_takeaways": [ string, ... ],
-  "exit_questions": [
-    { "prompt": string, "choices": [string,string,string,string], "correct_answer": string, "explanation": string, "section": string, "learning_objective": string }
-  ],
-  "exercise": {
-    "title": string,
-    "instructions": string,
-    "starter_code": string | null,
-    "deliverable": string,
-    "hints": [ string, ... ]
-  }
-}
+
+Return only the full lesson as plain Markdown, beginning with its title as a # heading. Do not encode the lesson in JSON, wrap the whole reply in a code fence, or return assessment metadata. The application requests structured checks separately after this writing pass. Keep runnable examples in correctly tagged code fences.
+
+Per-section minimum words: Why this matters 120; The simple version 220; Core mechanics 600; Mental model 220; Runnable experiment 240; Production architecture lens 400; Trade-offs and failure modes 320; Migration and observability 260; Practical exercise 280; Key takeaways 80. The total still needs at least 3,200 words, with 3,500–4,500 as the writing target.

@@ -31,6 +31,25 @@ fn request(id: RunnerId, prompt: &str) -> RunRequest {
 }
 
 #[test]
+fn ollama_enforces_requested_schema_without_constraining_prose_or_other_adapters() {
+    let schema = json!({"type":"object","properties":{"result":{"type":"string"}},"required":["result"],"additionalProperties":false});
+    let mut req = request(RunnerId::OllamaApi, "Return the result object");
+    req.output_schema = Some(schema.clone());
+    let body = api::body(&req, None);
+    assert_eq!(body["response_format"]["type"], "json_schema");
+    assert_eq!(body["response_format"]["json_schema"]["schema"], schema);
+    assert_eq!(body["temperature"], 0);
+    req.json = false;
+    assert!(api::body(&req, None).get("response_format").is_none());
+    req.json = true;
+    req.route.runner = RunnerId::OpenrouterApi;
+    assert_eq!(
+        api::body(&req, None)["response_format"]["type"],
+        "json_object"
+    );
+}
+
+#[test]
 fn runner_routes_cover_cli_api_and_local_without_colliding_provider_ids() {
     let mut ids = std::collections::HashSet::new();
     for id in RunnerId::ALL {
@@ -226,6 +245,14 @@ fn openrouter_reserves_answer_space_using_advertised_reasoning_controls() {
     for (controls, expected) in [
         (json!({"mandatory":false}), json!({"enabled":false})),
         (json!({"mandatory":true}), Value::Null),
+        (
+            json!({"mandatory":false,"supported_efforts":["high","medium","none"]}),
+            json!({"effort":"none"}),
+        ),
+        (
+            json!({"mandatory":true,"supported_efforts":["high","medium","none"]}),
+            json!({"effort":"medium"}),
+        ),
         (
             json!({"mandatory":true,"supports_max_tokens":true}),
             json!({"max_tokens":2048}),

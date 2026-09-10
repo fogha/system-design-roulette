@@ -281,6 +281,7 @@ impl Runner {
                     GenError::Timeout(_) => "timeout",
                     GenError::BadExit(_, _) => "process-failed",
                     GenError::Parse(_) | GenError::ProviderResponse { .. } => "invalid-response",
+                    GenError::Quality(_) => "quality-failed",
                     GenError::Io(_) => "io-failed",
                     GenError::Api(_) => "provider-failed",
                 };

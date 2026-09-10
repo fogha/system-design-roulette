@@ -83,6 +83,12 @@ pub fn body(req: &RunRequest, known: Option<&ModelOption>) -> Value {
     }
     let mut body = adapters::deepseek_body(req);
     body.as_object_mut().unwrap().remove("thinking");
+    if id == RunnerId::OllamaApi && req.json && req.tools.is_empty() {
+        if let Some(schema) = &req.output_schema {
+            body["response_format"] = json!({"type":"json_schema","json_schema":{"name":"principia_output","strict":true,"schema":schema}});
+            body["temperature"] = json!(0);
+        }
+    }
     if id == RunnerId::OpenaiApi {
         body.as_object_mut().unwrap().remove("max_tokens");
         body["max_completion_tokens"] = json!(req.max_tokens);
@@ -106,6 +112,13 @@ pub fn body(req: &RunRequest, known: Option<&ModelOption>) -> Value {
 /// reasoners retain reasoning, and dynamic routers retain provider defaults.
 fn reasoning_budget(known: Option<&ModelOption>, output_tokens: u32) -> Option<Value> {
     let controls = known?.reasoning.as_ref()?;
+    if controls["mandatory"] != true
+        && controls["supported_efforts"]
+            .as_array()
+            .is_some_and(|efforts| efforts.iter().any(|effort| effort == "none"))
+    {
+        return Some(json!({"effort":"none"}));
+    }
     if controls["supports_max_tokens"] == true && output_tokens >= 4096 {
         return Some(json!({"max_tokens":2048}));
     }
