@@ -178,6 +178,263 @@ pub fn plan(
     .map_err(e)
 }
 
+const REVIEW_STAGES: [Stage; 3] = [Stage::Recall, Stage::Check, Stage::Feedback];
+
+/// Topics of a class whose spaced review is due on `today`, most overdue first.
+pub fn review_due(
+    conn: &Connection,
+    course_id: &str,
+    today: &str,
+) -> Result<Vec<(db::Concept, String)>> {
+    let mut statement = conn
+        .prepare(
+            "SELECT c.id, m.next_review_date FROM mastery m JOIN concepts c ON c.id = m.concept_id
+             WHERE c.active = 1 AND c.focus = ?1 AND m.next_review_date IS NOT NULL AND m.next_review_date <= ?2
+             ORDER BY m.next_review_date, c.id",
+        )
+        .map_err(e)?;
+    let rows = statement
+        .query_map(params![course_id, today], |r| {
+            Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?))
+        })
+        .map_err(e)?;
+    let mut out = Vec::new();
+    for row in rows {
+        let (id, due) = row.map_err(e)?;
+        if let Some(concept) = db::get_concept(conn, id).map_err(e)? {
+            out.push((concept, due));
+        }
+    }
+    Ok(out)
+}
+
+/// Plan a delayed-retrieval session for the most overdue topic. It has no new
+/// lesson: recall, check, feedback. A saved review resumes; a saved lesson must
+/// finish first because one resumable session exists per class.
+pub fn plan_review(conn: &Connection, program: &ProgramRow, today: &str) -> Result<Session> {
+    let subject_id = program.subject_id.as_str();
+    if !program.enabled {
+        return Err(format!("{} is not enabled", program.label));
+    }
+    let path = match classes::current_path(conn, subject_id).map_err(e)? {
+        Some(path) => path,
+        None => classes::ensure_default_path(conn, subject_id, today).map_err(e)?,
+    };
+    let owner = PlanOwner::Class {
+        path: path.reference.clone(),
+    };
+    if let Some(existing) = sessions::resumable(conn, &owner).map_err(e)? {
+        if selection(&existing)?.reason.starts_with("spaced review") {
+            return Ok(existing);
+        }
+        return Err("Finish or discard the saved lesson before starting a review.".into());
+    }
+    let (concept, due) = review_due(conn, subject_id, today)?
+        .into_iter()
+        .next()
+        .ok_or_else(|| format!("No review is due in {} today.", program.label))?;
+    let selection = Selection {
+        adapter: "engineering".into(),
+        concept_id: concept.id,
+        slug: concept.slug.clone(),
+        title: concept.title.clone(),
+        category: concept.category.clone(),
+        slot_id: None,
+        occurrence_id: None,
+        service_date: today.into(),
+        revisit: false,
+        reason: format!("spaced review due {due}"),
+    };
+    sessions::plan(
+        conn,
+        &PlanSession {
+            request_key: format!(
+                "review:{}:{:032x}",
+                path.reference.class_id,
+                rand::random::<u128>()
+            ),
+            owner,
+            kind: SessionKind::Retrieval,
+            stages: REVIEW_STAGES.to_vec(),
+            selection: serde_json::to_value(&selection).map_err(e)?,
+        },
+        Utc::now(),
+    )
+    .map_err(e)
+}
+
+/// Questions of the most recent published lesson on `slug` for this class.
+fn previous_lesson_questions(
+    conn: &Connection,
+    class_id: &str,
+    slug: &str,
+) -> Result<Option<Vec<StoredQuestion>>> {
+    let content: Option<String> = conn
+        .query_row(
+            "SELECT lv.content_json FROM lesson_versions lv JOIN study_sessions s ON s.id = lv.session_id
+             WHERE s.class_id = ?1 AND json_extract(s.context_json,'$.selection.slug') = ?2
+               AND json_extract(lv.content_json,'$.body.source') NOT LIKE 'retrieval:%'
+             ORDER BY lv.created_at DESC LIMIT 1",
+            params![class_id, slug],
+            |r| r.get(0),
+        )
+        .optional()
+        .map_err(e)?;
+    let Some(content) = content else {
+        return Ok(None);
+    };
+    let value: Value = serde_json::from_str(&content).map_err(e)?;
+    let stored: StoredEngineeringLesson =
+        serde_json::from_value(value["body"].clone()).map_err(e)?;
+    Ok(Some(stored.questions))
+}
+
+fn bundled_questions(course: &crate::generator::FallbackCourse) -> Vec<StoredQuestion> {
+    course
+        .questions
+        .iter()
+        .filter(|question| question.kind == "mcq")
+        .take(5)
+        .enumerate()
+        .filter_map(|(index, question)| {
+            let choices = question.choices.clone().unwrap_or_default();
+            let correct_index = choices
+                .iter()
+                .position(|choice| choice.trim() == question.correct_answer.trim())?;
+            Some(StoredQuestion {
+                id: index + 1,
+                prompt: question.prompt.clone(),
+                choices,
+                correct_index,
+                explanation: question.explanation.clone(),
+                section: "Retrieval".into(),
+                learning_objective: course
+                    .key_takeaways
+                    .get(index)
+                    .cloned()
+                    .unwrap_or_else(|| question.prompt.clone()),
+            })
+        })
+        .collect()
+}
+
+/// Publish retrieval material without a provider: the topic's bundled
+/// reference questions, preferring ones the last lesson did not show, or the
+/// last lesson's own questions when nothing else exists. A repeated sample is
+/// recorded as such and never presented as fresh transfer.
+pub fn prepare_review(conn: &Connection, id: &SessionId) -> Result<Session> {
+    let session = sessions::get(conn, id).map_err(e)?;
+    if matches!(
+        session.status,
+        Status::Ready | Status::Active | Status::Paused
+    ) {
+        return Ok(session);
+    }
+    if session.status.terminal() {
+        return Err("This review is finished. Start a new one.".into());
+    }
+    if sessions::preparation(conn, id).map_err(e)?.status == "failed" {
+        sessions::retry_preparation(conn, id, Utc::now()).map_err(e)?;
+    }
+    let Some(lease) =
+        sessions::claim_preparation(conn, id, Utc::now(), LEASE_SECONDS).map_err(e)?
+    else {
+        return Err("This review is already being prepared.".into());
+    };
+    let chosen = selection(&session)?;
+    let course_id = session.context.course.course_id.clone();
+    let PlanOwner::Class { path } = &session.context.owner else {
+        return Err("This session does not belong to a class.".into());
+    };
+    let concept = db::get_concept(conn, chosen.concept_id)
+        .map_err(e)?
+        .ok_or("the reviewed topic no longer exists")?;
+    let previous = previous_lesson_questions(conn, &path.class_id, &concept.slug)?;
+    let bundled = crate::generator::fallback_for_slug(&course_id, &concept.slug);
+    let mut pool = bundled.as_ref().map(bundled_questions).unwrap_or_default();
+    let mut material = "bundled";
+    if let Some(previous) = &previous {
+        let unseen: Vec<StoredQuestion> = pool
+            .iter()
+            .filter(|q| !previous.iter().any(|p| p.prompt == q.prompt))
+            .cloned()
+            .collect();
+        if unseen.len() >= 3 {
+            pool = unseen;
+        } else if pool.is_empty() {
+            pool = previous.clone();
+            material = "previous_lesson";
+        }
+    }
+    if pool.is_empty() {
+        let _ = sessions::fail_preparation(
+            conn,
+            &lease,
+            "No retrieval material exists for this topic yet; complete a lesson on it first.",
+            Utc::now(),
+        );
+        return Err(format!(
+            "No retrieval material exists for {} yet; complete a lesson on it first.",
+            concept.title
+        ));
+    }
+    let fresh = previous.as_ref().is_none_or(|previous| {
+        pool.iter()
+            .all(|q| !previous.iter().any(|p| p.prompt == q.prompt))
+    });
+    for (index, question) in pool.iter_mut().enumerate() {
+        question.id = index + 1;
+    }
+    let takeaways = match &bundled {
+        Some(course) if !course.key_takeaways.is_empty() => course.key_takeaways.clone(),
+        _ => concept.curriculum.mechanisms.clone(),
+    };
+    let markdown = format!(
+        "## Recall before you check
+
+{}
+
+Say each of these in your own words before opening the check:
+
+{}
+",
+        concept.curriculum.learner_outcome,
+        takeaways
+            .iter()
+            .map(|line| format!("- {line}"))
+            .collect::<Vec<_>>()
+            .join(
+                "
+"
+            )
+    );
+    let stored = StoredEngineeringLesson {
+        concept_id: concept.id,
+        concept_title: concept.title.clone(),
+        category: concept.category.clone(),
+        title: format!("Review: {}", concept.title),
+        markdown,
+        resources: vec![],
+        questions: pool,
+        exercise: None,
+        source: if fresh {
+            "retrieval:fresh".into()
+        } else {
+            "retrieval:repeat".into()
+        },
+        path: Some(path.clone()),
+    };
+    let content = PreparedLesson {
+        title: stored.title.clone(),
+        body: serde_json::to_value(&stored).map_err(e)?,
+        provenance: json!({"kind": "retrieval", "material": material, "fresh_sample": fresh, "prepared_at": Utc::now().to_rfc3339()}),
+    };
+    sessions::publish_preparation(conn, &lease, &content, Utc::now()).map_err(e)?;
+    let session = sessions::get(conn, id).map_err(e)?;
+    ensure_check_round(conn, &session)?;
+    Ok(session)
+}
+
 /// Run the teaching pipeline for a planned session and publish one immutable
 /// lesson version. Failures keep the session and its error for an explicit retry.
 pub async fn prepare(state: &AppState, id: &SessionId) -> Result<Session> {
@@ -441,6 +698,12 @@ pub fn view(conn: &Connection, id: &SessionId) -> Result<Option<EngineeringLesso
             })
             .collect(),
         exercise: stored.exercise,
+        kind: if stored.source.starts_with("retrieval:") {
+            "retrieval".into()
+        } else {
+            "lesson".into()
+        },
+        fresh_sample: stored.source != "retrieval:repeat",
         agent_used: stored.source,
         prompt_profile: program.prompt_profile,
         prompt_version: program.prompt_version,
@@ -723,12 +986,22 @@ pub fn submit(
     let (score, corrections, questions) = grade(&round)?;
     let course_id = session.context.course.course_id.clone();
     let concept_id = selection(&session)?.concept_id;
+    let retrieval =
+        stored_lesson(conn, id)?.is_some_and(|(_, stored)| stored.source.starts_with("retrieval:"));
+    let fresh_sample =
+        stored_lesson(conn, id)?.is_none_or(|(_, stored)| stored.source != "retrieval:repeat");
     let result = EngineeringSessionResult {
         session_id: id.0.clone(),
         subject_id: course_id,
         passed: score >= 0.8,
         score,
         corrections: corrections.clone(),
+        kind: if retrieval {
+            "retrieval".into()
+        } else {
+            "lesson".into()
+        },
+        fresh_sample,
     };
     let result_value = serde_json::to_value(&result).map_err(e)?;
     let mut body = session.checkpoint.body.clone();
@@ -778,7 +1051,9 @@ pub fn submit(
                     ],
                 )?;
             }
-            mastery::record_course_read(tx, concept_id, &today)?;
+            if !retrieval {
+                mastery::record_course_read(tx, concept_id, &today)?;
+            }
             mastery::record_quiz_outcome(tx, concept_id, &today, score)?;
             crate::domain::schedule::resolve(tx, &format!("study:{}", id.0), true, Utc::now())?;
             Ok(json!({"kind": "completed", "concept_id": concept_id, "result": result_value}))

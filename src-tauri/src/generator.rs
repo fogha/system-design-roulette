@@ -2430,6 +2430,14 @@ pub fn fallback_mcq_pool(focus: &str) -> Vec<GeneratedQuestion> {
         .collect()
 }
 
+/// The bundled reference lesson authored for exactly this topic, if any.
+pub fn fallback_for_slug(focus: &str, slug: &str) -> Option<FallbackCourse> {
+    fallback_sources(focus)
+        .iter()
+        .filter_map(|s| serde_json::from_str::<FallbackCourse>(s).ok())
+        .find(|course| course.slug == slug)
+}
+
 pub fn pick_fallback(focus: &str, preferred_title: &str) -> FallbackCourse {
     let sources = fallback_sources(focus);
     let all: Vec<FallbackCourse> = sources

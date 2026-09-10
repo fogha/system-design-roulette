@@ -209,6 +209,17 @@ class AppStore {
     }
   }
 
+  /** Delayed retrieval for a class with review due; prepared without a provider. */
+  async startReview(subjectId: ClassroomSubjectId) {
+    if (this.preparingClass) return;
+    this.error = '';
+    try {
+      this.showLesson(await api.startClassReview(subjectId));
+    } catch (e) {
+      this.error = String(e);
+    }
+  }
+
   async resumeClass(subjectId: ClassroomSubjectId) {
     try {
       const session = await api.resumeClassroomSession(subjectId);

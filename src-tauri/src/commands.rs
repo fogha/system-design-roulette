@@ -863,6 +863,42 @@ pub fn skip_class_lesson(
     Ok(())
 }
 
+/// Start (or resume) a delayed-retrieval session for the class's most overdue
+/// topic. Prepared from bundled material without a provider; activation goes
+/// through the focus coordinator like any lesson.
+#[tauri::command]
+pub fn start_class_review(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    subject_id: String,
+) -> CmdResult<serde_json::Value> {
+    let spec = crate::classroom::subject(subject_id.trim()).map_err(err)?;
+    if spec.kind == crate::catalog::SubjectKind::Language {
+        return Err("Reviews are available for engineering classes.".into());
+    }
+    if let Some(holder) = state.focus.holder() {
+        if holder.course_id != spec.id {
+            return Err(format!(
+                "A focused {} session holds the desk. Finish it or use the escape hatch first.",
+                crate::focus::label(&holder.course_id)
+            ));
+        }
+    }
+    let planned = {
+        let conn = state.db.0.lock().unwrap();
+        let program = crate::classroom::program_row(&conn, spec.id)?;
+        let session = crate::subjects::engineering::plan_review(&conn, &program, &state.today())?;
+        crate::subjects::engineering::prepare_review(&conn, &session.id)?;
+        session.id
+    };
+    crate::enforcement::activate(&app, &state, &planned)?;
+    let conn = state.db.0.lock().unwrap();
+    let lesson = crate::subjects::engineering::view(&conn, &planned)?
+        .ok_or("The review could not be read.")?;
+    let _ = app.emit("classroom:state", serde_json::json!({ "review": planned }));
+    Ok(serde_json::json!({ "kind": "engineering", "lesson": lesson }))
+}
+
 #[tauri::command]
 pub fn resume_classroom_session(
     app: AppHandle,

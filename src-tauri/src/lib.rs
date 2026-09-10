@@ -326,6 +326,7 @@ pub fn run() {
             commands::plan_classroom_schedule,
             commands::start_classroom_session,
             commands::resume_classroom_session,
+            commands::start_class_review,
             commands::submit_classroom_engineering_session,
             commands::save_class_lesson_work,
             commands::save_class_check_answer,

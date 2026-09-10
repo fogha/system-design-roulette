@@ -150,6 +150,24 @@ fn answer_all(conn: &Connection, session: &Session, wrong: &[usize]) -> classroo
     check
 }
 
+fn answer_shown(conn: &Connection, session: &Session, wrong: &[usize]) -> classroom::CheckView {
+    let view = engineering::view(conn, &session.id).unwrap().unwrap();
+    let mut check = view.check.unwrap();
+    for id in view.questions.iter().map(|q| q.id).collect::<Vec<_>>() {
+        let choice = if wrong.contains(&id) { 1 } else { 0 };
+        check = engineering::save_answer(
+            conn,
+            &session.id,
+            &check.round_id,
+            check.revision,
+            id,
+            Some(choice),
+        )
+        .unwrap();
+    }
+    check
+}
+
 #[test]
 fn activating_from_settings_plans_a_foundations_lesson_on_a_default_path() {
     let (_, conn) = fixture();
@@ -480,4 +498,124 @@ fn a_failed_preparation_keeps_the_request_visible_for_retry() {
     sessions::retry_preparation(&conn, &session.id, now).unwrap();
     let published = publish(&conn, &session);
     assert_eq!(published.status, Status::Ready);
+}
+
+#[test]
+fn a_due_topic_gets_a_retrieval_session_from_fresh_or_repeated_material() {
+    let (_, conn) = fixture();
+    activate(&conn, "typescript", 9);
+    let program = classroom::program_row(&conn, "typescript").unwrap();
+    assert!(engineering::plan_review(&conn, &program, TODAY)
+        .unwrap_err()
+        .contains("No review is due"));
+    let session = publish(&conn, &plan(&conn, "typescript", None));
+    engineering::activate(&conn, &session.id).unwrap();
+    let check = answer_all(&conn, &session, &[]);
+    let result = engineering::submit(
+        &conn,
+        &session.id,
+        &check.round_id,
+        check.revision,
+        "",
+        TODAY,
+    )
+    .unwrap();
+    assert_eq!(
+        (result.kind.as_str(), result.fresh_sample),
+        ("lesson", true)
+    );
+    let slug = engineering::selection(&session).unwrap().slug;
+    // Spaced review is scheduled once a topic is mastered; mark it so with a due date.
+    let due = "2026-09-12".to_string();
+    conn.execute(
+        "UPDATE mastery SET state = 'mastered', review_interval_days = 3, next_review_date = ?2 WHERE concept_id = (SELECT id FROM concepts WHERE slug = ?1)",
+        params![slug, due],
+    )
+    .unwrap();
+    assert_eq!(
+        classroom::program_view(&conn, "typescript", TODAY)
+            .unwrap()
+            .review_due,
+        0
+    );
+    assert_eq!(
+        classroom::program_view(&conn, "typescript", &due)
+            .unwrap()
+            .review_due,
+        1
+    );
+    let review = engineering::plan_review(&conn, &program, &due).unwrap();
+    let chosen = engineering::selection(&review).unwrap();
+    assert!(chosen.reason.starts_with("spaced review due"));
+    assert_eq!(chosen.slug, slug);
+    assert_eq!(
+        engineering::plan_review(&conn, &program, &due).unwrap().id,
+        review.id
+    );
+    // Bundled reference questions give a fresh sample; otherwise the lesson's own
+    // questions repeat and the review says so.
+    engineering::prepare_review(&conn, &review.id).unwrap();
+    let view = engineering::view(&conn, &review.id).unwrap().unwrap();
+    let bundled =
+        system_design_roulette_lib::generator::fallback_for_slug("typescript", &slug).is_some();
+    assert_eq!(view.kind, "retrieval");
+    assert!(view.exercise.is_none() && !view.questions.is_empty());
+    assert_eq!(view.fresh_sample, bundled);
+    assert_eq!(
+        view.agent_used,
+        if bundled {
+            "retrieval:fresh"
+        } else {
+            "retrieval:repeat"
+        }
+    );
+    if !bundled {
+        assert_eq!(view.questions.len(), 5);
+    }
+    assert!(view.markdown.contains("Recall before you check"));
+    assert!(view.title.starts_with("Review:"));
+    engineering::activate(&conn, &review.id).unwrap();
+    let check = answer_shown(&conn, &review, &[]);
+    let result =
+        engineering::submit(&conn, &review.id, &check.round_id, check.revision, "", &due).unwrap();
+    assert_eq!(
+        (result.kind.as_str(), result.fresh_sample, result.passed),
+        ("retrieval", bundled, true)
+    );
+    assert_eq!(
+        classroom::program_view(&conn, "typescript", &due)
+            .unwrap()
+            .review_due,
+        0
+    );
+    // A topic with bundled reference questions gets fresh material.
+    let (id, title): (i64, String) = conn
+        .query_row(
+            "SELECT id, title FROM concepts WHERE slug = 'ts-inference-flow'",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .unwrap();
+    conn.execute(
+        "INSERT INTO mastery (concept_id, state, score_ema, encounters, last_seen_date, next_review_date, review_interval_days, teacher_notes, last_assessed_date) VALUES (?1,'practicing',0.7,1,?2,?2,3,'',?2)",
+        params![id, due],
+    )
+    .unwrap();
+    let fresh = engineering::plan_review(&conn, &program, &due).unwrap();
+    assert_eq!(
+        engineering::selection(&fresh).unwrap().slug,
+        "ts-inference-flow"
+    );
+    engineering::prepare_review(&conn, &fresh.id).unwrap();
+    let view = engineering::view(&conn, &fresh.id).unwrap().unwrap();
+    assert!(view.fresh_sample && view.kind == "retrieval" && !view.questions.is_empty());
+    assert!(view.title.contains(&title));
+    engineering::skip(&conn, &fresh.id).unwrap();
+    // A skipped review leaves the topic due; the next plan is a new session.
+    let again = engineering::plan_review(&conn, &program, &due).unwrap();
+    assert_ne!(again.id, fresh.id);
+    assert_eq!(
+        engineering::selection(&again).unwrap().slug,
+        "ts-inference-flow"
+    );
 }

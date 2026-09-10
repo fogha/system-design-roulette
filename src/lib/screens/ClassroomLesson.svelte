@@ -54,16 +54,24 @@
     session?.dispose();
   });
 
-  const stages = $derived<StageLink[]>([
-    { id: 'learn', label: 'Learn', available: true },
-    { id: 'practice', label: 'Practice', available: true },
-    { id: 'check', label: 'Check', available: true },
-    { id: 'feedback', label: 'Feedback', available: !!result },
-  ]);
+  /** A delayed review recalls, checks and gives feedback; there is no new lesson. */
+  const retrieval = $derived(lesson?.kind === 'retrieval');
+  const stages = $derived<StageLink[]>(retrieval
+    ? [
+        { id: 'recall', label: 'Recall', available: true },
+        { id: 'check', label: 'Check', available: true },
+        { id: 'feedback', label: 'Feedback', available: !!result },
+      ]
+    : [
+        { id: 'learn', label: 'Learn', available: true },
+        { id: 'practice', label: 'Practice', available: true },
+        { id: 'check', label: 'Check', available: true },
+        { id: 'feedback', label: 'Feedback', available: !!result },
+      ]);
 
   function goto(stage: LessonStage) {
     if (!scroller) return;
-    const target = stage === 'learn' ? null : stage === 'practice' ? exerciseSection : checkSection;
+    const target = stage === 'learn' || stage === 'recall' ? null : stage === 'practice' ? exerciseSection : checkSection;
     if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
     else scroller.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -128,11 +136,11 @@
     route={`classroom/${lesson.subject_id}/${lesson.category}`}
     status={`${lesson.prompt_version} · ${lesson.agent_used}`}
     code={lesson.short_code}
-    eyebrow={`${lesson.label} · ${lesson.estimated_minutes} MIN`}
+    eyebrow={retrieval ? `${lesson.label} · REVIEW · ${lesson.fresh_sample ? 'fresh sample' : 'repeated sample'}` : `${lesson.label} · ${lesson.estimated_minutes} MIN`}
     title={lesson.title}
     subtitle={`${lesson.concept_title} · ${lesson.category}`}
     {stages}
-    stage={result ? 'feedback' : session.stage}
+    stage={result ? 'feedback' : retrieval && session.stage === 'learn' ? 'recall' : session.stage}
     saveMessage={session.saveMessage}
     saveError={session.answerStatus === 'error'}
     minutes={lesson.estimated_minutes}
@@ -144,8 +152,8 @@
     onscroll={track}
   >
     {#snippet actions()}
-      <span class="quality mono"><Sparkles size={11} /> isolated teacher</span>
-      <button
+      <span class="quality mono"><Sparkles size={11} /> {retrieval ? 'delayed retrieval' : 'isolated teacher'}</span>
+      {#if !retrieval}<button
         class="chat-button"
         class:active={chatOpen}
         type="button"
@@ -154,15 +162,15 @@
         aria-controls="course-chat-drawer"
       >
         <MessageCircle size={12} /> {chatOpen ? 'close chat' : 'ask about this course'}
-      </button>
+      </button>{/if}
     {/snippet}
 
-    <CoursePurpose whyNow={lesson.why_now} curriculum={lesson.curriculum} prerequisites={lesson.prerequisites} />
+    {#if !retrieval}<CoursePurpose whyNow={lesson.why_now} curriculum={lesson.curriculum} prerequisites={lesson.prerequisites} />{/if}
 
     <article class="reading-pane" style="font-size: var(--reading-font)">
       <Markdown markdown={lesson.markdown} />
 
-      {#if lesson.resources.length}
+      {#if lesson.resources.length && !retrieval}
         <section class="sources" aria-labelledby="class-sources-title">
           <span class="eyebrow mono">PRIMARY EVIDENCE</span>
           <h2 id="class-sources-title">Continue the investigation</h2>
@@ -180,14 +188,16 @@
         </section>
       {/if}
 
-      <section class="exercise-end" aria-label="course exercise" bind:this={exerciseSection}>
-        <ExerciseWorkspace classroomSessionId={session.study ? undefined : Number(lesson.session_id)} studySessionId={session.study ? lesson.session_id : undefined} />
-      </section>
+      {#if !retrieval}
+        <section class="exercise-end" aria-label="course exercise" bind:this={exerciseSection}>
+          <ExerciseWorkspace classroomSessionId={session.study ? undefined : Number(lesson.session_id)} studySessionId={session.study ? lesson.session_id : undefined} />
+        </section>
+      {/if}
 
       <aside class="practice-pane" aria-labelledby="class-check-title" bind:this={checkSection}>
-        <span class="eyebrow mono">RETRIEVAL GATE</span>
-        <h2 id="class-check-title">Prove the mechanism</h2>
-        <p class="practice-intro">Answer from the lesson’s mechanism and evidence. Your result updates only this class.</p>
+        <span class="eyebrow mono">{retrieval ? 'DELAYED RETRIEVAL' : 'RETRIEVAL GATE'}</span>
+        <h2 id="class-check-title">{retrieval ? 'Retrieve it without the lesson' : 'Prove the mechanism'}</h2>
+        <p class="practice-intro">{retrieval ? (lesson.fresh_sample ? 'These samples were not shown in your last lesson on this topic. Your result updates this topic’s review interval.' : 'These are the same questions as your last lesson on this topic; a repeated sample is not proof of fresh transfer, so the result is recorded as a repeat.') : 'Answer from the lesson’s mechanism and evidence. Your result updates only this class.'}</p>
 
         <KnowledgeCheck
           name="class-question"
@@ -198,7 +208,7 @@
           onchoose={(index, choice) => session?.choose(index, choice)}
         />
 
-        <label class="reflection-field">
+        {#if !retrieval}<label class="reflection-field">
           <span>Implementation reflection <small>(optional)</small></span>
           <textarea
             bind:value={reflection}
@@ -206,13 +216,13 @@
             onblur={() => session?.saveWork({ reflection })}
             placeholder="What will you test, change, or measure in a real frontend?"
           ></textarea>
-        </label>
+        </label>{/if}
 
         <LessonOutcome
-          result={result ? { passed: result.passed, score: result.score, headline: result.passed ? 'evidence recorded' : 'review due', message: 'Corrections remain visible above; the class never locks the app.' } : null}
+          result={result ? { passed: result.passed, score: result.score, headline: result.passed ? (retrieval ? 'retention confirmed' : 'evidence recorded') : (retrieval ? 'back to practice' : 'review due'), message: retrieval ? (result.fresh_sample ? 'A passed review lengthens this topic’s interval; a failed one returns it to practice.' : 'Recorded as a repeated sample: the interval is unchanged by this pass alone.') : 'Corrections remain visible above; the class never locks the app.' } : null}
           busy={submitting}
           disabled={!session.complete}
-          submitLabel="check and record evidence"
+          submitLabel={retrieval ? 'check retention' : 'check and record evidence'}
           busyLabel="recording…"
           hint={`Answer all ${lesson.questions.length} questions to record evidence.`}
           returnLabel="return to classroom"
@@ -222,7 +232,7 @@
       </aside>
     </article>
 
-    <CourseChat classroomSessionId={session.study ? undefined : Number(lesson.session_id)} studySessionId={session.study ? lesson.session_id : undefined} bind:open={chatOpen} />
+    {#if !retrieval}<CourseChat classroomSessionId={session.study ? undefined : Number(lesson.session_id)} studySessionId={session.study ? lesson.session_id : undefined} bind:open={chatOpen} />{/if}
   </LessonShell>
 {:else}
   <div class="empty">

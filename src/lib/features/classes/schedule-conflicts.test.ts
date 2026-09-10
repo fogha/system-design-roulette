@@ -3,7 +3,7 @@ import { conflictMessage, scheduleConflicts } from './schedule-conflicts';
 import type { ClassroomProgramView, ClassroomSlotView } from '../../ipc';
 
 function program(subject_id: string, label: string, enabled: boolean, session_minutes = 30): ClassroomProgramView {
-  return { subject_id: subject_id as ClassroomProgramView['subject_id'], kind: 'engineering', label, native_label: '', short_code: 'X', enabled, agent: 'claude', model: 'sonnet', custom_agent_bin: '', prompt_profile: '', prompt_version: 'v1', session_minutes, learning_goal: '', target_weekly_minutes: 0, progress: 0, progress_label: '', completed: false, focus_policy: 'advisory' as const, route: null, language_progress: null };
+  return { subject_id: subject_id as ClassroomProgramView['subject_id'], kind: 'engineering', label, native_label: '', short_code: 'X', enabled, agent: 'claude', model: 'sonnet', custom_agent_bin: '', prompt_profile: '', prompt_version: 'v1', session_minutes, learning_goal: '', target_weekly_minutes: 0, progress: 0, progress_label: '', completed: false, focus_policy: 'advisory' as const, route: null, review_due: 0, language_progress: null };
 }
 function slot(id: number, subject_id: string, label: string, hour: number, minute: number, weekdays: number[], source: 'manual' | 'planned' = 'manual', enabled = true): ClassroomSlotView {
   return { id, subject_id: subject_id as ClassroomSlotView['subject_id'], label, short_code: 'X', kind: 'engineering', hour, minute, weekdays, enabled, owed: false, next_fire_at: '', in_progress: false, source, occurrence_id: null, disposition: null };

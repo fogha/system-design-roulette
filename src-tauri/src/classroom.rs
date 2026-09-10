@@ -197,6 +197,8 @@ pub struct ClassroomProgramView {
     /// What the accepted route says about completion, demonstrated knowledge,
     /// review and what comes next. Engineering classes with a path only.
     pub route: Option<RouteSummary>,
+    /// Topics whose spaced review is due today (engineering classes).
+    pub review_due: usize,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -365,6 +367,11 @@ pub fn program_view(
             })
             .unwrap_or_else(|| "advisory".into()),
         route: route_summary(conn, subject_id, &kind_for_route)?,
+        review_due: if kind_for_route == "engineering" {
+            crate::subjects::engineering::review_due(conn, subject_id, today)?.len()
+        } else {
+            0
+        },
     })
 }
 
@@ -1719,6 +1726,10 @@ pub struct EngineeringLessonView {
     pub resources: Vec<Resource>,
     pub questions: Vec<ClassroomQuestionView>,
     pub exercise: Option<Exercise>,
+    /// `lesson` or `retrieval` (delayed review without a new lesson).
+    pub kind: String,
+    /// False when a retrieval repeats the last lesson's questions.
+    pub fresh_sample: bool,
     pub agent_used: String,
     pub prompt_profile: String,
     pub prompt_version: String,
@@ -1784,6 +1795,8 @@ fn engineering_view(conn: &Connection, session_id: i64) -> Result<Option<Enginee
             Ok(EngineeringLessonView {
                 session_id: session_id.to_string(),
                 runtime: "legacy".into(),
+                kind: "lesson".into(),
+                fresh_sample: true,
                 lifecycle: status.clone(),
                 revision: 0,
                 checkpoint: None,
@@ -2210,6 +2223,13 @@ pub struct ClassroomCorrectionView {
     pub explanation: String,
 }
 
+fn lesson_kind() -> String {
+    "lesson".into()
+}
+fn default_true() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EngineeringSessionResult {
     pub session_id: String,
@@ -2217,6 +2237,10 @@ pub struct EngineeringSessionResult {
     pub passed: bool,
     pub score: f64,
     pub corrections: Vec<ClassroomCorrectionView>,
+    #[serde(default = "lesson_kind")]
+    pub kind: String,
+    #[serde(default = "default_true")]
+    pub fresh_sample: bool,
 }
 
 pub fn submit_engineering_session(
@@ -2319,6 +2343,8 @@ pub fn submit_engineering_session(
         passed: score >= 0.8,
         score,
         corrections,
+        kind: "lesson".into(),
+        fresh_sample: true,
     })
 }
 

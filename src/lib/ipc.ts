@@ -175,6 +175,8 @@ export interface ClassroomProgramView {
   focus_policy: FocusPolicy;
   /** What the accepted route says about completion, demonstrated knowledge, review and what comes next. */
   route: RouteSummary | null;
+  /** Topics whose spaced review is due today (engineering classes). */
+  review_due: number;
 }
 
 export interface RouteSummary {
@@ -412,6 +414,10 @@ export interface EngineeringLessonView {
   resources: Resource[];
   questions: ClassroomQuestionView[];
   exercise: ClassroomExercise | null;
+  /** `lesson`, or `retrieval` for a delayed review without a new lesson. */
+  kind: 'lesson' | 'retrieval';
+  /** False when a retrieval repeats the last lesson's questions. */
+  fresh_sample: boolean;
   agent_used: string;
   prompt_profile: string;
   prompt_version: string;
@@ -438,6 +444,8 @@ export interface EngineeringSessionResult {
   passed: boolean;
   score: number;
   corrections: ClassroomCorrection[];
+  kind: 'lesson' | 'retrieval';
+  fresh_sample: boolean;
 }
 
 export interface SessionView {
@@ -824,6 +832,8 @@ const realApi = {
   getClassAppointments: (subjectId: ClassroomSubjectId) => invoke<AppointmentView[]>('get_class_appointments', { subjectId }),
   resumeClassroomSession: (subjectId: ClassroomSubjectId) =>
     invoke<ClassroomSessionStart | null>('resume_classroom_session', { subjectId }),
+  /** Start or resume a delayed-retrieval session for the class's most overdue topic. */
+  startClassReview: (subjectId: ClassroomSubjectId) => invoke<ClassroomSessionStart>('start_class_review', { subjectId }),
   submitClassroomEngineeringSession: (input: {
     session_id: number;
     answers: number[];

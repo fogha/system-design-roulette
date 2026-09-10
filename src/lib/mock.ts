@@ -677,6 +677,7 @@ function mockClassroomProgram(subjectId: ClassroomSubjectId): ClassroomProgramVi
     learning_goal: settings.learningGoal,
     focus_policy: settings.focusPolicy,
     route: previewRoute(subjectId, acceptedPath),
+    review_due: 0,
     target_weekly_minutes: settings.targetWeeklyMinutes,
     progress: languageProgress?.progress ?? 0,
     progress_label:
@@ -718,6 +719,8 @@ function mockEngineeringLesson(subjectId: FocusArea): EngineeringLessonView {
       section: question.section, learning_objective: question.learning_objective,
     })),
     exercise: reference.exercise,
+    kind: 'lesson' as const,
+    fresh_sample: true,
     agent_used: mockClassroomSettings[subjectId].agent,
     prompt_profile: `classroom.${subjectId}`,
     prompt_version: `classroom.${subjectId}.v1`,
@@ -1174,6 +1177,7 @@ export const mockApi = {
     mockActiveEngineering.session_id = String(mockEngineeringSessionId);
     return { kind: 'engineering', lesson: mockActiveEngineering };
   },
+  startClassReview: async () => { throw new Error('Reviews need the desktop app.'); },
   resumeClassroomSession: async (
     subjectId: ClassroomSubjectId,
   ): Promise<ClassroomSessionStart | null> => {
@@ -1217,6 +1221,8 @@ export const mockApi = {
         correct: correct[index],
         explanation: reference[index].explanation,
       })),
+      kind: 'lesson' as const,
+      fresh_sample: true,
     };
   },
   // Shared-runtime lessons are prepared natively; the browser preview keeps its bundled lessons.

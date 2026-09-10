@@ -363,3 +363,9 @@ learner was away from the Mac; the driver's presence guard refused the first
 attempt (the learner had returned), so the native record below covers what
 could be captured. Behaviour is otherwise covered by `tests/classes.rs`,
 `tests/challenges.rs` and the preview-parity tests.
+
+## Delayed retrieval sessions — 2026-09-10
+
+Verified through `tests/engineering_runtime.rs` (fresh and repeated material,
+review count, mastery projection). The desktop pass is pending the learner's
+absence: the driver refuses to launch while the Mac is in use.

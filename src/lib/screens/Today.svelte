@@ -13,6 +13,8 @@
   const slots = $derived((app.state?.classroom_slots ?? []).filter(s => s.enabled && activeClasses.some(p => p.subject_id === s.subject_id)));
   const dueSlots = $derived(slots.filter(s => s.owed));
   const missed = $derived((app.state?.appointments ?? []).filter(a => a.disposition === 'missed'));
+  /** Engineering classes with spaced review due and no saved session in the way. */
+  const reviews = $derived(activeClasses.filter(p => p.kind === 'engineering' && p.review_due > 0 && !resumable.some(s => s.subject_id === p.subject_id)));
   const upcoming = $derived(slots.filter(s => !s.owed).sort((a,b) => a.next_fire_at.localeCompare(b.next_fire_at)).slice(0,4));
   const legacy = $derived(app.session?.status === 'in_progress');
   /** The class whose focused session holds the desk; other classes wait. */
@@ -64,6 +66,7 @@
   <div class="overview">
     <section aria-label="Class agenda"><NodeCard Icon={Clock} name="class-agenda" badge={dueSlots.length ? dueSlots.length+' due' : missed.length ? missed.length+' missed' : 'upcoming'} badgeTone={dueSlots.length || missed.length ? 'amber' : 'teal'}>
       {#each dueSlots as slot}<div class="study-row"><div><strong>{slot.label}</strong><p class="mono">{String(slot.hour).padStart(2,'0')}:{String(slot.minute).padStart(2,'0')} · due</p></div><button class="ghost mono-ghost" disabled={busy || !!app.preparingClass || resumable.some(s => s.subject_id === slot.subject_id) || heldElsewhere(slot.subject_id)} onclick={() => start(slot)}>Start class</button></div>{/each}
+      {#each reviews as program (program.subject_id)}<div class="study-row"><div><strong>{program.label}</strong><p class="mono">{program.review_due} {program.review_due === 1 ? 'topic' : 'topics'} · review due</p></div><button class="ghost mono-ghost" disabled={busy || !!app.preparingClass || heldElsewhere(program.subject_id)} onclick={() => app.startReview(program.subject_id)}>Start review<ArrowRight size={12} /></button></div>{/each}
       {#each missed as appointment (appointment.id)}<div class="study-row"><div><strong>{appointment.label}</strong><p class="mono">{appointment.local_date} · {appointment.local_time} · missed</p></div><div class="row-actions"><button class="ghost mono-ghost" disabled={busy || !!app.preparingClass || resumable.some(s => s.subject_id === appointment.course_id) || !activeClasses.some(p => p.subject_id === appointment.course_id) || heldElsewhere(appointment.course_id)} onclick={() => makeUp(appointment)}>Make up</button><button class="ghost mono-ghost" disabled={busy} onclick={() => skipAppointment(appointment)}>Skip</button></div></div>{/each}
       {#if !app.state?.schedule_paused}{#each upcoming as slot}<button class="agenda-link" onclick={() => app.openClass(slot.subject_id,'schedule')}><span><strong>{slot.label}</strong><small>{appointment(slot)}</small></span><ArrowRight size={13} /></button>{/each}{/if}
       {#if !dueSlots.length && !missed.length && (!upcoming.length || app.state?.schedule_paused)}<div class="queue-state"><StatusLED tone="ok" /><p>{app.state?.schedule_paused ? 'Appointments are paused.' : 'Add study times inside a class to build your week.'}</p></div>{/if}
