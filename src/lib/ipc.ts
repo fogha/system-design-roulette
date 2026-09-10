@@ -1,9 +1,10 @@
-import type { AcceptedPath, AcceptPath, PathSummary } from './contracts/classes';
+import type { AcceptedPath, AcceptPath, BridgeProposal, PathSummary, RevisePath } from './contracts/classes';
 import type { RunnerConfiguration } from './contracts/agents';
 import type { AgentCall, AgentPolicy, HealthCheck, RunnerInfo, ModelCatalog, LocalStatus, LocalPull } from './contracts/agents';
 import type { EnrollmentOptions, EnrollmentDraft, EnrollmentDraftId, SaveEnrollmentDraft } from './contracts/enrollment';
 import type { AssessmentResponse } from './contracts/assessments';
 import type { DiagnosticView, PathRecommendation } from './contracts/placement';
+import type { UnitChallengeView } from './contracts/challenges';
 import type { AssessmentRoundId } from './contracts/assessments';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
@@ -209,6 +210,34 @@ export interface CurriculumConceptView {
   learner_outcome: string;
   artifact: string;
   related_concepts: string[];
+  /** Status against the accepted route. */
+  path_status: PathStatus;
+  /** Core topic still required by the accepted route. */
+  required: boolean;
+}
+
+export type PathStatus =
+  | 'completed_here'
+  | 'prior_knowledge_checked'
+  | 'bypassed_by_choice'
+  | 'needs_refresher'
+  | 'not_assessed'
+  | 'bridge'
+  | 'in_progress'
+  | 'upcoming';
+
+/** Remaining required work on the accepted route beside full-course coverage. */
+export interface PathCoverage {
+  revision: number;
+  entry_label: string;
+  required_total: number;
+  required_done: number;
+  coverage_total: number;
+  coverage_done: number;
+  bypassed: number;
+  checked: number;
+  refreshers: number;
+  bridges: number;
 }
 
 export interface CurriculumMapView {
@@ -218,6 +247,9 @@ export interface CurriculumMapView {
   completed_sessions: number;
   current_phase: CurriculumPhase;
   concepts: CurriculumConceptView[];
+  path: PathCoverage | null;
+  /** Gaps seen in practice that a short bridge lesson would close. */
+  bridge_proposals: BridgeProposal[];
 }
 
 export interface ClassroomSlotView {
@@ -675,6 +707,12 @@ const realApi = {
   continuePlacementCheck: (draftId: EnrollmentDraftId, roundId: AssessmentRoundId) => invoke<DiagnosticView>('continue_placement_check', { draftId, roundId }),
   finishPlacementCheck: (draftId: EnrollmentDraftId, roundId: AssessmentRoundId) => invoke<DiagnosticView>('finish_placement_check', { draftId, roundId }),
   getClassPath: (courseId: ClassroomSubjectId) => invoke<AcceptedPath | null>('get_class_path', { courseId }),
+  reviseClassPath: (input: RevisePath) => invoke<AcceptedPath>('revise_class_path', { input }),
+  getUnitChallenge: (courseId: ClassroomSubjectId) => invoke<UnitChallengeView | null>('get_unit_challenge', { courseId }),
+  startUnitChallenge: (courseId: ClassroomSubjectId, unit: string, restart = false) => invoke<UnitChallengeView>('start_unit_challenge', { courseId, unit, restart }),
+  saveUnitChallengeResponse: (courseId: ClassroomSubjectId, roundId: AssessmentRoundId, expectedRevision: number, questionId: string, response: AssessmentResponse) => invoke<number>('save_unit_challenge_response', { courseId, roundId, expectedRevision, questionId, response }),
+  submitUnitChallengeRound: (courseId: ClassroomSubjectId, roundId: AssessmentRoundId, expectedRevision: number) => invoke<UnitChallengeView>('submit_unit_challenge_round', { courseId, roundId, expectedRevision }),
+  applyUnitChallenge: (courseId: ClassroomSubjectId, attemptId: string, expectedRevision: number) => invoke<AcceptedPath>('apply_unit_challenge', { courseId, attemptId, expectedRevision }),
   acceptClassPath: (input: AcceptPath) => invoke<AcceptedPath>('accept_class_path', { input }),
   getPathRecommendation: (draftId: EnrollmentDraftId, expectedRevision: number) => invoke<PathRecommendation>('get_path_recommendation', { draftId, expectedRevision }),
   getCatalog: () => invoke<CourseDefinition[]>('get_catalog'),

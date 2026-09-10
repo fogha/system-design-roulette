@@ -19,4 +19,12 @@ export interface PathRecommendation {
   route: 'foundations' | 'manual' | 'diagnostic'; entry_point: string; entry_label: string; explanation: string;
   earlier_topics: PathTopic[]; refreshers: PathTopic[]; criteria: CriterionResult[];
   unknown_areas: string[]; required_outcome: string; assessment_attempt_id: AssessmentAttemptId | null;
+  /** Topics left by choice after acceptance: not assessed, no credit. */
+  bypassed?: PathTopic[];
+  /** Topics whose prior knowledge a unit challenge demonstrated. */
+  checked?: PathTopic[];
+  /** Accepted bridge lessons, taken before dependent work. */
+  bridges?: PathTopic[];
+  /** Declined bridge proposals, recorded as `topic` before `before`. */
+  declined_bridges?: { topic: string; before: string }[];
 }

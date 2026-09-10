@@ -2,9 +2,10 @@ use rusqlite::{params, Connection};
 use system_design_roulette_lib::{
     catalog, classroom, db,
     domain::{
-        classes::{self, AcceptPath},
+        classes::{self, AcceptPath, PathChange, RevisePath},
         enrollment::{self, EntryChoice, LearningGoal, SaveEnrollmentDraft},
         placement,
+        sessions::{self, Disposition, PlanOwner, PlanSession, PreparedLesson, SessionKind, Stage},
     },
     language,
 };
@@ -391,4 +392,423 @@ fn diagnostic_acceptance_keeps_its_evidence_and_rejects_changed_setup() {
     .unwrap();
     assert!(classes::accept(&conn, &next, "2026-09-10").is_err());
     assert_eq!(count(&conn, "path_revisions"), 1);
+}
+
+fn revise(
+    conn: &Connection,
+    course: &str,
+    expected_revision: u32,
+    change: PathChange,
+) -> Result<classes::AcceptedPath, String> {
+    classes::revise(
+        conn,
+        &RevisePath {
+            course_id: course.into(),
+            expected_revision,
+            change,
+        },
+        "2026-09-10",
+    )
+    .map_err(|e| e.to_string())
+}
+
+#[test]
+fn bypassing_and_including_topics_revise_the_route_without_credit() {
+    let (_, conn) = fixture();
+    let input = setup(&conn, "typescript", "foundations");
+    let accepted = classes::accept(&conn, &input, "2026-09-09").unwrap();
+    let first = classes::next_concept(&conn, "typescript", "2026-09-09")
+        .unwrap()
+        .unwrap();
+    let core_total = classroom::curriculum_map(&conn, "typescript")
+        .unwrap()
+        .concepts
+        .iter()
+        .filter(|c| c.core)
+        .count();
+    let revised = revise(
+        &conn,
+        "typescript",
+        accepted.revision,
+        PathChange::Bypass {
+            topics: vec![first.slug.clone()],
+        },
+    )
+    .unwrap();
+    assert_eq!(revised.revision, 2);
+    assert_eq!(revised.reference.class_id, accepted.reference.class_id);
+    assert!(revised
+        .recommendation
+        .bypassed
+        .iter()
+        .any(|t| t.id == first.slug));
+    assert!(revised
+        .recommendation
+        .earlier_topics
+        .iter()
+        .any(|t| t.id == first.slug));
+    assert_ne!(
+        classes::next_concept(&conn, "typescript", "2026-09-10")
+            .unwrap()
+            .unwrap()
+            .slug,
+        first.slug
+    );
+    let map = classroom::curriculum_map(&conn, "typescript").unwrap();
+    let entry = map.concepts.iter().find(|c| c.slug == first.slug).unwrap();
+    assert_eq!(entry.path_status, "bypassed_by_choice");
+    assert!(!entry.required);
+    let coverage = map.path.as_ref().unwrap();
+    assert_eq!(
+        (
+            coverage.revision,
+            coverage.bypassed,
+            coverage.required_done,
+            coverage.coverage_done
+        ),
+        (2, 1, 0, 0)
+    );
+    assert_eq!(coverage.required_total + 1, core_total);
+    assert_eq!(coverage.coverage_total, core_total);
+    assert_eq!(count(&conn, "mastery"), 0);
+    let included = revise(
+        &conn,
+        "typescript",
+        2,
+        PathChange::Include {
+            topics: vec![first.slug.clone()],
+        },
+    )
+    .unwrap();
+    assert_eq!(included.revision, 3);
+    assert!(
+        included.recommendation.bypassed.is_empty()
+            && included.recommendation.earlier_topics.is_empty()
+    );
+    let map = classroom::curriculum_map(&conn, "typescript").unwrap();
+    let entry = map.concepts.iter().find(|c| c.slug == first.slug).unwrap();
+    assert_eq!(
+        (entry.path_status.as_str(), entry.required),
+        ("upcoming", true)
+    );
+    assert_eq!(map.path.as_ref().unwrap().required_total, core_total);
+    assert_eq!(count(&conn, "path_revisions"), 3);
+    // Stale base, replayed change, and a change that would alter nothing.
+    assert!(revise(
+        &conn,
+        "typescript",
+        1,
+        PathChange::Bypass {
+            topics: vec![first.slug.clone()]
+        }
+    )
+    .unwrap_err()
+    .contains("path changed"));
+    let replay = revise(
+        &conn,
+        "typescript",
+        2,
+        PathChange::Include {
+            topics: vec![first.slug.clone()],
+        },
+    )
+    .unwrap();
+    assert_eq!(replay.reference, included.reference);
+    assert!(revise(
+        &conn,
+        "typescript",
+        3,
+        PathChange::Include {
+            topics: vec![first.slug.clone()]
+        }
+    )
+    .unwrap_err()
+    .contains("as it is"));
+    assert!(revise(
+        &conn,
+        "typescript",
+        3,
+        PathChange::Bypass {
+            topics: vec!["not-a-topic".into()]
+        }
+    )
+    .unwrap_err()
+    .contains("not a topic"));
+    assert_eq!(count(&conn, "path_revisions"), 3);
+    assert_eq!(
+        classes::current_path(&conn, "typescript")
+            .unwrap()
+            .unwrap()
+            .reference,
+        included.reference
+    );
+}
+
+#[test]
+fn completed_topics_cannot_be_bypassed_and_language_paths_are_not_revised_this_way() {
+    let (_, conn) = fixture();
+    let input = setup(&conn, "javascript", "foundations");
+    let accepted = classes::accept(&conn, &input, "2026-09-09").unwrap();
+    let concept = classes::next_concept(&conn, "javascript", "2026-09-09")
+        .unwrap()
+        .unwrap();
+    conn.execute(
+        "INSERT INTO mastery (concept_id, state, score_ema, encounters, last_seen_date, next_review_date, review_interval_days, teacher_notes, last_assessed_date) VALUES (?1,'mastered',0.9,3,'2026-09-09','2026-09-20',11,'','2026-09-09')",
+        params![concept.id],
+    )
+    .unwrap();
+    assert!(revise(
+        &conn,
+        "javascript",
+        accepted.revision,
+        PathChange::Bypass {
+            topics: vec![concept.slug.clone()]
+        }
+    )
+    .unwrap_err()
+    .contains("already completed"));
+    let map = classroom::curriculum_map(&conn, "javascript").unwrap();
+    assert_eq!(
+        map.concepts
+            .iter()
+            .find(|c| c.slug == concept.slug)
+            .unwrap()
+            .path_status,
+        "completed_here"
+    );
+    assert_eq!(map.path.as_ref().unwrap().required_done, 1);
+    assert!(revise(
+        &conn,
+        "typescript",
+        1,
+        PathChange::Bypass {
+            topics: vec![concept.slug.clone()]
+        }
+    )
+    .unwrap_err()
+    .contains("Accept a learning path"));
+    let german = setup(&conn, "german", "A1");
+    let path = classes::accept(&conn, &german, "2026-09-09").unwrap();
+    assert!(revise(
+        &conn,
+        "german",
+        path.revision,
+        PathChange::Bypass {
+            topics: vec!["A1".into()]
+        }
+    )
+    .unwrap_err()
+    .contains("starting band"));
+}
+
+/// Walk a runtime session for `slug` to a completed result with `passed`.
+fn completed_session(
+    conn: &Connection,
+    path: &classes::AcceptedPath,
+    slug: &str,
+    passed: bool,
+) -> String {
+    let now = chrono::Utc::now();
+    let concept = db::all_concepts(conn, &path.recommendation.course.course_id)
+        .unwrap()
+        .into_iter()
+        .find(|c| c.slug == slug)
+        .unwrap();
+    let session = sessions::plan(conn, &PlanSession {
+        request_key: format!("request-{:032x}", rand::random::<u128>()),
+        owner: PlanOwner::Class { path: path.reference.clone() },
+        kind: SessionKind::Lesson,
+        stages: vec![Stage::Learn, Stage::Check, Stage::Feedback],
+        selection: serde_json::json!({"adapter":"engineering","concept_id":concept.id,"slug":slug,"title":concept.title,"category":concept.category,"slot_id":null,"service_date":"2026-09-10","revisit":false,"reason":"test"}),
+    }, now).unwrap();
+    let lease = sessions::claim_preparation(conn, &session.id, now, 60)
+        .unwrap()
+        .unwrap();
+    sessions::publish_preparation(
+        conn,
+        &lease,
+        &PreparedLesson {
+            title: "Lesson".into(),
+            body: serde_json::json!({"markdown":"body"}),
+            provenance: serde_json::json!({"kind":"fixture"}),
+        },
+        now,
+    )
+    .unwrap();
+    let session = sessions::get(conn, &session.id).unwrap();
+    let session = sessions::activate(conn, &session.id, session.revision, now).unwrap();
+    let current = sessions::get(conn, &session.id).unwrap().checkpoint;
+    let checkpoint = sessions::save_checkpoint(
+        conn,
+        &session.id,
+        current.revision,
+        &sessions::CheckpointBody {
+            stage: Stage::Feedback,
+            reading: current.body.reading.clone(),
+            work: current.body.work.clone(),
+        },
+        now,
+    )
+    .unwrap()
+    .revision;
+    sessions::finish(
+        conn,
+        &session.id,
+        session.revision,
+        checkpoint,
+        Disposition::Completed,
+        now,
+        |_, _| Ok(serde_json::json!({"passed": passed, "score": if passed { 1.0 } else { 0.25 }})),
+    )
+    .unwrap();
+    session.id.0
+}
+
+#[test]
+fn a_failed_check_with_a_set_aside_prerequisite_proposes_a_bridge_served_first() {
+    let (_, conn) = fixture();
+    let input = setup(&conn, "typescript", "foundations");
+    let accepted = classes::accept(&conn, &input, "2026-09-09").unwrap();
+    // Planning needs an active class: give it a study time and enable it.
+    classroom::upsert_slot(
+        &conn,
+        &classroom::UpsertClassroomSlotInput {
+            id: None,
+            subject_id: "typescript".into(),
+            hour: 9,
+            minute: 0,
+            weekdays: vec![1, 2, 3, 4, 5, 6, 7],
+            enabled: true,
+        },
+    )
+    .unwrap();
+    classroom::configure_program(
+        &conn,
+        &classroom::ConfigureClassroomInput {
+            subject_id: "typescript".into(),
+            enabled: true,
+            agent: "claude".into(),
+            model: "sonnet".into(),
+            custom_agent_bin: String::new(),
+            session_minutes: 30,
+            start_level: None,
+            target_level: None,
+            weekly_minutes: None,
+        },
+        "2026-09-09",
+    )
+    .unwrap();
+    let map = classroom::curriculum_map(&conn, "typescript").unwrap();
+    let dependent = map
+        .concepts
+        .iter()
+        .find(|c| !c.prerequisites.is_empty())
+        .unwrap()
+        .clone();
+    let prerequisite = dependent.prerequisites[0].clone();
+    // Set the prerequisite aside, then fail the dependent topic's check.
+    let revised = revise(
+        &conn,
+        "typescript",
+        accepted.revision,
+        PathChange::Bypass {
+            topics: vec![prerequisite.clone()],
+        },
+    )
+    .unwrap();
+    assert!(classes::bridge_proposals(&conn, "typescript")
+        .unwrap()
+        .is_empty());
+    let failed = completed_session(&conn, &revised, &dependent.slug, false);
+    let proposals = classes::bridge_proposals(&conn, "typescript").unwrap();
+    assert_eq!(proposals.len(), 1);
+    assert_eq!(
+        (
+            proposals[0].topic.id.as_str(),
+            proposals[0].before.id.as_str(),
+            proposals[0].session_id.as_str()
+        ),
+        (
+            prerequisite.as_str(),
+            dependent.slug.as_str(),
+            failed.as_str()
+        )
+    );
+    assert_eq!(
+        classroom::curriculum_map(&conn, "typescript")
+            .unwrap()
+            .bridge_proposals
+            .len(),
+        1
+    );
+    // Declining silences the pair; accepting records the bridge and serves it next.
+    let declined = revise(
+        &conn,
+        "typescript",
+        revised.revision,
+        PathChange::DeclineBridge {
+            topic: prerequisite.clone(),
+            before: dependent.slug.clone(),
+        },
+    )
+    .unwrap();
+    assert!(classes::bridge_proposals(&conn, "typescript")
+        .unwrap()
+        .is_empty());
+    let bridged = revise(
+        &conn,
+        "typescript",
+        declined.revision,
+        PathChange::AcceptBridge {
+            topic: prerequisite.clone(),
+            before: dependent.slug.clone(),
+        },
+    )
+    .unwrap();
+    assert!(bridged.recommendation.declined_bridges.is_empty());
+    assert_eq!(bridged.recommendation.bridges[0].id, prerequisite);
+    let map = classroom::curriculum_map(&conn, "typescript").unwrap();
+    let entry = map
+        .concepts
+        .iter()
+        .find(|c| c.slug == prerequisite)
+        .unwrap();
+    assert_eq!(
+        (
+            entry.path_status.as_str(),
+            entry.required,
+            map.path.as_ref().unwrap().bridges
+        ),
+        ("bridge", true, 1)
+    );
+    assert_eq!(
+        classes::next_concept(&conn, "typescript", "2026-09-11")
+            .unwrap()
+            .unwrap()
+            .slug,
+        prerequisite
+    );
+    // Once the bridge lesson completes, regular selection resumes and the bridge is not proposed again.
+    completed_session(&conn, &bridged, &prerequisite, true);
+    assert_ne!(
+        classes::next_concept(&conn, "typescript", "2026-09-12")
+            .unwrap()
+            .unwrap()
+            .slug,
+        prerequisite
+    );
+    assert!(classes::bridge_proposals(&conn, "typescript")
+        .unwrap()
+        .is_empty());
+    assert_eq!(count(&conn, "mastery"), 0);
+    // A passed check proposes nothing; a completed prerequisite is never proposed.
+    let other = map
+        .concepts
+        .iter()
+        .find(|c| !c.prerequisites.is_empty() && c.slug != dependent.slug)
+        .unwrap();
+    completed_session(&conn, &bridged, &other.slug, true);
+    assert!(classes::bridge_proposals(&conn, "typescript")
+        .unwrap()
+        .is_empty());
 }

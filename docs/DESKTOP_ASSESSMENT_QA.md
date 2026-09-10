@@ -355,3 +355,11 @@ unless the Mac has been idle, and ignores its own synthetic input.
   (screenshot 65). Reopening at Learn showed the paper reader with dark text
   on the scholar paper and the writing badge restored in the header
   (screenshot 66).
+
+## Path revisions and unit challenges — 2026-09-10
+
+Same isolated profile. The desktop pass for this increment ran only while the
+learner was away from the Mac; the driver's presence guard refused the first
+attempt (the learner had returned), so the native record below covers what
+could be captured. Behaviour is otherwise covered by `tests/classes.rs`,
+`tests/challenges.rs` and the preview-parity tests.

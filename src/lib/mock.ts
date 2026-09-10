@@ -1,12 +1,14 @@
 import { previewConfiguration, savePreviewConfiguration, previewRunners, previewModels, previewLocal, rememberPreviewModel, desktopRequired } from './features/runners/preview';
-import type { FocusPolicy } from './ipc';
+import type { FocusPolicy, CurriculumConceptView } from './ipc';
+import type { RevisePath } from './contracts/classes';
 import type { AgentPolicy, RunnerId } from './contracts/agents';
 import type { AssessmentRoundId } from './contracts/assessments';
 import { previewEnrollmentOptions, previewEnrollmentDraft, savePreviewEnrollmentDraft } from './enrollment-preview';
 import { getPreviewPlacement, startPreviewPlacement, savePreviewPlacement, submitPreviewPlacement, continuePreviewPlacement, finishPreviewPlacement, recommendPreviewPath } from './placement-preview';
 import type { SaveEnrollmentDraft } from './contracts/enrollment';
 import type { AcceptedPath, AcceptPath } from './contracts/classes';
-import { acceptPreviewClassPath, previewClassPath, previewPathSummary } from './class-preview';
+import { acceptPreviewClassPath, previewClassPath, previewPathSummary, revisePreviewClassPath } from './class-preview';
+import { applyPreviewChallenge, getPreviewChallenge, savePreviewChallengeResponse, startPreviewChallenge, submitPreviewChallenge } from './challenge-preview';
 import { scheduleConflicts, conflictMessage, type ScheduleCandidate, type ConflictScope } from './features/classes/schedule-conflicts';
 import { COURSES, courseDefinition } from './catalog';
 import seedConcepts from '../../src-tauri/seed/concepts.json';
@@ -860,6 +862,12 @@ export const mockApi = {
     return options;
   },
   getClassPath: async (courseId: ClassroomSubjectId) => previewClassPath(courseId),
+  getUnitChallenge: getPreviewChallenge,
+  startUnitChallenge: startPreviewChallenge,
+  saveUnitChallengeResponse: savePreviewChallengeResponse,
+  submitUnitChallengeRound: submitPreviewChallenge,
+  applyUnitChallenge: applyPreviewChallenge,
+  reviseClassPath: async (input: RevisePath) => revisePreviewClassPath(input, (slug) => seedConcepts.find((concept) => concept.slug === slug && concept.focus === input.course_id)?.title),
   acceptClassPath: async (input: AcceptPath) => {
     const path = await acceptPreviewClassPath(input);
     applyPreviewPath(previewClassPath(path.recommendation.course.course_id));
@@ -904,13 +912,19 @@ export const mockApi = {
     setupCompleted = true;
     return appState();
   },
-  getCurriculumMap: async (focus: FocusArea): Promise<CurriculumMapView> => ({
-    focus,
-    label: CLASSROOM_CATALOG.find((item) => item.id === focus)?.label ?? focus,
-    month_outcome: courseDefinition(focus)!.outcome,
-    completed_sessions: 0,
-    current_phase: 'foundations',
-    concepts: seedConcepts.filter((concept) => concept.focus === focus).map((concept) => ({
+  getCurriculumMap: async (focus: FocusArea): Promise<CurriculumMapView> => {
+    const path = previewClassPath(focus as ClassroomSubjectId);
+    const plan = path?.recommendation;
+    const listed = (list: { id: string }[] | undefined, slug: string) => !!list?.some((topic) => topic.id === slug);
+    const statusFor = (slug: string): CurriculumConceptView['path_status'] =>
+      !plan ? 'upcoming'
+      : listed(plan.bridges, slug) ? 'bridge'
+      : listed(plan.checked, slug) ? 'prior_knowledge_checked'
+      : listed(plan.bypassed, slug) ? 'bypassed_by_choice'
+      : listed(plan.refreshers, slug) ? 'needs_refresher'
+      : listed(plan.earlier_topics, slug) ? (plan.earlier_topics.find((t) => t.id === slug)?.reason.startsWith('Declared familiar') ? 'bypassed_by_choice' : 'not_assessed')
+      : 'upcoming';
+    const concepts = seedConcepts.filter((concept) => concept.focus === focus).map((concept): CurriculumConceptView => ({
       id: seedConcepts.indexOf(concept) + 1,
       slug: concept.slug,
       title: concept.title,
@@ -925,8 +939,32 @@ export const mockApi = {
       learner_outcome: concept.curriculum.learner_outcome,
       artifact: concept.curriculum.artifact,
       related_concepts: concept.curriculum.related_concepts,
-    })),
-  }),
+      path_status: statusFor(concept.slug),
+      required: concept.curriculum.core && ['upcoming', 'in_progress', 'bridge'].includes(statusFor(concept.slug)),
+    }));
+    const core = concepts.filter((concept) => concept.core);
+    return {
+      focus,
+      label: CLASSROOM_CATALOG.find((item) => item.id === focus)?.label ?? focus,
+      month_outcome: courseDefinition(focus)!.outcome,
+      completed_sessions: 0,
+      current_phase: 'foundations',
+      concepts,
+      path: path && plan ? {
+        revision: path.revision,
+        entry_label: plan.entry_label,
+        required_total: core.filter((concept) => concept.required).length,
+        required_done: 0,
+        coverage_total: core.length,
+        coverage_done: 0,
+        bypassed: concepts.filter((concept) => concept.path_status === 'bypassed_by_choice').length,
+        checked: concepts.filter((concept) => concept.path_status === 'prior_knowledge_checked').length,
+        refreshers: concepts.filter((concept) => concept.path_status === 'needs_refresher').length,
+        bridges: concepts.filter((concept) => concept.path_status === 'bridge').length,
+      } : null,
+      bridge_proposals: [],
+    };
+  },
   configureClassroomProgram: async (input: {
     subject_id: ClassroomSubjectId;
     enabled: boolean;

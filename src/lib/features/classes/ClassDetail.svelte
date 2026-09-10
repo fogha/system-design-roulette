@@ -1,7 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { api, type ClassroomProgramView, type CurriculumMapView, type FocusArea } from '../../ipc';
-  import type { AcceptedPath } from '../../contracts/classes';
+  import type { AcceptedPath, PathChange } from '../../contracts/classes';
   import { app } from '../../stores.svelte';
   import { courseDefinition } from '../../catalog';
   import { LayoutDashboard, Settings2, Compass, BookOpen, CalendarClock, Play, ArrowRight } from 'lucide-svelte';
@@ -11,6 +11,7 @@
   import ClassSchedule from './ClassSchedule.svelte';
   import EnrollmentSetup from './EnrollmentSetup.svelte';
   import PathPreview from './PathPreview.svelte';
+  import UnitChallenge from './UnitChallenge.svelte';
   import type { ClassTab } from './class-navigation';
   let { program, initialTab = 'overview', ontabchange }: { program: ClassroomProgramView; initialTab?: ClassTab; ontabchange?: (tab: ClassTab) => void } = $props();
   const uid = $props.id();
@@ -63,6 +64,23 @@
   $effect(() => { if (tab === 'curriculum' && program.kind === 'engineering') untrack(() => { if (!map && !mapLoading && !mapError) void loadMap(); }); });
   $effect(() => { if (tab === 'entry') untrack(() => { if (!pathLoaded && !pathLoading && !pathError) void loadPath(); }); });
   async function setupClosed() { editingPath = false; await loadPath(); }
+  let revising = $state(false);
+  let challenge = $state<{ unit: string; label: string } | null>(null);
+  async function challengeApplied() { path = await api.getClassPath(program.subject_id); pathLoaded = true; await loadMap(); await app.refresh(); }
+  /** Bypass or include a topic on the accepted route; the map and program refresh afterwards. */
+  async function revisePath(change: PathChange) {
+    if (revising) return;
+    revising = true; mapError = '';
+    try {
+      const current = path ?? await api.getClassPath(program.subject_id);
+      if (!current) throw new Error('Accept a learning path before changing the route.');
+      path = await api.reviseClassPath({ course_id: program.subject_id, expected_revision: current.revision, change });
+      pathLoaded = true;
+      await loadMap();
+      await app.refresh();
+    } catch (cause) { mapError = String(cause); }
+    finally { revising = false; }
+  }
 </script>
 
 <article class="class-detail" aria-label={`${program.label} controls`}>
@@ -93,7 +111,7 @@
           {/if}
         {:else if item.id === 'curriculum'}
           {#if program.kind === 'engineering'}
-            {#if map}<CurriculumMap {map} embedded />{:else if mapLoading}<p class="loading" role="status">Loading curriculum…</p>{:else if mapError}<p class="error" role="alert">{mapError}</p><button class="ghost mono-ghost" onclick={loadMap}>Retry</button>{/if}
+            {#if map}{#if mapError}<p class="error" role="alert">{mapError}</p>{/if}{#if challenge && program.accepted_path}<UnitChallenge courseId={program.subject_id} unit={challenge.unit} unitLabel={challenge.label} pathRevision={map.path?.revision ?? program.accepted_path.revision} onclose={() => (challenge = null)} onapplied={challengeApplied} />{/if}<CurriculumMap {map} embedded onrevise={program.accepted_path ? revisePath : undefined} {revising} onchallenge={program.accepted_path ? (unit, label) => (challenge = { unit, label }) : undefined} />{:else if mapLoading}<p class="loading" role="status">Loading curriculum…</p>{:else if mapError}<p class="error" role="alert">{mapError}</p><button class="ghost mono-ghost" onclick={loadMap}>Retry</button>{/if}
           {:else}
             <div class="language-map"><span class="eyebrow mono">LANGUAGE PATH</span><h3>{program.label} · learning bands</h3><p>{course.outcome}</p>{#if program.language_progress}<p class="notice">Current band: {program.language_progress.current_level} · Target: {program.language_progress.target_level} · {program.progress_label}</p>{/if}<ol>{#each course.entry_points as entry}<li><span class="mono">{entry.id}</span><div><h4>{entry.label}</h4></div></li>{/each}</ol><button class="ghost mono-ghost" onclick={() => select('entry')}>Review starting point<ArrowRight size={13} /></button></div>
           {/if}

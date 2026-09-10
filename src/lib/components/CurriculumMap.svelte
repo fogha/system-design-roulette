@@ -1,17 +1,40 @@
 <script lang="ts">
   import { courseDefinition } from '../catalog';
-  import type { CurriculumMapView, CurriculumPhase } from '../ipc';
+  import type { CurriculumConceptView, CurriculumMapView, CurriculumPhase } from '../ipc';
   import { CheckCircle2, Circle, Clock3, Link2, X, Search } from 'lucide-svelte';
+
+  import type { PathChange } from '../contracts/classes';
 
   let {
     map,
     onclose,
     embedded = false,
+    onrevise,
+    revising = false,
+    onchallenge,
   }: {
     map: CurriculumMapView;
     onclose?: () => void;
     embedded?: boolean;
+    /** Bypass or include topics on the accepted route (engineering classes with a path). */
+    onrevise?: (change: PathChange) => void;
+    revising?: boolean;
+    /** Open a unit challenge for a phase (engineering classes with a path). */
+    onchallenge?: (phase: CurriculumPhase, label: string) => void;
   } = $props();
+
+  const BADGES: Record<CurriculumConceptView['path_status'], { label: string; tone: string }> = {
+    completed_here: { label: 'Completed here', tone: 'ok' },
+    prior_knowledge_checked: { label: 'Prior knowledge checked', tone: 'teal' },
+    bypassed_by_choice: { label: 'Bypassed by choice', tone: 'muted' },
+    needs_refresher: { label: 'Needs refresher', tone: 'warn' },
+    not_assessed: { label: 'Not assessed', tone: 'muted' },
+    bridge: { label: 'Bridge lesson', tone: 'warn' },
+    in_progress: { label: 'In progress', tone: 'accent' },
+    upcoming: { label: 'Upcoming', tone: 'faint' },
+  };
+  const canBypass = (status: CurriculumConceptView['path_status']) => ['upcoming', 'in_progress', 'needs_refresher'].includes(status);
+  const canInclude = (status: CurriculumConceptView['path_status']) => ['bypassed_by_choice', 'not_assessed', 'prior_knowledge_checked'].includes(status);
 
   const uid = $props.id();
   let query = $state('');
@@ -42,6 +65,28 @@
       <span class="eyebrow mono">{coreCount} CORE TOPICS · {map.completed_sessions} SESSIONS COMPLETED</span>
       <h3 id={`${uid}-title`}>{map.label} learning map</h3>
       <p>{map.month_outcome}</p>
+      {#if map.path}
+        <dl class="coverage mono" aria-label="Route and coverage">
+          <div><dt>Required on your route</dt><dd>{map.path.required_done} / {map.path.required_total}</dd></div>
+          <div><dt>Course coverage</dt><dd>{map.path.coverage_done} / {map.path.coverage_total} core</dd></div>
+          <div><dt>Route</dt><dd>revision {map.path.revision} · from {map.path.entry_label}</dd></div>
+          <div><dt>Set aside</dt><dd>{map.path.bypassed} bypassed · {map.path.checked} checked · {map.path.refreshers} refreshers{#if map.path.bridges} · {map.path.bridges} bridges{/if}</dd></div>
+        </dl>
+        <p class="coverage-note">Bypassed and checked topics count toward neither denominator; revising the route never rewrites earlier results.</p>
+      {/if}
+      {#if map.bridge_proposals.length && onrevise}
+        <section class="bridges" aria-label="Suggested bridge lessons">
+          <span class="eyebrow mono">GAP SEEN IN PRACTICE</span>
+          <ul>
+            {#each map.bridge_proposals as proposal (proposal.topic.id + proposal.before.id)}
+              <li>
+                <div><strong>{proposal.topic.label}</strong> before more work on <strong>{proposal.before.label}</strong><p>The check on {proposal.before.label} scored {Math.round(proposal.score * 100)}% and depends on {proposal.topic.label}, which was set aside. A short bridge lesson comes next if you accept; your starting point does not change.</p></div>
+                <span class="route-actions"><button type="button" class="cta mono-cta" disabled={revising} onclick={() => onrevise?.({ kind: 'accept_bridge', topic: proposal.topic.id, before: proposal.before.id })}>Take the bridge</button><button type="button" class="ghost mono-ghost" disabled={revising} onclick={() => onrevise?.({ kind: 'decline_bridge', topic: proposal.topic.id, before: proposal.before.id })}>Not now</button></span>
+              </li>
+            {/each}
+          </ul>
+        </section>
+      {/if}
     </div>
     {#if !embedded && onclose}<button type="button" class="close" onclick={onclose} aria-label="Close curriculum map">
       <X size={15} />
@@ -61,6 +106,7 @@
           </span>
         </div>
         {#if map.current_phase === phase.id}<small class="you-are-here">current phase</small>{/if}
+        {#if onchallenge && map.path && phase.id !== 'elective' && concepts.some((concept) => concept.required)}<button type="button" class="ghost mono-ghost challenge-button" disabled={revising} onclick={() => onchallenge?.(phase.id, phase.label)}>Unit challenge</button>{/if}
         <ol>
           {#each concepts as concept}
             <li class:complete={complete(concept.mastery_state)} class:elective={!concept.core}>
@@ -77,11 +123,19 @@
                 <strong>{concept.title}</strong>
                 <p>{concept.learner_outcome}</p>
                 <span class="meta mono">
+                  <span class={`badge tone-${BADGES[concept.path_status]?.tone ?? 'faint'}`}>{BADGES[concept.path_status]?.label ?? concept.path_status}</span>
+                  {#if concept.required}<span class="badge tone-accent">required</span>{/if}
                   {concept.mastery_state}
                   {#if concept.prerequisites.length}
                     · <Link2 size={10} /> {prerequisiteTitles(concept.prerequisites)}
                   {/if}
                 </span>
+                {#if onrevise && map.path}
+                  <span class="route-actions">
+                    {#if canBypass(concept.path_status)}<button type="button" class="ghost mono-ghost" disabled={revising} onclick={() => onrevise?.({ kind: 'bypass', topics: [concept.slug] })}>Check out</button>{/if}
+                    {#if canInclude(concept.path_status)}<button type="button" class="ghost mono-ghost" disabled={revising} onclick={() => onrevise?.({ kind: 'include', topics: [concept.slug] })}>Include</button>{/if}
+                  </span>
+                {/if}
               </div>
             </li>
           {/each}
@@ -92,6 +146,15 @@
 </section>
 
 <style>
+  .coverage { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px 16px; margin: 12px 0 0; font-size: 10px; }
+  .coverage div { display: grid; gap: 2px; } .coverage dt { color: var(--faint); letter-spacing: 0.08em; text-transform: uppercase; font-size: 9px; } .coverage dd { margin: 0; color: var(--fg); }
+  .coverage-note { margin-top: 8px !important; font-size: 11px !important; color: var(--faint) !important; }
+  .badge { display: inline-block; border: 1px solid var(--node-border); border-radius: var(--radius-detail); padding: 1px 6px; margin-right: 6px; font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; }
+  .badge.tone-ok { color: var(--green); border-color: var(--green); } .badge.tone-teal { color: var(--teal-fg); border-color: var(--teal-fg); } .badge.tone-warn { color: var(--led-warn); border-color: var(--led-warn); }
+  .badge.tone-accent { color: var(--accent); border-color: var(--accent); } .badge.tone-muted { color: var(--muted); } .badge.tone-faint { color: var(--faint); }
+  .route-actions { display: flex; gap: 6px; margin-top: 6px; } .route-actions button { padding: 3px 8px; font-size: 9px; }
+  .challenge-button { margin: 6px 0 10px; padding: 4px 10px; font-size: 9px; }
+  .bridges { margin-top: 14px; border: 1px dashed var(--led-warn); border-radius: var(--radius-panel); padding: 12px 14px; } .bridges ul { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 10px; } .bridges li { display: flex; justify-content: space-between; gap: 14px; align-items: flex-start; } .bridges li p { margin: 4px 0 0; font-size: 12px; color: var(--muted); line-height: 1.5; } .bridges .route-actions { flex: none; margin-top: 0; }
   .curriculum-map.embedded { padding: 0; border: 0; background: none; max-width: 1100px; margin: 0 auto; }
   .search { display: flex; align-items: center; gap: 10px; border: 1px solid var(--node-border); border-radius: var(--radius-control); padding: 0 12px; background: var(--bg); color: var(--muted); margin-bottom: 20px; } .search:focus-within { outline: 1px solid var(--accent); } .search input { width: 100%; min-width: 0; border: 0; outline: none; background: none; color: var(--fg); font-size: 13px; padding: 12px 0; } .search span { flex-shrink: 0; font-size: 10px; } .empty { color: var(--muted); font-size: 13px; }
   .curriculum-map {

@@ -1200,6 +1200,27 @@ pub struct CurriculumConceptView {
     pub learner_outcome: String,
     pub artifact: String,
     pub related_concepts: Vec<String>,
+    /// Route status against the accepted path: completed_here, prior_knowledge_checked,
+    /// bypassed_by_choice, needs_refresher, not_assessed, bridge, in_progress or upcoming.
+    pub path_status: String,
+    /// Core topic still required by the accepted route.
+    pub required: bool,
+}
+
+/// Remaining required work for the accepted route beside full-course coverage,
+/// each with its own denominator.
+#[derive(Debug, Clone, Serialize)]
+pub struct PathCoverage {
+    pub revision: u32,
+    pub entry_label: String,
+    pub required_total: usize,
+    pub required_done: usize,
+    pub coverage_total: usize,
+    pub coverage_done: usize,
+    pub bypassed: usize,
+    pub checked: usize,
+    pub refreshers: usize,
+    pub bridges: usize,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1210,6 +1231,9 @@ pub struct CurriculumMapView {
     pub completed_sessions: i64,
     pub current_phase: String,
     pub concepts: Vec<CurriculumConceptView>,
+    pub path: Option<PathCoverage>,
+    /// Gaps seen in practice that a short bridge lesson would close.
+    pub bridge_proposals: Vec<crate::domain::classes::BridgeProposal>,
 }
 
 pub fn curriculum_map(conn: &Connection, focus: &str) -> Result<CurriculumMapView> {
@@ -1246,8 +1270,84 @@ pub fn curriculum_map(conn: &Connection, focus: &str) -> Result<CurriculumMapVie
             learner_outcome: concept.curriculum.learner_outcome,
             artifact: concept.curriculum.artifact,
             related_concepts: concept.curriculum.related_concepts,
+            path_status: String::new(),
+            required: false,
         });
     }
+    let path =
+        crate::domain::classes::current_path(conn, focus).map_err(|error| error.to_string())?;
+    let plan = path.as_ref().map(|path| &path.recommendation);
+    let listed = |list: &[crate::domain::placement::PathTopic], slug: &str| {
+        list.iter().any(|t| t.id == slug)
+    };
+    for concept in &mut concepts {
+        let completed = crate::roulette::is_completed(&concept.mastery_state);
+        let slug = concept.slug.as_str();
+        let (status, on_route) = match plan {
+            _ if completed => ("completed_here", true),
+            Some(plan) if listed(&plan.bridges, slug) => ("bridge", true),
+            Some(plan) if listed(&plan.checked, slug) => ("prior_knowledge_checked", false),
+            Some(plan) if listed(&plan.bypassed, slug) => ("bypassed_by_choice", false),
+            Some(plan) if listed(&plan.refreshers, slug) => ("needs_refresher", false),
+            Some(plan) if listed(&plan.earlier_topics, slug) => (
+                if plan
+                    .earlier_topics
+                    .iter()
+                    .any(|t| t.id == slug && t.reason.starts_with("Declared familiar"))
+                {
+                    "bypassed_by_choice"
+                } else {
+                    "not_assessed"
+                },
+                false,
+            ),
+            _ if concept.mastery_state != "unseen" => ("in_progress", true),
+            _ => ("upcoming", true),
+        };
+        concept.path_status = status.into();
+        concept.required = concept.core && on_route && !completed;
+    }
+    let path_coverage = path.as_ref().map(|path| {
+        let plan = &path.recommendation;
+        let core = concepts.iter().filter(|c| c.core);
+        let on_route = |c: &&CurriculumConceptView| {
+            crate::roulette::is_completed(&c.mastery_state)
+                || !(listed(&plan.earlier_topics, &c.slug)
+                    || listed(&plan.bypassed, &c.slug)
+                    || listed(&plan.checked, &c.slug))
+        };
+        PathCoverage {
+            revision: path.revision,
+            entry_label: plan.entry_label.clone(),
+            required_total: core.clone().filter(on_route).count(),
+            required_done: core
+                .clone()
+                .filter(on_route)
+                .filter(|c| crate::roulette::is_completed(&c.mastery_state))
+                .count(),
+            coverage_total: core.clone().count(),
+            coverage_done: core
+                .clone()
+                .filter(|c| crate::roulette::is_completed(&c.mastery_state))
+                .count(),
+            bypassed: concepts
+                .iter()
+                .filter(|c| c.path_status == "bypassed_by_choice")
+                .count(),
+            checked: concepts
+                .iter()
+                .filter(|c| c.path_status == "prior_knowledge_checked")
+                .count(),
+            refreshers: concepts
+                .iter()
+                .filter(|c| c.path_status == "needs_refresher")
+                .count(),
+            bridges: concepts
+                .iter()
+                .filter(|c| c.path_status == "bridge")
+                .count(),
+        }
+    });
     let phase_order = [
         "foundations",
         "mechanisms",
@@ -1274,6 +1374,9 @@ pub fn curriculum_map(conn: &Connection, focus: &str) -> Result<CurriculumMapVie
         completed_sessions,
         current_phase,
         concepts,
+        path: path_coverage,
+        bridge_proposals: crate::domain::classes::bridge_proposals(conn, focus)
+            .map_err(|error| error.to_string())?,
     })
 }
 

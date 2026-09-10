@@ -545,6 +545,23 @@ pub struct Recommendation {
     pub unknown_areas: Vec<String>,
     pub required_outcome: String,
     pub assessment_attempt_id: Option<AttemptId>,
+    /// Topics the learner chose to leave after acceptance: not assessed, no credit.
+    #[serde(default)]
+    pub bypassed: Vec<PathTopic>,
+    /// Topics whose prior knowledge a unit challenge demonstrated; not completed here.
+    #[serde(default)]
+    pub checked: Vec<PathTopic>,
+    /// Accepted bridge lessons, taken before the work that depends on them.
+    #[serde(default)]
+    pub bridges: Vec<PathTopic>,
+    /// Declined bridge proposals; the same pair is not proposed again.
+    #[serde(default)]
+    pub declined_bridges: Vec<BridgeDecision>,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BridgeDecision {
+    pub topic: String,
+    pub before: String,
 }
 pub fn recommend(
     conn: &Connection,
@@ -677,6 +694,10 @@ pub(crate) fn recommend_in_transaction(
         unknown_areas: unknown,
         required_outcome: snapshot["course"]["outcome"].as_str().unwrap().into(),
         assessment_attempt_id: attempt_id,
+        bypassed: Vec::new(),
+        checked: Vec::new(),
+        bridges: Vec::new(),
+        declined_bridges: Vec::new(),
     };
     result.id = format!("recommendation-{}", digest(&result)?);
     Ok(result)

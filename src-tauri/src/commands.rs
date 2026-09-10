@@ -1,4 +1,5 @@
 pub mod agents;
+pub mod challenges;
 pub mod classes;
 use crate::db::{self, Attempt};
 use crate::domain::{

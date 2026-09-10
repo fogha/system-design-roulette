@@ -103,6 +103,259 @@ pub fn path_by_id(conn: &Connection, path_id: &str) -> Result<AcceptedPath> {
     read_path(conn, path_id)
 }
 
+/// A deliberate change to an accepted route. Manual choices never create
+/// grades, mastery or completion evidence; they only change what is selected next.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum PathChange {
+    /// Check out of familiar topics: they leave the route uncredited.
+    Bypass { topics: Vec<String> },
+    /// Put earlier, bypassed or checked topics back on the route.
+    Include { topics: Vec<String> },
+    /// Prior knowledge demonstrated by a unit challenge attempt; no completion credit.
+    CheckOut {
+        topics: Vec<String>,
+        attempt_id: String,
+    },
+    /// Take a short bridge lesson on `topic` before more work on `before`.
+    AcceptBridge { topic: String, before: String },
+    /// Decline a proposed bridge; the pair is not proposed again.
+    DeclineBridge { topic: String, before: String },
+}
+
+/// A gap seen in practice: a failed check on a topic whose prerequisite was
+/// set aside (earlier, bypassed or checked) and is not completed here.
+#[derive(Debug, Clone, Serialize)]
+pub struct BridgeProposal {
+    pub topic: super::placement::PathTopic,
+    pub before: super::placement::PathTopic,
+    pub session_id: String,
+    pub score: f64,
+}
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RevisePath {
+    pub course_id: String,
+    pub expected_revision: u32,
+    pub change: PathChange,
+}
+
+fn revision_by_number(
+    conn: &Connection,
+    class_id: &str,
+    revision: u32,
+) -> Result<Option<AcceptedPath>> {
+    let id: Option<String> = conn
+        .query_row(
+            "SELECT id FROM path_revisions WHERE class_id = ?1 AND revision = ?2",
+            params![class_id, revision],
+            |r| r.get(0),
+        )
+        .optional()?;
+    id.map(|id| read_path(conn, &id)).transpose()
+}
+
+/// Apply a change to a plan; `Ok(false)` when it would leave the route as it is.
+fn apply_change(
+    conn: &Connection,
+    course_id: &str,
+    plan: &mut Recommendation,
+    change: &PathChange,
+) -> Result<bool> {
+    let concepts = db::all_concepts(conn, course_id)?;
+    let states: std::collections::HashMap<i64, String> = crate::mastery::overview(conn, course_id)?
+        .into_iter()
+        .map(|entry| (entry.concept_id, entry.state))
+        .collect();
+    let concept = |slug: &str| {
+        concepts
+            .iter()
+            .find(|c| c.slug == slug)
+            .ok_or_else(|| DbError::Invalid(format!("{slug} is not a topic of this course.")))
+    };
+    let listed =
+        |list: &[super::placement::PathTopic], slug: &str| list.iter().any(|t| t.id == slug);
+    let mut changed = false;
+    match change {
+        PathChange::Bypass { topics } => {
+            for slug in topics {
+                let concept = concept(slug)?;
+                if states
+                    .get(&concept.id)
+                    .is_some_and(|state| crate::roulette::is_completed(state))
+                {
+                    return Err(DbError::Invalid(format!(
+                        "{} is already completed here; there is nothing to bypass.",
+                        concept.title
+                    )));
+                }
+                if listed(&plan.bypassed, slug) {
+                    continue;
+                }
+                plan.bypassed.push(super::placement::PathTopic {
+                    id: slug.clone(),
+                    label: concept.title.clone(),
+                    reason: "Bypassed by choice; not assessed and not counted as coverage.".into(),
+                });
+                if !listed(&plan.earlier_topics, slug) {
+                    plan.earlier_topics.push(super::placement::PathTopic {
+                        id: slug.clone(),
+                        label: concept.title.clone(),
+                        reason: "Bypassed by choice; available for voluntary study.".into(),
+                    });
+                }
+                changed = true;
+            }
+        }
+        PathChange::CheckOut { topics, attempt_id } => {
+            for slug in topics {
+                let concept = concept(slug)?;
+                if states
+                    .get(&concept.id)
+                    .is_some_and(|state| crate::roulette::is_completed(state))
+                    || listed(&plan.checked, slug)
+                {
+                    continue;
+                }
+                plan.checked.push(super::placement::PathTopic {
+                    id: slug.clone(),
+                    label: concept.title.clone(),
+                    reason: format!(
+                        "Prior knowledge checked by unit challenge {attempt_id}; not completed here."
+                    ),
+                });
+                plan.bypassed.retain(|t| &t.id != slug);
+                if !listed(&plan.earlier_topics, slug) {
+                    plan.earlier_topics.push(super::placement::PathTopic {
+                        id: slug.clone(),
+                        label: concept.title.clone(),
+                        reason: "Prior knowledge checked; available for voluntary study.".into(),
+                    });
+                }
+                changed = true;
+            }
+        }
+        PathChange::AcceptBridge { topic, before } => {
+            let concept_topic = concept(topic)?;
+            let dependent = concept(before)?;
+            if !listed(&plan.bridges, topic) {
+                plan.bridges.push(super::placement::PathTopic {
+                    id: topic.clone(),
+                    label: concept_topic.title.clone(),
+                    reason: format!("Bridge before {}.", dependent.title),
+                });
+                changed = true;
+            }
+            let before_len = plan.declined_bridges.len();
+            plan.declined_bridges
+                .retain(|d| !(&d.topic == topic && &d.before == before));
+            if plan.declined_bridges.len() != before_len {
+                changed = true;
+            }
+        }
+        PathChange::DeclineBridge { topic, before } => {
+            concept(topic)?;
+            concept(before)?;
+            if !plan
+                .declined_bridges
+                .iter()
+                .any(|d| &d.topic == topic && &d.before == before)
+            {
+                plan.declined_bridges
+                    .push(super::placement::BridgeDecision {
+                        topic: topic.clone(),
+                        before: before.clone(),
+                    });
+                changed = true;
+            }
+        }
+        PathChange::Include { topics } => {
+            for slug in topics {
+                concept(slug)?;
+                let before = plan.earlier_topics.len() + plan.bypassed.len() + plan.checked.len();
+                plan.earlier_topics.retain(|t| &t.id != slug);
+                plan.bypassed.retain(|t| &t.id != slug);
+                plan.checked.retain(|t| &t.id != slug);
+                if plan.earlier_topics.len() + plan.bypassed.len() + plan.checked.len() != before {
+                    changed = true;
+                }
+            }
+        }
+    }
+    Ok(changed)
+}
+
+/// Record a new path revision for an accepted engineering class. Existing
+/// sessions keep the revision they were planned with; a lost response can be
+/// replayed with the same base revision and receives the same result.
+pub fn revise(conn: &Connection, input: &RevisePath, _today: &str) -> Result<AcceptedPath> {
+    let tx = rusqlite::Transaction::new_unchecked(conn, TransactionBehavior::Immediate)?;
+    let course = catalog::COURSES
+        .iter()
+        .find(|c| c.course_id == input.course_id)
+        .ok_or_else(|| DbError::InvalidFocus(input.course_id.clone()))?;
+    if course.kind != catalog::SubjectKind::Engineering {
+        return Err(DbError::Invalid(
+            "Language paths change through their starting band and target level.".into(),
+        ));
+    }
+    let current = current_path(&tx, &input.course_id)?
+        .ok_or_else(|| DbError::Invalid("Accept a learning path before revising it.".into()))?;
+    if enrollment::course_snapshot(&input.course_id)?.0.fingerprint
+        != current.reference.course_snapshot_fingerprint
+    {
+        return Err(DbError::Invalid(
+            "The curriculum changed. Review a new path before revising this one.".into(),
+        ));
+    }
+    if current.revision == input.expected_revision + 1 {
+        if let Some(base) =
+            revision_by_number(&tx, &current.reference.class_id, input.expected_revision)?
+        {
+            let mut plan = base.recommendation.clone();
+            if matches!(
+                apply_change(&tx, &input.course_id, &mut plan, &input.change),
+                Ok(true)
+            ) && serde_json::to_value(&plan)? == serde_json::to_value(&current.recommendation)?
+            {
+                return Ok(current);
+            }
+        }
+    }
+    if current.revision != input.expected_revision {
+        return Err(DbError::Invalid(
+            "The path changed. Review the current revision before revising it.".into(),
+        ));
+    }
+    let mut plan = current.recommendation.clone();
+    if !apply_change(&tx, &input.course_id, &mut plan, &input.change)? {
+        return Err(DbError::Invalid(
+            "That change would leave the route as it is.".into(),
+        ));
+    }
+    let path_id = format!("path-{:032x}", rand::random::<u128>());
+    let now = chrono::Utc::now().to_rfc3339();
+    tx.execute(
+        "INSERT INTO path_revisions(id,class_id,revision,course_snapshot_fingerprint,entry_profile_json,plan_json,accepted_at) VALUES(?1,?2,?3,?4,?5,?6,?7)",
+        params![
+            path_id,
+            current.reference.class_id,
+            current.revision + 1,
+            current.reference.course_snapshot_fingerprint,
+            serde_json::to_string(&current.configuration)?,
+            serde_json::to_string(&plan)?,
+            now
+        ],
+    )?;
+    tx.execute(
+        "UPDATE classes SET active_path_revision_id=?2, updated_at=?3 WHERE id=?1",
+        params![current.reference.class_id, path_id, now],
+    )?;
+    let result = read_path(&tx, &path_id)?;
+    tx.commit()?;
+    Ok(result)
+}
+
 /// A class that was activated from its settings without choosing a starting
 /// point begins at the foundations. This never touches a learner's pending
 /// setup draft: an unfinished starting-point choice must be completed first.
@@ -326,12 +579,170 @@ pub fn accept(conn: &Connection, input: &AcceptPath, today: &str) -> Result<Acce
     Ok(result)
 }
 
+/// Completed class sessions of `class_id` with their selection slug and outcome.
+fn completed_results(
+    conn: &Connection,
+    class_id: &str,
+) -> Result<Vec<(String, String, serde_json::Value, String)>> {
+    let mut statement = conn.prepare(
+        "SELECT s.id, json_extract(s.context_json,'$.selection.slug'), r.outcome_json, r.finished_at FROM study_sessions s JOIN study_results r ON r.session_id = s.id WHERE s.class_id = ?1 AND r.disposition = 'completed' ORDER BY r.finished_at DESC",
+    )?;
+    let rows = statement.query_map([class_id], |r| {
+        Ok((
+            r.get::<_, String>(0)?,
+            r.get::<_, Option<String>>(1)?.unwrap_or_default(),
+            r.get::<_, String>(2)?,
+            r.get::<_, String>(3)?,
+        ))
+    })?;
+    let mut out = Vec::new();
+    for row in rows {
+        let (id, slug, outcome, finished) = row?;
+        out.push((
+            id,
+            slug,
+            serde_json::from_str(&outcome).unwrap_or(serde_json::Value::Null),
+            finished,
+        ));
+    }
+    Ok(out)
+}
+
+/// Bridge lessons proposed from failed checks: the failed topic's prerequisites
+/// that were set aside and are neither completed, accepted nor declined.
+pub fn bridge_proposals(conn: &Connection, course_id: &str) -> Result<Vec<BridgeProposal>> {
+    let Some(path) = current_path(conn, course_id)? else {
+        return Ok(Vec::new());
+    };
+    let plan = &path.recommendation;
+    let concepts = db::all_concepts(conn, course_id)?;
+    let states: std::collections::HashMap<i64, String> = crate::mastery::overview(conn, course_id)?
+        .into_iter()
+        .map(|entry| (entry.concept_id, entry.state))
+        .collect();
+    let mut prerequisites = std::collections::HashMap::new();
+    let mut statement =
+        conn.prepare("SELECT slug, prereqs_json FROM concepts WHERE active = 1 AND focus = ?1")?;
+    for row in statement.query_map([course_id], |r| {
+        Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+    })? {
+        let (slug, raw) = row?;
+        prerequisites.insert(
+            slug,
+            serde_json::from_str::<Vec<String>>(&raw).unwrap_or_default(),
+        );
+    }
+    let listed =
+        |list: &[super::placement::PathTopic], slug: &str| list.iter().any(|t| t.id == slug);
+    let topic = |slug: &str, reason: String| {
+        concepts
+            .iter()
+            .find(|c| c.slug == slug)
+            .map(|c| super::placement::PathTopic {
+                id: c.slug.clone(),
+                label: c.title.clone(),
+                reason,
+            })
+    };
+    let mut proposals: Vec<BridgeProposal> = Vec::new();
+    for (session_id, slug, outcome, _) in completed_results(conn, &path.reference.class_id)? {
+        if outcome["passed"].as_bool() != Some(false) {
+            continue;
+        }
+        let Some(dependent) = concepts.iter().find(|c| c.slug == slug) else {
+            continue;
+        };
+        for prerequisite in prerequisites.get(&slug).cloned().unwrap_or_default() {
+            let set_aside = listed(&plan.earlier_topics, &prerequisite)
+                || listed(&plan.bypassed, &prerequisite)
+                || listed(&plan.checked, &prerequisite);
+            let completed = concepts
+                .iter()
+                .find(|c| c.slug == prerequisite)
+                .and_then(|c| states.get(&c.id))
+                .is_some_and(|state| crate::roulette::is_completed(state));
+            let decided = listed(&plan.bridges, &prerequisite)
+                || plan
+                    .declined_bridges
+                    .iter()
+                    .any(|d| d.topic == prerequisite && d.before == slug);
+            if !set_aside
+                || completed
+                || decided
+                || proposals.iter().any(|p| p.topic.id == prerequisite)
+            {
+                continue;
+            }
+            let (Some(topic), Some(before)) = (
+                topic(
+                    &prerequisite,
+                    format!(
+                        "Set aside on your route; {} depends on it.",
+                        dependent.title
+                    ),
+                ),
+                topic(&slug, "The check on this topic did not pass.".into()),
+            ) else {
+                continue;
+            };
+            proposals.push(BridgeProposal {
+                topic,
+                before,
+                session_id: session_id.clone(),
+                score: outcome["score"].as_f64().unwrap_or(0.0),
+            });
+        }
+    }
+    Ok(proposals)
+}
+
+/// An accepted bridge is pending until a session on that topic completes after
+/// the revision that accepted it.
+fn pending_bridge(conn: &Connection, path: &AcceptedPath, slug: &str) -> Result<bool> {
+    let accepted_at: Option<String> = {
+        let mut statement = conn.prepare(
+            "SELECT accepted_at, plan_json FROM path_revisions WHERE class_id = ?1 ORDER BY revision",
+        )?;
+        let rows = statement.query_map([&path.reference.class_id], |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+        })?;
+        let mut found = None;
+        for row in rows {
+            let (at, plan) = row?;
+            let plan: Recommendation = serde_json::from_str(&plan)?;
+            if plan.bridges.iter().any(|t| t.id == slug) {
+                found = Some(at);
+                break;
+            }
+        }
+        found
+    };
+    let Some(accepted_at) = accepted_at else {
+        return Ok(false);
+    };
+    Ok(!completed_results(conn, &path.reference.class_id)?
+        .iter()
+        .any(|(_, taken, _, finished)| taken == slug && *finished >= accepted_at))
+}
+
 /// A manual/diagnostic bypass changes the route, not the mastery ledger. Earlier
 /// prerequisites are carried into the lesson as visible checks and refreshers.
+/// Accepted bridge lessons come first, once each, before regular selection.
 pub fn next_concept(conn: &Connection, course_id: &str, date: &str) -> Result<Option<db::Concept>> {
     let Some(path) = current_path(conn, course_id)? else {
         return crate::roulette::draw(conn, date, course_id);
     };
+    for bridge in &path.recommendation.bridges {
+        if pending_bridge(conn, &path, &bridge.id)? {
+            if let Some(concept) = db::all_concepts(conn, course_id)?
+                .into_iter()
+                .find(|c| c.slug == bridge.id)
+            {
+                db::mark_concept_picked(conn, concept.id, date)?;
+                return Ok(Some(concept));
+            }
+        }
+    }
     if enrollment::course_snapshot(course_id)?.0.fingerprint
         != path.reference.course_snapshot_fingerprint
     {
