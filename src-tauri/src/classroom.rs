@@ -1305,7 +1305,7 @@ pub struct AppointmentView {
     pub make_up: bool,
 }
 
-fn appointment_view(
+pub fn appointment_view(
     conn: &Connection,
     occurrence: crate::domain::schedule::Occurrence,
 ) -> Result<AppointmentView> {

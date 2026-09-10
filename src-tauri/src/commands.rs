@@ -292,11 +292,7 @@ pub fn skip_appointment(
         let conn = state.db.0.lock().unwrap();
         let skipped = crate::domain::schedule::skip(&conn, &occurrence_id, chrono::Utc::now())
             .map_err(err)?;
-        crate::classroom::appointment_views(&conn, &state.today())
-            .map_err(err)?
-            .into_iter()
-            .find(|view| view.id == skipped.id)
-            .ok_or("The skipped appointment could not be read.")?
+        crate::classroom::appointment_view(&conn, skipped).map_err(err)?
     };
     let _ = app.emit("classroom:state", &view);
     Ok(view)
