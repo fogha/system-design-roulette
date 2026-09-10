@@ -340,7 +340,11 @@
         "tutor"
       ],
       "reference_lessons": [
-        "lb-quoting"
+        "lb-quoting",
+        "lb-pipelines",
+        "lb-permissions",
+        "lb-search",
+        "lb-capstone"
       ]
     },
     {
@@ -395,7 +399,11 @@
         "tutor"
       ],
       "reference_lessons": [
-        "bs-error-handling"
+        "bs-error-handling",
+        "bs-arguments",
+        "bs-status",
+        "bs-loops",
+        "bs-capstone"
       ]
     },
     {

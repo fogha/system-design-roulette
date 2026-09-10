@@ -375,3 +375,9 @@ absence: the driver refuses to launch while the Mac is in use.
 Verified through `tests/language_phases.rs`; the lesson's "This pass counts
 when" line and the failed-pass explanation are rendered by the language
 screen. Desktop pass pending the learner's absence.
+
+## Bash reference lessons — 2026-09-10
+
+Validated offline by `tests/fixtures.rs`; retrieval sets feed
+`engineering::prepare_review` for the two Bash courses. No desktop pass is
+needed for content; the Bash classes are not enrolled on the QA profile.

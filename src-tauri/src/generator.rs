@@ -1094,6 +1094,10 @@ fn with_focus(prompt: &str, focus: &str) -> String {
 #[derive(Debug, Clone, Deserialize)]
 pub struct FallbackCourse {
     pub slug: String,
+    /// Representative role of this bundled lesson: beginner, advanced, remediation,
+    /// retrieval or capstone. Empty for older fixtures.
+    #[serde(default)]
+    pub kind: String,
     pub title: String,
     pub markdown: String,
     #[serde(default)]
@@ -2440,9 +2444,11 @@ pub fn fallback_for_slug(focus: &str, slug: &str) -> Option<FallbackCourse> {
 
 pub fn pick_fallback(focus: &str, preferred_title: &str) -> FallbackCourse {
     let sources = fallback_sources(focus);
+    // Retrieval sets are recall material, never a substitute for a lesson.
     let all: Vec<FallbackCourse> = sources
         .iter()
         .filter_map(|s| serde_json::from_str(s).ok())
+        .filter(|course: &FallbackCourse| course.kind != "retrieval")
         .collect();
     let lower = preferred_title.to_lowercase();
     let scored = all
@@ -3594,6 +3600,31 @@ mod exercise_tests {
             for source in fallback_sources(focus) {
                 let fallback: super::FallbackCourse =
                     serde_json::from_str(source).expect("fallback JSON must parse");
+                if fallback.kind == "retrieval" {
+                    // Recall sets: five usable MCQs, no lesson structure, never picked as a lesson.
+                    assert_eq!(
+                        fallback.questions.len(),
+                        5,
+                        "{} retrieval set size",
+                        fallback.slug
+                    );
+                    assert!(
+                        fallback.questions.iter().all(|q| q.kind == "mcq"
+                            && super::usable_mcq(
+                                &q.prompt,
+                                q.choices.as_deref(),
+                                &q.correct_answer,
+                                &q.explanation
+                            )),
+                        "{} retrieval questions must be usable MCQs",
+                        fallback.slug
+                    );
+                    assert_ne!(
+                        super::pick_fallback(focus, &fallback.title).slug,
+                        fallback.slug
+                    );
+                    continue;
+                }
                 assert!(
                     fallback.resources.len() >= 3,
                     "{} needs at least three verified resources",
