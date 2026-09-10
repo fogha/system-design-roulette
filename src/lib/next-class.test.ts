@@ -36,6 +36,7 @@ function state(overrides: Partial<AppStateView> = {}): AppStateView {
     classroom_due_count: 0,
     active_classroom_sessions: [],
     appointments: [],
+    focus: null,
     ...overrides,
   };
 }
@@ -94,6 +95,7 @@ describe('next scheduled class', () => {
             prompt_profile: 'classroom.typescript',
             prompt_version: 'v1',
             session_minutes: 30,
+            focus_policy: 'advisory' as const,
             learning_goal: '',
             target_weekly_minutes: 90,
             progress: 0,
@@ -128,6 +130,7 @@ describe('next scheduled class', () => {
             prompt_profile: 'classroom.typescript',
             prompt_version: 'v1',
             session_minutes: 30,
+            focus_policy: 'advisory' as const,
             learning_goal: '',
             target_weekly_minutes: 90,
             progress: 0,
@@ -161,6 +164,7 @@ describe('next scheduled class', () => {
         prompt_profile: 'classroom.typescript',
         prompt_version: 'v1',
         session_minutes: 30,
+        focus_policy: 'advisory' as const,
         learning_goal: '',
         target_weekly_minutes: 90,
         progress: 0,

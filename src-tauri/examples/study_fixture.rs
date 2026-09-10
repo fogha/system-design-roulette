@@ -14,14 +14,31 @@ use system_design_roulette_lib::{
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<_> = std::env::args().skip(1).collect();
     if args.len() < 2 {
-        return Err("usage: study_fixture DISPOSABLE_QA_DATABASE SUBJECT_ID [--fail]".into());
+        return Err("usage: study_fixture DISPOSABLE_QA_DATABASE SUBJECT_ID [--fail|--skip]".into());
     }
     let fail = args.iter().any(|arg| arg == "--fail");
+    let skip = args.iter().any(|arg| arg == "--skip");
     let path = PathBuf::from(&args[0]);
     let subject = args[1].as_str();
     let today = chrono::Local::now().format("%Y-%m-%d").to_string();
     let conn = db::open(&path)?;
     let program = classroom::program_row(&conn, subject)?;
+    if skip {
+        // Dispose of the class's resumable session through the real skip path
+        // so its projections and appointment resolve exactly as in the app.
+        let resumable = if program.kind == "language" {
+            system_design_roulette_lib::subjects::language::resumable(&conn, subject)?
+        } else {
+            engineering::resumable(&conn, subject)?
+        };
+        let Some(session) = resumable else {
+            println!("{}", serde_json::json!({"skipped": null, "note": "no resumable session"}));
+            return Ok(());
+        };
+        engineering::skip(&conn, &session.id)?;
+        println!("{}", serde_json::json!({"skipped": session.id.0, "status": "skipped"}));
+        return Ok(());
+    }
     if program.kind == "language" {
         // Language lessons publish their curated seed without a tutor call.
         use system_design_roulette_lib::subjects::language;

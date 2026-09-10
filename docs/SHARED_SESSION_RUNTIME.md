@@ -12,7 +12,7 @@ Earlier daily study has an explicit compatibility owner and a service date in it
 
 ## Lifecycle and preparation
 
-The persisted lifecycle is `planned → preparing → ready → active ↔ paused → completed/skipped`. SQLite constrains transitions, ownership, one resumable session per owner and one logically active session. Activating advisory work pauses the previous foreground session without changing its checkpoint. Focused/strict activation remains unavailable through this foundation until the OS focus coordinator and recovery protocol are integrated.
+The persisted lifecycle is `planned → preparing → ready → active ↔ paused → completed/skipped`. SQLite constrains transitions, ownership, one resumable session per owner and one logically active session. Activating advisory work pauses the previous foreground session without changing its checkpoint. Focused/strict activation needs a grant from the native focus coordinator (`enforcement.rs`): it admits one holder at a time, refuses unprepared sessions, engages the kiosk at Firm (focused) or Hard (strict), releases on completion, skip or the escape hatch, and re-engages the active holder after a restart once the webview is ready.
 
 Planning creates a durable preparation job. Workers claim it with a bounded lease; a second worker receives no lease while the first is live. Heartbeats extend live leases. After expiry, another worker can recover the same request and invalidate the old token. Failed requests retain their identity and error until an explicit retry. Skipping cancels outstanding preparation.
 

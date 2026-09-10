@@ -26,14 +26,14 @@
 
   // Block common quit/close shortcuts while locked.
   function onKeydown(e: KeyboardEvent) {
-    if (!app.state?.debug_day && app.session?.locked && e.metaKey && ['q', 'w', 'h', 'm'].includes(e.key.toLowerCase())) {
+    if (!app.state?.debug_day && app.locked && e.metaKey && ['q', 'w', 'h', 'm'].includes(e.key.toLowerCase())) {
       e.preventDefault();
       e.stopPropagation();
     }
   }
 </script>
 
-<svelte:window onkeydown={onKeydown} oncontextmenu={(e) => !app.state?.debug_day && app.session?.locked && e.preventDefault()} />
+<svelte:window onkeydown={onKeydown} oncontextmenu={(e) => !app.state?.debug_day && app.locked && e.preventDefault()} />
 
 <div id="app-root" class="theme-noir">
   {#if isBlanker}

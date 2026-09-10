@@ -286,3 +286,39 @@ JavaScript & Browser (09:30) and German (10:00) active on weekdays:
 - With the fix, Skip on the remaining TypeScript row consumed it and the agenda
   refreshed to no missed rows; both TypeScript and German runtime sessions
   stayed listed as resumable (screenshot 46). SQLite: two skipped, one started.
+
+## Per-class focus ownership — 2026-09-10
+
+Same isolated profile (schema v9 unchanged), launched with `--debug-day` so the
+kiosk records the lock without seizing the display. TypeScript held a paused
+advisory lesson and German an active one from the appointment checks:
+
+- Today opened normally on the rebuilt app (screenshot 47). In the TypeScript
+  Settings tab the new Enforcement section showed ADVISORY selected; choosing
+  FIRM and Save enforcement reported "Enforcement saved" and SQLite stored
+  `focus_policy` = `focused` on the class row (screenshot 48).
+- With the app closed, the fixture's new `--skip` flag skipped the paused
+  advisory lesson through the real skip path, and a fresh fixture lesson was
+  planned and published with `focus_policy` = `focused` in its context
+  snapshot (`ready`).
+- Resume from the class header activated the session through the coordinator.
+  The first build left the lesson header reading "pause class" because the
+  store did not reload app state after activation (screenshot 50); start and
+  resume now refresh after the lesson opens.
+- Cmd-Q with the focused session active, then relaunch: the app logged the
+  debug-day kiosk engagement at frontend-ready and reopened the lesson by
+  itself at its saved reading position, with the header reading
+  "focused · finish the check" (disabled) and the break-glass hatch visible
+  (screenshot 51).
+- Break glass showed the revised copy ("a focused class lesson is paused with
+  its work kept, an in-progress daily session is marked skipped")
+  (screenshot 54a). Typing the phrase and tripping the breaker paused the
+  session (revision 6 → 9), created no daily-routine row for the day, and
+  returned to Today with no lock and the lesson listed as resumable
+  (screenshot 54).
+- On the rebuilt app, Resume showed the disabled "focused · finish the check"
+  header immediately. The desktop pass stopped there because the learner was
+  actively using this Mac (the QA window kept leaving the active Space and a
+  region capture showed their own work, which was deleted); the completion and
+  skip release paths are covered by `tests/enforcement.rs` and the command-level
+  release calls rather than by a native capture in this pass.

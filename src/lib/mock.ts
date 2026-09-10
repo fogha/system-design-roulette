@@ -1,4 +1,5 @@
 import { previewConfiguration, savePreviewConfiguration, previewRunners, previewModels, previewLocal, rememberPreviewModel, desktopRequired } from './features/runners/preview';
+import type { FocusPolicy } from './ipc';
 import type { AgentPolicy, RunnerId } from './contracts/agents';
 import type { AssessmentRoundId } from './contracts/assessments';
 import { previewEnrollmentOptions, previewEnrollmentDraft, savePreviewEnrollmentDraft } from './enrollment-preview';
@@ -372,6 +373,7 @@ const mockClassroomSettings = Object.fromEntries(
       sessionMinutes: 30,
       learningGoal: '',
       targetWeeklyMinutes: 0,
+      focusPolicy: 'advisory' as FocusPolicy,
     },
   ]),
 ) as Record<
@@ -384,6 +386,7 @@ const mockClassroomSettings = Object.fromEntries(
     sessionMinutes: number;
     learningGoal: string;
     targetWeeklyMinutes: number;
+    focusPolicy: FocusPolicy;
   }
 >;
 let mockClassroomSlots: ClassroomSlotView[] = requestedClass
@@ -646,6 +649,7 @@ function mockClassroomProgram(subjectId: ClassroomSubjectId): ClassroomProgramVi
     prompt_version: 'v1',
     session_minutes: settings.sessionMinutes,
     learning_goal: settings.learningGoal,
+    focus_policy: settings.focusPolicy,
     target_weekly_minutes: settings.targetWeeklyMinutes,
     progress: languageProgress?.progress ?? 0,
     progress_label:
@@ -717,6 +721,7 @@ function appState(): AppStateView {
     classroom_slots: mockClassroomSlots,
     classroom_due_count: mockClassroomSlots.filter((slot) => slot.owed).length,
     appointments: [],
+    focus: null,
     active_classroom_sessions: [
       ...(mockActiveLanguage
         ? [
@@ -1157,6 +1162,10 @@ export const mockApi = {
   submitClassCheck: async () => { throw new Error('Shared-runtime knowledge checks need the desktop app.'); },
   submitClassLanguageCheck: async () => { throw new Error('Shared-runtime knowledge checks need the desktop app.'); },
   skipAppointment: async () => { throw new Error('Appointments need the desktop app.'); },
+  setClassFocusPolicy: async (subjectId: ClassroomSubjectId, policy: FocusPolicy) => {
+    mockClassroomSettings[subjectId].focusPolicy = policy;
+    return mockPrograms().find((program) => program.subject_id === subjectId)!;
+  },
   getClassAppointments: async () => [],
   pauseClassLesson: async () => {},
   skipClassLesson: async (sessionId: string) => { if (mockActiveEngineering?.session_id === sessionId) mockActiveEngineering = null; },

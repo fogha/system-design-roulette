@@ -35,6 +35,7 @@ function state(overrides: Partial<AppStateView> = {}): AppStateView {
     classroom_due_count: 0,
     active_classroom_sessions: [],
     appointments: [],
+    focus: null,
     ...overrides,
   };
 }
@@ -166,4 +167,30 @@ it('keeps preparation visible across navigation and prevents duplicate starts un
     vi.restoreAllMocks();
     app.error = '';
   }
+});
+
+describe('focused class sessions', () => {
+  const focus = { session_id: 'study-1', course_id: 'typescript', policy: 'focused' as const, locked: true };
+
+  it('shows the escape hatch only once the kiosk is engaged for the holder', () => {
+    expect(shouldShowEscapeHatch(state({ focus }))).toBe(true);
+    expect(shouldShowEscapeHatch(state({ focus: { ...focus, locked: false } }))).toBe(false);
+  });
+
+  it('locks navigation and reports the holder to other classes', () => {
+    app.state = state({ focus });
+    app.screen = 'idle';
+    expect(app.locked).toBe(true);
+    expect(app.isFocusLocked('study-1')).toBe(true);
+    expect(app.isFocusLocked('study-2')).toBe(false);
+    expect(app.heldByOtherClass('javascript')).toBe('typescript');
+    expect(app.heldByOtherClass('typescript')).toBeNull();
+    app.navigate('progress');
+    expect(app.screen).toBe('idle');
+    app.state = state();
+    expect(app.locked).toBe(false);
+    app.navigate('progress');
+    expect(app.screen).toBe('dashboard');
+    app.navigate('today');
+  });
 });

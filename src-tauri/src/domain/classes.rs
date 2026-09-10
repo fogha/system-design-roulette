@@ -73,6 +73,32 @@ fn read_path(conn: &Connection, path_id: &str) -> Result<AcceptedPath> {
         accepted_at: row.6,
     })
 }
+/// Change how future sessions of a class are enforced. Existing sessions keep
+/// the policy snapshotted when they were planned. A class without a path yet
+/// begins at the foundations so the policy has a class to belong to.
+pub fn set_focus_policy(
+    conn: &Connection,
+    course_id: &str,
+    policy: enrollment::FocusPolicy,
+    today: &str,
+) -> Result<EnrollmentConfiguration> {
+    if current_path(conn, course_id)?.is_none() {
+        ensure_default_path(conn, course_id, today)?;
+    }
+    let mut config = current_configuration(conn, course_id)?
+        .ok_or_else(|| DbError::Invalid("This class has no configuration yet.".into()))?;
+    config.focus_policy = policy;
+    conn.execute(
+        "UPDATE classes SET configuration_json=?2,updated_at=?3 WHERE course_id=?1",
+        params![
+            course_id,
+            serde_json::to_string(&config)?,
+            chrono::Utc::now().to_rfc3339()
+        ],
+    )?;
+    Ok(config)
+}
+
 pub fn path_by_id(conn: &Connection, path_id: &str) -> Result<AcceptedPath> {
     read_path(conn, path_id)
 }
@@ -231,12 +257,6 @@ pub fn accept(conn: &Connection, input: &AcceptPath, today: &str) -> Result<Acce
         .iter()
         .find(|c| c.course_id == draft.course.course_id)
         .ok_or_else(|| DbError::InvalidFocus(draft.course.course_id.clone()))?;
-    if draft.configuration.focus_policy != enrollment::FocusPolicy::Advisory {
-        return Err(DbError::Invalid(
-            "Class paths currently support advisory focus. Choose advisory before accepting."
-                .into(),
-        ));
-    }
     if !crate::agents::valid_model(&draft.configuration.tutor.model) {
         return Err(DbError::Invalid(
             "Choose a valid model ID before accepting the path.".into(),

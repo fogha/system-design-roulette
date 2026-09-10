@@ -40,6 +40,8 @@ pub struct AppState {
     /// (this is memory-only). Namespaced keys keep independently allocated
     /// course and classroom ids from colliding.
     pub chat_threads: Mutex<HashMap<String, Vec<ChatTurn>>>,
+    /// Owner of foreground enforcement for class sessions, if any.
+    pub focus: crate::enforcement::Coordinator,
 }
 
 #[derive(Debug, Clone)]

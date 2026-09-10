@@ -95,6 +95,8 @@ pub struct AppStateView {
     pub active_classroom_sessions: Vec<crate::classroom::ActiveClassroomSessionView>,
     /// Today's durable appointments plus recent missed ones awaiting make-up.
     pub appointments: Vec<crate::classroom::AppointmentView>,
+    /// The class session holding foreground enforcement, if any.
+    pub focus: Option<crate::enforcement::FocusView>,
 }
 
 fn valid_agent(agent: &str) -> bool {
@@ -193,8 +195,10 @@ pub fn set_kiosk_level(state: State<'_, AppState>, level: String) -> CmdResult<(
 /// Called by the webview on boot. Until this fires, the kiosk refuses to
 /// engage (a dead webview has no escape hatch).
 #[tauri::command]
-pub fn mark_frontend_ready(state: State<'_, AppState>) -> CmdResult<()> {
+pub fn mark_frontend_ready(app: AppHandle, state: State<'_, AppState>) -> CmdResult<()> {
     state.frontend_ready.store(true, Ordering::SeqCst);
+    // An active focused class session recovers its enforcement only now.
+    crate::enforcement::restore(&app, &state);
     Ok(())
 }
 
@@ -278,7 +282,27 @@ pub fn get_app_state(state: State<'_, AppState>) -> CmdResult<AppStateView> {
         classroom_due_count,
         active_classroom_sessions,
         appointments,
+        focus: crate::enforcement::view(&state),
     })
+}
+
+/// Choose how future sessions of a class are enforced. Existing sessions keep
+/// the policy they were planned with.
+#[tauri::command]
+pub fn set_class_focus_policy(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    subject_id: String,
+    policy: crate::domain::enrollment::FocusPolicy,
+) -> CmdResult<crate::classroom::ClassroomProgramView> {
+    let view = {
+        let conn = state.db.0.lock().unwrap();
+        crate::domain::classes::set_focus_policy(&conn, subject_id.trim(), policy, &state.today())
+            .map_err(err)?;
+        crate::classroom::program_view(&conn, subject_id.trim(), &state.today()).map_err(err)?
+    };
+    let _ = app.emit("classroom:state", &view);
+    Ok(view)
 }
 
 /// Skip an open appointment without starting a session. It is consumed once.
@@ -569,6 +593,14 @@ pub async fn start_classroom_session(
         .map_err(|_| "A class lesson is already being prepared. Wait for it to finish before starting another.".to_string())?;
     let revisit = revisit.unwrap_or(false);
     let spec = crate::classroom::subject(subject_id.trim()).map_err(err)?;
+    if let Some(holder) = state.focus.holder() {
+        if holder.course_id != spec.id {
+            return Err(format!(
+                "A focused {} session holds the desk. Finish it or use the escape hatch first.",
+                crate::focus::label(&holder.course_id)
+            ));
+        }
+    }
     // Resolve the appointment this start serves: an explicit one (including a
     // missed make-up) or today's appointment of the chosen rule.
     let appointment = {
@@ -627,8 +659,8 @@ pub async fn start_classroom_session(
                         serde_json::json!({ "planned": planned.id }),
                     );
                     crate::subjects::language::prepare(&state, &planned.id).await?;
+                    crate::enforcement::activate(&app, &state, &planned.id)?;
                     let conn = state.db.0.lock().unwrap();
-                    crate::subjects::language::activate(&conn, &planned.id)?;
                     crate::subjects::language::view(&conn, &planned.id)?
                         .ok_or("The prepared lesson could not be read.")?
                 }
@@ -667,8 +699,8 @@ pub async fn start_classroom_session(
                         serde_json::json!({ "planned": planned.id }),
                     );
                     crate::subjects::engineering::prepare(&state, &planned.id).await?;
+                    crate::enforcement::activate(&app, &state, &planned.id)?;
                     let conn = state.db.0.lock().unwrap();
-                    crate::subjects::engineering::activate(&conn, &planned.id)?;
                     crate::subjects::engineering::view(&conn, &planned.id)?
                         .ok_or("The prepared lesson could not be read.")?
                 }
@@ -758,6 +790,7 @@ pub fn submit_class_check(
             &state.today(),
         )?
     };
+    crate::enforcement::release(&app, &state, &session_id.0);
     state.clear_chat_threads();
     let _ = app.emit("classroom:state", &result);
     Ok(result)
@@ -783,6 +816,7 @@ pub fn submit_class_language_check(
             &state.today(),
         )?
     };
+    crate::enforcement::release(&app, &state, &session_id.0);
     state.clear_chat_threads();
     let _ = app.emit("classroom:state", &result);
     Ok(result)
@@ -794,6 +828,16 @@ pub fn pause_class_lesson(
     state: State<'_, AppState>,
     session_id: crate::domain::sessions::SessionId,
 ) -> CmdResult<()> {
+    if state
+        .focus
+        .holder()
+        .is_some_and(|holder| holder.session_id == session_id.0)
+    {
+        return Err(
+            "This focused session cannot be paused. Finish its check, or use the escape hatch."
+                .into(),
+        );
+    }
     let conn = state.db.0.lock().unwrap();
     crate::subjects::engineering::pause(&conn, &session_id).map(|_| ())
 }
@@ -809,6 +853,7 @@ pub fn skip_class_lesson(
         let conn = state.db.0.lock().unwrap();
         crate::subjects::engineering::skip(&conn, &session_id)?;
     }
+    crate::enforcement::release(&app, &state, &session_id.0);
     state.clear_chat_threads();
     let _ = app.emit(
         "classroom:state",
@@ -819,6 +864,7 @@ pub fn skip_class_lesson(
 
 #[tauri::command]
 pub fn resume_classroom_session(
+    app: AppHandle,
     state: State<'_, AppState>,
     subject_id: String,
 ) -> CmdResult<Option<serde_json::Value>> {
@@ -844,7 +890,9 @@ pub fn resume_classroom_session(
             ) {
                 return Ok(None);
             }
-            crate::subjects::language::activate(&conn, &session.id)?;
+            drop(conn);
+            crate::enforcement::activate(&app, &state, &session.id)?;
+            let conn = state.db.0.lock().unwrap();
             Ok(crate::subjects::language::view(&conn, &session.id)?
                 .map(|lesson| serde_json::json!({ "kind": "language", "lesson": lesson })))
         }
@@ -869,7 +917,9 @@ pub fn resume_classroom_session(
                 // Planned or failed preparation: Learn now retries it, Discard skips it.
                 return Ok(None);
             }
-            crate::subjects::engineering::activate(&conn, &session.id)?;
+            drop(conn);
+            crate::enforcement::activate(&app, &state, &session.id)?;
+            let conn = state.db.0.lock().unwrap();
             Ok(crate::subjects::engineering::view(&conn, &session.id)?
                 .map(|lesson| serde_json::json!({ "kind": "engineering", "lesson": lesson })))
         }
@@ -2141,37 +2191,24 @@ pub fn escape_session(
 ) -> CmdResult<bool> {
     match crate::kiosk::verify_escape(&state, &phrase)? {
         true => {
-            let today = state.today();
-            {
+            // A focused class session is paused with its work intact; only an
+            // actually running legacy day is marked skipped. The retired daily
+            // routine never gains a new row here.
+            if crate::enforcement::escape(&app, &state).is_none() {
+                let today = state.today();
                 let conn = state.db.0.lock().unwrap();
-                let focus = crate::mastery::get_profile(&conn, "preferred_focus")
-                    .ok()
-                    .flatten()
-                    .filter(|value| crate::focus::is_selectable(value))
-                    .unwrap_or_else(|| "javascript".into());
-                let mut s = db::current_primary_session(&conn, &today)
-                    .ok()
-                    .flatten()
-                    .unwrap_or(db::Session {
-                        date: today.clone(),
-                        concept_id: None,
-                        status: "pending".into(),
-                        current_step: session::STEP_QUIZ.into(),
-                        quiz_score: None,
-                        started_at: None,
-                        completed_at: None,
-                        reading_seconds: 0,
-                        session_type: "lesson".into(),
-                        plan_reason: "emergency skip before session start".into(),
-                        focus,
-                    });
-                s.status = "skipped".into();
-                s.completed_at = Some(session::now_iso());
-                let _ = db::upsert_session(&conn, &s);
+                if let Ok(Some(mut s)) = db::current_primary_session(&conn, &today) {
+                    if s.status == "in_progress" {
+                        s.status = "skipped".into();
+                        s.completed_at = Some(session::now_iso());
+                        let _ = db::upsert_session(&conn, &s);
+                    }
+                }
             }
             state.clear_chat_threads();
             crate::kiosk::release(&app, &state);
             let _ = app.emit("session:state", session::view(&state));
+            let _ = app.emit("classroom:state", serde_json::json!({ "escaped": true }));
             Ok(true)
         }
         false => Ok(false),

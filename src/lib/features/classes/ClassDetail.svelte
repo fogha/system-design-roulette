@@ -23,6 +23,9 @@
   let opening = $state(false);
   /** A shared-runtime lesson whose preparation has not finished: Learn now retries it. */
   const pending = $derived(!!active && active.runtime === 'study' && ['planned', 'preparing'].includes(active.lifecycle));
+  /** Another class's focused session holds the desk: this class waits. */
+  const heldElsewhere = $derived(app.heldByOtherClass(program.subject_id));
+  const heldLabel = $derived(heldElsewhere ? (app.state?.classroom_programs.find(p => p.subject_id === heldElsewhere)?.label ?? heldElsewhere) : '');
   async function open(slotId: number | null = null, occurrenceId: string | null = null) { if (opening) return; opening = true; try { if (active && !pending) await app.resumeClass(program.subject_id); else await app.startClass(program.subject_id, slotId, program.completed, occurrenceId); } finally { opening = false; } }
   let busy = $state(false), error = $state('');
   async function discard() {
@@ -65,7 +68,8 @@
 <article class="class-detail" aria-label={`${program.label} controls`}>
   <header class="class-header">
     <div class="identity"><CourseGlyph courseId={program.subject_id} size={46} /><div><div class="eyebrow mono">{program.kind === 'language' ? 'LANGUAGE' : 'ENGINEERING'} / {program.short_code}<span class:enabled={program.enabled} class="status">{program.completed ? 'Completed' : program.enabled ? 'Active' : 'Inactive'}</span></div><h2>{program.label}</h2><p>{program.native_label}</p></div></div>
-    <div class="header-actions"><button class="ghost mono-ghost" onclick={toggle} disabled={busy || opening || preparing}>{busy ? 'Saving…' : program.enabled ? 'Pause class' : slots.some(slot => slot.enabled) ? 'Activate class' : 'Set study times'}</button><button class="cta mono-cta" disabled={(!program.enabled && !active) || opening || preparing} onclick={() => open()}><Play size={13} />{opening ? 'Opening…' : pending ? 'Retry preparation' : active ? 'Resume' : program.completed ? 'Revisit' : 'Learn now'}</button>{#if pending}<button class="ghost mono-ghost" onclick={discard} disabled={busy || opening || preparing}>Discard lesson</button>{/if}</div>
+    <div class="header-actions"><button class="ghost mono-ghost" onclick={toggle} disabled={busy || opening || preparing}>{busy ? 'Saving…' : program.enabled ? 'Pause class' : slots.some(slot => slot.enabled) ? 'Activate class' : 'Set study times'}</button><button class="cta mono-cta" disabled={(!program.enabled && !active) || opening || preparing || !!heldElsewhere} title={heldElsewhere ? `A focused ${heldLabel} session holds the desk.` : undefined} onclick={() => open()}><Play size={13} />{opening ? 'Opening…' : pending ? 'Retry preparation' : active ? 'Resume' : program.completed ? 'Revisit' : 'Learn now'}</button>{#if pending}<button class="ghost mono-ghost" onclick={discard} disabled={busy || opening || preparing}>Discard lesson</button>{/if}</div>
+    {#if heldElsewhere}<p class="held mono" role="status">A focused {heldLabel} session holds the desk. {program.label} waits until it finishes.</p>{/if}
   </header>
   {#if error}<p class="banner error" role="alert">{error}</p>{/if}
   <div class="tabs" role="tablist" aria-label={`${program.label} sections`}>
@@ -82,7 +86,7 @@
             {#if pending}<p class="notice">Lesson preparation did not finish: <strong>{active?.title}</strong>. Retry it or discard it from the class header; nothing was graded.</p>{:else if active}<p class="notice">Saved session: <strong>{active.title}</strong>. Resume from the class header.</p>{:else if !program.enabled}<p class="notice">Set your starting point and add a study time, then activate this class when you’re ready.</p>{/if}
           </div>
         {:else if item.id === 'settings'}<ClassSettings {program} />
-        {:else if item.id === 'schedule'}<ClassSchedule {program} opening={opening || preparing} onstart={open} onmakeup={(id) => open(null, id)} />
+        {:else if item.id === 'schedule'}<ClassSchedule {program} opening={opening || preparing || !!heldElsewhere} onstart={open} onmakeup={(id) => open(null, id)} />
         {:else if item.id === 'entry'}
           {#if pathLoading}<p class="loading" role="status">Loading your starting point…</p>{:else if pathError}<p class="error" role="alert">{pathError}</p><button class="ghost mono-ghost" onclick={loadPath}>Retry</button>{:else if pathLoaded}
             {#if path && !editingPath}<PathPreview embedded path={path.recommendation} acceptedRevision={path.revision} onclose={() => select('overview')} onfoundations={() => editingPath = true} />{:else}<EnrollmentSetup embedded courseId={program.subject_id} onclose={setupClosed} />{/if}
@@ -100,6 +104,7 @@
 </article>
 
 <style>
+  .held { margin: 8px 0 0; font-size: 11px; color: var(--led-warn); }
   .class-detail { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; overflow: hidden; }
   .class-header { flex-shrink: 0; padding: 22px 24px; display: flex; justify-content: space-between; align-items: center; gap: 18px; background: linear-gradient(110deg,var(--surface),var(--node-bg)); }
   .identity { display: flex; align-items: center; gap: 14px; min-width: 0; } .eyebrow { font-size: 10px; color: var(--muted); letter-spacing: .7px; } h2 { font: 26px/1.2 var(--font-display); margin: 7px 0 5px; } .identity p { font: 10px var(--font-mono); margin: 0; color: var(--muted); }

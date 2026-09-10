@@ -88,7 +88,11 @@
   }
 
   /** Production work is saved with the lesson so a paused session restores it. */
+  /** A Focused/Strict session that engaged the kiosk cannot be paused here. */
+  const lockedHere = $derived(app.isFocusLocked(lesson?.session_id));
+
   async function pause() {
+    if (lockedHere) return;
     stopSpeaking();
     if (lesson && study && !result) {
       try {
@@ -170,8 +174,14 @@
     />
 
     <header class="lesson-head">
-      <button class="back" type="button" onclick={pause}>
-        <ArrowLeft size={14} /> pause and return
+      <button
+        class="back"
+        type="button"
+        onclick={pause}
+        disabled={lockedHere}
+        title={lockedHere ? 'Focused session: finish the check, or use the escape hatch.' : undefined}
+      >
+        <ArrowLeft size={14} /> {lockedHere ? 'focused · finish the check' : 'pause and return'}
       </button>
       <div class="lesson-identity">
         <span class="code mono">{lesson.language === 'german' ? 'DE' : 'IT'}</span>

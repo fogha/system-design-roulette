@@ -5,6 +5,7 @@ pub mod classroom;
 pub mod commands;
 pub mod db;
 pub mod domain;
+pub mod enforcement;
 pub mod focus;
 pub mod generator;
 pub mod keychain;
@@ -177,6 +178,7 @@ pub fn run() {
                 gen_notify: tokio::sync::Notify::new(),
                 class_start_gate: tokio::sync::Mutex::new(()),
                 chat_threads: Mutex::new(std::collections::HashMap::new()),
+                focus: enforcement::Coordinator::default(),
             });
 
             // Self-heal the launchd plist if it points at a stale binary path
@@ -326,6 +328,7 @@ pub fn run() {
             commands::pause_class_lesson,
             commands::skip_class_lesson,
             commands::skip_appointment,
+            commands::set_class_focus_policy,
             commands::get_class_appointments,
             commands::submit_language_session,
             commands::set_kiosk_level,

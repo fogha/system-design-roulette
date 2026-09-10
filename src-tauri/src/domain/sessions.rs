@@ -556,13 +556,39 @@ pub fn publish_preparation(
     Ok(result)
 }
 
-/// Logical foreground ownership only. Generalized OS enforcement requires its
-/// own recovery protocol; until then this entry point accepts advisory sessions.
+/// Issued only by the native focus coordinator once it owns enforcement for
+/// exactly one session; focused and strict sessions cannot activate without it.
+#[derive(Debug)]
+pub struct FocusGrant(pub(crate) ());
+
+/// Logical foreground ownership for advisory sessions. Focused and strict
+/// sessions must be activated through the coordinator's grant.
 pub fn activate(
     conn: &Connection,
     id: &SessionId,
     expected_revision: u32,
     now: DateTime<Utc>,
+) -> Result<Session> {
+    activate_inner(conn, id, expected_revision, now, None)
+}
+
+/// Activation of a focused or strict session under the coordinator's grant.
+pub fn activate_focused(
+    conn: &Connection,
+    id: &SessionId,
+    expected_revision: u32,
+    now: DateTime<Utc>,
+    grant: FocusGrant,
+) -> Result<Session> {
+    activate_inner(conn, id, expected_revision, now, Some(grant))
+}
+
+fn activate_inner(
+    conn: &Connection,
+    id: &SessionId,
+    expected_revision: u32,
+    now: DateTime<Utc>,
+    grant: Option<FocusGrant>,
 ) -> Result<Session> {
     let tx = transaction(conn)?;
     let session = get(&tx, id)?;
@@ -576,7 +602,7 @@ pub fn activate(
     if !matches!(session.status, Status::Ready | Status::Paused) {
         return Err(invalid("Only a ready or paused session can be activated."));
     }
-    if session.context.focus_policy != FocusPolicy::Advisory {
+    if session.context.focus_policy != FocusPolicy::Advisory && grant.is_none() {
         return Err(invalid(
             "Focused study needs the native focus coordinator before activation.",
         ));

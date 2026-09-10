@@ -69,6 +69,7 @@ fn app_state(conn: rusqlite::Connection) -> system_design_roulette_lib::state::A
         gen_notify: tokio::sync::Notify::new(),
         class_start_gate: tokio::sync::Mutex::new(()),
         chat_threads: Mutex::new(Default::default()),
+        focus: Default::default(),
     }
 }
 

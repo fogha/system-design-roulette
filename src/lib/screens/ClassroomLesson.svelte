@@ -114,7 +114,11 @@
     });
   }
 
+  /** A Focused/Strict session that engaged the kiosk cannot be paused here. */
+  const lockedHere = $derived(app.isFocusLocked(lesson?.session_id));
+
   async function pause() {
+    if (lockedHere) return;
     if (lesson && study) {
       try {
         await saveQueue;
@@ -169,8 +173,14 @@
     />
 
     <header class="lesson-head">
-      <button class="back-button" type="button" onclick={pause}>
-        <ArrowLeft size={14} /> pause class
+      <button
+        class="back-button"
+        type="button"
+        onclick={pause}
+        disabled={lockedHere}
+        title={lockedHere ? 'Focused session: finish the check, or use the escape hatch.' : undefined}
+      >
+        <ArrowLeft size={14} /> {lockedHere ? 'focused · finish the check' : 'pause class'}
       </button>
       <div class="identity">
         <span class="class-code mono">{lesson.short_code}</span>

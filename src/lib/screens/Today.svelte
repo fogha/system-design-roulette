@@ -15,6 +15,10 @@
   const missed = $derived((app.state?.appointments ?? []).filter(a => a.disposition === 'missed'));
   const upcoming = $derived(slots.filter(s => !s.owed).sort((a,b) => a.next_fire_at.localeCompare(b.next_fire_at)).slice(0,4));
   const legacy = $derived(app.session?.status === 'in_progress');
+  /** The class whose focused session holds the desk; other classes wait. */
+  const held = $derived(app.state?.focus?.course_id ?? null);
+  const heldLabel = $derived(held ? (app.state?.classroom_programs.find(p => p.subject_id === held)?.label ?? held) : '');
+  const heldElsewhere = (subject: string) => held !== null && held !== subject;
   $effect(() => { const timer = setInterval(() => now = new Date(),1000); return () => clearInterval(timer); });
   async function pause() {
     if (busy) return; busy = true;
@@ -49,17 +53,18 @@
     <div class="badges"><MetaBadge tone="violet">{activeClasses.length} active classes</MetaBadge><MetaBadge tone="teal">{slots.length} study times</MetaBadge></div>
     <button class="cta mono-cta" onclick={() => app.openClass()}><BookOpen size={14} />Open classes</button>
     <div class="quick-links"><button class="ghost mono-ghost" onclick={() => app.navigate('progress')}>Progress ledger</button><button class="ghost mono-ghost" onclick={pause} disabled={busy}>{app.state?.schedule_paused ? 'Resume appointments' : 'Pause appointments'}</button></div>
+    {#if held}<p class="held mono" role="status">A focused {heldLabel} session holds the desk. Other classes wait until it finishes.</p>{/if}
   </section>
   {#if resumable.length || legacy}
     <section class="saved" aria-label="Saved sessions"><NodeCard Icon={Play} name="saved-sessions" badge="resumable" badgeTone="teal">
       {#if legacy}<div class="study-row"><div><strong>Saved daily session</strong><p>The daily routine has been retired. Continue this existing session at its saved step.</p></div><button class="ghost mono-ghost" onclick={() => app.resumeSession()}>Resume<ArrowRight size={12} /></button></div>{/if}
-      {#each resumable as session}{@const pending = session.runtime === 'study' && ['planned', 'preparing'].includes(session.lifecycle)}<div class="study-row"><div><strong>{session.label}</strong><p>{session.title}{pending ? ' · preparation did not finish' : ''}</p></div>{#if pending}<button class="ghost mono-ghost" disabled={busy || !!app.preparingClass} onclick={() => app.startClass(session.subject_id)}>Retry<ArrowRight size={12} /></button>{:else}<button class="ghost mono-ghost" onclick={() => app.resumeClass(session.subject_id)}>Resume<ArrowRight size={12} /></button>{/if}</div>{/each}
+      {#each resumable as session}{@const pending = session.runtime === 'study' && ['planned', 'preparing'].includes(session.lifecycle)}<div class="study-row"><div><strong>{session.label}</strong><p>{session.title}{pending ? ' · preparation did not finish' : ''}</p></div>{#if pending}<button class="ghost mono-ghost" disabled={busy || !!app.preparingClass || heldElsewhere(session.subject_id)} onclick={() => app.startClass(session.subject_id)}>Retry<ArrowRight size={12} /></button>{:else}<button class="ghost mono-ghost" disabled={heldElsewhere(session.subject_id)} onclick={() => app.resumeClass(session.subject_id)}>Resume<ArrowRight size={12} /></button>{/if}</div>{/each}
     </NodeCard></section>
   {/if}
   <div class="overview">
     <section aria-label="Class agenda"><NodeCard Icon={Clock} name="class-agenda" badge={dueSlots.length ? dueSlots.length+' due' : missed.length ? missed.length+' missed' : 'upcoming'} badgeTone={dueSlots.length || missed.length ? 'amber' : 'teal'}>
-      {#each dueSlots as slot}<div class="study-row"><div><strong>{slot.label}</strong><p class="mono">{String(slot.hour).padStart(2,'0')}:{String(slot.minute).padStart(2,'0')} · due</p></div><button class="ghost mono-ghost" disabled={busy || !!app.preparingClass || resumable.some(s => s.subject_id === slot.subject_id)} onclick={() => start(slot)}>Start class</button></div>{/each}
-      {#each missed as appointment (appointment.id)}<div class="study-row"><div><strong>{appointment.label}</strong><p class="mono">{appointment.local_date} · {appointment.local_time} · missed</p></div><div class="row-actions"><button class="ghost mono-ghost" disabled={busy || !!app.preparingClass || resumable.some(s => s.subject_id === appointment.course_id) || !activeClasses.some(p => p.subject_id === appointment.course_id)} onclick={() => makeUp(appointment)}>Make up</button><button class="ghost mono-ghost" disabled={busy} onclick={() => skipAppointment(appointment)}>Skip</button></div></div>{/each}
+      {#each dueSlots as slot}<div class="study-row"><div><strong>{slot.label}</strong><p class="mono">{String(slot.hour).padStart(2,'0')}:{String(slot.minute).padStart(2,'0')} · due</p></div><button class="ghost mono-ghost" disabled={busy || !!app.preparingClass || resumable.some(s => s.subject_id === slot.subject_id) || heldElsewhere(slot.subject_id)} onclick={() => start(slot)}>Start class</button></div>{/each}
+      {#each missed as appointment (appointment.id)}<div class="study-row"><div><strong>{appointment.label}</strong><p class="mono">{appointment.local_date} · {appointment.local_time} · missed</p></div><div class="row-actions"><button class="ghost mono-ghost" disabled={busy || !!app.preparingClass || resumable.some(s => s.subject_id === appointment.course_id) || !activeClasses.some(p => p.subject_id === appointment.course_id) || heldElsewhere(appointment.course_id)} onclick={() => makeUp(appointment)}>Make up</button><button class="ghost mono-ghost" disabled={busy} onclick={() => skipAppointment(appointment)}>Skip</button></div></div>{/each}
       {#if !app.state?.schedule_paused}{#each upcoming as slot}<button class="agenda-link" onclick={() => app.openClass(slot.subject_id,'schedule')}><span><strong>{slot.label}</strong><small>{appointment(slot)}</small></span><ArrowRight size={13} /></button>{/each}{/if}
       {#if !dueSlots.length && !missed.length && (!upcoming.length || app.state?.schedule_paused)}<div class="queue-state"><StatusLED tone="ok" /><p>{app.state?.schedule_paused ? 'Appointments are paused.' : 'Add study times inside a class to build your week.'}</p></div>{/if}
       <button class="ghost mono-ghost" onclick={() => app.openClass(null,'schedule')}>Manage class schedules<ArrowRight size={12} /></button>
@@ -71,6 +76,7 @@
   </div>
 </div>
 <style>
+  .held { margin: 10px 0 0; font-size: 11px; color: var(--led-warn); }
   .today { width: min(1080px,100%); padding: 26px 30px 40px; margin: 0 auto; } .idle-center { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 24px 0 28px; } h1 { font-size: 34px; margin: 10px 0 6px; } .sub { color: var(--muted); font-size: 13px; margin: 0 0 22px; max-width: 620px; }
   .node-wrap { width: min(370px,100%); text-align: left; margin-bottom: 18px; } .count { font-size: 30px; color: var(--accent); margin: 5px 0; } .next-class { font-size: 14px; font-weight: 500; } .sched { font-size: 11px; color: var(--muted); margin-top: 5px; } .badges,.quick-links { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; } .badges { margin-bottom: 22px; } .quick-links { margin-top: 16px; }
   .overview { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding-top: 22px; border-top: 1px dashed var(--node-border); } .saved { margin: 0 0 22px; } .study-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 10px 0; border-bottom: 1px dashed var(--node-divider); margin-bottom: 12px; } .study-row strong { font-size: 13px; font-weight: 500; } .study-row p,.hint { font-size: 12px; color: var(--muted); margin: 5px 0 12px; } .queue-state { display: flex; gap: 9px; align-items: center; font-size: 12px; color: var(--muted); }

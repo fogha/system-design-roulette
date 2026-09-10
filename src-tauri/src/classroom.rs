@@ -192,6 +192,8 @@ pub struct ClassroomProgramView {
     pub completed: bool,
     pub language_progress: Option<language::LanguageProgramView>,
     pub accepted_path: Option<crate::domain::classes::PathSummary>,
+    /// Enforcement for future sessions: advisory, focused or strict.
+    pub focus_policy: String,
 }
 
 pub fn program_views(conn: &Connection, today: &str) -> Result<Vec<ClassroomProgramView>> {
@@ -270,6 +272,15 @@ pub fn program_view(
         accepted_path: crate::domain::classes::current_path(conn, subject_id)
             .map_err(|e| e.to_string())?
             .map(|path| path.summary()),
+        focus_policy: crate::domain::classes::current_configuration(conn, subject_id)
+            .map_err(|e| e.to_string())?
+            .map(|config| {
+                serde_json::to_value(config.focus_policy)
+                    .ok()
+                    .and_then(|value| value.as_str().map(String::from))
+                    .unwrap_or_else(|| "advisory".into())
+            })
+            .unwrap_or_else(|| "advisory".into()),
     })
 }
 

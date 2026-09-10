@@ -21,7 +21,7 @@
     });
     if (ok) {
       open = false;
-      await app.refresh();
+      await app.escaped();
     } else if (!error) {
       error = 'phrase does not match';
       typed = '';
@@ -43,8 +43,8 @@
       <div class="hatch-head mono">
         <span class="bg-tag">BREAK GLASS</span>
         <span class="hatch-warn">
-          circuit breaker — marks today’s enforced session skipped; completed classroom history is
-          preserved
+          circuit breaker — releases the lock: a focused class lesson is paused with its work
+          kept, an in-progress daily session is marked skipped
         </span>
       </div>
       <svg class="phrase-svg" viewBox="0 0 640 28" preserveAspectRatio="xMidYMid meet">

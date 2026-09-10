@@ -59,6 +59,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         gen_notify: tokio::sync::Notify::new(),
         class_start_gate: tokio::sync::Mutex::new(()),
         chat_threads: Mutex::new(Default::default()),
+        focus: Default::default(),
     };
     println!(
         "{}",

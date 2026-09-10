@@ -2,6 +2,7 @@ import {
   api,
   onEvent,
   type AppStateView,
+  type ClassroomSessionStart,
   type ClassroomSubjectId,
   type EngineeringLessonView,
   type LanguageLessonView,
@@ -64,7 +65,12 @@ export function resolveRoute(
 
 export function shouldShowEscapeHatch(state: AppStateView | null): boolean {
   if (!state) return false;
-  return state.owed || state.session.locked || state.session.status === 'in_progress';
+  return (
+    state.owed ||
+    state.session.locked ||
+    state.session.status === 'in_progress' ||
+    !!state.focus?.locked
+  );
 }
 
 class AppStore {
@@ -94,8 +100,25 @@ class AppStore {
     return this.state?.session ?? null;
   }
 
+  /** True while the desk is enforced by a legacy day or a focused class session. */
+  get locked(): boolean {
+    return !!(this.session?.locked || this.state?.focus?.locked);
+  }
+
+  /** Whether the focus coordinator currently locks the given study session. */
+  isFocusLocked(sessionId: string | undefined): boolean {
+    const focus = this.state?.focus;
+    return !!focus && focus.locked && focus.session_id === sessionId;
+  }
+
+  /** The class whose focused session holds the desk, when it is not `subjectId`. */
+  heldByOtherClass(subjectId: string): string | null {
+    const focus = this.state?.focus;
+    return focus && focus.course_id !== subjectId ? focus.course_id : null;
+  }
+
   navigate(destination: Destination) {
-    if (this.session?.locked) return;
+    if (this.locked) return;
     this.destination = destination;
     this.screen = destination === 'progress' ? 'dashboard' : 'idle';
   }
@@ -108,6 +131,7 @@ class AppStore {
       if (next.session.session_id !== this.session?.session_id) this.timerRemaining = -1;
       this.state = next;
       this.route();
+      this.followFocus();
     } catch (e) {
       if (request === this.refreshRequest) this.error = String(e);
     }
@@ -122,9 +146,43 @@ class AppStore {
     this.stepAway = decision.stepAway;
   }
 
+  private focusFollowed: string | null = null;
+
+  /** A locked focused class session belongs on screen: reopen it after a
+   *  restart or when the desk was shown elsewhere. One attempt per session. */
+  private followFocus() {
+    const focus = this.state?.focus;
+    if (!focus?.locked) {
+      this.focusFollowed = null;
+      return;
+    }
+    const language = this.languageLesson?.session_id === focus.session_id;
+    if (language || this.engineeringLesson?.session_id === focus.session_id) {
+      if (this.screen !== 'classroom' && this.screen !== 'language') {
+        this.screen = language ? 'language' : 'classroom';
+      }
+      return;
+    }
+    if (this.focusFollowed === focus.session_id) return;
+    this.focusFollowed = focus.session_id;
+    void this.resumeClass(focus.course_id as ClassroomSubjectId);
+  }
+
+  /** After the escape hatch trips: a class lesson leaves the screen and the
+   *  authoritative state decides what is shown next. */
+  async escaped() {
+    if (this.screen === 'classroom' || this.screen === 'language') {
+      this.languageLesson = null;
+      this.engineeringLesson = null;
+      this.screen = 'idle';
+    }
+    this.focusFollowed = null;
+    await this.refresh();
+  }
+
   /** Leave an unlocked in-progress session for the idle/dashboard screens. */
   leaveSession() {
-    if (this.session?.locked) return;
+    if (this.locked) return;
     this.stepAway = true;
     this.screen = 'idle';
   }
@@ -143,13 +201,7 @@ class AppStore {
     this.genLog = [];
     try {
       const session = await api.startClassroomSession(subjectId, slotId, revisit, occurrenceId);
-      if (session.kind === 'language') {
-        this.languageLesson = session.lesson;
-        this.screen = 'language';
-      } else {
-        this.engineeringLesson = session.lesson;
-        this.screen = 'classroom';
-      }
+      this.showLesson(session);
     } catch (e) {
       this.error = String(e);
     } finally {
@@ -164,16 +216,23 @@ class AppStore {
         await this.refresh();
         return;
       }
-      if (session.kind === 'language') {
-        this.languageLesson = session.lesson;
-        this.screen = 'language';
-      } else {
-        this.engineeringLesson = session.lesson;
-        this.screen = 'classroom';
-      }
+      this.showLesson(session);
     } catch (e) {
       this.error = String(e);
     }
+  }
+
+  /** Put an opened lesson on screen, then reload the authoritative state:
+   *  activation may have engaged focus, which the lesson header reflects. */
+  private showLesson(session: ClassroomSessionStart) {
+    if (session.kind === 'language') {
+      this.languageLesson = session.lesson;
+      this.screen = 'language';
+    } else {
+      this.engineeringLesson = session.lesson;
+      this.screen = 'classroom';
+    }
+    void this.refresh();
   }
 
   async finishClass() {

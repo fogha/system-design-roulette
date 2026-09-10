@@ -165,8 +165,14 @@ pub fn configured_level(state: &AppState) -> KioskLevel {
     }
 }
 
-/// Engage the kiosk lock on the main window and start the refocus loop.
+/// Engage the kiosk lock at the globally configured level.
 pub fn engage(app: &AppHandle, state: &AppState) {
+    engage_at(app, state, configured_level(state))
+}
+
+/// Engage the kiosk lock on the main window at an explicit level and start
+/// the refocus loop. The focus coordinator chooses the level per session.
+pub fn engage_at(app: &AppHandle, state: &AppState, level: KioskLevel) {
     if state.debug_day {
         log::info!("debug-day: kiosk engagement skipped");
         state.locked.store(true, Ordering::SeqCst);
@@ -181,7 +187,6 @@ pub fn engage(app: &AppHandle, state: &AppState) {
     if state.locked.swap(true, Ordering::SeqCst) {
         return;
     }
-    let level = configured_level(state);
     log::info!("kiosk engaging at level {level:?}");
     let Some(window) = app.get_webview_window("main") else {
         state.locked.store(false, Ordering::SeqCst);

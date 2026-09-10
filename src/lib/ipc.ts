@@ -138,6 +138,18 @@ export interface LanguageSessionResult {
   progress: LanguageProgramView;
 }
 
+/** Enforcement chosen for a class: advisory (nudge), focused (Firm kiosk), strict (Hard kiosk). */
+export type FocusPolicy = 'advisory' | 'focused' | 'strict';
+
+/** The class session holding foreground enforcement. */
+export interface FocusView {
+  session_id: string;
+  course_id: string;
+  policy: FocusPolicy;
+  /** True once the kiosk is engaged for this session. */
+  locked: boolean;
+}
+
 export interface ClassroomProgramView {
   accepted_path?: PathSummary | null;
   subject_id: ClassroomSubjectId;
@@ -158,6 +170,8 @@ export interface ClassroomProgramView {
   progress_label: string;
   completed: boolean;
   language_progress: LanguageProgramView | null;
+  /** Enforcement applied to sessions planned from now on. */
+  focus_policy: FocusPolicy;
 }
 
 export type CurriculumPhase =
@@ -411,6 +425,8 @@ export interface AppStateView {
   active_classroom_sessions: ActiveClassroomSessionView[];
   /** Today's durable appointments plus recent missed ones awaiting make-up. */
   appointments: AppointmentView[];
+  /** The class session holding foreground enforcement, if any. */
+  focus: FocusView | null;
 }
 
 export interface QuizQuestionView {
@@ -663,6 +679,8 @@ const realApi = {
   getPathRecommendation: (draftId: EnrollmentDraftId, expectedRevision: number) => invoke<PathRecommendation>('get_path_recommendation', { draftId, expectedRevision }),
   getCatalog: () => invoke<CourseDefinition[]>('get_catalog'),
   markFrontendReady: () => invoke<void>('mark_frontend_ready'),
+  setClassFocusPolicy: (subjectId: ClassroomSubjectId, policy: FocusPolicy) =>
+    invoke<ClassroomProgramView>('set_class_focus_policy', { subjectId, policy }),
   getAppState: () => invoke<AppStateView>('get_app_state'),
   getRunnerConfiguration: (runner: string) => invoke<RunnerConfiguration>('get_runner_configuration', { runner }),
   saveRunnerConfiguration: (configuration: RunnerConfiguration) => invoke<RunnerConfiguration>('save_runner_configuration', { configuration }),
