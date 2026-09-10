@@ -248,3 +248,11 @@ the writing response, `language_unit_progress` gained one encounter without pass
 credit, `language_skill_scores` recorded listening, reading,
 vocabulary/pragmatics and writing, and a second assessment submission existed
 (screenshots 33, 35, 36).
+
+Legacy compatibility on the same profile: a hand-inserted in-progress
+`classroom_sessions` row for JavaScript (two questions, `qa-legacy` source)
+resumed from the class header on the legacy screen (`classroom.javascript.v1 ·
+qa-legacy`), accepted keyboard answers and completed through the compatibility
+submit: the row became `completed` with score 1.0, two `classroom_exit_attempts`
+rows kept their legacy `session_id`, no study session was created for the class,
+and SQLite integrity and foreign-key checks passed (screenshots 38, 39).
