@@ -209,6 +209,7 @@
           <span class="meta-label">PRODUCTION</span>
           <h2 id="production-title">Show what you can do</h2>
           <p>Writing and speaking evidence is saved with this lesson and can be strengthened in a later pass.</p>
+          {#if lesson.phase_requirement}<p class="requirement mono" role="note">This pass counts when: {lesson.phase_requirement}</p>{/if}
         </div>
         <section class="production">
           <div class="production-head">
@@ -263,7 +264,9 @@
             headline: result.passed ? 'evidence recorded' : 'retrieval needs another pass',
             message: result.passed
               ? `Progress remains at ${result.current_level} until every skill strand clears the level gate.`
-              : 'This scenario will return. Review the explanations rather than memorising choice letters.',
+              : result.requirement
+                ? `Not counted yet: ${result.requirement} Your answers and practice are kept; this scenario will return.`
+                : 'This scenario will return. Review the explanations rather than memorising choice letters.',
             extra: result.level_advanced_to ? `Level gate passed — now entering ${result.level_advanced_to}.` : null,
           } : null}
           busy={submitting}
@@ -304,6 +307,7 @@
   .practice-pane { margin-top: 24px; border-top: 1px solid var(--node-border); border-radius: var(--radius-panel); padding: 24px; background: var(--surface); font-size: 15px; }
   .practice-intro h2 { font-size: 16px; margin: 6px 0; }
   .practice-intro p { color: var(--muted); font-size: 11px; line-height: 1.5; margin: 0; }
+  .requirement { margin-top: 8px !important; color: var(--led-warn) !important; font-size: 10px !important; }
   .production { margin-top: 16px; border: 1px solid var(--node-border); border-radius: var(--radius-control); padding: 14px; }
   .production-head { display: flex; align-items: center; gap: 8px; color: var(--accent); }
   .production h3 { margin: 0; font-size: 13px; }

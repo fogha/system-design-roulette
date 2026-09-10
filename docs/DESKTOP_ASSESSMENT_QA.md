@@ -369,3 +369,9 @@ could be captured. Behaviour is otherwise covered by `tests/classes.rs`,
 Verified through `tests/engineering_runtime.rs` (fresh and repeated material,
 review count, mastery projection). The desktop pass is pending the learner's
 absence: the driver refuses to launch while the Mac is in use.
+
+## Language passes by phase — 2026-09-10
+
+Verified through `tests/language_phases.rs`; the lesson's "This pass counts
+when" line and the failed-pass explanation are rendered by the language
+screen. Desktop pass pending the learner's absence.

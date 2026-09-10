@@ -501,6 +501,7 @@ function mockLanguageLesson(language: LanguageId): LanguageLessonView {
     level: 'A1',
     unit_slug: german ? 'de-a1-greetings-introductions' : 'it-a1-greetings',
     phase: 1,
+    phase_requirement: null,
     phase_label: 'notice and understand',
     title: german ? 'Greetings and Introductions' : 'Saluti e presentazioni',
     scenario: german
@@ -1372,6 +1373,7 @@ export const mockApi = {
             ? 'Correct: this expression fits the scenario and register.'
             : 'Review the model dialogue and retrieve the complete phrase as one chunk.',
       })),
+      requirement: null,
       level_advanced_to: null,
       current_level: mockActiveLanguage.level,
       progress: mockLanguageProgram(mockActiveLanguage.language),

@@ -105,6 +105,8 @@ export interface LanguageLessonView {
   unit_slug: string;
   phase: number;
   phase_label: string;
+  /** What this pass needs beyond its check before it counts, if anything. */
+  phase_requirement: string | null;
   title: string;
   scenario: string;
   can_do: string;
@@ -137,6 +139,8 @@ export interface LanguageSessionResult {
   level_advanced_to: CefrLevel | null;
   current_level: CefrLevel;
   progress: LanguageProgramView;
+  /** Unmet phase requirement that kept this pass from counting, if any. */
+  requirement?: string | null;
 }
 
 /** Enforcement chosen for a class: advisory (nudge), focused (Firm kiosk), strict (Hard kiosk). */

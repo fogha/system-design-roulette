@@ -719,6 +719,8 @@ pub struct LanguageLessonView {
     pub unit_slug: String,
     pub phase: i64,
     pub phase_label: String,
+    /// What this pass needs beyond its check before it counts, if anything.
+    pub phase_requirement: Option<String>,
     pub title: String,
     pub scenario: String,
     pub can_do: String,
@@ -766,6 +768,26 @@ fn phase_guidance(phase: i64) -> &'static str {
     }
 }
 
+/// Which of the seven pass families a phase belongs to: recognition, form and
+/// meaning, guided interaction, listening transfer, written production, spoken
+/// production, integrated retrieval.
+pub fn phase_family(phase: i64) -> u8 {
+    (phase - 1).rem_euclid(7) as u8
+}
+
+/// What a pass needs beyond its knowledge check before it counts, if anything.
+/// Presence of practice evidence is recorded honestly; it is never presented
+/// as assessed proficiency.
+pub fn phase_requirement(phase: i64) -> Option<&'static str> {
+    match phase_family(phase) {
+        3 => Some("Play the model exchange at least once so listening evidence exists."),
+        4 => Some("Write at least 12 words for the writing prompt."),
+        5 => Some("Say the speaking task aloud and mark it done."),
+        6 => Some("Answer at least four of five checks and add one production sample (writing or speaking)."),
+        _ => None,
+    }
+}
+
 fn target_language_name(language: &str) -> &'static str {
     match language {
         "german" => "German",
@@ -774,94 +796,299 @@ fn target_language_name(language: &str) -> &'static str {
     }
 }
 
+fn place(correct: String, mut distractors: Vec<String>, slot: usize) -> (Vec<String>, usize) {
+    distractors.retain(|choice| choice != &correct);
+    distractors.dedup();
+    distractors.truncate(3);
+    let index = slot % (distractors.len() + 1);
+    distractors.insert(index, correct);
+    (distractors, index)
+}
+
+fn meaning_question(unit: &UnitSpec, at: usize, id: usize, slot: usize) -> StoredQuestion {
+    let n = unit.vocabulary.len();
+    let vocab = &unit.vocabulary[at % n];
+    let distractors = (1..n)
+        .map(|k| unit.vocabulary[(at + k) % n].meaning.clone())
+        .collect();
+    let (choices, correct_index) = place(vocab.meaning.clone(), distractors, slot);
+    StoredQuestion {
+        id,
+        prompt: format!("In this scenario, what does “{}” mean?", vocab.term),
+        choices,
+        correct_index,
+        explanation: format!("{} Example: {}", vocab.meaning, vocab.example),
+        strand: "vocabulary_pragmatics".into(),
+    }
+}
+
+fn reverse_question(
+    unit: &UnitSpec,
+    at: usize,
+    id: usize,
+    slot: usize,
+    strand: &str,
+) -> StoredQuestion {
+    let n = unit.vocabulary.len();
+    let vocab = &unit.vocabulary[at % n];
+    let distractors = (1..n)
+        .map(|k| unit.vocabulary[(at + k) % n].term.clone())
+        .collect();
+    let (choices, correct_index) = place(vocab.term.clone(), distractors, slot);
+    StoredQuestion {
+        id,
+        prompt: format!(
+            "Which target-language expression means “{}”?",
+            vocab.meaning
+        ),
+        choices,
+        correct_index,
+        explanation: format!("The expression is “{}”. {}", vocab.term, vocab.example),
+        strand: strand.into(),
+    }
+}
+
+fn phrase_question(unit: &UnitSpec, at: usize, id: usize, slot: usize) -> StoredQuestion {
+    let n = unit.phrases.len();
+    let phrase = &unit.phrases[at % n];
+    let distractors = (1..n)
+        .map(|k| unit.phrases[(at + k) % n].translation.clone())
+        .collect();
+    let (choices, correct_index) = place(phrase.translation.clone(), distractors, slot);
+    StoredQuestion {
+        id,
+        prompt: format!("Choose the best meaning of “{}”.", phrase.target),
+        choices,
+        correct_index,
+        explanation: format!("{} {}", phrase.translation, phrase.note),
+        strand: "reading".into(),
+    }
+}
+
+/// Production direction: the meaning is given, the target expression is chosen.
+fn phrase_target_question(
+    unit: &UnitSpec,
+    at: usize,
+    id: usize,
+    slot: usize,
+    strand: &str,
+) -> StoredQuestion {
+    let n = unit.phrases.len();
+    let phrase = &unit.phrases[at % n];
+    let distractors = (1..n)
+        .map(|k| unit.phrases[(at + k) % n].target.clone())
+        .collect();
+    let (choices, correct_index) = place(phrase.target.clone(), distractors, slot);
+    StoredQuestion {
+        id,
+        prompt: format!(
+            "Which expression would you use to say “{}”?",
+            phrase.translation
+        ),
+        choices,
+        correct_index,
+        explanation: format!("Say “{}”. {}", phrase.target, phrase.note),
+        strand: strand.into(),
+    }
+}
+
+/// Guided interaction: which line answers this turn of the model exchange.
+fn dialogue_reply_question(
+    unit: &UnitSpec,
+    at: usize,
+    id: usize,
+    slot: usize,
+) -> Option<StoredQuestion> {
+    let n = unit.dialogue.len();
+    if n < 3 {
+        return None;
+    }
+    let at = at % (n - 1);
+    let line = &unit.dialogue[at];
+    let reply = &unit.dialogue[at + 1];
+    let distractors = (0..n)
+        .filter(|&k| k != at + 1)
+        .map(|k| unit.dialogue[k].target.clone())
+        .collect();
+    let (choices, correct_index) = place(reply.target.clone(), distractors, slot);
+    Some(StoredQuestion {
+        id,
+        prompt: format!(
+            "{} says “{}”. Which line answers it in the exchange?",
+            line.speaker, line.target
+        ),
+        choices,
+        correct_index,
+        explanation: format!(
+            "{}: “{}” — {}",
+            reply.speaker, reply.target, reply.translation
+        ),
+        strand: "spoken_interaction".into(),
+    })
+}
+
+/// Comprehension of a heard or read line: its meaning among the others.
+fn dialogue_meaning_question(
+    unit: &UnitSpec,
+    at: usize,
+    id: usize,
+    slot: usize,
+    strand: &str,
+) -> Option<StoredQuestion> {
+    let n = unit.dialogue.len();
+    if n < 2 {
+        return None;
+    }
+    let line = &unit.dialogue[at % n];
+    let distractors = (1..n)
+        .map(|k| unit.dialogue[(at + k) % n].translation.clone())
+        .collect();
+    let (choices, correct_index) = place(line.translation.clone(), distractors, slot);
+    Some(StoredQuestion {
+        id,
+        prompt: format!(
+            "{} says “{}”. What does that mean?",
+            line.speaker, line.target
+        ),
+        choices,
+        correct_index,
+        explanation: format!("“{}” means “{}”.", line.target, line.translation),
+        strand: strand.into(),
+    })
+}
+
+fn curated_question(unit: &UnitSpec, index: usize, id: usize) -> StoredQuestion {
+    let check = &unit.checks[index % unit.checks.len()];
+    StoredQuestion {
+        id,
+        prompt: check.prompt.clone(),
+        choices: check.choices.clone(),
+        correct_index: check.correct_index,
+        explanation: check.explanation.clone(),
+        strand: check.strand.clone(),
+    }
+}
+
+/// Curated check indices for a pass: rotated so consecutive passes share at
+/// most one item, with the preferred strand pulled forward when present.
+fn curated_indices(unit: &UnitSpec, family: u8, count: usize, prefer: Option<&str>) -> Vec<usize> {
+    let n = unit.checks.len().max(1);
+    let start = (family as usize * 3) % n;
+    let mut order: Vec<usize> = (0..n).map(|k| (start + k) % n).collect();
+    if let Some(strand) = prefer {
+        order.sort_by_key(|&index| unit.checks[index].strand != strand);
+    }
+    order.truncate(count.min(n));
+    order
+}
+
+/// Five checks whose task family changes with the pass: recognition first,
+/// then form, guided interaction, listening, written and spoken production,
+/// and integrated retrieval that avoids the previous passes' curated items.
 fn build_questions(unit: &UnitSpec, phase: i64) -> Vec<StoredQuestion> {
-    let offset = (phase.max(1) as usize - 1) % unit.vocabulary.len();
-    let vocab = &unit.vocabulary[offset];
-    let reverse = &unit.vocabulary[(offset + 3) % unit.vocabulary.len()];
-    let phrase = &unit.phrases[offset % unit.phrases.len()];
-
-    let mut meaning_choices = unit
-        .vocabulary
-        .iter()
-        .skip(offset + 1)
-        .chain(unit.vocabulary.iter())
-        .map(|item| item.meaning.clone())
-        .filter(|meaning| meaning != &vocab.meaning)
-        .take(3)
-        .collect::<Vec<_>>();
-    meaning_choices.insert(offset % 4, vocab.meaning.clone());
-    let meaning_correct = offset % 4;
-
-    let mut term_choices = unit
-        .vocabulary
-        .iter()
-        .skip(offset + 2)
-        .chain(unit.vocabulary.iter())
-        .map(|item| item.term.clone())
-        .filter(|term| term != &reverse.term)
-        .take(3)
-        .collect::<Vec<_>>();
-    let term_correct = (offset + 1) % 4;
-    term_choices.insert(term_correct, reverse.term.clone());
-
-    let phrase_distractors = unit
-        .phrases
-        .iter()
-        .filter(|candidate| candidate.target != phrase.target)
-        .take(3)
-        .map(|candidate| candidate.translation.clone())
-        .collect::<Vec<_>>();
-    let phrase_correct = (offset + 2) % 4;
-    let mut phrase_choices = phrase_distractors;
-    phrase_choices.insert(phrase_correct, phrase.translation.clone());
-
-    let curated_a = &unit.checks[offset % unit.checks.len()];
-    let curated_b = &unit.checks[(offset + 2) % unit.checks.len()];
-    vec![
-        StoredQuestion {
-            id: 1,
-            prompt: format!("In this scenario, what does “{}” mean?", vocab.term),
-            choices: meaning_choices,
-            correct_index: meaning_correct,
-            explanation: format!("{} Example: {}", vocab.meaning, vocab.example),
-            strand: "vocabulary_pragmatics".into(),
-        },
-        StoredQuestion {
-            id: 2,
-            prompt: format!(
-                "Which target-language expression means “{}”?",
-                reverse.meaning
-            ),
-            choices: term_choices,
-            correct_index: term_correct,
-            explanation: format!("The expression is “{}”. {}", reverse.term, reverse.example),
-            strand: "vocabulary_pragmatics".into(),
-        },
-        StoredQuestion {
-            id: 3,
-            prompt: format!("Choose the best meaning of “{}”.", phrase.target),
-            choices: phrase_choices,
-            correct_index: phrase_correct,
-            explanation: format!("{} {}", phrase.translation, phrase.note),
-            strand: "reading".into(),
-        },
-        StoredQuestion {
-            id: 4,
-            prompt: curated_a.prompt.clone(),
-            choices: curated_a.choices.clone(),
-            correct_index: curated_a.correct_index,
-            explanation: curated_a.explanation.clone(),
-            strand: curated_a.strand.clone(),
-        },
-        StoredQuestion {
-            id: 5,
-            prompt: curated_b.prompt.clone(),
-            choices: curated_b.choices.clone(),
-            correct_index: curated_b.correct_index,
-            explanation: curated_b.explanation.clone(),
-            strand: curated_b.strand.clone(),
-        },
-    ]
+    let family = phase_family(phase);
+    let o = (phase.max(1) as usize - 1) % unit.vocabulary.len().max(1);
+    let mut out: Vec<StoredQuestion> = Vec::new();
+    let mut push = |question: Option<StoredQuestion>| {
+        if let Some(question) = question {
+            out.push(question);
+        }
+    };
+    match family {
+        0 => {
+            push(Some(meaning_question(unit, o, 1, o)));
+            push(Some(meaning_question(unit, o + 3, 2, o + 1)));
+            push(Some(phrase_question(unit, o, 3, o + 2)));
+        }
+        1 => {
+            push(Some(reverse_question(unit, o, 1, o, "grammar")));
+            push(Some(reverse_question(
+                unit,
+                o + 3,
+                2,
+                o + 1,
+                "vocabulary_pragmatics",
+            )));
+            push(
+                dialogue_reply_question(unit, o, 3, o + 2)
+                    .or_else(|| Some(phrase_question(unit, o, 3, o + 2))),
+            );
+        }
+        2 => {
+            push(
+                dialogue_reply_question(unit, o, 1, o)
+                    .or_else(|| Some(phrase_question(unit, o, 1, o))),
+            );
+            push(
+                dialogue_reply_question(unit, o + 2, 2, o + 1)
+                    .or_else(|| Some(phrase_question(unit, o + 2, 2, o + 1))),
+            );
+            push(Some(phrase_target_question(
+                unit,
+                o + 1,
+                3,
+                o + 2,
+                "spoken_interaction",
+            )));
+        }
+        3 => {
+            push(
+                dialogue_meaning_question(unit, o, 1, o, "listening")
+                    .or_else(|| Some(meaning_question(unit, o, 1, o))),
+            );
+            push(
+                dialogue_meaning_question(unit, o + 3, 2, o + 1, "listening")
+                    .or_else(|| Some(meaning_question(unit, o + 3, 2, o + 1))),
+            );
+            push(Some(meaning_question(unit, o + 1, 3, o + 2)));
+        }
+        4 => {
+            push(Some(reverse_question(unit, o, 1, o, "writing")));
+            push(Some(reverse_question(unit, o + 2, 2, o + 1, "writing")));
+            push(Some(phrase_target_question(unit, o, 3, o + 2, "writing")));
+        }
+        5 => {
+            push(Some(phrase_target_question(
+                unit,
+                o,
+                1,
+                o,
+                "spoken_production",
+            )));
+            push(Some(phrase_target_question(
+                unit,
+                o + 2,
+                2,
+                o + 1,
+                "spoken_production",
+            )));
+            push(
+                dialogue_reply_question(unit, o + 1, 3, o + 2)
+                    .or_else(|| Some(phrase_question(unit, o + 1, 3, o + 2))),
+            );
+        }
+        _ => {
+            push(
+                dialogue_meaning_question(unit, o + 1, 1, o, "reading")
+                    .or_else(|| Some(phrase_question(unit, o + 1, 1, o))),
+            );
+            push(Some(reverse_question(unit, o + 1, 2, o + 1, "writing")));
+        }
+    }
+    let prefer = match family {
+        3 => Some("listening"),
+        4 => Some("writing"),
+        5 => Some("spoken_production"),
+        _ => None,
+    };
+    let needed = 5 - out.len();
+    for index in curated_indices(unit, family, needed, prefer) {
+        out.push(curated_question(unit, index, out.len() + 1));
+    }
+    for (index, question) in out.iter_mut().enumerate() {
+        question.id = index + 1;
+    }
+    out
 }
 
 fn build_lesson(language: &str, level: &str, unit: &UnitSpec, phase: i64) -> StoredLesson {
@@ -985,13 +1212,14 @@ fn build_lesson(language: &str, level: &str, unit: &UnitSpec, phase: i64) -> Sto
          Listen for stressed syllables and phrase rhythm, not only individual sounds. Comprehensibility matters before accent perfection.\n\n\
          ## Pragmatics\n\n{pragmatics}\n\n\
          ## Culture in context\n\n{culture}\n\n\
-         ## Produce evidence\n\n**Speaking:** {speaking_prompt}\n\n**Writing:** {writing_prompt}\n\n\
+         ## Produce evidence\n\n**Speaking:** {speaking_prompt}\n\n**Writing:** {writing_prompt}\n\n{requirement_line}\n\n\
          ## Why this progression is credible\n\nThe app revisits this scenario through reception, interaction, production, and delayed retrieval. Progress is based on demonstrated skill evidence, not merely opening the lesson. CEFR dates are planning targets rather than certificates; live conversation and varied real-world input remain necessary.\n\n\
          ## Reference framework\n\n{sources}",
         scenario = unit.scenario,
         can_do = unit.can_do,
         phase_label = phase_label(phase),
         phase_guidance = phase_guidance(phase),
+        requirement_line = phase_requirement(phase).map(|text| format!("**This pass counts when:** {text}")).unwrap_or_default(),
         foundations = foundations,
         dialogue = dialogue,
         phrases = phrases,
@@ -1144,6 +1372,7 @@ fn lesson_view(meta: LessonMeta<'_>, stored: StoredLesson) -> Result<LanguageLes
         unit_slug: meta.unit_slug.to_string(),
         phase: meta.phase,
         phase_label: stored.phase_label,
+        phase_requirement: phase_requirement(meta.phase).map(String::from),
         title: stored.title,
         scenario: stored.scenario,
         can_do: stored.can_do,
@@ -1319,6 +1548,8 @@ pub(crate) fn view_from_stored(
 pub struct LanguageOutcome {
     pub passed: bool,
     pub score: f64,
+    /// Why a pass did not count despite its check, when a phase requirement was unmet.
+    pub requirement: Option<String>,
     pub level_advanced_to: Option<String>,
     pub current_level: String,
 }
@@ -1374,7 +1605,25 @@ pub fn project_completion(
     }
     let production_score = (writing_evidence + f64::from(evidence.speaking_completed)) / 2.0;
     let score = (knowledge_score * 0.8 + production_score * 0.2).clamp(0.0, 1.0);
-    let passed = knowledge_score >= 0.60;
+    let family = phase_family(evidence.phase);
+    let requirement_met = match family {
+        3 => evidence.listened,
+        4 => writing_words >= 12,
+        5 => evidence.speaking_completed,
+        6 => writing_words >= 12 || evidence.speaking_completed,
+        _ => true,
+    };
+    let threshold = if family == 6 { 0.80 } else { 0.60 };
+    let passed = knowledge_score >= threshold && requirement_met;
+    let requirement = if passed {
+        None
+    } else if !requirement_met {
+        phase_requirement(evidence.phase).map(String::from)
+    } else if family == 6 {
+        Some("Integrated retrieval counts from four correct checks out of five.".into())
+    } else {
+        None
+    };
     let max_phase = level_spec(curriculum(language)?, evidence.level)?.sessions_per_unit as i64;
     let next_review = parse_date(today)
         + Duration::days(if score >= 0.85 {
@@ -1424,6 +1673,7 @@ pub fn project_completion(
     Ok(LanguageOutcome {
         passed,
         score,
+        requirement,
         level_advanced_to,
         current_level,
     })
@@ -1610,6 +1860,9 @@ pub struct LanguageSessionResult {
     pub level_advanced_to: Option<String>,
     pub current_level: String,
     pub progress: LanguageProgramView,
+    /// Unmet phase requirement that kept this pass from counting, if any.
+    #[serde(default)]
+    pub requirement: Option<String>,
 }
 
 fn update_skill(
@@ -1779,6 +2032,7 @@ pub fn submit_session(
         level_advanced_to: outcome.level_advanced_to,
         current_level: outcome.current_level,
         progress: program_view(conn, &language, today)?,
+        requirement: outcome.requirement.clone(),
     };
     transaction.commit().map_err(|error| error.to_string())?;
     Ok(result)
@@ -1795,4 +2049,28 @@ pub fn pedagogical_summary(language: &str) -> Result<String> {
         target_language_name(language),
         curriculum.levels.iter().map(|level| level.units.len()).sum::<usize>()
     ))
+}
+
+/// The check a pass would show for a unit, for offline validation and tools.
+pub fn preview_check(
+    language: &str,
+    level: &str,
+    unit_slug: &str,
+    phase: i64,
+) -> Result<Vec<LanguageQuestionView>> {
+    let spec = level_spec(curriculum(language)?, level)?;
+    let unit = spec
+        .units
+        .iter()
+        .find(|unit| unit.slug == unit_slug)
+        .ok_or_else(|| format!("unknown unit {unit_slug}"))?;
+    Ok(build_questions(unit, phase)
+        .into_iter()
+        .map(|question| LanguageQuestionView {
+            id: question.id,
+            prompt: question.prompt,
+            choices: question.choices,
+            strand: question.strand,
+        })
+        .collect())
 }
