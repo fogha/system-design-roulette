@@ -7,7 +7,8 @@ use system_design_roulette_lib::{
     classroom::{self, StoredEngineeringLesson, StoredQuestion},
     db,
     domain::sessions::{self, PreparedLesson, Status},
-    generator, subjects::engineering,
+    generator,
+    subjects::engineering,
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -21,6 +22,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let today = chrono::Local::now().format("%Y-%m-%d").to_string();
     let conn = db::open(&path)?;
     let program = classroom::program_row(&conn, subject)?;
+    if program.kind == "language" {
+        // Language lessons publish their curated seed without a tutor call.
+        use system_design_roulette_lib::subjects::language;
+        let session = match language::resumable(&conn, subject)? {
+            Some(session) => session,
+            None => language::plan(&conn, &program, None, &today, false)?,
+        };
+        let published = language::publish_curated(&conn, &session.id)?;
+        println!(
+            "{}",
+            serde_json::json!({"session_id": published.id.0, "status": published.status, "adapter": "language"})
+        );
+        return Ok(());
+    }
     let session = match engineering::resumable(&conn, subject)? {
         Some(session) => session,
         None => engineering::plan(&conn, &program, None, &today, false)?,
@@ -39,7 +54,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let lease = sessions::claim_preparation(&conn, &session.id, now, 600)?
         .ok_or("another worker holds this preparation lease")?;
     if fail {
-        sessions::fail_preparation(&conn, &lease, "QA fixture: the tutor provider was unavailable.", now)?;
+        sessions::fail_preparation(
+            &conn,
+            &lease,
+            "QA fixture: the tutor provider was unavailable.",
+            now,
+        )?;
         println!(
             "{}",
             serde_json::json!({"session_id": session.id.0, "status": "preparing", "preparation": "failed"})
@@ -76,7 +96,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .collect::<Result<_, String>>()?;
     if questions.is_empty() {
-        return Err(format!("bundled lesson {} has no multiple-choice questions", bundled.slug).into());
+        return Err(format!(
+            "bundled lesson {} has no multiple-choice questions",
+            bundled.slug
+        )
+        .into());
     }
     let stored = StoredEngineeringLesson {
         concept_id: chosen.concept_id,

@@ -233,3 +233,11 @@ Reading-position follow-up on the same profile: a second fixture lesson
 question, the app was quit, and `study_checkpoints` held revision 1 with stage
 `practice` and reading offset 4420. Relaunch and Resume reopened the lesson at
 the exercise hints with the check just below (screenshot 31).
+
+Language lesson on the shared runtime (same profile, 2026-09-10): German gained a
+10:00 study time and was activated; Learn now with the failing stub tutor
+published the curated A1 seed (`curated` provenance) into an active session and
+rendered the mission, dialogue player and five checks. Two answers saved at
+revision 2; the session stayed active and resumable after leaving the screen.
+Submission of a language check was verified by `tests/language_runtime.rs`, not
+natively, in this pass (screenshot 33).
