@@ -16,6 +16,9 @@ import seedConcepts from '../../src-tauri/seed/concepts.json';
 import type {
   AppStateView,
   ArchivedCourse,
+  ProgressQuery,
+  ProgressEntry,
+  ProgressLesson,
   ChatMessage,
   CourseView,
   DashboardView,
@@ -1397,54 +1400,22 @@ export const mockApi = {
   },
   getEscapePhrase: async () =>
     'I am choosing to skip my training today and I accept the broken streak',
-  getDashboard: async (): Promise<DashboardView> => {
-    const topics = [
-      'The event loop and microtask checkpoints',
-      'Closures, scope, and the lexical environment',
-      'V8 hidden classes and shape transitions',
-      'Prototypes, delegation, and property lookup',
-      'Promise internals and async/await lowering',
-      'WeakRef, FinalizationRegistry, and GC edges',
-      'Proxy traps and invariant semantics',
-      'Structured clone and transferables',
-      'Module graphs and live bindings',
-      'Atomics, workers, and shared memory',
-    ];
-    const history = [];
-    const today = new Date();
-    for (let i = 1; i <= 36; i++) {
-      const d = new Date(today);
-      d.setDate(d.getDate() - i);
-      const skipped = i === 9 || i === 23;
-      history.push({
-        date: d.toISOString().slice(0, 10),
-        status: skipped ? 'skipped' : 'completed',
-        quiz_score: skipped ? null : Math.round((0.5 + ((i * 37) % 50) / 100) * 100) / 100,
-        concept_title: topics[i % topics.length],
-      });
-    }
-    const states = [
-      'mastered', 'maintenance', 'practicing', 'practicing', 'struggling',
-      'introduced', 'decayed', 'unseen', 'unseen', 'unseen',
-    ] as const;
-    const categories = ['runtime', 'language', 'memory', 'async', 'modules', 'platform'];
-    const mastery = Array.from({ length: 72 }, (_, i) => ({
-      concept_id: i + 1,
-      slug: `concept-${i + 1}`,
-      title: topics[i % topics.length],
-      category: categories[Math.floor(i / 12)],
-      state: states[(i * 7) % states.length],
-      score_ema: ((i * 13) % 100) / 100,
-    }));
-    return {
-      history,
-      streak: 17,
-      carryover_due: 2,
-      concepts_total: 72,
-      concepts_covered: 36,
-      mastery,
-    };
+  getDashboard: async (query: ProgressQuery = {}): Promise<DashboardView> => {
+    const programs = CLASSROOM_CATALOG.map(item => mockClassroomProgram(item.id));
+    const dateAt = (ago: number) => { const d = new Date(); d.setDate(d.getDate()-ago); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+    const history: ProgressEntry[] = Array.from({length: 48}, (_, i) => {
+      const program = programs[i % programs.length];
+      return { source: program.kind === 'language' ? 'language' : 'classroom', owner_id: String(i+1), date: dateAt(Math.floor(i/2)), subject_id: program.subject_id, title: `${program.label}: ${['Foundations and first principles','Practice and retrieval','Applying the next concept'][i%3]}`, status: i===0 ? 'in_progress' : i%11===0 ? 'skipped' : 'completed', score: i===0 || i%11===0 ? null : 0.7+(i%4)/10, can_read: true };
+    });
+    const scoped = history.filter(h => !query.subject_id || h.subject_id===query.subject_id);
+    const completed = scoped.filter(h => h.status==='completed');
+    const matching = scoped.filter(h => (!query.status || h.status===query.status) && `${h.title} ${h.subject_id}`.toLowerCase().includes((query.search??'').trim().toLowerCase()));
+    const page = Math.min(Math.max(0,query.page??0),Math.floor(Math.max(0,matching.length-1)/8));
+    const dates = new Set(completed.map(h=>h.date));
+    let streak = 0; let ago = dates.has(dateAt(0)) ? 0 : 1; while(dates.has(dateAt(ago++))) streak++;
+    return {today:dateAt(0), classes:programs.map(p=>({...p,completed_sessions:history.filter(h=>h.subject_id===p.subject_id && h.status==='completed').length})), completed_sessions:completed.length, study_days:dates.size, streak, activity:Array.from({length:28},(_,i)=>({date:dateAt(27-i),completed:completed.filter(h=>h.date===dateAt(27-i)).length})), history:matching.slice(page*8,page*8+8),history_total:matching.length,page,page_size:8};
   },
+  getProgressLesson: async (_source: ProgressEntry['source'], _ownerId: string): Promise<ProgressLesson | null> => ({ title: 'Preview lesson', date: new Date().toISOString().slice(0,10), markdown: COURSE_MD, course_id: null, classroom_session_id: null }),
   getPastCourse: async (): Promise<ArchivedCourse | null> => ({
     course_id: MOCK_COURSE_ID,
     session_date: new Date().toISOString().slice(0, 10),

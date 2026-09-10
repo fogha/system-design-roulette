@@ -8,7 +8,6 @@ use crate::domain::{
 use crate::generator::GradeItem;
 use crate::session::{self, SessionView};
 use crate::state::AppState;
-use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
@@ -1877,50 +1876,23 @@ pub fn get_escape_phrase(state: State<'_, AppState>) -> CmdResult<String> {
         .unwrap_or_default())
 }
 
-#[derive(Serialize)]
-pub struct DashboardView {
-    pub history: Vec<db::HistoryEntry>,
-    pub streak: i64,
-    pub carryover_due: i64,
-    pub concepts_total: i64,
-    pub concepts_covered: i64,
-    pub mastery: Vec<crate::mastery::MasteryEntry>,
+#[tauri::command]
+pub fn get_dashboard(
+    state: State<'_, AppState>,
+    query: Option<crate::progress::ProgressQuery>,
+) -> CmdResult<crate::progress::DashboardView> {
+    let conn = state.db.0.lock().unwrap();
+    crate::progress::read(&conn, &state.today(), &query.unwrap_or_default())
 }
 
 #[tauri::command]
-pub fn get_dashboard(state: State<'_, AppState>) -> CmdResult<DashboardView> {
-    let today = state.today();
-    let tomorrow = state.tomorrow();
+pub fn get_progress_lesson(
+    state: State<'_, AppState>,
+    source: String,
+    owner_id: String,
+) -> CmdResult<Option<crate::progress::ProgressLesson>> {
     let conn = state.db.0.lock().unwrap();
-    let track_focus = session::session_focus(&conn, &today)
-        .map_err(err)?
-        .unwrap_or_else(|| "javascript".to_string());
-    let history = db::history(&conn, 120).map_err(err)?;
-    let streak = db::streak(&conn, &today).map_err(err)?;
-    let carryover_due = db::carryover_count(&conn, &tomorrow, &track_focus).map_err(err)?;
-    let concepts_total: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM concepts WHERE active = 1 AND focus = ?1",
-            params![track_focus],
-            |r| r.get(0),
-        )
-        .map_err(err)?;
-    let concepts_covered: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM concepts WHERE times_picked > 0 AND focus = ?1",
-            params![track_focus],
-            |r| r.get(0),
-        )
-        .map_err(err)?;
-    let mastery = crate::mastery::overview(&conn, &track_focus).map_err(err)?;
-    Ok(DashboardView {
-        history,
-        streak,
-        carryover_due,
-        concepts_total,
-        concepts_covered,
-        mastery,
-    })
+    crate::progress::lesson(&conn, &source, &owner_id)
 }
 
 #[derive(Serialize)]

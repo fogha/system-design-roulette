@@ -429,13 +429,49 @@ export interface MasteryEntry {
   score_ema: number;
 }
 
+export interface ProgressQuery {
+  subject_id?: string | null;
+  search?: string;
+  status?: string | null;
+  page?: number;
+}
+export interface ProgressEntry {
+  source: 'primary' | 'classroom' | 'language';
+  owner_id: string;
+  date: string;
+  subject_id: string;
+  title: string;
+  status: string;
+  score: number | null;
+  can_read: boolean;
+}
+export interface ProgressClass {
+  subject_id: ClassroomSubjectId;
+  label: string;
+  short_code: string;
+  enabled: boolean;
+  progress: number;
+  progress_label: string;
+  completed_sessions: number;
+}
 export interface DashboardView {
-  history: HistoryEntry[];
+  today: string;
+  classes: ProgressClass[];
+  completed_sessions: number;
+  study_days: number;
   streak: number;
-  carryover_due: number;
-  concepts_total: number;
-  concepts_covered: number;
-  mastery: MasteryEntry[];
+  activity: { date: string; completed: number }[];
+  history: ProgressEntry[];
+  history_total: number;
+  page: number;
+  page_size: number;
+}
+export interface ProgressLesson {
+  title: string;
+  date: string;
+  markdown: string;
+  course_id: number | null;
+  classroom_session_id: number | null;
 }
 
 export interface AudioLine {
@@ -690,7 +726,8 @@ const realApi = {
   submitExitQuiz: (sessionId: string, answers: Record<number, string>) =>
     invoke<ExitQuizResult>('submit_exit_quiz', { sessionId, answers }),
   getEscapePhrase: () => invoke<string>('get_escape_phrase'),
-  getDashboard: () => invoke<DashboardView>('get_dashboard'),
+  getDashboard: (query: ProgressQuery = {}) => invoke<DashboardView>('get_dashboard', { query }),
+  getProgressLesson: (source: ProgressEntry['source'], ownerId: string) => invoke<ProgressLesson | null>('get_progress_lesson', { source, ownerId }),
   getPastCourse: (date: string) =>
     invoke<ArchivedCourse | null>('get_past_course', { date }),
   openResources: (sessionId: string) => invoke<number>('open_resources', { sessionId }),

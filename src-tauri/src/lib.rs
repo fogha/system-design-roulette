@@ -11,6 +11,7 @@ pub mod keychain;
 pub mod kiosk;
 pub mod language;
 pub mod mastery;
+pub mod progress;
 pub mod research;
 pub mod roulette;
 pub mod scheduler;
@@ -317,6 +318,7 @@ pub fn run() {
             commands::escape_session,
             commands::get_escape_phrase,
             commands::get_dashboard,
+            commands::get_progress_lesson,
             commands::get_past_course,
             commands::open_resources,
             commands::get_exercise,

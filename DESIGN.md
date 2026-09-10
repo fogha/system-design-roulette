@@ -91,3 +91,7 @@ See [native verification](docs/DESKTOP_DESIGN_QA.md) for the build and test scop
 - Metaphors must be honest — never label something with a concept it doesn't implement.
 - Course reader body stays scholar (paper, 68ch, 1.8 line-height) — reading comfort wins;
   only its header bar speaks topology.
+
+### Progress workspace
+
+Progress uses the same contained workspace as Classes. A compact class list scopes the right pane; lifetime totals, a short activity strip and history filters provide an overview without a page-length report. History uses database pagination and its own keyboard-focusable scroll region, with fixed page controls. At narrow widths, a custom class dropdown replaces the sidebar. Short windows use a contained Overview/History switch. Archived reading occupies the detail area and returns to the preserved filters and focused lesson. Keep these controls within the shared radius and color tokens; do not restore the old stacked mastery/history report.

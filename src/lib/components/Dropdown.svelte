@@ -11,13 +11,14 @@
   import { tick } from 'svelte';
   import { Check, ChevronDown } from 'lucide-svelte';
 
-  let { value = $bindable(), options, label, disabled = false, onchange, placeholder = 'Choose an option' }: {
+  let { value = $bindable(), options, label, disabled = false, onchange, placeholder = 'Choose an option', hideLabel = false }: {
     value?: T;
     options: readonly DropdownOption<T>[];
     label: string;
     disabled?: boolean;
     onchange?: (value: T) => void;
     placeholder?: string;
+    hideLabel?: boolean;
   } = $props();
   const id = $props.id();
   let open = $state(false);
@@ -145,7 +146,7 @@
 </script>
 
 <div class="dropdown" class:disabled={unavailable}>
-  <label id={`${id}-label`} for={`${id}-trigger`}>{label}</label>
+  <label class:visually-hidden={hideLabel} id={`${id}-label`} for={`${id}-trigger`}>{label}</label>
   <button bind:this={trigger} id={`${id}-trigger`} type="button" class="dropdown-trigger" class:open disabled={unavailable}
     role="combobox" aria-haspopup="listbox" aria-expanded={open} aria-controls={open ? `${id}-list` : undefined}
     aria-labelledby={`${id}-label ${id}-value`} aria-activedescendant={open && active >= 0 ? `${id}-option-${active}` : undefined}
@@ -170,6 +171,7 @@
 {/if}
 
 <style>
+  .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .dropdown { display: grid; gap: 7px; min-width: 0; width: 100%; }
   label { color: var(--muted); font: 11px/1.5 var(--font-mono); cursor: pointer; }
   .dropdown-trigger { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-width: 0; min-height: 38px; padding: 9px 11px; border: 1px solid var(--node-border); border-radius: var(--radius-control); background: var(--bg); color: var(--fg); font: 12px/1.5 var(--font-mono); text-align: left; cursor: pointer; }
