@@ -322,3 +322,36 @@ advisory lesson and German an active one from the appointment checks:
   region capture showed their own work, which was deleted); the completion and
   skip release paths are covered by `tests/enforcement.rs` and the command-level
   release calls rather than by a native capture in this pass.
+
+## Shared lesson shell — 2026-09-10
+
+Same isolated profile, rebuilt app with `features/lessons/` (LessonShell,
+LessonSession, KnowledgeCheck, LessonOutcome). The driver now refuses to act
+unless the Mac has been idle, and ignores its own synthetic input.
+
+- Launching with the focused TypeScript session still active re-engaged the
+  lock and reopened the lesson in the shell: focused return control, class
+  identity, stage rail (Learn · Practice · Check · Feedback), save state with
+  the time budget, reading-size control and the hatch (screenshot 56).
+- The rail's Check jumped to the retrieval gate; the shared check rendered the
+  three frozen questions with lettered choices and objectives (screenshot 57).
+  Choosing answers reported "answers saved with this lesson" (screenshot 58).
+- Submitting moved the rail to Feedback, showed the corrections and result
+  through the shared outcome component, restored the plain return control and
+  removed the hatch: completion released the focus lock. SQLite: the session
+  is `completed` at revision 13 (screenshot 59). Return reached Today unlocked
+  (screenshot 60).
+- The German lesson opened in the same shell with its mission, audio console,
+  production (writing, speaking) before the check, and evidence badges in the
+  header (screenshot 61); Practice on the rail scrolled to the production
+  stage and the checkpoint recorded stage `practice` (screenshot 62). The
+  first shell build rendered the paper reader with light text on the paper
+  background; the paper now uses the scholar theme's foreground and
+  background again.
+- On the rebuilt app, Resume reopened the German lesson at its saved practice
+  stage with the rail recomputed from the restored position (screenshot 64);
+  a typed writing response and "pause and return" left the session `paused`
+  with checkpoint revision 2 holding the response and stage `practice`
+  (screenshot 65). Reopening at Learn showed the paper reader with dark text
+  on the scholar paper and the writing badge restored in the header
+  (screenshot 66).
