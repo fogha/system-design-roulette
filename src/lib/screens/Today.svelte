@@ -44,7 +44,7 @@
   {#if resumable.length || legacy}
     <section class="saved" aria-label="Saved sessions"><NodeCard Icon={Play} name="saved-sessions" badge="resumable" badgeTone="teal">
       {#if legacy}<div class="study-row"><div><strong>Saved daily session</strong><p>The daily routine has been retired. Continue this existing session at its saved step.</p></div><button class="ghost mono-ghost" onclick={() => app.resumeSession()}>Resume<ArrowRight size={12} /></button></div>{/if}
-      {#each resumable as session}<div class="study-row"><div><strong>{session.label}</strong><p>{session.title}</p></div><button class="ghost mono-ghost" onclick={() => app.resumeClass(session.subject_id)}>Resume<ArrowRight size={12} /></button></div>{/each}
+      {#each resumable as session}{@const pending = session.runtime === 'study' && ['planned', 'preparing'].includes(session.lifecycle)}<div class="study-row"><div><strong>{session.label}</strong><p>{session.title}{pending ? ' · preparation did not finish' : ''}</p></div>{#if pending}<button class="ghost mono-ghost" disabled={busy || !!app.preparingClass} onclick={() => app.startClass(session.subject_id)}>Retry<ArrowRight size={12} /></button>{:else}<button class="ghost mono-ghost" onclick={() => app.resumeClass(session.subject_id)}>Resume<ArrowRight size={12} /></button>{/if}</div>{/each}
     </NodeCard></section>
   {/if}
   <div class="overview">

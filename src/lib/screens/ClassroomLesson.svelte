@@ -1,5 +1,6 @@
 <script lang="ts">
   import { api, type EngineeringSessionResult } from '../ipc';
+  import type { AssessmentRoundId } from '../contracts/assessments';
   import { app } from '../stores.svelte';
   import ClusterBar from '../components/ClusterBar.svelte';
   import CourseChat from '../components/CourseChat.svelte';
@@ -16,24 +17,79 @@
   } from 'lucide-svelte';
 
   const lesson = $derived(app.engineeringLesson);
+  /** Shared-runtime lessons persist answers against their frozen check round. */
+  const study = $derived(lesson?.runtime === 'study');
   let answers = $state<number[]>([]);
   let reflection = $state('');
   let submitting = $state(false);
   let result = $state<EngineeringSessionResult | null>(null);
-  let prepared = $state<number | null>(null);
+  let prepared = $state<string | null>(null);
   let chatOpen = $state(false);
+  let roundId = $state<AssessmentRoundId | null>(null);
+  let checkRevision = $state(0);
+  let answerStatus = $state<'saved' | 'saving' | 'error'>('saved');
+  let answerError = $state('');
+  let saveQueue: Promise<void> = Promise.resolve();
 
   $effect(() => {
     if (lesson && prepared !== lesson.session_id) {
       prepared = lesson.session_id;
-      answers = Array(lesson.questions.length).fill(-1);
-      reflection = '';
-      result = null;
+      const restored: number[] = Array(lesson.questions.length).fill(-1);
+      if (lesson.check) {
+        for (const [index, question] of lesson.questions.entries()) {
+          const saved = lesson.check.responses[String(question.id)];
+          const choice = saved?.status === 'answered' ? Number(saved.answer) : NaN;
+          if (Number.isInteger(choice) && choice >= 0) restored[index] = choice;
+        }
+      }
+      answers = restored;
+      const savedReflection = lesson.checkpoint?.body.work.reflection;
+      reflection = typeof savedReflection === 'string' ? savedReflection : '';
+      result = lesson.outcome ?? null;
       chatOpen = false;
+      roundId = lesson.check?.round_id ?? null;
+      checkRevision = lesson.check?.revision ?? 0;
+      answerStatus = 'saved';
+      answerError = '';
     }
   });
 
   const complete = $derived(lesson ? answers.every((answer) => answer >= 0) : false);
+
+  function choose(index: number, choiceIndex: number) {
+    const next = [...answers];
+    next[index] = choiceIndex;
+    answers = next;
+    if (!lesson || !study || !roundId) return;
+    const sessionId = lesson.session_id;
+    const round = roundId;
+    const questionId = lesson.questions[index].id;
+    answerStatus = 'saving';
+    saveQueue = saveQueue.then(async () => {
+      try {
+        const saved = await api.saveClassCheckAnswer(sessionId, round, checkRevision, questionId, choiceIndex);
+        checkRevision = saved.revision;
+        answerStatus = 'saved';
+        answerError = '';
+      } catch (error) {
+        answerStatus = 'error';
+        answerError = String(error);
+      }
+    });
+  }
+
+  async function pause() {
+    if (lesson && study) {
+      try {
+        await saveQueue;
+        await api.pauseClassLesson(lesson.session_id);
+      } catch (error) {
+        app.error = String(error);
+      }
+    }
+    app.screen = 'idle';
+    void app.refresh();
+  }
 
   /** Name the publisher so the learner can weigh a source before opening it. */
   function publisher(url: string): string {
@@ -48,11 +104,18 @@
     if (!lesson || !complete || submitting) return;
     submitting = true;
     try {
-      result = await api.submitClassroomEngineeringSession({
-        session_id: lesson.session_id,
-        answers,
-        reflection,
-      });
+      if (study) {
+        await saveQueue;
+        if (answerStatus === 'error') throw new Error(answerError || 'Saved answers could not be stored. Try again.');
+        if (!roundId) throw new Error('The knowledge check is not ready yet.');
+        result = await api.submitClassCheck(lesson.session_id, roundId, checkRevision, reflection);
+      } else {
+        result = await api.submitClassroomEngineeringSession({
+          session_id: Number(lesson.session_id),
+          answers,
+          reflection,
+        });
+      }
     } catch (error) {
       app.error = String(error);
     } finally {
@@ -70,7 +133,7 @@
     />
 
     <header class="lesson-head">
-      <button class="back-button" type="button" onclick={() => (app.screen = 'idle')}>
+      <button class="back-button" type="button" onclick={pause}>
         <ArrowLeft size={14} /> pause class
       </button>
       <div class="identity">
@@ -125,7 +188,7 @@
         {/if}
 
         <section class="exercise-end" aria-label="course exercise">
-          <ExerciseWorkspace classroomSessionId={lesson.session_id} />
+          <ExerciseWorkspace classroomSessionId={study ? undefined : Number(lesson.session_id)} studySessionId={study ? lesson.session_id : undefined} />
         </section>
 
         <aside class="practice-pane" aria-labelledby="class-check-title">
@@ -134,6 +197,11 @@
         <p class="practice-intro">
           Answer from the lesson’s mechanism and evidence. Your result updates only this class.
         </p>
+        {#if study && !result}
+          <p class="save-state mono" class:err={answerStatus === 'error'} role="status">
+            {answerStatus === 'saving' ? 'saving answers…' : answerStatus === 'error' ? `answers not saved: ${answerError}` : 'answers saved with this lesson'}
+          </p>
+        {/if}
 
         {#if result}
           <div class:passed={result.passed} class="result-card" aria-live="polite">
@@ -163,11 +231,7 @@
                       value={choiceIndex}
                       checked={answers[index] === choiceIndex}
                       disabled={!!result}
-                      onchange={() => {
-                        const next = [...answers];
-                        next[index] = choiceIndex;
-                        answers = next;
-                      }}
+                      onchange={() => choose(index, choiceIndex)}
                     />
                     <span>{choice}</span>
                   </label>
@@ -205,7 +269,7 @@
       </article>
     </main>
 
-    <CourseChat classroomSessionId={lesson.session_id} bind:open={chatOpen} />
+    <CourseChat classroomSessionId={study ? undefined : Number(lesson.session_id)} studySessionId={study ? lesson.session_id : undefined} bind:open={chatOpen} />
   </div>
 {:else}
   <div class="empty">
@@ -274,6 +338,7 @@
   .practice-pane { margin-top: 12px; border-top: 1px solid var(--node-border); border-radius: var(--radius-panel); padding: 24px; background: var(--surface); }
   .practice-pane h2, .sources h2 { font-size: 16px; margin: 6px 0; }
   .practice-intro { color: var(--muted); font-size: 11px; line-height: 1.5; }
+  .save-state { color: var(--faint); font-size: 9px; margin: 0 0 6px; } .save-state.err { color: var(--red); }
   .sources { margin-top: 28px; border: 1px solid var(--node-border); border-radius: var(--radius-panel); padding: 16px; }
   .sources p { color: var(--muted); font-size: 12px; line-height: 1.6; }
   .sources ul { padding-left: 18px; }

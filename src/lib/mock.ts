@@ -173,6 +173,7 @@ const MOCK_CURRICULUM: CurriculumBrief = {
 const MOCK_EXERCISE: Omit<ExerciseView, 'draft'> = {
   course_id: MOCK_COURSE_ID,
   classroom_session_id: null,
+  study_session_id: null,
   title: 'Trace and tame a microtask storm',
   instructions:
     'Write a tiny script that logs a numbered tag for each callback so you can see the exact order the event loop runs things in.\n\n1. Log a `sync-start` tag.\n2. Schedule a `setTimeout(..., 0)` that logs a `macrotask` tag.\n3. Chain two `.then()` calls off a resolved promise, each logging a `microtask` tag.\n4. Log a `sync-end` tag.\n5. Run it and annotate which line ran in which "wave" (sync, microtask checkpoint, macrotask).',
@@ -653,7 +654,13 @@ function mockEngineeringLesson(subjectId: FocusArea): EngineeringLessonView {
   const reference = referenceFor(subjectId);
   const concept = seedConcepts.find((concept) => concept.slug === reference.slug)!;
   return {
-    session_id: mockEngineeringSessionId,
+    session_id: String(mockEngineeringSessionId),
+    runtime: 'legacy',
+    lifecycle: 'in_progress',
+    revision: 0,
+    checkpoint: null,
+    check: null,
+    outcome: null,
     subject_id: subjectId,
     label: catalog.label,
     short_code: catalog.short,
@@ -705,11 +712,13 @@ function appState(): AppStateView {
       ...(mockActiveLanguage
         ? [
             {
-              session_id: mockActiveLanguage.session_id,
+              session_id: String(mockActiveLanguage.session_id),
               subject_id: mockActiveLanguage.language,
               kind: 'language' as const,
               label: mockActiveLanguage.label,
               title: mockActiveLanguage.title,
+              runtime: 'legacy' as const,
+              lifecycle: 'in_progress',
             },
           ]
         : []),
@@ -721,6 +730,8 @@ function appState(): AppStateView {
               kind: 'engineering' as const,
               label: mockActiveEngineering.label,
               title: mockActiveEngineering.title,
+              runtime: 'legacy' as const,
+              lifecycle: 'in_progress',
             },
           ]
         : []),
@@ -1079,7 +1090,7 @@ export const mockApi = {
     }
     mockEngineeringSessionId += 1;
     mockActiveEngineering = mockEngineeringLesson(subjectId);
-    mockActiveEngineering.session_id = mockEngineeringSessionId;
+    mockActiveEngineering.session_id = String(mockEngineeringSessionId);
     return { kind: 'engineering', lesson: mockActiveEngineering };
   },
   resumeClassroomSession: async (
@@ -1101,7 +1112,7 @@ export const mockApi = {
     answers: number[];
     reflection: string;
   }): Promise<EngineeringSessionResult> => {
-    if (!mockActiveEngineering || mockActiveEngineering.session_id !== input.session_id) {
+    if (!mockActiveEngineering || mockActiveEngineering.session_id !== String(input.session_id)) {
       throw new Error('engineering classroom session not found');
     }
     const lesson = mockActiveEngineering;
@@ -1113,7 +1124,7 @@ export const mockApi = {
     const score = correct.filter(Boolean).length / lesson.questions.length;
     mockActiveEngineering = null;
     return {
-      session_id: input.session_id,
+      session_id: String(input.session_id),
       subject_id: lesson.subject_id,
       passed: score >= 0.8,
       score,
@@ -1127,13 +1138,19 @@ export const mockApi = {
       })),
     };
   },
+  // Shared-runtime lessons are prepared natively; the browser preview keeps its bundled lessons.
+  saveClassLessonWork: async () => { throw new Error('Saved lesson work needs the desktop app.'); },
+  saveClassCheckAnswer: async () => { throw new Error('Saved lesson work needs the desktop app.'); },
+  submitClassCheck: async () => { throw new Error('Shared-runtime knowledge checks need the desktop app.'); },
+  pauseClassLesson: async () => {},
+  skipClassLesson: async (sessionId: string) => { if (mockActiveEngineering?.session_id === sessionId) mockActiveEngineering = null; },
   getExercise: async (owner: {
     course_id?: number | null;
     classroom_session_id?: number | null;
   }): Promise<ExerciseView | null> => {
     if (owner.classroom_session_id != null) {
       const lesson =
-        mockActiveEngineering?.session_id === owner.classroom_session_id
+        mockActiveEngineering?.session_id === String(owner.classroom_session_id)
           ? mockActiveEngineering
           : null;
       if (!lesson?.exercise) return null;
@@ -1141,6 +1158,7 @@ export const mockApi = {
       return {
         course_id: null,
         classroom_session_id: owner.classroom_session_id,
+        study_session_id: null,
         ...lesson.exercise,
         draft: mockClassroomExerciseDrafts.get(owner.classroom_session_id) ?? null,
         completed: completion?.completed ?? false,
@@ -1432,7 +1450,7 @@ export const mockApi = {
     let streak = 0; let ago = dates.has(dateAt(0)) ? 0 : 1; while(dates.has(dateAt(ago++))) streak++;
     return {today:dateAt(0), classes:programs.map(p=>({...p,completed_sessions:history.filter(h=>h.subject_id===p.subject_id && h.status==='completed').length})), completed_sessions:completed.length, study_days:dates.size, streak, activity:Array.from({length:28},(_,i)=>({date:dateAt(27-i),completed:completed.filter(h=>h.date===dateAt(27-i)).length})), history:matching.slice(page*8,page*8+8),history_total:matching.length,page,page_size:8};
   },
-  getProgressLesson: async (_source: ProgressEntry['source'], _ownerId: string): Promise<ProgressLesson | null> => ({ title: 'Preview lesson', date: new Date().toISOString().slice(0,10), markdown: COURSE_MD, course_id: null, classroom_session_id: null }),
+  getProgressLesson: async (_source: ProgressEntry['source'], _ownerId: string): Promise<ProgressLesson | null> => ({ title: 'Preview lesson', date: new Date().toISOString().slice(0,10), markdown: COURSE_MD, course_id: null, classroom_session_id: null, study_session_id: null }),
   getPastCourse: async (): Promise<ArchivedCourse | null> => ({
     course_id: MOCK_COURSE_ID,
     session_date: new Date().toISOString().slice(0, 10),

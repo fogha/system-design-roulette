@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { api, type ChatMessage } from '../ipc';
+  import { api, type ChatMessage, type ChatOwner } from '../ipc';
   import Markdown from './Markdown.svelte';
   import { tick } from 'svelte';
   import { X, ArrowUp, RotateCcw, BookOpen, Sparkles } from 'lucide-svelte';
@@ -9,8 +9,9 @@
   let {
     courseId,
     classroomSessionId,
+    studySessionId,
     open = $bindable(false),
-  }: { courseId?: number; classroomSessionId?: number; open?: boolean } = $props();
+  }: { courseId?: number; classroomSessionId?: number; studySessionId?: string; open?: boolean } = $props();
 
   let messages = $state<ChatMessage[]>([]);
   let loading = $state(false);
@@ -22,9 +23,17 @@
   let listEl = $state<HTMLElement | undefined>(undefined);
   let inputEl = $state<HTMLTextAreaElement | undefined>(undefined);
   let loadedFor = '';
-  const ownerId = $derived(classroomSessionId ?? courseId ?? -1);
+  const ownerId = $derived(studySessionId ?? classroomSessionId ?? courseId ?? -1);
   const classroomMode = $derived(classroomSessionId !== undefined);
-  const ownerKey = $derived(`${classroomMode ? 'classroom' : 'course'}:${ownerId}`);
+  const studyMode = $derived(studySessionId !== undefined);
+  const ownerKey = $derived(`${studyMode ? 'study' : classroomMode ? 'classroom' : 'course'}:${ownerId}`);
+  const owner: ChatOwner = $derived(
+    studyMode
+      ? { study_session_id: studySessionId }
+      : classroomMode
+        ? { classroom_session_id: classroomSessionId }
+        : { course_id: courseId },
+  );
   const starterPrompts = [
     'Explain the hardest mechanism more simply.',
     'Show me a small runnable example.',
@@ -38,15 +47,14 @@
 
   $effect(() => {
     const key = ownerKey;
-    const id = ownerId;
     if (!open || key === loadedFor) return;
     loadedFor = key;
     messages = [];
     error = '';
     loading = true;
-    const owner = classroomMode ? { classroom_session_id: id } : { course_id: id };
+    const capturedOwner = owner;
     api
-      .getChat(owner)
+      .getChat(capturedOwner)
       .then((m) => {
         messages = m;
         loading = false;
@@ -86,7 +94,6 @@
     input = '';
     await scrollToBottom();
     try {
-      const owner = classroomMode ? { classroom_session_id: ownerId } : { course_id: ownerId };
       const thread = await api.sendChatMessage(owner, text);
       messages = thread;
       pendingMessage = '';

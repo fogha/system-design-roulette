@@ -21,8 +21,15 @@
   let tab = $state<ClassTab>(untrack(() => initialTab));
   let visited = $state<ClassTab[]>(untrack(() => [initialTab]));
   let opening = $state(false);
-  async function open(slotId: number | null = null) { if (opening) return; opening = true; try { if (active) await app.resumeClass(program.subject_id); else await app.startClass(program.subject_id, slotId, program.completed); } finally { opening = false; } }
+  /** A shared-runtime lesson whose preparation has not finished: Learn now retries it. */
+  const pending = $derived(!!active && active.runtime === 'study' && ['planned', 'preparing'].includes(active.lifecycle));
+  async function open(slotId: number | null = null) { if (opening) return; opening = true; try { if (active && !pending) await app.resumeClass(program.subject_id); else await app.startClass(program.subject_id, slotId, program.completed); } finally { opening = false; } }
   let busy = $state(false), error = $state('');
+  async function discard() {
+    if (!active || busy) return;
+    busy = true; error = '';
+    try { await api.skipClassLesson(active.session_id); await app.refresh(); } catch (cause) { error = String(cause); } finally { busy = false; }
+  }
   let map = $state<CurriculumMapView | null>(null), mapLoading = $state(false), mapError = $state('');
   let path = $state<AcceptedPath | null>(null), pathLoading = $state(false), pathError = $state(''), pathLoaded = $state(false), editingPath = $state(false);
   const tabs = [
@@ -58,7 +65,7 @@
 <article class="class-detail" aria-label={`${program.label} controls`}>
   <header class="class-header">
     <div class="identity"><CourseGlyph courseId={program.subject_id} size={46} /><div><div class="eyebrow mono">{program.kind === 'language' ? 'LANGUAGE' : 'ENGINEERING'} / {program.short_code}<span class:enabled={program.enabled} class="status">{program.completed ? 'Completed' : program.enabled ? 'Active' : 'Inactive'}</span></div><h2>{program.label}</h2><p>{program.native_label}</p></div></div>
-    <div class="header-actions"><button class="ghost mono-ghost" onclick={toggle} disabled={busy || opening || preparing}>{busy ? 'Saving…' : program.enabled ? 'Pause class' : slots.some(slot => slot.enabled) ? 'Activate class' : 'Set study times'}</button><button class="cta mono-cta" disabled={(!program.enabled && !active) || opening || preparing} onclick={() => open()}><Play size={13} />{opening ? 'Opening…' : active ? 'Resume' : program.completed ? 'Revisit' : 'Learn now'}</button></div>
+    <div class="header-actions"><button class="ghost mono-ghost" onclick={toggle} disabled={busy || opening || preparing}>{busy ? 'Saving…' : program.enabled ? 'Pause class' : slots.some(slot => slot.enabled) ? 'Activate class' : 'Set study times'}</button><button class="cta mono-cta" disabled={(!program.enabled && !active) || opening || preparing} onclick={() => open()}><Play size={13} />{opening ? 'Opening…' : pending ? 'Retry preparation' : active ? 'Resume' : program.completed ? 'Revisit' : 'Learn now'}</button>{#if pending}<button class="ghost mono-ghost" onclick={discard} disabled={busy || opening || preparing}>Discard lesson</button>{/if}</div>
   </header>
   {#if error}<p class="banner error" role="alert">{error}</p>{/if}
   <div class="tabs" role="tablist" aria-label={`${program.label} sections`}>
@@ -72,7 +79,7 @@
             <div class="overview-intro"><span class="eyebrow mono">THE COURSE</span><h3>{course.summary}</h3><p>{course.outcome}</p></div>
             <div class="metrics"><div><span>Progress</span><strong>{Math.round(program.progress * 100)}<small>%</small></strong><p>{program.progress_label}</p><div class="progress-track" role="progressbar" aria-label="Course progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(program.progress * 100)}><i style:width={`${program.progress * 100}%`}></i></div></div><div><span>Session length</span><strong>{program.session_minutes}<small>min</small></strong><p>{program.agent} / {program.model}</p></div><div><span>Study times</span><strong>{slots.length}</strong><button class="inline" onclick={() => select('schedule')}>{slots.length ? 'Manage schedule' : 'Set a study time'}<ArrowRight size={13} /></button></div></div>
             <div class="overview-grid"><section class="info-card"><span class="eyebrow mono">YOUR STARTING POINT</span><h4>{program.accepted_path?.entry_label ?? 'Begin where you are'}</h4><p>{program.accepted_path ? `Accepted path · revision ${program.accepted_path.revision}. Review your route and prerequisite refreshers.` : 'Start with the foundations, choose a stage or take a short check to find your level.'}</p><button class="ghost mono-ghost" onclick={() => select('entry')}>{program.accepted_path ? 'View personal path' : 'Set starting point'}<ArrowRight size={13} /></button></section><section class="info-card"><span class="eyebrow mono">WORKING ENVIRONMENT</span><p class="environment">{course.environment}</p>{#if course.prerequisite_courses.length}<p>Suggested preparation: {course.prerequisite_courses.map(id => courseDefinition(id)?.label ?? id).join(', ')} or equivalent experience.</p>{/if}<button class="ghost mono-ghost" onclick={() => select('curriculum')}>Explore curriculum<ArrowRight size={13} /></button></section></div>
-            {#if active}<p class="notice">Saved session: <strong>{active.title}</strong>. Resume from the class header.</p>{:else if !program.enabled}<p class="notice">Set your starting point and add a study time, then activate this class when you’re ready.</p>{/if}
+            {#if pending}<p class="notice">Lesson preparation did not finish: <strong>{active?.title}</strong>. Retry it or discard it from the class header; nothing was graded.</p>{:else if active}<p class="notice">Saved session: <strong>{active.title}</strong>. Resume from the class header.</p>{:else if !program.enabled}<p class="notice">Set your starting point and add a study time, then activate this class when you’re ready.</p>{/if}
           </div>
         {:else if item.id === 'settings'}<ClassSettings {program} />
         {:else if item.id === 'schedule'}<ClassSchedule {program} opening={opening || preparing} onstart={open} />

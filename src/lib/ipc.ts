@@ -256,11 +256,14 @@ export interface ClassroomPlanView {
 }
 
 export interface ActiveClassroomSessionView {
-  session_id: number;
+  session_id: string;
   subject_id: ClassroomSubjectId;
   kind: ClassroomKind;
   label: string;
   title: string;
+  runtime: 'legacy' | 'study';
+  /** Shared-runtime lifecycle, or `in_progress` for legacy rows. */
+  lifecycle: string;
 }
 
 export interface ClassroomQuestionView {
@@ -279,8 +282,30 @@ export interface ClassroomExercise {
   hints: string[];
 }
 
+export type LessonStage = 'recall' | 'learn' | 'practice' | 'check' | 'feedback';
+export interface LessonReadingPosition { anchor: string | null; offset: number }
+export interface LessonCheckpoint {
+  revision: number;
+  body: { stage: LessonStage; reading: LessonReadingPosition; work: Record<string, unknown> };
+  updated_at: string;
+}
+/** Saved answers for a frozen knowledge-check round. */
+export interface LessonCheckView {
+  round_id: AssessmentRoundId;
+  revision: number;
+  responses: Record<string, AssessmentResponse>;
+  submitted: boolean;
+}
+
 export interface EngineeringLessonView {
-  session_id: number;
+  /** Legacy classroom row ID or shared-runtime `study-…` ID; see `runtime`. */
+  session_id: string;
+  runtime: 'legacy' | 'study';
+  lifecycle: string;
+  revision: number;
+  checkpoint: LessonCheckpoint | null;
+  check: LessonCheckView | null;
+  outcome: EngineeringSessionResult | null;
   subject_id: FocusArea;
   label: string;
   short_code: string;
@@ -317,7 +342,7 @@ export interface ClassroomCorrection {
 }
 
 export interface EngineeringSessionResult {
-  session_id: number;
+  session_id: string;
   subject_id: FocusArea;
   passed: boolean;
   score: number;
@@ -453,7 +478,7 @@ export interface ProgressQuery {
   page?: number;
 }
 export interface ProgressEntry {
-  source: 'primary' | 'classroom' | 'language';
+  source: 'primary' | 'classroom' | 'language' | 'study';
   owner_id: string;
   date: string;
   subject_id: string;
@@ -489,6 +514,7 @@ export interface ProgressLesson {
   markdown: string;
   course_id: number | null;
   classroom_session_id: number | null;
+  study_session_id: string | null;
 }
 
 export interface AudioLine {
@@ -557,6 +583,7 @@ export interface ArchivedCourse {
 export interface ExerciseView {
   course_id: number | null;
   classroom_session_id: number | null;
+  study_session_id: string | null;
   title: string;
   instructions: string;
   starter_code: string | null;
@@ -570,11 +597,21 @@ export interface ExerciseView {
 export interface ExerciseOwner {
   course_id?: number | null;
   classroom_session_id?: number | null;
+  study_session_id?: string | null;
 }
 
 export interface ChatOwner {
   course_id?: number | null;
   classroom_session_id?: number | null;
+  study_session_id?: string | null;
+}
+
+export interface ClassLessonWorkInput {
+  session_id: string;
+  expected_revision: number;
+  stage?: LessonStage | null;
+  reading?: LessonReadingPosition | null;
+  work?: Record<string, unknown>;
 }
 
 export const isTauri =
@@ -689,17 +726,20 @@ const realApi = {
     invoke<ExerciseView | null>('get_exercise', {
       courseId: owner.course_id ?? null,
       classroomSessionId: owner.classroom_session_id ?? null,
+      studySessionId: owner.study_session_id ?? null,
     }),
   saveExerciseDraft: (owner: ExerciseOwner, draft: string) =>
     invoke<void>('save_exercise_draft', {
       courseId: owner.course_id ?? null,
       classroomSessionId: owner.classroom_session_id ?? null,
+      studySessionId: owner.study_session_id ?? null,
       draft,
     }),
   saveExerciseCompletion: (owner: ExerciseOwner, completed: boolean, reflection: string) =>
     invoke<void>('save_exercise_completion', {
       courseId: owner.course_id ?? null,
       classroomSessionId: owner.classroom_session_id ?? null,
+      studySessionId: owner.study_session_id ?? null,
       completed,
       reflection,
     }),
@@ -707,13 +747,22 @@ const realApi = {
     invoke<ChatMessage[]>('get_chat', {
       courseId: owner.course_id ?? null,
       classroomSessionId: owner.classroom_session_id ?? null,
+      studySessionId: owner.study_session_id ?? null,
     }),
   sendChatMessage: (owner: ChatOwner, message: string) =>
     invoke<ChatMessage[]>('send_chat_message', {
       courseId: owner.course_id ?? null,
       classroomSessionId: owner.classroom_session_id ?? null,
+      studySessionId: owner.study_session_id ?? null,
       message,
     }),
+  saveClassLessonWork: (input: ClassLessonWorkInput) => invoke<LessonCheckpoint>('save_class_lesson_work', { input }),
+  saveClassCheckAnswer: (sessionId: string, roundId: AssessmentRoundId, expectedRevision: number, questionId: number, choice: number | null) =>
+    invoke<LessonCheckView>('save_class_check_answer', { sessionId, roundId, expectedRevision, questionId, choice }),
+  submitClassCheck: (sessionId: string, roundId: AssessmentRoundId, expectedRevision: number, reflection: string) =>
+    invoke<EngineeringSessionResult>('submit_class_check', { sessionId, roundId, expectedRevision, reflection }),
+  pauseClassLesson: (sessionId: string) => invoke<void>('pause_class_lesson', { sessionId }),
+  skipClassLesson: (sessionId: string) => invoke<void>('skip_class_lesson', { sessionId }),
   submitLanguageSession: (input: {
     session_id: number;
     answers: number[];

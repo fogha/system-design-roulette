@@ -519,6 +519,44 @@ pub fn exercise_view(conn: &Connection, id: &SessionId) -> Result<Option<db::Exe
     }))
 }
 
+/// Exercise draft/completion saves are single-editor and debounced, so they
+/// merge into the latest checkpoint revision under the command lock.
+pub fn save_exercise_work(
+    conn: &Connection,
+    id: &SessionId,
+    draft: Option<String>,
+    completion: Option<(bool, String)>,
+) -> Result<()> {
+    let session = sessions::get(conn, id).map_err(e)?;
+    let mut work = BTreeMap::new();
+    if let Some(draft) = draft {
+        work.insert("exercise_draft".to_string(), Value::String(draft));
+    }
+    if let Some((completed, reflection)) = completion {
+        work.insert("exercise_completed".to_string(), Value::Bool(completed));
+        work.insert(
+            "exercise_reflection".to_string(),
+            Value::String(reflection.trim().to_string()),
+        );
+    }
+    patch_work(conn, id, session.checkpoint.revision, None, None, work).map(|_| ())
+}
+
+/// The tutor snapshotted at planning, for auxiliary calls about this lesson.
+pub fn generation_profile(conn: &Connection, id: &SessionId) -> Result<GenerationProfile> {
+    let session = sessions::get(conn, id).map_err(e)?;
+    let course_id = session.context.course.course_id.clone();
+    let program = classroom::program_row(conn, &course_id)?;
+    let tutor = &session.context.tutor;
+    Ok(GenerationProfile {
+        subject_id: course_id,
+        agent: tutor.provider.clone(),
+        model: tutor.model.clone(),
+        custom_bin: tutor.custom_agent_bin.clone().unwrap_or_default(),
+        prompt_version: format!("{}.{}", program.prompt_profile, program.prompt_version),
+    })
+}
+
 pub fn chat_context(
     conn: &Connection,
     id: &SessionId,

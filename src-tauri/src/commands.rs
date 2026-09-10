@@ -536,14 +536,150 @@ pub async fn start_classroom_session(
             serde_json::json!({ "kind": "language", "lesson": lesson })
         }
         crate::classroom::SubjectKind::Engineering => {
-            let lesson =
-                crate::classroom::start_engineering_session(&state, spec.id, slot_id, revisit)
-                    .await?;
+            // A legacy in-progress row finishes through the compatibility path;
+            // every new lesson runs on the shared study runtime.
+            let (legacy, planned) = {
+                let conn = state.db.0.lock().unwrap();
+                let legacy =
+                    crate::classroom::active_engineering_session(&conn, spec.id).map_err(err)?;
+                if legacy.is_some() {
+                    (legacy, None)
+                } else {
+                    let program = crate::classroom::program_row(&conn, spec.id).map_err(err)?;
+                    let planned = crate::subjects::engineering::plan(
+                        &conn,
+                        &program,
+                        slot_id,
+                        &state.today(),
+                        revisit,
+                    )?;
+                    (None, Some(planned))
+                }
+            };
+            let lesson = match (legacy, planned) {
+                (Some(lesson), _) => lesson,
+                (None, Some(planned)) => {
+                    let _ = app.emit(
+                        "classroom:state",
+                        serde_json::json!({ "planned": planned.id }),
+                    );
+                    crate::subjects::engineering::prepare(&state, &planned.id).await?;
+                    let conn = state.db.0.lock().unwrap();
+                    crate::subjects::engineering::activate(&conn, &planned.id)?;
+                    crate::subjects::engineering::view(&conn, &planned.id)?
+                        .ok_or("The prepared lesson could not be read.")?
+                }
+                (None, None) => unreachable!(),
+            };
             serde_json::json!({ "kind": "engineering", "lesson": lesson })
         }
     };
     let _ = app.emit("classroom:state", &value);
     Ok(value)
+}
+
+/// Saved work for a shared-runtime lesson: stage, reading position and editor
+/// fields. Feedback is only reached through the knowledge check.
+#[derive(Deserialize)]
+pub struct ClassLessonWorkInput {
+    pub session_id: crate::domain::sessions::SessionId,
+    pub expected_revision: u32,
+    #[serde(default)]
+    pub stage: Option<crate::domain::sessions::Stage>,
+    #[serde(default)]
+    pub reading: Option<crate::domain::sessions::ReadingPosition>,
+    #[serde(default)]
+    pub work: std::collections::BTreeMap<String, serde_json::Value>,
+}
+
+#[tauri::command]
+pub fn save_class_lesson_work(
+    state: State<'_, AppState>,
+    input: ClassLessonWorkInput,
+) -> CmdResult<crate::domain::sessions::Checkpoint> {
+    let conn = state.db.0.lock().unwrap();
+    crate::subjects::engineering::patch_work(
+        &conn,
+        &input.session_id,
+        input.expected_revision,
+        input.stage,
+        input.reading,
+        input.work,
+    )
+}
+
+#[tauri::command]
+pub fn save_class_check_answer(
+    state: State<'_, AppState>,
+    session_id: crate::domain::sessions::SessionId,
+    round_id: crate::domain::assessments::RoundId,
+    expected_revision: u32,
+    question_id: usize,
+    choice: Option<usize>,
+) -> CmdResult<crate::classroom::CheckView> {
+    let conn = state.db.0.lock().unwrap();
+    crate::subjects::engineering::save_answer(
+        &conn,
+        &session_id,
+        &round_id,
+        expected_revision,
+        question_id,
+        choice,
+    )
+}
+
+#[tauri::command]
+pub fn submit_class_check(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    session_id: crate::domain::sessions::SessionId,
+    round_id: crate::domain::assessments::RoundId,
+    expected_revision: u32,
+    reflection: String,
+) -> CmdResult<crate::classroom::EngineeringSessionResult> {
+    let result = {
+        let conn = state.db.0.lock().unwrap();
+        crate::subjects::engineering::submit(
+            &conn,
+            &session_id,
+            &round_id,
+            expected_revision,
+            &reflection,
+            &state.today(),
+        )?
+    };
+    state.clear_chat_threads();
+    let _ = app.emit("classroom:state", &result);
+    Ok(result)
+}
+
+/// Leave a lesson open for later without losing its saved work.
+#[tauri::command]
+pub fn pause_class_lesson(
+    state: State<'_, AppState>,
+    session_id: crate::domain::sessions::SessionId,
+) -> CmdResult<()> {
+    let conn = state.db.0.lock().unwrap();
+    crate::subjects::engineering::pause(&conn, &session_id).map(|_| ())
+}
+
+/// Discard a lesson without credit; its content and work stay in history.
+#[tauri::command]
+pub fn skip_class_lesson(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    session_id: crate::domain::sessions::SessionId,
+) -> CmdResult<()> {
+    {
+        let conn = state.db.0.lock().unwrap();
+        crate::subjects::engineering::skip(&conn, &session_id)?;
+    }
+    state.clear_chat_threads();
+    let _ = app.emit(
+        "classroom:state",
+        serde_json::json!({ "skipped": session_id }),
+    );
+    Ok(())
 }
 
 #[tauri::command]
@@ -561,8 +697,27 @@ pub fn resume_classroom_session(
         }
         crate::classroom::SubjectKind::Engineering => {
             let conn = state.db.0.lock().unwrap();
-            Ok(crate::classroom::active_engineering_session(&conn, spec.id)
-                .map_err(err)?
+            if let Some(lesson) =
+                crate::classroom::active_engineering_session(&conn, spec.id).map_err(err)?
+            {
+                return Ok(Some(
+                    serde_json::json!({ "kind": "engineering", "lesson": lesson }),
+                ));
+            }
+            let Some(session) = crate::subjects::engineering::resumable(&conn, spec.id)? else {
+                return Ok(None);
+            };
+            if !matches!(
+                session.status,
+                crate::domain::sessions::Status::Ready
+                    | crate::domain::sessions::Status::Active
+                    | crate::domain::sessions::Status::Paused
+            ) {
+                // Planned or failed preparation: Learn now retries it, Discard skips it.
+                return Ok(None);
+            }
+            crate::subjects::engineering::activate(&conn, &session.id)?;
+            Ok(crate::subjects::engineering::view(&conn, &session.id)?
                 .map(|lesson| serde_json::json!({ "kind": "engineering", "lesson": lesson })))
         }
     }
@@ -1935,8 +2090,15 @@ pub fn get_exercise(
     state: State<'_, AppState>,
     course_id: Option<i64>,
     classroom_session_id: Option<i64>,
+    study_session_id: Option<String>,
 ) -> CmdResult<Option<db::ExerciseView>> {
     let conn = state.db.0.lock().unwrap();
+    if let Some(id) = study_session_id {
+        return crate::subjects::engineering::exercise_view(
+            &conn,
+            &crate::domain::sessions::SessionId(id),
+        );
+    }
     if let Some(id) = classroom_session_id {
         return crate::classroom::classroom_exercise(&conn, id).map_err(err);
     }
@@ -1972,9 +2134,18 @@ pub fn save_exercise_draft(
     state: State<'_, AppState>,
     course_id: Option<i64>,
     classroom_session_id: Option<i64>,
+    study_session_id: Option<String>,
     draft: String,
 ) -> CmdResult<()> {
     let conn = state.db.0.lock().unwrap();
+    if let Some(id) = study_session_id {
+        return crate::subjects::engineering::save_exercise_work(
+            &conn,
+            &crate::domain::sessions::SessionId(id),
+            Some(draft),
+            None,
+        );
+    }
     db::save_exercise_draft(&conn, course_id, classroom_session_id, &draft).map_err(err)
 }
 
@@ -1986,6 +2157,7 @@ pub fn save_exercise_completion(
     state: State<'_, AppState>,
     course_id: Option<i64>,
     classroom_session_id: Option<i64>,
+    study_session_id: Option<String>,
     completed: bool,
     reflection: String,
 ) -> CmdResult<()> {
@@ -1995,6 +2167,14 @@ pub fn save_exercise_completion(
         );
     }
     let conn = state.db.0.lock().unwrap();
+    if let Some(id) = study_session_id {
+        return crate::subjects::engineering::save_exercise_work(
+            &conn,
+            &crate::domain::sessions::SessionId(id),
+            None,
+            Some((completed, reflection)),
+        );
+    }
     db::save_exercise_completion(
         &conn,
         course_id,
@@ -2049,8 +2229,9 @@ pub fn get_chat(
     state: State<'_, AppState>,
     course_id: Option<i64>,
     classroom_session_id: Option<i64>,
+    study_session_id: Option<String>,
 ) -> CmdResult<Vec<ChatMessageView>> {
-    let key = chat_key(course_id, classroom_session_id)?;
+    let key = chat_key(course_id, classroom_session_id, study_session_id.as_deref())?;
     let threads = state.chat_threads.lock().unwrap();
     Ok(threads
         .get(&key)
@@ -2058,11 +2239,18 @@ pub fn get_chat(
         .unwrap_or_default())
 }
 
-fn chat_key(course_id: Option<i64>, classroom_session_id: Option<i64>) -> CmdResult<String> {
-    match (course_id, classroom_session_id) {
-        (Some(id), None) => Ok(format!("course:{id}")),
-        (None, Some(id)) => Ok(format!("classroom:{id}")),
-        _ => Err("chat owner must be exactly one of course or classroom session".into()),
+fn chat_key(
+    course_id: Option<i64>,
+    classroom_session_id: Option<i64>,
+    study_session_id: Option<&str>,
+) -> CmdResult<String> {
+    match (course_id, classroom_session_id, study_session_id) {
+        (Some(id), None, None) => Ok(format!("course:{id}")),
+        (None, Some(id), None) => Ok(format!("classroom:{id}")),
+        (None, None, Some(id)) if !id.is_empty() => Ok(format!("study:{id}")),
+        _ => Err(
+            "chat owner must be exactly one of course, classroom session or study session".into(),
+        ),
     }
 }
 
@@ -2074,9 +2262,10 @@ pub async fn send_chat_message(
     state: State<'_, AppState>,
     course_id: Option<i64>,
     classroom_session_id: Option<i64>,
+    study_session_id: Option<String>,
     message: String,
 ) -> CmdResult<Vec<ChatMessageView>> {
-    let key = chat_key(course_id, classroom_session_id)?;
+    let key = chat_key(course_id, classroom_session_id, study_session_id.as_deref())?;
     let message = prepare_chat_message(message)?;
     let history = state
         .chat_threads
@@ -2085,7 +2274,21 @@ pub async fn send_chat_message(
         .get(&key)
         .cloned()
         .unwrap_or_default();
-    let reply = if let Some(id) = classroom_session_id {
+    let reply = if let Some(id) = study_session_id {
+        let (context, profile) = {
+            let conn = state.db.0.lock().unwrap();
+            let id = crate::domain::sessions::SessionId(id);
+            (
+                crate::subjects::engineering::chat_context(&conn, &id)?,
+                crate::subjects::engineering::generation_profile(&conn, &id)?,
+            )
+        };
+        state
+            .generator
+            .answer_course_question_for(&context, &message, &history, &profile)
+            .await
+            .map_err(err)?
+    } else if let Some(id) = classroom_session_id {
         let (context, profile) = {
             let conn = state.db.0.lock().unwrap();
             let context = crate::classroom::engineering_chat_context(&conn, id).map_err(err)?;

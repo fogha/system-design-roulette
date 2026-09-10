@@ -31,7 +31,7 @@ describe('catalog contract in the browser preview', () => {
     expect(course.reference_lessons).toContain(lesson.concept_slug);
     const reference = Object.values(references).find((reference) => reference.slug === lesson.concept_slug)!;
     const answers = reference.questions.filter((question) => question.kind === 'mcq').map((question) => question.choices!.indexOf(question.correct_answer));
-    const result = await mockApi.submitClassroomEngineeringSession({ session_id: lesson.session_id, answers, reflection: 'Evidence from the reference exercise.' });
+    const result = await mockApi.submitClassroomEngineeringSession({ session_id: Number(lesson.session_id), answers, reflection: 'Evidence from the reference exercise.' });
     expect(result.score).toBe(1);
     expect(result.corrections.every((correction) => correction.correct)).toBe(true);
   });

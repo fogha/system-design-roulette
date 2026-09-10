@@ -118,8 +118,8 @@
   {#if viewing}
     <section class="archive" aria-label="Saved lesson">
       <header><button class="ghost mono-ghost" onclick={closeLesson}><ArrowLeft size={14}/> Progress</button><div><h2 id="progress-archive-heading" tabindex="-1">{viewing.title}</h2><p>{dateLabel(viewing.date,true)} · Saved lesson</p></div></header>
-      <div class="archive-tabs" aria-label="Saved lesson sections"><button class:active={archiveTab==='read'} aria-pressed={archiveTab==='read'} onclick={()=>archiveTab='read'}><BookOpen size={14}/> Lesson</button>{#if viewing.course_id!==null||viewing.classroom_session_id!==null}<button class:active={archiveTab==='exercise'} aria-pressed={archiveTab==='exercise'} onclick={()=>archiveTab='exercise'}><Hammer size={14}/> Practice</button>{/if}</div>
-      <div class="archive-scroll"><article class="theme-scholar reader-card">{#if archiveTab==='exercise'}<ExerciseWorkspace courseId={viewing.course_id??undefined} classroomSessionId={viewing.classroom_session_id??undefined}/>{:else}<Markdown markdown={viewing.markdown}/>{/if}</article></div>
+      <div class="archive-tabs" aria-label="Saved lesson sections"><button class:active={archiveTab==='read'} aria-pressed={archiveTab==='read'} onclick={()=>archiveTab='read'}><BookOpen size={14}/> Lesson</button>{#if viewing.course_id!==null||viewing.classroom_session_id!==null||viewing.study_session_id!==null}<button class:active={archiveTab==='exercise'} aria-pressed={archiveTab==='exercise'} onclick={()=>archiveTab='exercise'}><Hammer size={14}/> Practice</button>{/if}</div>
+      <div class="archive-scroll"><article class="theme-scholar reader-card">{#if archiveTab==='exercise'}<ExerciseWorkspace courseId={viewing.course_id??undefined} classroomSessionId={viewing.classroom_session_id??undefined} studySessionId={viewing.study_session_id??undefined}/>{:else}<Markdown markdown={viewing.markdown}/>{/if}</article></div>
     </section>
   {/if}
 </div>

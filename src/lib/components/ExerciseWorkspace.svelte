@@ -7,7 +7,8 @@
   let {
     courseId,
     classroomSessionId,
-  }: { courseId?: number; classroomSessionId?: number } = $props();
+    studySessionId,
+  }: { courseId?: number; classroomSessionId?: number; studySessionId?: string } = $props();
 
   let exercise = $state<ExerciseView | null>(null);
   let loading = $state(true);
@@ -23,15 +24,19 @@
   let saver: ReturnType<typeof createDraftSaver> | undefined;
   let loadVersion = 0;
   const owner: ExerciseOwner = $derived(
-    classroomSessionId !== undefined
-      ? { classroom_session_id: classroomSessionId }
-      : { course_id: courseId },
+    studySessionId !== undefined
+      ? { study_session_id: studySessionId }
+      : classroomSessionId !== undefined
+        ? { classroom_session_id: classroomSessionId }
+        : { course_id: courseId },
   );
 
   $effect(() => {
     const capturedOwner = { ...owner };
-    const ownerKey = classroomSessionId !== undefined
-      ? `classroom:${classroomSessionId}` : `course:${courseId}`;
+    const ownerKey = studySessionId !== undefined
+      ? `study:${studySessionId}`
+      : classroomSessionId !== undefined
+        ? `classroom:${classroomSessionId}` : `course:${courseId}`;
     const version = ++loadVersion;
     let disposed = false;
     const currentSaver = createDraftSaver(
