@@ -1,4 +1,4 @@
-//! Daily auto-trigger scheduling, one backend per OS.
+//! Class appointment wakeups, one backend per OS.
 //!
 //! All three backends register the installed binary to launch with `--triggered`
 //! at every configured time, and self-heal if the registration points at a
@@ -140,7 +140,11 @@ pub fn ensure_current(hour: u32, minute: u32) {
 pub fn ensure_current_many(times: &[(u32, u32)]) {
     match normalize_times(times) {
         Ok(times) if !times.is_empty() => imp::ensure_current_many(&times),
-        Ok(_) => {}
+        Ok(_) => {
+            if let Err(error) = uninstall() {
+                log::warn!("could not remove obsolete scheduler wakeups: {error}");
+            }
+        }
         Err(error) => log::warn!("invalid scheduler interval set: {error}"),
     }
 }

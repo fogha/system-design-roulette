@@ -254,7 +254,7 @@ pub fn program_view(
         label: row.label,
         native_label: row.native_label,
         short_code: row.short_code,
-        enabled: row.enabled,
+        enabled: row.enabled && has_enabled_schedule(conn, subject_id)?,
         agent: row.agent,
         model: row.model,
         custom_agent_bin: row.custom_agent_bin,
@@ -298,6 +298,16 @@ fn valid_model(model: &str) -> bool {
     crate::agents::valid_model(model)
 }
 
+/// Activation requires a persisted class appointment, including in native IPC.
+pub fn has_enabled_schedule(conn: &Connection, subject_id: &str) -> Result<bool> {
+    conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM classroom_schedule_slots WHERE subject_id=?1 AND enabled=1)",
+        [subject_id],
+        |row| row.get(0),
+    )
+    .map_err(|error| error.to_string())
+}
+
 pub fn configure_program(
     conn: &Connection,
     input: &ConfigureClassroomInput,
@@ -307,6 +317,9 @@ pub fn configure_program(
         rusqlite::Transaction::new_unchecked(conn, rusqlite::TransactionBehavior::Immediate)
             .map_err(|e| e.to_string())?;
     let spec = subject(&input.subject_id)?;
+    if input.enabled && !has_enabled_schedule(conn, spec.id)? {
+        return Err("Add a study time in this class's Schedule tab before activating it.".into());
+    }
     if !valid_agent(&input.agent) || !valid_model(&input.model) {
         return Err("class agent or model is invalid".into());
     }
@@ -380,6 +393,9 @@ pub struct UpsertClassroomSlotInput {
 }
 
 pub fn upsert_slot(conn: &Connection, input: &UpsertClassroomSlotInput) -> Result<i64> {
+    let transaction =
+        rusqlite::Transaction::new_unchecked(conn, rusqlite::TransactionBehavior::Immediate)
+            .map_err(|e| e.to_string())?;
     subject(&input.subject_id)?;
     if input.hour > 23 || input.minute > 59 {
         return Err("classroom slot time is invalid".into());
@@ -391,15 +407,15 @@ pub fn upsert_slot(conn: &Connection, input: &UpsertClassroomSlotInput) -> Resul
         return Err("select at least one valid weekday".into());
     }
     let weekdays_json = serde_json::to_string(&weekdays).map_err(|error| error.to_string())?;
-    if let Some(id) = input.id {
+    let id = if let Some(id) = input.id {
         // Hand-editing a slot "claims" it as manual, even if the schedule
         // planner originally created it — re-planning never touches it again.
         let changed = conn
             .execute(
                 "UPDATE classroom_schedule_slots
-                 SET subject_id = ?2, hour = ?3, minute = ?4,
+                 SET hour = ?3, minute = ?4,
                      weekdays_json = ?5, enabled = ?6, source = 'manual'
-                 WHERE id = ?1",
+                 WHERE id = ?1 AND subject_id = ?2",
                 params![
                     id,
                     input.subject_id,
@@ -419,7 +435,7 @@ pub fn upsert_slot(conn: &Connection, input: &UpsertClassroomSlotInput) -> Resul
         if changed == 0 {
             return Err("classroom slot was not found".into());
         }
-        Ok(id)
+        id
     } else {
         conn.execute(
             "INSERT INTO classroom_schedule_slots
@@ -441,11 +457,43 @@ pub fn upsert_slot(conn: &Connection, input: &UpsertClassroomSlotInput) -> Resul
                 error.to_string()
             }
         })?;
-        Ok(conn.last_insert_rowid())
+        conn.last_insert_rowid()
+    };
+    pause_without_schedule(conn, &input.subject_id)?;
+    transaction.commit().map_err(|e| e.to_string())?;
+    Ok(id)
+}
+
+fn pause_without_schedule(conn: &Connection, subject_id: &str) -> Result<()> {
+    if !has_enabled_schedule(conn, subject_id)? {
+        conn.execute(
+            "UPDATE classroom_programs SET enabled=0 WHERE subject_id=?1",
+            [subject_id],
+        )
+        .map_err(|e| e.to_string())?;
+        conn.execute(
+            "UPDATE language_programs SET enabled=0 WHERE language=?1",
+            [subject_id],
+        )
+        .map_err(|e| e.to_string())?;
+        conn.execute("UPDATE classes SET status='paused',updated_at=?2 WHERE course_id=?1 AND status='active'", params![subject_id, language::now_iso()])
+            .map_err(|e| e.to_string())?;
     }
+    Ok(())
 }
 
 pub fn delete_slot(conn: &Connection, id: i64) -> Result<()> {
+    let transaction =
+        rusqlite::Transaction::new_unchecked(conn, rusqlite::TransactionBehavior::Immediate)
+            .map_err(|e| e.to_string())?;
+    let subject_id: Option<String> = conn
+        .query_row(
+            "SELECT subject_id FROM classroom_schedule_slots WHERE id=?1",
+            [id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
     let active_engineering: i64 = conn
         .query_row(
             "SELECT COUNT(*) FROM classroom_sessions
@@ -480,6 +528,10 @@ pub fn delete_slot(conn: &Connection, id: i64) -> Result<()> {
     .map_err(|error| error.to_string())?;
     conn.execute("DELETE FROM classroom_schedule_slots WHERE id = ?1", [id])
         .map_err(|error| error.to_string())?;
+    if let Some(subject_id) = subject_id {
+        pause_without_schedule(conn, &subject_id)?;
+    }
+    transaction.commit().map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -626,7 +678,7 @@ pub fn plan_schedule(
                 conn,
                 &language::ConfigureProgramInput {
                     language: spec.id.into(),
-                    enabled: true,
+                    enabled: program.enabled,
                     start_level: existing.start_level,
                     target_level: existing.target_level,
                     weekly_minutes: input.target_weekly_minutes,
@@ -944,21 +996,13 @@ pub fn slot_views(
 }
 
 pub fn all_schedule_times(conn: &Connection) -> Result<Vec<(u32, u32)>> {
-    let primary_hour = db::get_config(conn, "schedule_hour")
-        .map_err(|error| error.to_string())?
-        .and_then(|value| value.parse().ok())
-        .unwrap_or(9);
-    let primary_minute = db::get_config(conn, "schedule_minute")
-        .map_err(|error| error.to_string())?
-        .and_then(|value| value.parse().ok())
-        .unwrap_or(0);
-    let mut times = vec![(primary_hour, primary_minute)];
-    times.extend(
-        slot_rows(conn)?
-            .into_iter()
-            .filter(|slot| slot.enabled && slot.program_enabled)
-            .map(|slot| (slot.hour, slot.minute)),
-    );
+    // The retired once-a-day routine is not an appointment source. Its saved
+    // time remains legacy provenance; only enabled class rules wake the app.
+    let mut times = slot_rows(conn)?
+        .into_iter()
+        .filter(|slot| slot.enabled && slot.program_enabled)
+        .map(|slot| (slot.hour, slot.minute))
+        .collect::<Vec<_>>();
     times.sort_unstable();
     times.dedup();
     Ok(times)

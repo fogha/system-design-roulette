@@ -7,6 +7,7 @@ import {
   type LanguageLessonView,
   type SessionView,
 } from './ipc';
+import type { ClassTab } from './features/classes/class-navigation';
 import type { Destination } from './app/navigation';
 
 export type Screen =
@@ -71,6 +72,13 @@ class AppStore {
   state = $state<AppStateView | null>(null);
   screen = $state<Screen>('loading');
   destination = $state<Destination>('today');
+  classSelection = $state<ClassroomSubjectId | null>(null);
+  classTab = $state<ClassTab>('overview');
+  openClass(subjectId: ClassroomSubjectId | null = null, tab: ClassTab = 'overview') {
+    this.classSelection = subjectId;
+    this.classTab = tab;
+    this.navigate('classes');
+  }
   genStatus = $state<string>('');
   genLog = $state<string[]>([]);
   timerRemaining = $state<number>(-1);

@@ -16,7 +16,8 @@
   import FlowStage from '../../components/FlowStage.svelte';
   import { ArrowLeft, Check, Compass, ListStart, Layers, BookOpen, Clock, Save } from 'lucide-svelte';
 
-  let { courseId, onclose }: { courseId: ClassroomSubjectId; onclose: () => void } = $props();
+  let { courseId, onclose, embedded = false }: { courseId: ClassroomSubjectId; onclose: () => void; embedded?: boolean } = $props();
+  const uid = $props.id();
   const course = $derived(courseDefinition(courseId)!);
   let editor: ReturnType<typeof enrollmentEditor>;
   let view = $state<EnrollmentEditorState>({ options: null, draft: null, configuration: null, status: 'loading', error: '' });
@@ -89,22 +90,22 @@
 </script>
 
 {#if checking && view.draft}
-  <PlacementCheck draft={view.draft} onclose={() => (checking = false)} onrecommend={() => openNext(false)} />
+  <PlacementCheck {embedded} draft={view.draft} onclose={() => (checking = false)} onrecommend={() => openNext(false)} />
 {:else if path}
-  <PathPreview {path} onclose={() => (path = null)} onfoundations={includeFoundations} onaccept={accept} {accepting} error={operationError} />
+  <PathPreview {embedded} {path} onclose={() => (path = null)} onfoundations={includeFoundations} onaccept={accept} {accepting} error={operationError} />
 {:else}
-<section class="enrollment" aria-labelledby="enrollment-title">
-  <button class="back-link" onclick={close} disabled={closing}><ArrowLeft size={15} /> Classes</button>
+<section class="enrollment" class:embedded aria-labelledby={`${uid}-title`}>
+  {#if !embedded}<button class="back-link" onclick={close} disabled={closing}><ArrowLeft size={15} /> Classes</button>{/if}
   <header>
     <p class="eyebrow mono">{course.label} · Setup draft</p>
-    <h1 id="enrollment-title">Start from what you know</h1>
+    <h1 id={`${uid}-title`}>Start from what you know</h1>
     <p class="intro">Choose your goal and starting preferences. Your setup is saved so you can return to it later.</p>
   </header>
 
   {#if view.status === 'loading'}
     <p role="status">Loading your course setup…</p>
   {:else if configuration && view.options}
-    <p class="notice">Review your path, then accept it to enable this class. Starting preferences and diagnostic samples remain separate from completed lessons and mastery.</p>
+    <p class="notice">Review and accept your path, then add a study time to activate this class. Starting preferences and diagnostic samples remain separate from completed lessons and mastery.</p>
     <FlowStage number="01"><NodeCard Icon={BookOpen} name={course.title} badge={course.version} badgeTone="violet">
     <div class="course-context">
       <p>{course.outcome}</p>
@@ -121,7 +122,7 @@
       <div class="route-grid">
         {#each routes as route}
           <label class:selected={configuration.entry.route === route.id}>
-            <span class="route-top"><route.icon size={14} /><input type="radio" name="entry-route" value={route.id} checked={configuration.entry.route === route.id} onchange={() => choose(route.id)} /></span>
+            <span class="route-top"><route.icon size={14} /><input type="radio" name={`${uid}-entry-route`} value={route.id} checked={configuration.entry.route === route.id} onchange={() => choose(route.id)} /></span>
             <strong>{route.title}</strong><span>{route.description}</span>
           </label>
         {/each}
@@ -240,4 +241,5 @@
   :is(button, input, textarea, summary):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
   @media (max-width: 620px) { .route-grid { grid-template-columns: 1fr; } .route-grid label { gap: 5px; } }
   @media (max-width: 620px) { .enrollment { padding: 22px 18px; } .form-grid, .familiar-list { grid-template-columns: 1fr; } footer button { width: 100%; } }
+  .enrollment.embedded { width: 100%; max-width: 1000px; padding: 0; } .embedded header { margin-top: 0; }
 </style>

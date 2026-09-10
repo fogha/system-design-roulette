@@ -30,7 +30,7 @@ fn configure(conn: &rusqlite::Connection, subject_id: &str, agent: &str) {
         conn,
         &ConfigureClassroomInput {
             subject_id: subject_id.into(),
-            enabled: true,
+            enabled: false,
             agent: agent.into(),
             model: "sonnet".into(),
             custom_agent_bin: String::new(),
@@ -42,6 +42,20 @@ fn configure(conn: &rusqlite::Connection, subject_id: &str, agent: &str) {
         "2026-07-21",
     )
     .unwrap();
+    // Legacy enabled-program fixtures can predate schedules. Activation itself
+    // is exercised separately below with the new schedule prerequisite.
+    conn.execute(
+        "UPDATE classroom_programs SET enabled=1 WHERE subject_id=?1",
+        [subject_id],
+    )
+    .unwrap();
+    if is_language {
+        conn.execute(
+            "UPDATE language_programs SET enabled=1 WHERE language=?1",
+            [subject_id],
+        )
+        .unwrap();
+    }
 }
 
 #[test]
@@ -285,7 +299,7 @@ fn class_agent_and_model_settings_do_not_leak_between_subjects() {
 }
 
 #[test]
-fn every_enabled_class_slot_extends_the_primary_os_schedule() {
+fn only_enabled_class_slots_supply_os_wakeup_times() {
     let conn = test_db();
     configure(&conn, "german", "claude");
     configure(&conn, "frontend-architecture", "deepseek");
@@ -315,7 +329,7 @@ fn every_enabled_class_slot_extends_the_primary_os_schedule() {
     .unwrap();
     assert_eq!(
         classroom::all_schedule_times(&conn).unwrap(),
-        vec![(7, 30), (12, 15), (19, 0)]
+        vec![(7, 30), (12, 15)]
     );
 }
 
@@ -896,4 +910,168 @@ fn decayed_modules_return_but_mastered_ones_do_not() {
             "only the decayed module may be re-served"
         );
     }
+}
+
+#[test]
+fn activation_requires_a_saved_enabled_rule_and_keeps_configuration_atomic() {
+    let conn = test_db();
+    let mut input = ConfigureClassroomInput {
+        subject_id: "linux-bash".into(),
+        enabled: true,
+        agent: "codex".into(),
+        model: "default".into(),
+        custom_agent_bin: String::new(),
+        session_minutes: 45,
+        start_level: None,
+        target_level: None,
+        weekly_minutes: None,
+    };
+    assert!(classroom::configure_program(&conn, &input, "2026-09-10")
+        .unwrap_err()
+        .contains("study time"));
+    assert_eq!(
+        classroom::program_row(&conn, "linux-bash").unwrap().agent,
+        "claude"
+    );
+    assert!(classroom::all_schedule_times(&conn).unwrap().is_empty());
+    let id = classroom::upsert_slot(
+        &conn,
+        &UpsertClassroomSlotInput {
+            id: None,
+            subject_id: "linux-bash".into(),
+            hour: 8,
+            minute: 30,
+            weekdays: vec![1, 3, 5],
+            enabled: false,
+        },
+    )
+    .unwrap();
+    assert!(classroom::configure_program(&conn, &input, "2026-09-10").is_err());
+    classroom::upsert_slot(
+        &conn,
+        &UpsertClassroomSlotInput {
+            id: Some(id),
+            subject_id: "linux-bash".into(),
+            hour: 8,
+            minute: 30,
+            weekdays: vec![1, 3, 5],
+            enabled: true,
+        },
+    )
+    .unwrap();
+    classroom::configure_program(&conn, &input, "2026-09-10").unwrap();
+    assert_eq!(classroom::all_schedule_times(&conn).unwrap(), vec![(8, 30)]);
+    input.enabled = false;
+    classroom::configure_program(&conn, &input, "2026-09-10").unwrap();
+    assert!(classroom::all_schedule_times(&conn).unwrap().is_empty());
+    assert_eq!(
+        classroom::slot_views(&conn, "2026-09-10", false)
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        db::get_config(&conn, "schedule_hour").unwrap().as_deref(),
+        Some("19")
+    );
+    input.enabled = true;
+    classroom::configure_program(&conn, &input, "2026-09-10").unwrap();
+    classroom::delete_slot(&conn, id).unwrap();
+    assert!(!classroom::program_row(&conn, "linux-bash").unwrap().enabled);
+    classroom::upsert_slot(
+        &conn,
+        &UpsertClassroomSlotInput {
+            id: None,
+            subject_id: "linux-bash".into(),
+            hour: 8,
+            minute: 30,
+            weekdays: vec![1, 3, 5],
+            enabled: true,
+        },
+    )
+    .unwrap();
+    assert!(!classroom::program_row(&conn, "linux-bash").unwrap().enabled);
+    assert!(classroom::all_schedule_times(&conn).unwrap().is_empty());
+}
+
+#[test]
+fn editing_a_schedule_cannot_transfer_it_to_another_class() {
+    let conn = test_db();
+    let mut input = UpsertClassroomSlotInput {
+        id: None,
+        subject_id: "linux-bash".into(),
+        hour: 8,
+        minute: 30,
+        weekdays: vec![1, 3, 5],
+        enabled: true,
+    };
+    let id = classroom::upsert_slot(&conn, &input).unwrap();
+    input.id = Some(id);
+    input.subject_id = "german".into();
+    input.hour = 10;
+    assert!(classroom::upsert_slot(&conn, &input)
+        .unwrap_err()
+        .contains("not found"));
+    let slots = classroom::slot_views(&conn, "2026-09-10", false).unwrap();
+    assert_eq!(slots.len(), 1);
+    assert_eq!(slots[0].subject_id, "linux-bash");
+    assert_eq!(slots[0].hour, 8);
+}
+
+#[test]
+fn dormant_daily_generation_jobs_remain_archived_while_saved_work_can_resume() {
+    let conn = test_db();
+    for (date, status) in [("2026-09-09", "in_progress"), ("2026-09-10", "pending")] {
+        db::upsert_session(
+            &conn,
+            &Session {
+                date: date.into(),
+                status: status.into(),
+                current_step: "course".into(),
+                concept_id: None,
+                quiz_score: None,
+                started_at: Some("2026-09-09T09:00:00".into()),
+                completed_at: None,
+                reading_seconds: 17,
+                session_type: "lesson".into(),
+                plan_reason: String::new(),
+                focus: "system-design".into(),
+            },
+        )
+        .unwrap();
+    }
+    db::jobs::enqueue(&conn, "course", "2026-09-10").unwrap();
+    db::jobs::enqueue(&conn, "quiz", "2026-09-11").unwrap();
+    db::jobs::enqueue(&conn, "course", "2026-09-09").unwrap();
+    let job = db::jobs::next_for_active_legacy_session(&conn)
+        .unwrap()
+        .unwrap();
+    assert_eq!(job.2, "2026-09-09");
+    db::jobs::mark(&conn, job.0, "done", None).unwrap();
+    assert!(db::jobs::next_for_active_legacy_session(&conn)
+        .unwrap()
+        .is_none());
+    assert_eq!(
+        conn.query_row(
+            "SELECT COUNT(*) FROM generation_jobs WHERE status='queued'",
+            [],
+            |r| r.get::<_, i64>(0)
+        )
+        .unwrap(),
+        2
+    );
+    assert_eq!(
+        db::get_session(&conn, "2026-09-09")
+            .unwrap()
+            .unwrap()
+            .reading_seconds,
+        17
+    );
+    assert_eq!(
+        db::get_session(&conn, "2026-09-10")
+            .unwrap()
+            .unwrap()
+            .status,
+        "pending"
+    );
 }

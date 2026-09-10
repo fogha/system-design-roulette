@@ -1,4 +1,3 @@
-import { courseDefinition } from './catalog';
 import type { AppStateView } from './ipc';
 
 export interface NextClass {
@@ -21,35 +20,10 @@ function localDateKey(date: Date): string {
   ].join('-');
 }
 
-function primaryCandidate(state: AppStateView, now: Date): Candidate | null {
-  if (
-    !Number.isInteger(state.schedule_hour) ||
-    !Number.isInteger(state.schedule_minute) ||
-    state.schedule_hour < 0 ||
-    state.schedule_hour > 23 ||
-    state.schedule_minute < 0 ||
-    state.schedule_minute > 59
-  ) {
-    return null;
-  }
-  const focus = state.session.status === 'in_progress' ? state.session.focus : state.selected_focus;
-  const label = courseDefinition(focus)?.label ?? 'Daily study';
-  if (state.owed) {
-    return { at: new Date(now), label, due: true };
-  }
-  const at = new Date(now);
-  at.setHours(state.schedule_hour, state.schedule_minute, 0, 0);
-  const primaryHandledToday =
-    state.session.date === localDateKey(now) && state.session.status !== 'pending';
-  if (at <= now || primaryHandledToday) at.setDate(at.getDate() + 1);
-  return { at, label, due: false };
-}
-
 export function nextScheduledClass(state: AppStateView | null, now: Date): NextClass | null {
   if (!state || state.schedule_paused) return null;
 
-  const primary = primaryCandidate(state, now);
-  const candidates: Candidate[] = primary ? [primary] : [];
+  const candidates: Candidate[] = [];
   const enabledSubjects = new Set(
     state.classroom_programs
       .filter((program) => program.enabled)
@@ -96,7 +70,7 @@ export function formatClassCountdown(nextClass: NextClass | null, now: Date): st
 }
 
 export function formatClassTime(nextClass: NextClass | null, now: Date): string {
-  if (!nextClass) return 'No enabled classes';
+  if (!nextClass) return 'No scheduled classes';
   if (nextClass.due) return 'scheduled time has arrived';
 
   const tomorrow = new Date(now);

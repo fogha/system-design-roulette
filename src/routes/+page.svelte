@@ -4,7 +4,6 @@
   import SetupWizard from '../lib/screens/SetupWizard.svelte';
   import Today from '../lib/screens/Today.svelte';
   import Classes from '../lib/features/classes/Classes.svelte';
-  import Schedule from '../lib/screens/Schedule.svelte';
   import StudySettings from '../lib/screens/StudySettings.svelte';
   import DeskShell from '../lib/app/DeskShell.svelte';
   import Quiz from '../lib/screens/Quiz.svelte';
@@ -47,7 +46,6 @@
     <DeskShell>
       {#if app.screen === 'dashboard'}<Dashboard />
       {:else if app.destination === 'classes'}<Classes />
-      {:else if app.destination === 'schedule'}<Schedule />
       {:else if app.destination === 'settings'}<StudySettings />
       {:else}<Today />{/if}
     </DeskShell>

@@ -18,6 +18,8 @@ describe('catalog contract in the browser preview', () => {
     const authored = concepts.filter((concept) => concept.focus === course.id);
     expect(map.concepts.map((concept) => concept.slug)).toEqual(authored.map((concept) => concept.slug));
     expect(map.month_outcome).toBe(course.outcome);
+    await mockApi.upsertClassroomSlot({ subject_id: course.id, hour: 9, minute: 0, weekdays: [1, 3, 5], enabled: true });
+    await mockApi.configureClassroomProgram({ subject_id: course.id, enabled: true, agent: 'claude', model: 'opus', custom_agent_bin: '', session_minutes: 30 });
     const started = await mockApi.startClassroomSession(course.id);
     expect(started.kind).toBe('engineering');
     if (started.kind !== 'engineering') throw new Error('wrong subject adapter');

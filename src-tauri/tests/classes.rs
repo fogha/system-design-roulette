@@ -53,7 +53,7 @@ fn count(conn: &Connection, table: &str) -> i64 {
 }
 
 #[test]
-fn all_nine_paths_activate_atomically_without_creating_study_or_assessment_credit() {
+fn all_nine_paths_save_without_activating_unscheduled_classes_or_awarding_credit() {
     let (file, conn) = fixture();
     let tables = [
         "sessions",
@@ -82,7 +82,7 @@ fn all_nine_paths_activate_atomically_without_creating_study_or_assessment_credi
                 .iter()
                 .all(|m| !m.reached));
         }
-        assert!(classroom::program_row(&conn, course.id).unwrap().enabled);
+        assert!(!classroom::program_row(&conn, course.id).unwrap().enabled);
         assert_eq!(
             classroom::program_view(&conn, course.id, "2026-09-09")
                 .unwrap()
@@ -207,6 +207,18 @@ fn reassessment_keeps_the_class_and_prior_path_and_the_original_retry_result() {
 #[test]
 fn a_new_language_path_changes_future_entry_without_rewriting_an_active_lesson() {
     let (_, conn) = fixture();
+    classroom::upsert_slot(
+        &conn,
+        &classroom::UpsertClassroomSlotInput {
+            id: None,
+            subject_id: "german".into(),
+            hour: 7,
+            minute: 30,
+            weekdays: vec![1, 3, 5],
+            enabled: true,
+        },
+    )
+    .unwrap();
     let first_input = setup(&conn, "german", "A1");
     let first = classes::accept(&conn, &first_input, "2026-09-09").unwrap();
     let lesson = language::start_session(&conn, "german", "2026-09-09", false).unwrap();

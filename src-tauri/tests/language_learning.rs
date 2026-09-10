@@ -194,7 +194,7 @@ fn legacy_language_slots_migrate_into_the_classroom_schedule() {
     classroom::initialize(&conn).unwrap();
     assert_eq!(
         classroom::all_schedule_times(&conn).unwrap(),
-        vec![(7, 30), (12, 15), (19, 0)]
+        vec![(7, 30), (12, 15)]
     );
 }
 

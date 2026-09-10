@@ -128,7 +128,14 @@ pub fn sync_configuration(conn: &Connection, course_id: &str, today: &str) -> Re
         params![
             course_id,
             serde_json::to_string(&config)?,
-            if program.enabled { "active" } else { "paused" },
+            if program.enabled
+                && crate::classroom::has_enabled_schedule(conn, course_id)
+                    .map_err(DbError::Invalid)?
+            {
+                "active"
+            } else {
+                "paused"
+            },
             chrono::Utc::now().to_rfc3339()
         ],
     )?;
@@ -193,11 +200,13 @@ pub fn accept(conn: &Connection, input: &AcceptPath, today: &str) -> Result<Acce
     let path_id = format!("path-{:032x}", rand::random::<u128>());
     let now = chrono::Utc::now().to_rfc3339();
     let configuration_json = serde_json::to_string(&draft.configuration)?;
-    // Session readers and due/consumed readers continue to use the same subject
-    // adapters. This bridge enables that existing program atomically with its path.
-    let changed = tx.execute("UPDATE classroom_programs SET enabled=1, agent=?2, model=?3, custom_agent_bin=?4, session_minutes=?5, learning_goal=?6, target_weekly_minutes=COALESCE(?7,target_weekly_minutes), updated_at=?8 WHERE subject_id=?1",
+    // Save an accepted path without activating an unscheduled class.
+    let scheduled =
+        crate::classroom::has_enabled_schedule(&tx, course.id).map_err(DbError::Invalid)?;
+    let status = if scheduled { "active" } else { "paused" };
+    let changed = tx.execute("UPDATE classroom_programs SET enabled=?9, agent=?2, model=?3, custom_agent_bin=?4, session_minutes=?5, learning_goal=?6, target_weekly_minutes=COALESCE(?7,target_weekly_minutes), updated_at=?8 WHERE subject_id=?1",
         params![course.id,draft.configuration.tutor.provider,draft.configuration.tutor.model,draft.configuration.tutor.custom_agent_bin.as_deref().unwrap_or(""),draft.configuration.pace.session_minutes,
-            match &draft.configuration.goal { LearningGoal::CourseOutcome{note} | LearningGoal::LanguageLevel{note,..} => note },draft.configuration.pace.weekly_minutes,now])?;
+            match &draft.configuration.goal { LearningGoal::CourseOutcome{note} | LearningGoal::LanguageLevel{note,..} => note },draft.configuration.pace.weekly_minutes,now,scheduled])?;
     if changed != 1 {
         return Err(DbError::Invalid(
             "Classroom data is not initialized. Restart the app and retry.".into(),
@@ -206,16 +215,16 @@ pub fn accept(conn: &Connection, input: &AcceptPath, today: &str) -> Result<Acce
     if let LearningGoal::LanguageLevel { target_level, .. } = &draft.configuration.goal {
         // Existing lesson/assessment rows and the original progress baseline are
         // retained. An explicit new path changes the cursor for subsequent work.
-        let changed = tx.execute("UPDATE language_programs SET enabled=1, current_level=?2, target_level=?3, start_level=CASE WHEN EXISTS(SELECT 1 FROM language_sessions WHERE language=?1) THEN start_level ELSE ?2 END, start_date=CASE WHEN EXISTS(SELECT 1 FROM language_sessions WHERE language=?1) THEN start_date ELSE ?7 END, weekly_minutes=COALESCE(?4,weekly_minutes), session_minutes=?5, updated_at=?6 WHERE language=?1",
-            params![course.id,recommendation.entry_point,target_level,draft.configuration.pace.weekly_minutes,draft.configuration.pace.session_minutes,now,today])?;
+        let changed = tx.execute("UPDATE language_programs SET enabled=?8, current_level=?2, target_level=?3, start_level=CASE WHEN EXISTS(SELECT 1 FROM language_sessions WHERE language=?1) THEN start_level ELSE ?2 END, start_date=CASE WHEN EXISTS(SELECT 1 FROM language_sessions WHERE language=?1) THEN start_date ELSE ?7 END, weekly_minutes=COALESCE(?4,weekly_minutes), session_minutes=?5, updated_at=?6 WHERE language=?1",
+            params![course.id,recommendation.entry_point,target_level,draft.configuration.pace.weekly_minutes,draft.configuration.pace.session_minutes,now,today,scheduled])?;
         if changed != 1 {
             return Err(DbError::Invalid(
                 "Language data is not initialized. Restart the app and retry.".into(),
             ));
         }
     }
-    tx.execute("INSERT INTO classes(id,course_id,course_snapshot_fingerprint,status,configuration_json,active_path_revision_id,created_at,updated_at) VALUES(?1,?2,?3,'active',?4,?5,?6,?6) ON CONFLICT(course_id) DO UPDATE SET course_snapshot_fingerprint=excluded.course_snapshot_fingerprint, configuration_json=excluded.configuration_json,active_path_revision_id=excluded.active_path_revision_id,status='active',updated_at=excluded.updated_at",
-        params![class_id,course.course_id,draft.course.fingerprint,configuration_json,path_id,now])?;
+    tx.execute("INSERT INTO classes(id,course_id,course_snapshot_fingerprint,status,configuration_json,active_path_revision_id,created_at,updated_at) VALUES(?1,?2,?3,?7,?4,?5,?6,?6) ON CONFLICT(course_id) DO UPDATE SET course_snapshot_fingerprint=excluded.course_snapshot_fingerprint, configuration_json=excluded.configuration_json,active_path_revision_id=excluded.active_path_revision_id,status=excluded.status,updated_at=excluded.updated_at",
+        params![class_id,course.course_id,draft.course.fingerprint,configuration_json,path_id,now,status])?;
     tx.execute("INSERT INTO path_revisions(id,class_id,revision,course_snapshot_fingerprint,entry_profile_json,plan_json,accepted_at) VALUES(?1,?2,?3,?4,?5,?6,?7)",
         params![path_id,class_id,revision,draft.course.fingerprint,configuration_json,serde_json::to_string(&recommendation)?,now])?;
     tx.execute("UPDATE enrollment_drafts SET status='accepted',accepted_class_id=?2,updated_at=?3 WHERE id=?1",params![draft.id.0,class_id,now])?;

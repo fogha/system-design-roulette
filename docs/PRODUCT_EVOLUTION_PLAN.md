@@ -20,7 +20,7 @@ The source supports that interpretation directly:
 
 **Product identity: Principia Desk.** The name is finalized. Position the app as an intentional place to understand subjects from their foundations. Use this exact display name throughout the planned UI, onboarding, documentation and installer labels. The suggested tagline is **Understand deeply. Practice daily.**; tagline and visual identity remain proposals. Apply the compatibility rules in the rebranding workstream when implementing the rename.
 
-**Visual direction clarified during implementation:** the user rejected the simplified preview and requested the design on `main` as the reference, specifically for visual design. Preserve its blueprint grid, node headers, numbered rails, dashed connectors, status LEDs, compact monospace controls, amber actions, colored metadata badges, serif headlines and paper reader. The catalog, entry-level support and structural work remain in scope. Five destinations describe information organization; a sidebar or generic card styling is not a requirement. [DESIGN.md](../DESIGN.md) now records this explicit constraint.
+**Visual direction clarified during implementation:** the user rejected the simplified preview and requested the design on `main` as the reference, specifically for visual design. Preserve its blueprint grid, node headers, numbered rails, dashed connectors, status LEDs, compact monospace controls, amber actions, colored metadata badges, serif headlines and paper reader. The catalog, entry-level support and structural work remain in scope. The later class-workspace request adds a searchable class sidebar and a large detail pane with independently scrollable tabs. Keep four global destinations: Today, Classes, Progress and Settings. Scheduling belongs to each class; Today provides the combined agenda. [DESIGN.md](../DESIGN.md) now records this explicit constraint.
 
 **1. Establish the product vocabulary and catalog.** Use the same meanings in code, database contracts, UI copy, fixtures and documentation. The main navigation should say **Classes**; the internal subject catalog describes what can be studied.
 
@@ -42,7 +42,7 @@ The source supports that interpretation directly:
 
 Avoid using `course` for one generated document, `class` for both a subject and an attempt, or `completed` for every kind of progress. Existing types can retain legacy names inside compatibility adapters during migration; the new public contract uses the definitions above.
 
-Start with one supported course per subject and one active class per course. Preserve existing dormant/enabled settings. Classes has Active, Paused and Completed filters. Add class offers Continue or Reactivate when an enrollment already exists, rather than creating duplicates. Its short flow is course → goal and starting point → optional placement check → personal path preview → pace, tutor defaults and optional schedule → class overview. Multiple courses and enrollments can fit the IDs later without requiring a course builder now.
+Start with one supported course per subject and one active class per course. Preserve existing dormant/enabled settings. Classes has Active, Paused and Completed filters. Add class offers Continue or Reactivate when an enrollment already exists, rather than creating duplicates. Its short flow is course → goal and starting point → optional placement check → personal path preview → pace, tutor defaults and saved study times → class activation. Multiple courses and enrollments can fit the IDs later without requiring a course builder now.
 
 The initial catalog should contain nine courses, initially one per subject entry. Linux Bash and Bash Scripting are separate offerings: interactive command-line fluency and script-based automation respectively.
 
@@ -92,7 +92,7 @@ Offer three routes during Add class:
 | Help me find my level | Take an optional short diagnostic, with Skip / I don't know and a visible effort estimate. Target roughly 5–10 minutes for the initial check; offer a longer practical task only when useful. | Recommend an entry unit, relevant refreshers and any uncertain prerequisites. A brief sample does not establish mastery of the whole course. |
 | Choose my starting point | Select a course-specific level or unit and indicate familiar topics. No mandatory entrance exam. | Begin there with an explicitly provisional entry profile and visible prerequisite advice; unverified topics can be checked during relevant practice. |
 
-Persist an enrollment draft and any diagnostic answers so closing onboarding does not lose work. Activate the class and its schedule only after the learner accepts the path. Skipping or failing to load a diagnostic always leaves the foundations and manual-entry routes available. Placement carries no focus lock or time penalty.
+Persist an enrollment draft and any diagnostic answers so closing onboarding does not lose work. Accepting a path saves the class setup. Activation additionally requires at least one enabled, saved study time; an unscheduled class stays inactive. Skipping or failing to load a diagnostic always leaves the foundations and manual-entry routes available. Placement carries no focus lock or time penalty.
 
 The path preview explains **where you will start, which material you can bypass, why that is recommended, and which gaps need a short refresher**. Offer Accept path, Change starting point and Include foundations. Keep bypassed material visible and available for voluntary study. Class overview and curriculum use the same controls; learners can check out of a familiar unit or adjust their path later without resetting their class or history.
 
@@ -106,14 +106,14 @@ Use early practice and later retrieval to refine the entry profile. When a gap a
 
 For German and Italian, keep a declared CEFR starting band and target alongside separate evidence for reading, writing, listening and speaking. Selecting B1 is a starting preference, not an assessed B1 certification. Missing audio or speaking evaluation leaves those skills unassessed and does not force a reading-capable learner back to A1. Engineering courses use their own units and competency groups; do not invent one universal scale across all subjects.
 
-**2. Define one learner experience.** Use five destinations: **Today, Classes, Schedule, Progress, Settings**. Subject browsing lives under Add class rather than competing with My classes in navigation.
+**2. Define one learner experience.** Use four destinations: **Today, Classes, Progress, Settings**. Remove the duplicate top-level Schedule screen and once-a-day routine. Classes own recurring study times; Today combines their agenda. Subject browsing lives under Add class rather than competing with My classes in navigation.
 
 | Destination | Contents and actions | Current code to split or replace |
 |---|---|---|
 | Today | Pin the foreground or most recently used session; list other paused sessions, due appointments, the next class and reviews due | `Idle.svelte`, `next-class.ts`, state routing |
-| Classes | Consistent class cards with subject, goal, curriculum progress, next action and schedule summary; Add class | `ClassroomPanel.svelte` |
-| Class details | Overview, personal path and full curriculum, starting point/reassessment, saved work/history, schedule and tutor settings | Classroom panel sections, `CurriculumMap`, program views |
-| Schedule | One agenda/week view; edit a recurring rule; preview a plan; see conflicts before applying it | Slot editor and planner inside `ClassroomPanel` |
+| Classes | Searchable sidebar with status filters; selected class in a large detail pane | `ClassWorkspace.svelte` replaces `ClassroomPanel.svelte` |
+| Class details | Overview, Settings, Starting point, Curriculum and Schedule tabs; retain drafts while switching classes and tabs; scroll within the pane | `ClassDetail.svelte` and focused class components |
+| Class Schedule tab | Study times and weekly planner; preview before saving; surface conflicts before applying | `ClassSchedule.svelte`; shared occurrence validation remains pending |
 | Progress | Filtered history across every class; earned milestones, assessed skills, review needs and saved work | `Dashboard.svelte` plus new unified history reads |
 | Settings | Provider credentials/defaults, study preferences, focus behavior, audio and recovery | Settings embedded in Idle and setup |
 
@@ -125,7 +125,7 @@ Today should privilege the next useful action over settings and statistics. Mult
 |                |                                                       |
 | Today          | Continue your System Design lesson                    |
 | Classes        | Cache invalidation · Practice · Draft saved            |
-| Schedule       | [Resume lesson]                                       |
+|                | [Resume lesson]                                       |
 | Progress       |                                                       |
 | Settings       | Today's schedule                                      |
 |                | 18:00 German · Introducing yourself       [Start]     |
@@ -258,7 +258,7 @@ Use provider-specific model identifiers and capabilities. The current Claude-sha
 
 **6. Give scheduling an explicit occurrence model.** Store recurrence rules separately from scheduled appointments and attempts. A rule includes class, local time, weekdays, timezone, source (`manual` or `planned`), enabled state and revision. An occurrence snapshots its rule revision, intended local date/time, resolved UTC instant and disposition. For one firing per rule per day, enforce uniqueness on `(rule_id, local_service_date)`.
 
-Starting from Today or Schedule passes an occurrence ID. An explicit Learn now action creates a manual session with no scheduled appointment; it must not silently consume a different appointment. If a class already has active work, Resume takes precedence. When an appointment becomes due during that class's manual session, keep it visibly queued, disable another Start, and offer Resume plus explicit skip/reschedule of the appointment. Completing or skipping consumes a linked appointment once, while assessment success remains a separate result.
+Starting from Today or a class's Schedule tab passes an occurrence ID. An explicit Learn now action creates a manual session with no scheduled appointment; it must not silently consume a different appointment. If a class already has active work, Resume takes precedence. When an appointment becomes due during that class's manual session, keep it visibly queued, disable another Start, and offer Resume plus explicit skip/reschedule of the appointment. Completing or skipping consumes a linked appointment once, while assessment success remains a separate result.
 
 Manual schedule rules survive planning. Preview collisions and offered alternatives; never overwrite manual ownership on time conflict. Apply planned changes transactionally to future appointments only. Editing/deleting a rule preserves active and historical occurrence/session snapshots. Record legacy slot migration once so restarting cannot recreate a deleted rule.
 
@@ -270,7 +270,7 @@ The application resolves due work. launchd, systemd and Windows Task Scheduler o
 - Pausing scheduling suppresses new triggers/reminders and preserves work/history. Disabling a class pauses its future appointments.
 - Simultaneous focused appointments are queued visibly; they never compete for the kiosk lock.
 
-Treat focus/enforcement as a class/schedule policy, separate from the teaching subject. Proposed UI options retain existing semantics: Advisory, Focused and Strict, with explanations of what each does on the current OS. New classes default to advisory; migration preserves existing enforcement settings. The legacy daily routine can select different subjects on different days, so it has no reliable permanent class owner. Keep that routine through a migration compatibility policy until the learner explicitly assigns it to a class; never infer ownership from the latest subject or duplicate enforcement across classes. The compatibility target can still start a shared-runtime session after its class is chosen, without retaining a separate teaching engine. Generalize enforcement only after all adapters support the shared ready/active/pause/recovery lifecycle. Do not acquire a new lock while required content is unavailable. Preserve `mark_frontend_ready`, the emergency phrase, the existing unlock-file path, sleep-aware timing and native recovery tests throughout.
+Treat focus/enforcement as a class/schedule policy, separate from the teaching subject. Proposed UI options retain existing semantics: Advisory, Focused and Strict, with explanations of what each does on the current OS. New classes default to advisory; migration preserves existing enforcement settings. The user has retired the legacy daily routine. It must not create appointments, generation jobs, new sessions or automatic locks. Preserve its historical records, stable identities, original preferences and resumable work as recovery data without assigning an invented class. Only active class appointments participate in automatic focus. A single coordinator captures the active class/session/occurrence and releases or transfers ownership explicitly; overlapping due appointments queue visibly and cannot acquire competing locks. Validate cross-class schedule overlaps before activation or saving changes, including duration changes and weekly wraparound. Generalize enforcement only after all adapters support the shared ready/active/pause/recovery lifecycle. Do not acquire a new lock while required content is unavailable. Preserve `mark_frontend_ready`, the emergency phrase, the existing unlock-file path, sleep-aware timing and native recovery tests throughout.
 
 **7. Migrate existing records without losing their meaning.** Introduce numbered migrations with checksums and a schema version. Use a consistent SQLite backup mechanism before migration, not a raw copy of an active WAL database. Verify foreign-key enforcement after each connection opens and run integrity checks after migration.
 
@@ -337,7 +337,7 @@ Shared session results show activity/assessment outcomes, corrections, saved wor
 | P0 — Record decisions | Principia Desk name, initial Linux Bash/Bash Scripting inclusion and experienced-learner entry support finalized; record remaining scope, terminology and focus policy | Current review | Agreed direction, with unresolved choices clearly marked |
 | P1 — Repair current behavior | `session.rs`, `classroom.rs`, `language.rs`, UI saves/audio, scheduler, build/CI | P0 assumptions | Reviewed regressions covered; Linux CI green; working app preserved |
 | P2 — Catalog and contracts | Subject manifest; System Design and new shell-course briefs/source policies; entry maps, prerequisites and environment metadata; class/lesson/session/entry-profile/path DTOs; migration runner | P1 | Nine consistent catalog entries with validated baseline curricula; original records still load; no duplicated registry |
-| P3 — Shared foundations and navigation | Tokens/primitives; Today, Classes, Schedule, Progress, Settings; entry-choice/path-preview UI; legacy DTO adapters | P2 contracts | Existing capabilities reachable through the new navigation, no native behavior regressions; entry UI reflects supported native operations |
+| P3 — Shared foundations and navigation | Tokens/primitives; Today, Classes, Progress, Settings; searchable class workspace; entry-choice/path-preview UI; legacy DTO adapters | P2 contracts | Existing capabilities reachable through the new navigation, no native behavior regressions; entry UI reflects supported native operations |
 | P4 — Session and assessment runtime | Extract primary FSM behind compatibility IPC; frozen lesson/round state including diagnostic purpose; durable artifacts; transactional/idempotent submission; switch due/active/history readers with its writer | P2 | Primary loop, diagnostic attempt persistence and existing schedule pass real command-path and restart tests |
 | P5 — Subject adapters and data cutover | Route classroom engineering, then CEFR through shared runtime; entry-profile/path selection and reassessment; per-engine migrations and simultaneous due/consumed/history reader cutover | P4 | All engines share lifecycle/identity; starting points affect lesson selection without resetting progress; existing schedules and specialized practice work; upgrade fixtures pass |
 | P6 — Occurrences and focus | Shared rules/appointments; OS adapters; clock; foreground lock ownership | P5 | Scheduled start→complete→due-cleared works on all platforms; history survives edits |
@@ -390,7 +390,7 @@ The same-branch workflow is already prepared locally:
 | Shell courses | Both entries visible with distinct outcomes; Linux Bash → Bash Scripting prerequisite and placement path; tested Linux environment/setup labels; quoting and filenames with spaces; empty/missing input; streams, pipelines and exit statuses; script failure paths, cleanup and repeat runs; saved script/transcript restoration; no verified-execution claim without evaluator evidence |
 | Language goals | Every A1/A2/B1/B2 target; weak/missing/sufficient evidence; target completion; disable/edit/extend after completion; no silent proficiency inference |
 | Persistence | Restart during preparation, reading, writing, practice and grading; navigation during debounce; failed save followed by retry; immutable submitted results with later archived exercise revisions |
-| Scheduling | Scheduled and manual starts; due appointment during manual work; simultaneous rules; replanning/manual collision; deletion with history; pause; sleep/wake; midnight; timezone and DST; legacy routine assignment |
+| Scheduling | Scheduled and manual starts; due appointment during manual work; simultaneous rules; replanning/manual collision; deletion with history; pause; sleep/wake; midnight; timezone and DST; legacy routine retirement without data loss |
 | Enforcement | Frontend readiness; only ready content locks; one owner; subject handoff; timer sleep gaps; phrase/unlock recovery; clean release of native restrictions |
 | Generation | Simultaneous start calls; recovered job lease; obsolete result; provider settings changed in flight; invalid content; missing source/audio/provider |
 | Migration | Original main, PR head and intermediate schemas; content/record counts and hashes; foreign keys; no recreated deleted slots; System Design archive and active session preserved |
@@ -547,8 +547,7 @@ Schema v6 and `domain/sessions.rs` now provide stable study-session IDs, immutab
 preparation context and lesson versions, the planned/preparing/ready/active/paused/
 terminal lifecycle, versioned work and reading checkpoints, per-owner resumable
 work, advisory foreground handoff and recoverable preparation leases. Class paths,
-curriculum, tutor, goal and pace are captured before provider work starts. A daily
-routine has an explicit compatibility owner without an invented class assignment.
+curriculum, tutor, goal and pace are captured before provider work starts. The foundation initially included an explicit daily-routine compatibility owner. The later retirement decision removes it from new production planning; saved primary work still needs its import/recovery path.
 
 The existing assessment runtime accepts session ownership. Completion joins the
 subject adapter's grading, evidence and occurrence projection in one transaction;
@@ -608,3 +607,24 @@ lives in the compatibility table, and shared-runtime session count remains zero
 in desktop QA. Its migration must reuse the new IDs and switch state/content,
 preparation, assessment ownership and due/consumed/history projections together.
 The full P4–P9 scope and outstanding cross-platform gates remain unchanged.
+
+
+### Class workspace and retirement of the daily routine
+
+The user's later direction supersedes the original fifth navigation destination and daily-routine assignment proposal. The global shell now has Today, Classes, Progress and Settings. Classes uses a searchable sidebar, status filter and a large detail pane with Overview, Settings, Starting point, Curriculum and Schedule tabs. Visited class/tab editors stay mounted so switching within the workspace retains drafts. Curriculum search and a nested Study times / Plan a week switch keep controls within the detail scroll pane.
+
+A saved, enabled study time is now required for activation in both native commands and the browser preview. Accepting an unscheduled path saves it without activating it. The class header takes an unscheduled class to Schedule; removing its last enabled time pauses it without deleting its learning records or silently reactivating it when another time is added. Slot edits cannot move an appointment to a different class. Schedule deletion is transactional.
+
+The once-a-day time no longer contributes OS wake-ups, countdowns, automatic focus, new-session commands or tomorrow's preparation. Existing primary history, stable IDs, queued job provenance and saved in-progress work remain; the legacy worker only processes work for saved in-progress sessions. Empty or globally paused class schedules remove obsolete wake-up registrations. These OS actions remain disabled in debug-day QA. The old global daily focus picker has been removed from setup/settings because it no longer controls new appointments.
+
+This is an intermediate scheduling cutover: class reminders are still advisory. Cross-class overlap validation, durable occurrences, one class-owned focus coordinator, per-class focus controls and generalized enforcement remain P6 work. Do not expose focused/strict class modes until ownership, content readiness, release/recovery and competing appointments pass native tests. Shared-runtime lesson IPC and legacy import also remain pending.
+
+The shared custom dropdown now prevents WebKit's pointer-trigger blur/reopen race. Repeated pointer clicks on the same trigger close it normally; outside click, keyboard selection and Escape remain available. The fix was reproduced and verified in separate packaged macOS QA apps and committed as `5c1d23d`.
+
+Validation for the class-workspace increment: 222 Rust tests passed (including the separate read-only import preflight currently under development), six live/external tests remained ignored, 51 frontend tests passed, Svelte reported zero errors/warnings, strict Clippy passed, and the packaged macOS build succeeded. The isolated desktop profile verified four navigation destinations, same-trigger dropdown closure, schedule-before-activation, draft/tab retention across class switches, saved settings, restart persistence, and two due class appointments without a daily-session lock. No production learner data or real OS scheduler registration was used.
+
+### Additional execution and Progress priorities
+
+The user reports failures across model/runner execution and requests thorough tests of every supported runner and its saved models. Prioritize native connection checks and actual lesson execution, CLI discovery/environment, model routing, provider request/response protocols, authentication and failure feedback. Use real connected runners for live checks; contract fixtures alone do not establish live availability. Record unconfigured or account-limited providers separately. Earlier UI QA launch overrides deliberately used failing CLI executables; do not reuse those overrides for live execution tests. Redesign Progress to fit the class-oriented product and report real learning records.
+
+The user authorized continued implementation until the goal is complete. Check the available weekly Codex balance at major checkpoints; at 2% remaining stop feature work, push all task commits to this PR branch and update the PR and this plan with verified work and remaining gates. The first account status check reported 34% remaining. Do not include unrelated staged user files in task commits.

@@ -8,7 +8,7 @@
   import ChoiceList from '../../components/ChoiceList.svelte';
   import Markdown from '../../components/Markdown.svelte';
   import { ArrowLeft, Compass, Check, ArrowRight } from 'lucide-svelte';
-  let { draft, onclose, onrecommend }: { draft: EnrollmentDraft; onclose: () => void; onrecommend: () => void } = $props();
+  let { draft, onclose, onrecommend, embedded = false }: { draft: EnrollmentDraft; onclose: () => void; onrecommend: () => void; embedded?: boolean } = $props();
   let check = $state<DiagnosticView | null>(null);
   let work = $state<AssessmentEditorState | null>(null);
   let editor = $state<ReturnType<typeof assessmentEditor>>();
@@ -72,7 +72,7 @@
     await run(async () => { const saved = await api.finishPlacementCheck(draft.id, check!.round_id); install(saved); if (alive && saved.matches_draft) onrecommend(); });
   }
 </script>
-<section class="check" aria-label="Starting-point check">
+<section class="check" class:embedded aria-label="Starting-point check">
   <button class="ghost mono-ghost" onclick={close}><ArrowLeft size={13} /> Back to setup</button>
   <header><p class="eyebrow mono">PLACEMENT · {draft.course.course_id}</p><h2>Find your starting point</h2><p>Take your time. Skip anything unfamiliar; your answers are saved as you go.</p></header>
   {#if check}
@@ -129,4 +129,5 @@
   .evidence { margin: 10px 0; padding: 0 12px; border-left: 1px solid var(--node-border); color: var(--muted); font-size: 12px; }
   .evidence .mono { font-size: 10px; color: var(--fg); }
   @media(max-width:620px) { .check { padding: 20px 16px; } .actions { justify-content: flex-start; } }
+  .check.embedded { width: 100%; max-width: 1000px; padding: 0; }
 </style>

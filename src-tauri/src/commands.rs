@@ -192,12 +192,8 @@ pub fn set_kiosk_level(state: State<'_, AppState>, level: String) -> CmdResult<(
 /// Called by the webview on boot. Until this fires, the kiosk refuses to
 /// engage (a dead webview has no escape hatch).
 #[tauri::command]
-pub fn mark_frontend_ready(app: AppHandle, state: State<'_, AppState>) -> CmdResult<()> {
+pub fn mark_frontend_ready(state: State<'_, AppState>) -> CmdResult<()> {
     state.frontend_ready.store(true, Ordering::SeqCst);
-    if session::session_owed(&state) {
-        let _ = app.emit("session:owed", true);
-        crate::kiosk::engage(&app, &state);
-    }
     Ok(())
 }
 
@@ -256,7 +252,8 @@ pub fn get_app_state(state: State<'_, AppState>) -> CmdResult<AppStateView> {
     Ok(AppStateView {
         onboarded,
         session: session::view(&state),
-        owed: session::session_owed(&state),
+        // Compatibility field for saved primary-session screens.
+        owed: false,
         schedule_hour: hour,
         schedule_minute: minute,
         agent_ok: None,
@@ -283,9 +280,10 @@ fn refresh_os_schedule(state: &AppState) -> CmdResult<()> {
     let times = {
         let conn = state.db.0.lock().unwrap();
         if matches!(db::get_config(&conn, "schedule_paused"), Ok(Some(value)) if value == "1") {
-            return Ok(());
+            Vec::new()
+        } else {
+            crate::classroom::all_schedule_times(&conn).map_err(err)?
         }
-        crate::classroom::all_schedule_times(&conn).map_err(err)?
     };
     crate::scheduler::install_many(&times)
 }
@@ -305,8 +303,7 @@ pub fn set_deepseek_api_key(key: String) -> CmdResult<()> {
     crate::keychain::set_secret("deepseek", &key)
 }
 
-/// Pause the daily schedule entirely: launchd agent removed, owed checks
-/// disabled, countdown hidden — dormant until resume_schedule.
+/// Pause all class appointments. Existing learning records remain resumable.
 #[tauri::command]
 pub fn pause_schedule(app: AppHandle, state: State<'_, AppState>) -> CmdResult<()> {
     {
@@ -346,8 +343,6 @@ pub async fn check_agent(
 
 #[derive(Deserialize)]
 pub struct SetupInput {
-    pub hour: u32,
-    pub minute: u32,
     pub escape_phrase: String,
     #[serde(default)]
     pub kiosk_level: Option<String>,
@@ -359,30 +354,17 @@ pub struct SetupInput {
     pub custom_agent_bin: Option<String>,
 }
 
-fn validate_schedule_time(hour: u32, minute: u32) -> CmdResult<()> {
-    if hour > 23 || minute > 59 {
-        Err(format!(
-            "invalid schedule time {hour:02}:{minute:02}; hour must be 0-23 and minute 0-59"
-        ))
-    } else {
-        Ok(())
-    }
-}
-
 #[tauri::command]
 pub async fn complete_setup(
     app: AppHandle,
     state: State<'_, AppState>,
     input: SetupInput,
 ) -> CmdResult<AppStateView> {
-    validate_schedule_time(input.hour, input.minute)?;
     if input.escape_phrase.trim().len() < 40 {
         return Err("escape phrase must be at least 40 characters".into());
     }
     {
         let conn = state.db.0.lock().unwrap();
-        db::set_config(&conn, "schedule_hour", &input.hour.to_string()).map_err(err)?;
-        db::set_config(&conn, "schedule_minute", &input.minute.to_string()).map_err(err)?;
         db::set_config(&conn, "escape_phrase", input.escape_phrase.trim()).map_err(err)?;
         let level = input.kiosk_level.as_deref().unwrap_or("hard");
         if !valid_kiosk_level(level) {
@@ -414,17 +396,6 @@ pub async fn complete_setup(
     state.gen_notify.notify_one();
     let _ = app.emit("session:state", session::view(&state));
     get_app_state(state)
-}
-
-#[tauri::command]
-pub fn update_schedule(state: State<'_, AppState>, hour: u32, minute: u32) -> CmdResult<()> {
-    validate_schedule_time(hour, minute)?;
-    {
-        let conn = state.db.0.lock().unwrap();
-        db::set_config(&conn, "schedule_hour", &hour.to_string()).map_err(err)?;
-        db::set_config(&conn, "schedule_minute", &minute.to_string()).map_err(err)?;
-    }
-    refresh_os_schedule(&state)
 }
 
 #[tauri::command]
@@ -526,11 +497,11 @@ pub async fn start_classroom_session(
     slot_id: Option<i64>,
     revisit: Option<bool>,
 ) -> CmdResult<serde_json::Value> {
-    if session::session_owed(&state) {
-        return Err(
-            "The focused daily study session is due. Complete or skip it before starting a classroom class."
-                .into(),
-        );
+    {
+        let conn = state.db.0.lock().unwrap();
+        if !crate::classroom::has_enabled_schedule(&conn, subject_id.trim()).map_err(err)? {
+            return Err("Add a study time in this class's Schedule tab before starting it.".into());
+        }
     }
     let revisit = revisit.unwrap_or(false);
     let spec = crate::classroom::subject(subject_id.trim()).map_err(err)?;
@@ -579,12 +550,6 @@ pub fn resume_classroom_session(
     state: State<'_, AppState>,
     subject_id: String,
 ) -> CmdResult<Option<serde_json::Value>> {
-    if session::session_owed(&state) {
-        return Err(
-            "The focused daily study session is due. Complete or skip it before resuming a classroom class."
-                .into(),
-        );
-    }
     let spec = crate::classroom::subject(subject_id.trim()).map_err(err)?;
     match spec.kind {
         crate::classroom::SubjectKind::Language => {
@@ -628,27 +593,6 @@ pub fn submit_language_session(
     };
     let _ = app.emit("classroom:state", &result);
     Ok(result)
-}
-
-#[tauri::command]
-pub async fn start_session(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    focus: String,
-) -> CmdResult<SessionView> {
-    let s = session::start_session(&state, Some(focus.trim()))
-        .await
-        .map_err(err)?;
-    {
-        let conn = state.db.0.lock().unwrap();
-        let _ = crate::mastery::set_profile(&conn, "preferred_focus", &s.focus);
-    }
-    if s.status == "in_progress" {
-        crate::kiosk::engage(&app, &state);
-    }
-    let v = session::view(&state);
-    let _ = app.emit("session:state", v.clone());
-    Ok(v)
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -2252,13 +2196,6 @@ pub fn open_resources(
 #[cfg(test)]
 mod exit_quiz_tests {
     use super::*;
-
-    #[test]
-    fn schedule_time_validation_rejects_out_of_range_values() {
-        assert!(validate_schedule_time(23, 59).is_ok());
-        assert!(validate_schedule_time(24, 0).is_err());
-        assert!(validate_schedule_time(8, 60).is_err());
-    }
 
     fn question(id: i64, correct_answer: &str, explanation: &str) -> db::ExitQuestion {
         db::ExitQuestion {

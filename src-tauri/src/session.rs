@@ -30,52 +30,6 @@ pub fn now_iso() -> String {
     chrono::Local::now().format("%Y-%m-%dT%H:%M:%S").to_string()
 }
 
-/// Is a session owed right now? (scheduled time passed, today not completed/skipped)
-pub fn session_owed(state: &AppState) -> bool {
-    let today = state.today();
-    let conn = state.db.0.lock().unwrap();
-    let onboarded = matches!(db::get_config(&conn, "onboarded"), Ok(Some(v)) if v == "1");
-    if !onboarded {
-        return false;
-    }
-    // Paused scheduler: nothing is ever owed until the user resumes.
-    if matches!(db::get_config(&conn, "schedule_paused"), Ok(Some(v)) if v == "1") {
-        return false;
-    }
-    if let Ok(Some(s)) = db::get_session(&conn, &today) {
-        if s.status == "completed" || s.status == "skipped" {
-            return false;
-        }
-    }
-    if state.debug_day {
-        return true;
-    }
-    let configured_hour: u32 = db::get_config(&conn, "schedule_hour")
-        .ok()
-        .flatten()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(9);
-    let configured_minute: u32 = db::get_config(&conn, "schedule_minute")
-        .ok()
-        .flatten()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(0);
-    let (hour, minute) = if configured_hour <= 23 && configured_minute <= 59 {
-        (configured_hour, configured_minute)
-    } else {
-        log::error!(
-            "invalid persisted schedule {configured_hour:02}:{configured_minute:02}; using 09:00"
-        );
-        (9, 0)
-    };
-    let now = chrono::Local::now();
-    let sched = now
-        .date_naive()
-        .and_hms_opt(hour, minute, 0)
-        .expect("validated schedule time");
-    now.naive_local() >= sched
-}
-
 /// Get or create today's session row and return it.
 pub fn ensure_today_session(state: &AppState) -> db::Result<Session> {
     let today = state.today();
@@ -367,7 +321,7 @@ pub fn view(state: &AppState) -> SessionView {
     }
 }
 
-/// Mark today completed, enqueue tomorrow's pregeneration, release the lock.
+/// Complete saved legacy work and release its lock. New study belongs to classes.
 pub fn complete_session(
     app: &AppHandle,
     state: &AppState,
@@ -391,7 +345,6 @@ pub fn complete_session(
             );
         }
         let today = s.date.clone();
-        let tomorrow = adjacent_date(&today, 1)?;
         s.status = "completed".into();
         s.current_step = STEP_DONE.into();
         s.completed_at = Some(now_iso());
@@ -400,7 +353,6 @@ pub fn complete_session(
         if let Some(cid) = s.concept_id {
             crate::mastery::record_course_read(&tx, cid, &today)?;
         }
-        db::jobs::enqueue(&tx, "quiz", &tomorrow)?;
         tx.commit()?;
         s
     };
@@ -438,7 +390,9 @@ pub async fn generation_worker(app: AppHandle) {
     loop {
         let job = {
             let conn = state.db.0.lock().unwrap();
-            db::jobs::next_queued(&conn).ok().flatten()
+            db::jobs::next_for_active_legacy_session(&conn)
+                .ok()
+                .flatten()
         };
         let Some((job_id, kind, target_date)) = job else {
             tokio::select! {

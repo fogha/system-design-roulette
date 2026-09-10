@@ -564,8 +564,6 @@ const realApi = {
   checkAgent: (agent?: string, customBin?: string) =>
     invoke<boolean>('check_agent', { agent, customBin }),
   completeSetup: (
-    hour: number,
-    minute: number,
     escapePhrase: string,
     kioskLevel = 'hard',
     model = 'opus',
@@ -574,8 +572,6 @@ const realApi = {
   ) =>
     invoke<AppStateView>('complete_setup', {
       input: {
-        hour,
-        minute,
         escape_phrase: escapePhrase,
         kiosk_level: kioskLevel,
         model,
@@ -588,8 +584,6 @@ const realApi = {
   setAgent: (agent: string, customBin?: string) =>
     invoke<void>('set_agent', { agent, customBin }),
   setDeepseekApiKey: (key: string) => invoke<void>('set_deepseek_api_key', { key }),
-  updateSchedule: (hour: number, minute: number) =>
-    invoke<void>('update_schedule', { hour, minute }),
   getCurriculumMap: (focus: FocusArea) =>
     invoke<CurriculumMapView>('get_curriculum_map', { focus }),
   configureClassroomProgram: (input: {
@@ -677,7 +671,6 @@ const realApi = {
   }) => invoke<LanguageSessionResult>('submit_language_session', { input }),
   pauseSchedule: () => invoke<void>('pause_schedule'),
   resumeSchedule: () => invoke<void>('resume_schedule'),
-  startSession: (focus: FocusArea) => invoke<SessionView>('start_session', { focus }),
   getQuiz: (sessionId: string) => invoke<QuizRoundView>('get_quiz', { sessionId }),
   submitAnswer: (sessionId: string, roundId: AssessmentRoundId, expectedRevision: number, questionId: number, answer: string, confirmed: boolean) =>
     invoke<number>('submit_answer', { sessionId, roundId, expectedRevision, questionId, answer, confirmed }),

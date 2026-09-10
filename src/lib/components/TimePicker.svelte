@@ -62,7 +62,7 @@
   {#each [{ seg: 'h' as const, val: hour }, { seg: 'm' as const, val: minute }] as s, i}
     {#if i === 1}<div class="colon" class:lit={focused !== null}>:</div>{/if}
     <div class="seg-col">
-      <button class="chev" tabindex="-1" aria-label={`Increase ${s.seg === 'h' ? 'hour' : 'minute'}`} onclick={() => step(s.seg, 1)}>▴</button>
+      <button type="button" class="chev" tabindex="-1" aria-label={`Increase ${s.seg === 'h' ? 'hour' : 'minute'}`} onclick={() => step(s.seg, 1)}>▴</button>
       <div
         class="seg"
         class:focused={focused === s.seg}
@@ -80,7 +80,7 @@
       >
         {String(s.val).padStart(2, '0')}
       </div>
-      <button class="chev" tabindex="-1" aria-label={`Decrease ${s.seg === 'h' ? 'hour' : 'minute'}`} onclick={() => step(s.seg, -1)}>▾</button>
+      <button type="button" class="chev" tabindex="-1" aria-label={`Decrease ${s.seg === 'h' ? 'hour' : 'minute'}`} onclick={() => step(s.seg, -1)}>▾</button>
     </div>
   {/each}
   {#if cron}

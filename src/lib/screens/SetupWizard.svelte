@@ -2,14 +2,9 @@
   import { api } from '../ipc';
   import { app } from '../stores.svelte';
   import ClusterBar from '../components/ClusterBar.svelte';
-  import NodeCard from '../components/NodeCard.svelte';
-  import TimePicker from '../components/TimePicker.svelte';
-  import EnforcementPicker from '../components/EnforcementPicker.svelte';
   import RunnerSetup from '../features/runners/RunnerSetup.svelte';
-  import { Clock, Lock, Rocket, X } from 'lucide-svelte';
+  import { Rocket, X } from 'lucide-svelte';
 
-  let time = $state('19:00');
-  let kioskLevel = $state('hard');
   let model = $state('opus');
   let agent = $state('claude');
   let customBin = $state('');
@@ -28,11 +23,10 @@
       error = 'phrases do not match';
       return;
     }
-    const [h, m] = time.split(':').map(Number);
     submitting = true;
     try {
       if (agent === 'custom') customBin = (await api.getRunnerConfiguration(agent)).custom_command;
-      await api.completeSetup(h, m, phrase.trim(), kioskLevel, model, agent, customBin);
+      await api.completeSetup(phrase.trim(), 'advisory', model, agent, customBin);
       await app.refresh();
     } catch (e) {
       error = String(e);
@@ -48,62 +42,22 @@
     <header class="boot-head">
       <h1>Bootstrap your training cluster</h1>
       <p class="sub">
-        Configure the shared teacher credentials and primary enforcement service, then use
-        Classroom to enable, schedule, and immediately start each subject.
+        Configure your tutor and recovery preferences, then choose a class and its study times.
       </p>
     </header>
 
     <div class="flow">
-      <!-- 01 · scheduler -->
+      <!-- 01 · tutor -->
       <section class="stage">
         <span class="step mono">01</span>
-        <NodeCard Icon={Clock} name="cron-scheduler" badge=":launchd" badgeTone="amber">
-          {#snippet children()}
-            <div class="meta-label">FIRE_AT — daily trigger</div>
-            <div class="sched">
-              <TimePicker bind:value={time} />
-              <ul class="sched-info mono">
-                <li><span class="k">trigger</span> daily · local time</li>
-                <li><span class="k">asleep</span> fires on next wake</li>
-                <li><span class="k">powered off</span> fires at next login</li>
-              </ul>
-            </div>
-          {/snippet}
-        </NodeCard>
-      </section>
-
-      <div class="pipe" aria-hidden="true"></div>
-
-      <!-- 02 · agent -->
-      <section class="stage">
-        <span class="step mono">02</span>
         <RunnerSetup bind:agent bind:model bind:customBin initiallyExpanded onKeyChanged={() => app.refresh()} />
       </section>
 
         <div class="pipe" aria-hidden="true"></div>
 
-      <!-- enforcement -->
-      <section class="stage">
-        <span class="step mono">03</span>
-        <NodeCard
-          Icon={Lock}
-          name="enforcement-service"
-          badge={kioskLevel === 'hard' ? 'kiosk · no mercy' : kioskLevel === 'firm' ? 'kiosk · level 1000' : 'advisory'}
-          badgeTone={kioskLevel === 'hard' ? 'red' : kioskLevel === 'firm' ? 'violet' : 'teal'}
-          accent="var(--violet)"
-        >
-          {#snippet children()}
-            <div class="meta-label">SLO — daily session completion · pick your strictness</div>
-            <EnforcementPicker bind:value={kioskLevel} />
-          {/snippet}
-        </NodeCard>
-      </section>
-
-      <div class="pipe" aria-hidden="true"></div>
-
       <!-- escape phrase -->
       <section class="stage">
-        <span class="step mono">04</span>
+        <span class="step mono">02</span>
         <div class="break-glass">
           <div class="bg-tag">BREAK<br />GLASS</div>
           <div class="bg-fields">
@@ -127,8 +81,7 @@
         {#if !submitting}<Rocket size={14} />{/if}{submitting ? '… deploying' : 'deploy to prod'}
       </button>
       <span class="hint">
-        writes launchd plist · pre-generates day-1 course<br />
-        first session: today at {time} (or now, if {time} already passed)
+        Next: choose a class, set your starting point and add study times.
       </span>
     </div>
   </div>
@@ -193,32 +146,6 @@
     opacity: 0.7;
   }
 
-  .sched {
-    display: flex;
-    align-items: center;
-    gap: 20px;
-    flex-wrap: wrap;
-    margin-top: 8px;
-  }
-  .sched-info {
-    list-style: none;
-    margin: 0;
-    padding: 0 0 0 18px;
-    border-left: 1px dashed var(--node-divider);
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    font-size: 10.5px;
-    color: var(--faint);
-    line-height: 1.4;
-  }
-  .sched-info .k {
-    display: inline-block;
-    min-width: 84px;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
   .hint {
     font-family: var(--font-mono);
     font-size: 10px;

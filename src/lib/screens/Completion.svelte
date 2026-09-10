@@ -5,22 +5,11 @@
   const sessionId = app.session?.session_id ?? '';
   import ClusterBar from '../components/ClusterBar.svelte';
   import NodeCard from '../components/NodeCard.svelte';
-  import StatusLED from '../components/StatusLED.svelte';
-  import { Check, ArrowUpRight, Headphones, Languages } from 'lucide-svelte';
+  import { Check, ArrowUpRight, Languages } from 'lucide-svelte';
 
   const session = $derived(app.session);
   const skipped = $derived(session?.status === 'skipped');
   let resourcesOpened = $state(false);
-  let audioOn = $state(false);
-
-  $effect(() => {
-    api.getAudioEnabled().then((v) => (audioOn = v)).catch(() => {});
-  });
-
-  async function toggleAudio() {
-    audioOn = !audioOn;
-    await api.setAudioEnabled(audioOn).catch(() => {});
-  }
 
   async function openResources() {
     const n = await api.openResources(sessionId).catch(() => 0);
@@ -40,18 +29,17 @@
       <div class="meta-label">POSTMORTEM — streak reset to 0</div>
       <h1>Circuit breaker tripped.</h1>
       <p class="sub">
-        Today is marked skipped. Open Classroom to start any enabled subject without changing
-        the primary session.
+        This saved session is marked skipped. Your class schedules remain available.
       </p>
       <div class="actions">
         <button class="ghost mono-ghost" onclick={() => (app.screen = 'dashboard')}>cluster overview</button>
-        <button class="ghost mono-ghost" onclick={() => (app.screen = 'idle')}>
-          <Languages size={12} /> classroom
+        <button class="ghost mono-ghost" onclick={() => app.openClass()}>
+          <Languages size={12} /> classes
         </button>
       </div>
     {:else}
       <div class="meta-label">DEPLOY COMPLETE — session shipped</div>
-      <h1>Done for today.</h1>
+      <h1>Session complete.</h1>
       <div class="stats">
         <NodeCard name="error-budget" badge="quiz" badgeTone="muted">
           {#snippet children()}
@@ -66,21 +54,16 @@
           {/snippet}
         </NodeCard>
       </div>
-      <div class="pregen">
-        <StatusLED tone="pending" label={app.genStatus || "shard: pre-generating tomorrow's course"} />
-      </div>
       <div class="actions">
         <button class="cta mono-cta" onclick={openResources}>
           {#if resourcesOpened}<Check size={13} />{:else}<ArrowUpRight size={13} />{/if}{resourcesOpened ? 'egress queue flushed' : 'open reading list in browser'}
         </button>
         <button class="ghost mono-ghost" onclick={() => (app.screen = 'dashboard')}>cluster overview</button>
-        <button class="ghost mono-ghost" onclick={() => (app.screen = 'idle')}>
-          <Languages size={12} /> classroom
+        <button class="ghost mono-ghost" onclick={() => app.openClass()}>
+          <Languages size={12} /> classes
         </button>
       </div>
-      <button class="ghost mono-ghost audio-toggle" onclick={toggleAudio}>
-        <Headphones size={11} /> audio lesson tomorrow: {audioOn ? 'ON — script pre-renders overnight' : 'off'}
-      </button>
+
     {/if}
   </div>
 </div>
@@ -121,16 +104,9 @@
     color: var(--fg);
     text-align: center;
   }
-  .pregen {
-    margin-bottom: 22px;
-  }
   .actions {
     display: flex;
     gap: 12px;
     align-items: center;
-  }
-  .audio-toggle {
-    margin-top: 10px;
-    font-size: 10px;
   }
 </style>

@@ -1,16 +1,21 @@
 <script lang="ts">
   import { courseDefinition } from '../catalog';
   import type { CurriculumMapView, CurriculumPhase } from '../ipc';
-  import { CheckCircle2, Circle, Clock3, Link2, X } from 'lucide-svelte';
+  import { CheckCircle2, Circle, Clock3, Link2, X, Search } from 'lucide-svelte';
 
   let {
     map,
     onclose,
+    embedded = false,
   }: {
     map: CurriculumMapView;
-    onclose: () => void;
+    onclose?: () => void;
+    embedded?: boolean;
   } = $props();
 
+  const uid = $props.id();
+  let query = $state('');
+  const matches = $derived(map.concepts.filter(c => `${c.title} ${c.learner_outcome}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())));
   const phases = $derived([
     ...(courseDefinition(map.focus)?.entry_points ?? []).map((entry) => ({
       id: entry.id as CurriculumPhase, label: entry.label,
@@ -23,7 +28,7 @@
   }
 
   function conceptsFor(phase: CurriculumPhase) {
-    return map.concepts.filter((concept) => concept.phase === phase);
+    return matches.filter((concept) => concept.phase === phase);
   }
 
   function complete(state: string) {
@@ -31,20 +36,22 @@
   }
 </script>
 
-<section class="curriculum-map" aria-labelledby="curriculum-map-title">
+<section class="curriculum-map" class:embedded aria-labelledby={`${uid}-title`}>
   <header>
     <div>
       <span class="eyebrow mono">{coreCount} CORE TOPICS · {map.completed_sessions} SESSIONS COMPLETED</span>
-      <h3 id="curriculum-map-title">{map.label} learning map</h3>
+      <h3 id={`${uid}-title`}>{map.label} learning map</h3>
       <p>{map.month_outcome}</p>
     </div>
-    <button type="button" class="close" onclick={onclose} aria-label="Close curriculum map">
+    {#if !embedded && onclose}<button type="button" class="close" onclick={onclose} aria-label="Close curriculum map">
       <X size={15} />
-    </button>
+    </button>{/if}
   </header>
 
+  <label class="search"><Search size={15} /><input type="search" aria-label="Search curriculum topics" placeholder="Find a topic or outcome…" bind:value={query} /><span class="mono">{matches.length} topics</span></label>
+  {#if !matches.length}<p class="empty" role="status">No topics match your search.</p>{/if}
   <div class="phase-grid">
-    {#each phases as phase}
+    {#each phases.filter(p => conceptsFor(p.id).length) as phase}
       {@const concepts = conceptsFor(phase.id)}
       <section class:current={map.current_phase === phase.id} class="phase">
         <div class="phase-head">
@@ -85,9 +92,12 @@
 </section>
 
 <style>
+  .curriculum-map.embedded { padding: 0; border: 0; background: none; max-width: 1100px; margin: 0 auto; }
+  .search { display: flex; align-items: center; gap: 10px; border: 1px solid var(--node-border); border-radius: var(--radius-control); padding: 0 12px; background: var(--bg); color: var(--muted); margin-bottom: 20px; } .search:focus-within { outline: 1px solid var(--accent); } .search input { width: 100%; min-width: 0; border: 0; outline: none; background: none; color: var(--fg); font-size: 13px; padding: 12px 0; } .search span { flex-shrink: 0; font-size: 10px; } .empty { color: var(--muted); font-size: 13px; }
   .curriculum-map {
     grid-column: 1 / -1;
     border: 1px solid var(--border);
+    border-radius: var(--radius-panel);
     background: var(--surface);
     padding: 16px;
   }
@@ -128,6 +138,7 @@
     width: 36px;
     height: 36px;
     border: 1px solid var(--border);
+    border-radius: var(--radius-panel);
     background: transparent;
     color: var(--muted);
   }
@@ -141,6 +152,7 @@
   }
   .phase {
     border: 1px solid var(--border);
+    border-radius: var(--radius-panel);
     background: var(--surface-2);
     padding: 10px;
   }

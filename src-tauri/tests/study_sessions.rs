@@ -31,6 +31,20 @@ fn fixture() -> (std::path::PathBuf, Connection) {
     (path, conn)
 }
 fn request(conn: &Connection, course: &str, entry: &str) -> PlanSession {
+    if !classroom::has_enabled_schedule(conn, course).unwrap() {
+        classroom::upsert_slot(
+            conn,
+            &classroom::UpsertClassroomSlotInput {
+                id: None,
+                subject_id: course.into(),
+                hour: 9,
+                minute: 0,
+                weekdays: vec![1, 3, 5],
+                enabled: true,
+            },
+        )
+        .unwrap();
+    }
     let options = enrollment::options(course).unwrap();
     let mut configuration = options.default_configuration;
     configuration.entry = EntryChoice::Manual {

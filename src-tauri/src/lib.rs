@@ -74,10 +74,6 @@ pub fn run() {
                 let _ = w.set_focus();
             }
             let state = app.state::<AppState>();
-            if session::session_owed(&state) {
-                let _ = app.emit("session:owed", true);
-                kiosk::engage(app, &state);
-            }
             let classroom_slots = {
                 let conn = state.db.0.lock().unwrap();
                 classroom::slot_views(&conn, &state.today(), state.debug_day)
@@ -168,11 +164,17 @@ pub fn run() {
                     matches!(db::get_config(&conn, "onboarded"), Ok(Some(v)) if v == "1");
                 let paused =
                     matches!(db::get_config(&conn, "schedule_paused"), Ok(Some(v)) if v == "1");
-                if onboarded && !paused {
-                    let times =
-                        classroom::all_schedule_times(&conn).unwrap_or_else(|_| vec![(9, 0)]);
+                if onboarded {
+                    let times = if paused {
+                        Ok(Vec::new())
+                    } else {
+                        classroom::all_schedule_times(&conn)
+                    };
                     drop(conn);
-                    scheduler::ensure_current_many(&times);
+                    match times {
+                        Ok(times) => scheduler::ensure_current_many(&times),
+                        Err(error) => log::error!("could not reconcile class wakeups: {error}"),
+                    }
                 }
             }
 
@@ -188,10 +190,6 @@ pub fn run() {
                 loop {
                     tokio::time::sleep(std::time::Duration::from_secs(60)).await;
                     let state = handle.state::<AppState>();
-                    if session::session_owed(&state) && !state.locked.load(Ordering::SeqCst) {
-                        let _ = handle.emit("session:owed", true);
-                        kiosk::engage(&handle, &state);
-                    }
                     let classroom_slots = {
                         let conn = state.db.0.lock().unwrap();
                         classroom::slot_views(&conn, &state.today(), state.debug_day)
@@ -216,10 +214,6 @@ pub fn run() {
                 tauri::async_runtime::spawn(async move {
                     tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
                     let state = handle.state::<AppState>();
-                    if session::session_owed(&state) {
-                        let _ = handle.emit("session:owed", true);
-                        kiosk::engage(&handle, &state);
-                    }
                     let classroom_slots = {
                         let conn = state.db.0.lock().unwrap();
                         classroom::slot_views(&conn, &state.today(), state.debug_day)
@@ -290,7 +284,6 @@ pub fn run() {
             commands::agents::get_agent_policy,
             commands::agents::set_agent_policy,
             commands::complete_setup,
-            commands::update_schedule,
             commands::get_curriculum_map,
             commands::configure_classroom_program,
             commands::upsert_classroom_slot,
@@ -306,7 +299,6 @@ pub fn run() {
             commands::set_deepseek_api_key,
             commands::pause_schedule,
             commands::resume_schedule,
-            commands::start_session,
             commands::get_quiz,
             commands::submit_answer,
             commands::finish_quiz,

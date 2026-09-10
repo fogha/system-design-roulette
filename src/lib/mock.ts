@@ -603,10 +603,11 @@ function applyPreviewPath(path: AcceptedPath | null) {
   const id = path.recommendation.course.course_id;
   if (restoredPaths.get(id) === path.reference.path_revision_id) return;
   const { tutor, pace, goal } = path.configuration;
-  Object.assign(mockClassroomSettings[id], { enabled: true, agent: tutor.provider, model: tutor.model, customBin: tutor.custom_agent_bin ?? '', sessionMinutes: pace.session_minutes, learningGoal: goal.note, targetWeeklyMinutes: pace.weekly_minutes ?? mockClassroomSettings[id].targetWeeklyMinutes });
+  const scheduled = mockClassroomSlots.some(slot => slot.subject_id === id && slot.enabled);
+  Object.assign(mockClassroomSettings[id], { enabled: scheduled, agent: tutor.provider, model: tutor.model, customBin: tutor.custom_agent_bin ?? '', sessionMinutes: pace.session_minutes, learningGoal: goal.note, targetWeeklyMinutes: pace.weekly_minutes ?? mockClassroomSettings[id].targetWeeklyMinutes });
   if ((id === 'german' || id === 'italian') && goal.kind === 'language_level') {
     const settings = mockLanguageSettings[id];
-    Object.assign(settings, { enabled: true, currentLevel: path.recommendation.entry_point, targetLevel: goal.target_level, sessionMinutes: pace.session_minutes, weeklyMinutes: pace.weekly_minutes ?? settings.weeklyMinutes });
+    Object.assign(settings, { enabled: scheduled, currentLevel: path.recommendation.entry_point, targetLevel: goal.target_level, sessionMinutes: pace.session_minutes, weeklyMinutes: pace.weekly_minutes ?? settings.weeklyMinutes });
   }
   restoredPaths.set(id, path.reference.path_revision_id);
 }
@@ -624,7 +625,7 @@ function mockClassroomProgram(subjectId: ClassroomSubjectId): ClassroomProgramVi
     label: catalog.label,
     native_label: catalog.native,
     short_code: catalog.short,
-    enabled: settings.enabled,
+    enabled: settings.enabled && mockClassroomSlots.some(slot => slot.subject_id === subjectId && slot.enabled),
     agent: settings.agent,
     model: settings.model,
     custom_agent_bin: settings.customBin,
@@ -681,9 +682,8 @@ function appState(): AppStateView {
     onboarded: !inSetup,
     session: session(),
     selected_focus: mockSelectedFocus,
-    // After completing setup the session is not owed yet (scheduled time is
-    // in the future) — mirrors the real backend so routing bugs reproduce.
-    owed: !setupCompleted && !params.has('unlocked'),
+    // Recurring obligations now belong to classes; no separate daily trigger.
+    owed: false,
     schedule_hour: 19,
     schedule_minute: 0,
     debug_day: true,
@@ -810,6 +810,12 @@ function savePreviewQuiz() {
 
 let previewFreeOnly = true;
 
+function pauseMockClassWithoutSchedule(subjectId: ClassroomSubjectId) {
+  if (mockClassroomSlots.some(slot => slot.subject_id === subjectId && slot.enabled)) return;
+  mockClassroomSettings[subjectId].enabled = false;
+  if (subjectId === 'german' || subjectId === 'italian') mockLanguageSettings[subjectId].enabled = false;
+}
+
 export const mockApi = {
   getEnrollmentOptions: async (courseId: ClassroomSubjectId) => {
     const options = previewEnrollmentOptions(courseId);
@@ -862,7 +868,6 @@ export const mockApi = {
     setupCompleted = true;
     return appState();
   },
-  updateSchedule: async () => {},
   getCurriculumMap: async (focus: FocusArea): Promise<CurriculumMapView> => ({
     focus,
     label: CLASSROOM_CATALOG.find((item) => item.id === focus)?.label ?? focus,
@@ -898,6 +903,7 @@ export const mockApi = {
     weekly_minutes?: number | null;
   }) => {
     const settings = mockClassroomSettings[input.subject_id];
+    if (input.enabled && !mockClassroomSlots.some(slot => slot.subject_id === input.subject_id && slot.enabled)) throw new Error("Add a study time in this class's Schedule tab before activating it.");
     settings.enabled = input.enabled;
     settings.agent = input.agent;
     settings.model = input.model;
@@ -910,11 +916,6 @@ export const mockApi = {
       if (input.start_level) language.startLevel = input.start_level;
       if (input.target_level) language.targetLevel = input.target_level;
       if (input.weekly_minutes) language.weeklyMinutes = input.weekly_minutes;
-    }
-    if (!input.enabled) {
-      mockClassroomSlots = mockClassroomSlots.filter(
-        (slot) => slot.subject_id !== input.subject_id,
-      );
     }
     return mockClassroomProgram(input.subject_id);
   },
@@ -944,8 +945,10 @@ export const mockApi = {
       source: 'manual',
     };
     const existing = mockClassroomSlots.findIndex((candidate) => candidate.id === id);
+    if (input.id != null && (existing < 0 || mockClassroomSlots[existing].subject_id !== input.subject_id)) throw new Error('classroom slot was not found');
     if (existing >= 0) mockClassroomSlots[existing] = slot;
     else mockClassroomSlots = [...mockClassroomSlots, slot];
+    pauseMockClassWithoutSchedule(input.subject_id);
     return mockClassroomSlots;
   },
   planClassroomSchedule: async (input: {
@@ -1039,12 +1042,15 @@ export const mockApi = {
     };
   },
   deleteClassroomSlot: async (id: number) => {
+    const removed = mockClassroomSlots.find(slot => slot.id === id);
     mockClassroomSlots = mockClassroomSlots.filter((slot) => slot.id !== id);
+    if (removed) pauseMockClassWithoutSchedule(removed.subject_id);
     return mockClassroomSlots;
   },
   startClassroomSession: async (
     subjectId: ClassroomSubjectId,
   ): Promise<ClassroomSessionStart> => {
+    if (!mockClassroomProgram(subjectId).enabled) throw new Error("Add a study time and activate this class before starting it.");
     if (subjectId === 'german' || subjectId === 'italian') {
       mockLanguageSessionId += 1;
       mockActiveLanguage = mockLanguageLesson(subjectId);
@@ -1259,13 +1265,6 @@ export const mockApi = {
   },
   resumeSchedule: async () => {
     mockPaused = false;
-  },
-  startSession: async (focus: FocusArea) => {
-    mockSelectedFocus = focus;
-    state.status = 'in_progress';
-    state.step = 'quiz';
-    clearMockChatThreads();
-    return session();
   },
   getQuiz: async (sessionId: string): Promise<QuizRoundView> => { requirePreviewPrimary(sessionId); return structuredClone(previewQuiz); },
   submitAnswer: async (sessionId: string, roundId: AssessmentRoundId, expectedRevision: number, id: number, answer: string, confirmed: boolean) => {

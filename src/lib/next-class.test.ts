@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AppStateView, ClassroomSlotView } from './ipc';
 import {
-  formatClassCountdown,
   nextScheduledClass,
 } from './next-class';
 
@@ -69,29 +68,12 @@ describe('next scheduled class', () => {
     expect(nextScheduledClass(state({ schedule_paused: true }), now)).toBeNull();
   });
 
-  it('shows an owed primary session as due now', () => {
-    const next = nextScheduledClass(state({ owed: true }), now);
-    expect(next?.label).toBe('JavaScript & Browser');
-    expect(next?.due).toBe(true);
-    expect(formatClassCountdown(next, now)).toBe('due now');
+  it('does not turn an old daily time or obligation into a class appointment', () => {
+    expect(nextScheduledClass(state({ owed: true, schedule_hour: 9, schedule_minute: 0 }), now)).toBeNull();
+    expect(nextScheduledClass(state(), now)).toBeNull();
   });
 
-  it('moves a primary session already completed today to tomorrow', () => {
-    const next = nextScheduledClass(
-      state({
-        session: {
-          ...state().session,
-          date: '2026-07-28',
-          status: 'completed',
-        },
-      }),
-      now,
-    );
-    expect(next?.at.getDate()).toBe(29);
-    expect(next?.due).toBe(false);
-  });
-
-  it('combines classes tied at the same instant', () => {
+  it('uses a class time without adding the retired daily routine', () => {
     const at = new Date(2026, 6, 28, 9, 0, 0);
     const next = nextScheduledClass(
       state({
@@ -121,10 +103,10 @@ describe('next scheduled class', () => {
       }),
       now,
     );
-    expect(next?.label).toBe('JavaScript & Browser + TypeScript');
+    expect(next?.label).toBe('TypeScript');
   });
 
-  it('ignores an invalid primary time and keeps valid weekday classroom data', () => {
+  it('uses saved class weekdays independently of the retired daily time', () => {
     const friday = new Date(2026, 6, 31, 18, 30, 0);
     const next = nextScheduledClass(
       state({

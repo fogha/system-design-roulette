@@ -5,8 +5,12 @@ node panels, compact monospace controls, status LEDs, colored metadata badges,
 numbered rails and dashed connections, with Fraunces headlines and a paper
 reading surface. The user explicitly reaffirmed this direction on 2026-09-09
 after rejecting the simplified preview. New functionality must extend this
-visual system. Organizing the app into five destinations does not require a
-sidebar or a different visual identity.
+visual system. Global navigation has four destinations: Today, Classes, Progress
+and Settings. The user requested a searchable sidebar inside Classes and a large
+detail pane with Overview, Settings, Starting point, Curriculum and Schedule tabs.
+Each pane scrolls within the available desktop height; preserve drafts across
+class/tab changes and keep the header and tabs accessible. Today combines class
+appointments; the duplicate Schedule destination and daily routine are retired.
 
 Use `main`'s `SetupWizard`, `Idle`, `NodeCard`, `MetaBadge`, `StatusLED`,
 `TimePicker` and the screenshots under `docs/screenshots/` as references. The
@@ -20,7 +24,7 @@ actual relationships and state.
 | App concept | UI vocabulary | Component |
 |---|---|---|
 | Setup wizard | bootstrap your training cluster | NodeCard topology + pipes |
-| Daily schedule | `cron-scheduler` node, FIRE_AT | NodeCard |
+| Class schedule | Study times / Plan a week inside the selected class | ClassSchedule |
 | Agent CLI check | `agent-backend` healthcheck, 200 OK, p50 | StatusLED + MetaBadge |
 | Kiosk lock | `enforcement-service`, kiosk · level 1000 | NodeCard (violet accent) |
 | Escape phrase | BREAK GLASS circuit breaker | BreakGlass (dashed red) |

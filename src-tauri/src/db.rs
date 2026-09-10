@@ -1224,6 +1224,24 @@ pub mod jobs {
         })
     }
 
+    /// Retiring the daily routine must not run its queued future appointments.
+    /// Preserve those rows for import/history while servicing only saved work.
+    pub fn next_for_active_legacy_session(
+        conn: &Connection,
+    ) -> Result<Option<(i64, String, String)>> {
+        conn.query_row(
+            "SELECT j.id, j.kind, j.target_date FROM generation_jobs j
+             JOIN sessions s ON s.date = j.target_date
+             WHERE j.status = 'queued' AND j.attempts < 3
+               AND s.status = 'in_progress'
+             ORDER BY j.id LIMIT 1",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .optional()
+        .map_err(Into::into)
+    }
+
     pub fn mark(conn: &Connection, id: i64, status: &str, error: Option<&str>) -> Result<()> {
         conn.execute(
             "UPDATE generation_jobs SET status = ?2, error = ?3,

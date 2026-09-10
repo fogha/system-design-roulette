@@ -186,14 +186,8 @@ pub fn engage(app: &AppHandle, state: &AppState) {
     let Some(window) = app.get_webview_window("main") else {
         state.locked.store(false, Ordering::SeqCst);
         log::warn!("kiosk engage deferred: main window unavailable");
-        let app = app.clone();
-        tauri::async_runtime::spawn(async move {
-            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-            let state = app.state::<AppState>();
-            if crate::session::session_owed(&state) && !state.locked.load(Ordering::SeqCst) {
-                engage(&app, &state);
-            }
-        });
+        // A focus coordinator retries from its captured class/session owner.
+        // Never fall back to the retired daily routine after a missing window.
         return;
     };
     if level == KioskLevel::Advisory {
