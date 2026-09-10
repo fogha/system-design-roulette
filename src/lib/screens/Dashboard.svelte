@@ -85,7 +85,7 @@
     </aside>
     <section class="overview" aria-label="Learning overview">
       <div class="mobile-filter"><Dropdown hideLabel label="Progress for class" value={selected} options={classOptions} onchange={chooseClass}/></div>
-      <div class="overview-heading"><div><h2>{selectedClass?.label??'Across your desk'}</h2><p>{selectedClass?.progress_label??'Engineering, languages and earlier study in one place.'}</p></div>{#if selected}<button class="ghost mono-ghost" onclick={openClass}>Curriculum <ArrowUpRight size={13}/></button>{:else}<span class="scope mono">ALL TIME</span>{/if}</div>
+      <div class="overview-heading"><div><h2>{selectedClass?.label??'Across your desk'}</h2>{#if selectedClass}<p>{selectedClass.progress_label}</p>{/if}</div>{#if selected}<button class="ghost mono-ghost" onclick={openClass}>Curriculum <ArrowUpRight size={13}/></button>{:else}<span class="scope mono">ALL TIME</span>{/if}</div>
       <div class="compact-tabs" aria-label="Progress view"><span>{selectedClass?.label??'All classes'}</span><button aria-pressed={compactTab==='summary'} class:active={compactTab==='summary'} onclick={()=>compactTab='summary'}>Overview</button><button aria-pressed={compactTab==='history'} class:active={compactTab==='history'} onclick={()=>compactTab='history'}>History</button></div>
       <div class="summary-grid" class:hide-on-compact={compactTab!=='summary'}>
         <div class="metric"><span class="meta-label">SESSIONS COMPLETED</span><strong>{data?.completed_sessions??'—'}</strong><small>Finished learning sessions</small></div>
@@ -143,6 +143,22 @@
   .history-scroll { overflow:auto; flex:1; min-height:0; overscroll-behavior:contain; scrollbar-gutter:stable; } table { width:100%; border-collapse:collapse; font-size:11px; text-align:left; } th { position:sticky; top:0; z-index:1; background:var(--node-bg); font:9px var(--font-mono); color:var(--muted); padding:8px 7px 10px; border-bottom:1px solid var(--node-border); white-space:nowrap; } td { padding:10px 7px; border-bottom:1px solid var(--node-divider); } tr:last-child td { border-bottom:0; } .lesson-cell { width:52%; } .lesson-cell button { display:flex; align-items:center; gap:6px; text-align:left; border:0; background:none; color:var(--fg); font:11px/1.5 var(--font-body); padding:0; cursor:pointer; } .lesson-cell button :global(svg) { flex-shrink:0; color:var(--accent); } .lesson-cell button:hover { color:var(--accent); } .lesson-cell strong { font-weight:400; } .lesson-cell small { display:block; color:var(--muted); font-size:9px; margin-top:4px; } .date-cell { white-space:nowrap; color:var(--muted); font-size:10px; } .score { text-align:right; white-space:nowrap; font-size:10px; } .result { display:inline-block; padding:4px 6px; border-radius:var(--radius-detail); font:9px var(--font-mono); background:var(--warn-bg); color:var(--warn-fg); white-space:nowrap; } .result.completed { color:var(--ok-fg); background:var(--ok-bg); } .result.skipped { color:var(--muted); background:var(--surface); }
   .pagination { line-height:1.4; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; padding:11px 0; border-top:1px solid var(--node-border); font:9px var(--font-mono); color:var(--muted); } .pagination>div { display:flex; align-items:center; gap:10px; } .icon-button { display:inline-flex; align-items:center; justify-content:center; width:29px; height:29px; padding:0; border:1px solid var(--node-border); background:var(--bg); color:var(--fg); cursor:pointer; } button:disabled { opacity:.4; cursor:default; } .ghost { display:inline-flex; align-items:center; justify-content:center; gap:6px; font-size:10px; } .empty { display:flex; flex-direction:column; justify-content:center; align-items:center; min-height:180px; height:100%; gap:12px; padding:24px; color:var(--muted); text-align:center; } .empty :global(svg) { color:var(--accent); } .empty h3 { color:var(--fg); } .empty p { font-size:11px; margin:0; line-height:1.6; }
   .compact-tabs { display:none; }
+  @container progress (min-height:501px) {
+    .page-heading { margin-bottom:12px; }
+    .overview { padding-top:14px; }
+    .overview-heading { margin-bottom:10px; }
+    .overview-heading h2 { font-size:20px; }
+    .metric { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; }
+    .metric .meta-label { max-width:100px; line-height:1.6; }
+    .metric strong { margin:0; flex-shrink:0; }
+    .activity { padding:9px 0; }
+    .history-heading { padding:8px 0; }
+    .history-tools { padding-bottom:8px; }
+    td { padding-top:8px; padding-bottom:8px; }
+    .all-classes { padding-top:9px; padding-bottom:9px; }
+    .class-row { padding-top:6px; padding-bottom:6px; margin:2px 0; }
+    .sidebar-note { padding-top:9px; padding-bottom:9px; }
+  }
   @container progress (max-height:500px) { .page-heading .meta-label { display:none; } .page-heading h1 { font-size:23px; margin:0; } .page-heading { margin-bottom:10px; } .overview-heading { display:none; } .compact-tabs { display:flex; align-items:center; gap:6px; margin-bottom:12px; flex-shrink:0; } .compact-tabs span { flex:1; min-width:0; font-size:11px; color:var(--muted); } .compact-tabs button { border:1px solid var(--node-border); padding:7px 10px; font:10px var(--font-mono); background:var(--bg); color:var(--muted); } .compact-tabs button.active { background:var(--violet-bg); color:var(--violet-fg); border-color:var(--violet); } .hide-on-compact { display:none!important; } .history-heading { display:none; } .history-scroll { min-height:0; } }
   @container progress (max-height:500px) and (max-width:780px) { .overview { position:relative; } .mobile-filter { width:calc(100% - 152px); margin-bottom:12px; } .compact-tabs { position:absolute; top:16px; right:16px; margin:0; } .compact-tabs span { display:none; } }
   .error { display:flex; gap:12px; align-items:center; padding:10px 12px; margin-bottom:12px; border:1px solid var(--bad-fg); border-radius:var(--radius-control); color:var(--bad-fg); background:var(--bad-bg); font-size:11px; } .error>span { flex:1; } .mobile-filter { display:none; }

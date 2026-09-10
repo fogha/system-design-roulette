@@ -96,4 +96,6 @@ See [native verification](docs/DESKTOP_DESIGN_QA.md) for the build and test scop
 
 Progress uses the same contained workspace as Classes. A compact class list scopes the right pane; lifetime totals, a short activity strip and history filters provide an overview without a page-length report. History uses database pagination and its own keyboard-focusable scroll region, with fixed page controls. At narrow widths, a custom class dropdown replaces the sidebar. Short windows use a contained Overview/History switch. Archived reading occupies the detail area and returns to the preserved filters and focused lesson. Keep these controls within the shared radius and color tokens; do not restore the old stacked mastery/history report.
 
+When the panel has enough height for both overview and history, align metric labels and values in a compact row and reduce decorative spacing. Give the recovered space to lesson rows. The short-panel Overview/History switch remains responsible for smaller windows and preparation banners.
+
 The compact switch responds to the panel's available height, including space used by lesson-preparation status. It must not depend solely on window height: a normal-size window can still need the compact layout while another task is running. Native QA verified the summary/history switch and contained history controls with a real lesson preparing.
