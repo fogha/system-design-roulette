@@ -107,6 +107,18 @@ pub fn run() {
             let startup_today = chrono::Local::now().format("%Y-%m-%d").to_string();
             language::initialize(&conn, &startup_today).map_err(std::io::Error::other)?;
             classroom::initialize(&conn).map_err(std::io::Error::other)?;
+            // One-time, idempotent import of finished daily-routine history into
+            // the shared runtime. Open work stays with the compatibility engine.
+            match storage::primary_import::apply(&conn) {
+                Ok(summary) => log::info!(
+                    "legacy study import: {} imported, {} already imported, {} retained for recovery, {} open",
+                    summary.imported.len(),
+                    summary.already_imported,
+                    summary.retained.len(),
+                    summary.open_work
+                ),
+                Err(error) => log::error!("legacy study import skipped: {error}"),
+            }
             let codex_bin = resolve_codex_bin(&conn);
             // Primary model for course generation: config 'model' (default opus).
             // Held behind Arc<Mutex> so settings changes apply live.

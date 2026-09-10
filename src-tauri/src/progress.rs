@@ -13,6 +13,7 @@ const HISTORY: &str = r#"WITH history AS (
  (SELECT id FROM courses WHERE session_date=s.date AND concept_id=s.concept_id ORDER BY id DESC LIMIT 1) AS course_id, s.started_at
  FROM sessions s JOIN primary_session_ids i ON i.legacy_date=s.date
  LEFT JOIN concepts c ON c.id=s.concept_id WHERE s.status!='pending'
+ AND s.date NOT IN (SELECT legacy_key FROM legacy_crosswalk WHERE legacy_table='primary_import')
  UNION ALL
  SELECT 'classroom',CAST(id AS TEXT),session_date,subject_id,title,status,score,NULL,started_at FROM classroom_sessions
  UNION ALL
@@ -20,15 +21,16 @@ const HISTORY: &str = r#"WITH history AS (
  CASE WHEN json_valid(lesson_json) THEN COALESCE(json_extract(lesson_json,'$.title'),unit_slug) ELSE unit_slug END,
  status,score,NULL,started_at FROM language_sessions
  UNION ALL
- SELECT 'study',s.id,json_extract(s.context_json,'$.selection.service_date'),cl.course_id,
+ SELECT 'study',s.id,json_extract(s.context_json,'$.selection.service_date'),
+ COALESCE(cl.course_id,json_extract(s.context_json,'$.course.course_id')),
  COALESCE(json_extract(v.content_json,'$.title'),json_extract(s.context_json,'$.selection.title')),
  CASE s.status WHEN 'completed' THEN 'completed' WHEN 'skipped' THEN 'skipped' ELSE 'in_progress' END,
- json_extract(r.outcome_json,'$.result.score'),
- CASE WHEN v.id IS NULL THEN NULL ELSE 1 END, s.created_at
- FROM study_sessions s JOIN classes cl ON cl.id=s.class_id
+ COALESCE(json_extract(r.outcome_json,'$.result.score'),json_extract(r.outcome_json,'$.legacy.quiz_score')),
+ CASE WHEN json_extract(v.content_json,'$.body.markdown') IS NULL THEN NULL ELSE 1 END, s.created_at
+ FROM study_sessions s LEFT JOIN classes cl ON cl.id=s.class_id
  LEFT JOIN lesson_versions v ON v.id=s.lesson_version_id
  LEFT JOIN study_results r ON r.session_id=s.id
- WHERE s.owner_kind='class'
+ WHERE s.owner_kind IN ('class','daily_routine')
 )"#;
 
 #[derive(Debug, Default, Deserialize)]

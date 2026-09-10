@@ -116,3 +116,17 @@ misconception feed. Legacy in-progress classroom rows remain resumable through
 the compatibility commands until they finish. The `study_fixture` example
 publishes a bundled reference lesson into a planned session (or fails the
 preparation with `--fail`) for desktop QA without a provider.
+
+## Primary import
+
+`storage/primary_import::apply` imports finished daily-routine sessions as
+terminal runtime sessions (`owner_kind = 'daily_routine'`) that reuse the v7
+`primary-…` IDs. Completed days get a lesson version (`legacy_lesson` with the
+stored markdown, resources, round-one exit checks and exercise, or
+`legacy_retrieval` for quiz-only days), a checkpoint with the reading time and
+step, and a `study_results` row whose outcome carries the legacy score, reading
+time and assessment attempt IDs. Skipped days import without content. The
+crosswalk row `('primary_import', date)` makes the import idempotent; open work
+and rows with recovery reasons (including a course missing from the catalog)
+are left to the compatibility engine. Legacy assessment attempts keep their
+`legacy_primary` owner. The app runs the import at startup and logs a summary.

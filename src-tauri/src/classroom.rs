@@ -229,8 +229,8 @@ pub fn program_view(
         let (total, covered, done): (i64, i64, i64) = conn
             .query_row(
                 "SELECT COUNT(*),
-                        SUM(CASE WHEN COALESCE(m.state, 'unseen') != 'unseen' THEN 1 ELSE 0 END),
-                        SUM(CASE WHEN m.state IN ('mastered','maintenance') THEN 1 ELSE 0 END)
+                        COALESCE(SUM(CASE WHEN COALESCE(m.state, 'unseen') != 'unseen' THEN 1 ELSE 0 END), 0),
+                        COALESCE(SUM(CASE WHEN m.state IN ('mastered','maintenance') THEN 1 ELSE 0 END), 0)
                  FROM concepts c
                  LEFT JOIN mastery m ON m.concept_id = c.id
                  WHERE c.active = 1 AND c.focus = ?1",

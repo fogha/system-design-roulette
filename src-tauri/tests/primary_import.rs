@@ -438,3 +438,305 @@ fn original_main_and_pr_upgrade_records_keep_system_design_and_all_archived_docu
         );
     }
 }
+
+// ── One-time import into the shared study runtime ──────────────────────────
+
+#[test]
+fn apply_imports_finished_daily_sessions_and_leaves_open_work_and_recovery_rows_alone() {
+    use system_design_roulette_lib::{
+        classroom,
+        domain::sessions::{self, SessionId, Status},
+        language,
+        progress::{self, ProgressQuery},
+    };
+    let (path, conn) = fixture();
+    // Progress lists every class, so the class registry must exist.
+    language::initialize(&conn, "2026-09-10").unwrap();
+    classroom::initialize(&conn).unwrap();
+    conn.execute_batch("INSERT INTO sessions(date,concept_id,status,current_step,reading_seconds,focus,session_type,quiz_score,completed_at) VALUES
+        ('2026-08-29',1,'skipped','quiz',0,'javascript','lesson',NULL,'2026-08-29T09:00:00'),
+        ('2026-08-28',NULL,'completed','done',0,'javascript','pop_quiz',0.75,'2026-08-28T09:00:00'),
+        ('2026-08-27',1,'completed','done',10,'javascript','lesson',NULL,NULL),
+        ('2026-08-26',NULL,'completed','done',0,'not-a-course','pop_quiz',0.5,'2026-08-26T09:00:00');
+        INSERT INTO exit_questions(course_id,round,prompt,choices_json,correct_answer,explanation,section,learning_objective)
+        VALUES(16,1,'Archived check','[\"a\",\"b\"]','a','because','Section','Objective');").unwrap();
+    let legacy_rows: i64 = conn
+        .query_row("SELECT COUNT(*) FROM sessions", [], |r| r.get(0))
+        .unwrap();
+    let summary = primary_import::apply(&conn).unwrap();
+    assert_eq!(summary.imported.len(), 3, "{summary:?}");
+    assert_eq!(
+        summary.open_work, 4,
+        "three in-progress days and one pending day stay legacy"
+    );
+    assert_eq!(summary.retained.len(), 2);
+    let retained_dates: Vec<_> = summary
+        .retained
+        .iter()
+        .map(|r| r.service_date.as_str())
+        .collect();
+    assert_eq!(retained_dates, ["2026-08-26", "2026-08-27"]);
+    assert!(summary.retained[0]
+        .recovery
+        .contains(&RecoveryReason::CourseNotInCatalog));
+    assert!(summary.retained[1]
+        .recovery
+        .contains(&RecoveryReason::TerminalTimeNotRecorded));
+
+    let finished = summary
+        .imported
+        .iter()
+        .find(|s| s.service_date == "2026-08-31")
+        .unwrap();
+    assert_eq!(
+        finished.session_id,
+        db::primary_session_id(&conn, "2026-08-31")
+            .unwrap()
+            .unwrap()
+    );
+    let id = SessionId(finished.session_id.clone());
+    let session = sessions::get(&conn, &id).unwrap();
+    assert_eq!(session.status, Status::Completed);
+    assert_eq!(session.finished_at.as_deref(), Some("2026-08-31T10:00:00"));
+    assert_eq!(session.context.course.course_id, "javascript");
+    assert_eq!(session.context.tutor.provider, "claude");
+    assert_eq!(session.context.tutor.model, "unknown");
+    assert_eq!(session.context.selection["adapter"], "legacy_primary");
+    let lesson = sessions::lesson(&conn, &id).unwrap().unwrap();
+    assert_eq!(lesson.content.title, "Original JS topic");
+    assert_eq!(
+        lesson.content.body["markdown"],
+        "# Archived completed lesson"
+    );
+    assert_eq!(
+        lesson.content.body["exit_checks"].as_array().unwrap().len(),
+        1
+    );
+    assert_eq!(lesson.content.provenance["kind"], "legacy_primary");
+    let result = sessions::result(&conn, &id).unwrap().unwrap();
+    assert_eq!(result.outcome["legacy"]["reading_seconds"], 1800);
+    assert_eq!(result.checkpoint.work["reading_seconds"], 1800);
+
+    let skipped = summary
+        .imported
+        .iter()
+        .find(|s| s.service_date == "2026-08-29")
+        .unwrap();
+    assert_eq!(skipped.disposition, "skipped");
+    assert!(skipped.lesson_version_id.is_none());
+    assert_eq!(
+        sessions::get(&conn, &SessionId(skipped.session_id.clone()))
+            .unwrap()
+            .status,
+        Status::Skipped
+    );
+
+    let retrieval = summary
+        .imported
+        .iter()
+        .find(|s| s.service_date == "2026-08-28")
+        .unwrap();
+    let retrieval_lesson = sessions::lesson(&conn, &SessionId(retrieval.session_id.clone()))
+        .unwrap()
+        .unwrap();
+    assert_eq!(retrieval_lesson.content.body["kind"], "legacy_retrieval");
+    assert_eq!(retrieval_lesson.content.body["quiz_score"], 0.75);
+
+    // Idempotent, and the legacy source rows are untouched.
+    let again = primary_import::apply(&conn).unwrap();
+    assert!(again.imported.is_empty());
+    assert_eq!(again.already_imported, 3);
+    assert_eq!(
+        conn.query_row("SELECT COUNT(*) FROM sessions", [], |r| r.get::<_, i64>(0))
+            .unwrap(),
+        legacy_rows
+    );
+    assert_eq!(
+        conn.query_row(
+            "SELECT status FROM sessions WHERE date='2026-08-31'",
+            [],
+            |r| r.get::<_, String>(0)
+        )
+        .unwrap(),
+        "completed"
+    );
+    assert_eq!(
+        conn.query_row("SELECT COUNT(*) FROM study_sessions", [], |r| r
+            .get::<_, i64>(0))
+            .unwrap(),
+        3
+    );
+
+    // History reads imported days from the runtime once, and the rest from legacy.
+    let dashboard = progress::read(&conn, "2026-09-10", &ProgressQuery::default()).unwrap();
+    let study: Vec<_> = dashboard
+        .history
+        .iter()
+        .filter(|e| e.source == "study")
+        .collect();
+    assert_eq!(study.len(), 3);
+    for entry in &dashboard.history {
+        assert!(
+            !(entry.source == "primary"
+                && ["2026-08-31", "2026-08-29", "2026-08-28"].contains(&entry.date.as_str())),
+            "{entry:?}"
+        );
+    }
+    let archived = study.iter().find(|e| e.date == "2026-08-31").unwrap();
+    assert!(
+        archived.can_read && archived.subject_id == "javascript" && archived.status == "completed"
+    );
+    let quiz_day = study.iter().find(|e| e.date == "2026-08-28").unwrap();
+    assert!(!quiz_day.can_read);
+    assert!((quiz_day.score.unwrap() - 0.75).abs() < 1e-9);
+    assert!(dashboard
+        .history
+        .iter()
+        .any(|e| e.source == "primary" && e.date == "2026-09-01"));
+    assert!(dashboard
+        .history
+        .iter()
+        .any(|e| e.source == "primary" && e.date == "2026-08-27"));
+    assert!(progress::lesson(&conn, "study", &finished.session_id)
+        .unwrap()
+        .unwrap()
+        .markdown
+        .contains("Archived completed lesson"));
+    drop(conn);
+    let reopened = db::open(&path).unwrap();
+    assert_eq!(
+        reopened
+            .query_row("PRAGMA integrity_check", [], |r| r.get::<_, String>(0))
+            .unwrap(),
+        "ok"
+    );
+    assert!(reopened
+        .prepare("PRAGMA foreign_key_check")
+        .unwrap()
+        .query([])
+        .unwrap()
+        .next()
+        .unwrap()
+        .is_none());
+}
+
+#[test]
+fn apply_keeps_the_active_class_session_in_the_foreground() {
+    use system_design_roulette_lib::{
+        classroom::{
+            self, ConfigureClassroomInput, StoredEngineeringLesson, StoredQuestion,
+            UpsertClassroomSlotInput,
+        },
+        domain::sessions::{self, PreparedLesson, Status},
+        language,
+        subjects::engineering,
+    };
+    let directory = std::env::temp_dir().join(format!(
+        "principia-import-foreground-{:032x}",
+        rand::random::<u128>()
+    ));
+    std::fs::create_dir_all(&directory).unwrap();
+    let conn = db::open(&directory.join("learner.db")).unwrap();
+    db::seed_concepts(&conn, include_str!("../seed/concepts.json")).unwrap();
+    language::initialize(&conn, "2026-09-10").unwrap();
+    classroom::initialize(&conn).unwrap();
+    classroom::upsert_slot(
+        &conn,
+        &UpsertClassroomSlotInput {
+            id: None,
+            subject_id: "javascript".into(),
+            hour: 9,
+            minute: 0,
+            weekdays: vec![1, 2, 3, 4, 5, 6, 7],
+            enabled: true,
+        },
+    )
+    .unwrap();
+    classroom::configure_program(
+        &conn,
+        &ConfigureClassroomInput {
+            subject_id: "javascript".into(),
+            enabled: true,
+            agent: "claude".into(),
+            model: "sonnet".into(),
+            custom_agent_bin: String::new(),
+            session_minutes: 30,
+            start_level: None,
+            target_level: None,
+            weekly_minutes: None,
+        },
+        "2026-09-10",
+    )
+    .unwrap();
+    let program = classroom::program_row(&conn, "javascript").unwrap();
+    let planned = engineering::plan(&conn, &program, None, "2026-09-10", false).unwrap();
+    let chosen = engineering::selection(&planned).unwrap();
+    let lease = sessions::claim_preparation(&conn, &planned.id, chrono::Utc::now(), 60)
+        .unwrap()
+        .unwrap();
+    let stored = StoredEngineeringLesson {
+        concept_id: chosen.concept_id,
+        concept_title: chosen.title.clone(),
+        category: chosen.category.clone(),
+        title: "Class lesson".into(),
+        markdown: "## Body".into(),
+        resources: vec![],
+        questions: vec![StoredQuestion {
+            id: 1,
+            prompt: "Q".into(),
+            choices: vec!["a".into(), "b".into()],
+            correct_index: 0,
+            explanation: "e".into(),
+            section: String::new(),
+            learning_objective: "o".into(),
+        }],
+        exercise: None,
+        source: "fixture".into(),
+        path: None,
+    };
+    sessions::publish_preparation(
+        &conn,
+        &lease,
+        &PreparedLesson {
+            title: "Class lesson".into(),
+            body: serde_json::to_value(&stored).unwrap(),
+            provenance: json!({"kind":"fixture"}),
+        },
+        chrono::Utc::now(),
+    )
+    .unwrap();
+    let active = engineering::activate(&conn, &planned.id).unwrap();
+    assert_eq!(active.status, Status::Active);
+    let concept_id: i64 = conn
+        .query_row(
+            "SELECT id FROM concepts WHERE focus='javascript' ORDER BY id LIMIT 1",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    conn.execute("INSERT INTO sessions(date,concept_id,status,current_step,reading_seconds,focus,completed_at) VALUES('2026-08-31',?1,'completed','done',1800,'javascript','2026-08-31T10:00:00')", params![concept_id]).unwrap();
+    conn.execute("INSERT INTO courses(session_date,concept_id,markdown,resources_json,source,generated_at) VALUES('2026-08-31',?1,'# Archived','[]','codex','original')", params![concept_id]).unwrap();
+    let summary = primary_import::apply(&conn).unwrap();
+    assert_eq!(summary.imported.len(), 1);
+    let after = sessions::get(&conn, &planned.id).unwrap();
+    assert_eq!(
+        after.status,
+        Status::Active,
+        "the class lesson keeps the foreground"
+    );
+    assert_eq!(after.revision, active.revision + 2);
+    assert_eq!(
+        classroom::completed_lesson_count(&conn, "javascript").unwrap(),
+        1,
+        "legacy completion still counts once"
+    );
+    assert_eq!(
+        conn.query_row(
+            "SELECT COUNT(*) FROM study_sessions WHERE status='active'",
+            [],
+            |r| r.get::<_, i64>(0)
+        )
+        .unwrap(),
+        1
+    );
+}
