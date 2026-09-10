@@ -519,6 +519,10 @@ pub fn exercise_view(conn: &Connection, id: &SessionId) -> Result<Option<db::Exe
     }))
 }
 
+pub fn checkpoint_revision(conn: &Connection, id: &SessionId) -> Result<u32> {
+    Ok(sessions::get(conn, id).map_err(e)?.checkpoint.revision)
+}
+
 /// Exercise draft/completion saves are single-editor and debounced, so they
 /// merge into the latest checkpoint revision under the command lock.
 pub fn save_exercise_work(

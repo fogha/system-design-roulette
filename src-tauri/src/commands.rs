@@ -579,11 +579,14 @@ pub async fn start_classroom_session(
 }
 
 /// Saved work for a shared-runtime lesson: stage, reading position and editor
-/// fields. Feedback is only reached through the knowledge check.
+/// fields. Feedback is only reached through the knowledge check. Cooperating
+/// widgets of one open lesson (reading tracker, exercise workspace) may omit the
+/// expected revision to merge their keys into the latest checkpoint.
 #[derive(Deserialize)]
 pub struct ClassLessonWorkInput {
     pub session_id: crate::domain::sessions::SessionId,
-    pub expected_revision: u32,
+    #[serde(default)]
+    pub expected_revision: Option<u32>,
     #[serde(default)]
     pub stage: Option<crate::domain::sessions::Stage>,
     #[serde(default)]
@@ -598,10 +601,14 @@ pub fn save_class_lesson_work(
     input: ClassLessonWorkInput,
 ) -> CmdResult<crate::domain::sessions::Checkpoint> {
     let conn = state.db.0.lock().unwrap();
+    let expected = match input.expected_revision {
+        Some(revision) => revision,
+        None => crate::subjects::engineering::checkpoint_revision(&conn, &input.session_id)?,
+    };
     crate::subjects::engineering::patch_work(
         &conn,
         &input.session_id,
-        input.expected_revision,
+        expected,
         input.stage,
         input.reading,
         input.work,

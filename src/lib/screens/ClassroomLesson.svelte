@@ -1,6 +1,8 @@
 <script lang="ts">
   import { api, type EngineeringSessionResult } from '../ipc';
   import type { AssessmentRoundId } from '../contracts/assessments';
+  import { tick } from 'svelte';
+  import { lessonStageFor } from '../features/classes/lesson-stage';
   import { app } from '../stores.svelte';
   import ClusterBar from '../components/ClusterBar.svelte';
   import CourseChat from '../components/CourseChat.svelte';
@@ -30,6 +32,40 @@
   let answerStatus = $state<'saved' | 'saving' | 'error'>('saved');
   let answerError = $state('');
   let saveQueue: Promise<void> = Promise.resolve();
+  let scroller = $state<HTMLElement | undefined>(undefined);
+  let exerciseSection = $state<HTMLElement | undefined>(undefined);
+  let checkSection = $state<HTMLElement | undefined>(undefined);
+  let positionTimer: ReturnType<typeof setTimeout> | undefined;
+  let lastSavedPosition = '';
+  let restoredFor: string | null = null;
+
+  /** Debounced reading position and stage for shared-runtime lessons. */
+  function trackPosition() {
+    if (!lesson || !study || result || !scroller) return;
+    clearTimeout(positionTimer);
+    positionTimer = setTimeout(() => void savePosition(), 700);
+  }
+  async function savePosition() {
+    if (!lesson || !study || result || !scroller) return;
+    const offset = Math.round(scroller.scrollTop);
+    const stage = lessonStageFor(offset, scroller.clientHeight, exerciseSection?.offsetTop ?? null, checkSection?.offsetTop ?? null);
+    const key = `${lesson.session_id}:${offset}:${stage}`;
+    if (key === lastSavedPosition) return;
+    lastSavedPosition = key;
+    try {
+      await api.saveClassLessonWork({ session_id: lesson.session_id, expected_revision: null, stage, reading: { anchor: null, offset } });
+    } catch {
+      lastSavedPosition = '';
+    }
+  }
+  $effect(() => {
+    // Restore the saved reading position once per opened lesson.
+    if (!lesson || !study || !scroller || restoredFor === lesson.session_id) return;
+    restoredFor = lesson.session_id;
+    const offset = lesson.checkpoint?.body.reading.offset ?? 0;
+    if (offset > 0) void tick().then(() => requestAnimationFrame(() => { if (scroller) scroller.scrollTop = offset; }));
+  });
+  $effect(() => () => { clearTimeout(positionTimer); void savePosition(); });
 
   $effect(() => {
     if (lesson && prepared !== lesson.session_id) {
@@ -165,7 +201,7 @@
       prerequisites={lesson.prerequisites}
     />
 
-    <main class="reading-layout">
+    <main class="reading-layout" bind:this={scroller} onscroll={trackPosition}>
       <article class="reading-pane">
         <Markdown markdown={lesson.markdown} />
 
@@ -187,11 +223,11 @@
           </section>
         {/if}
 
-        <section class="exercise-end" aria-label="course exercise">
+        <section class="exercise-end" aria-label="course exercise" bind:this={exerciseSection}>
           <ExerciseWorkspace classroomSessionId={study ? undefined : Number(lesson.session_id)} studySessionId={study ? lesson.session_id : undefined} />
         </section>
 
-        <aside class="practice-pane" aria-labelledby="class-check-title">
+        <aside class="practice-pane" aria-labelledby="class-check-title" bind:this={checkSection}>
         <span class="eyebrow mono">RETRIEVAL GATE</span>
         <h2 id="class-check-title">Prove the mechanism</h2>
         <p class="practice-intro">

@@ -608,7 +608,8 @@ export interface ChatOwner {
 
 export interface ClassLessonWorkInput {
   session_id: string;
-  expected_revision: number;
+  /** Omit to merge into the latest checkpoint (cooperating widgets of one open lesson). */
+  expected_revision?: number | null;
   stage?: LessonStage | null;
   reading?: LessonReadingPosition | null;
   work?: Record<string, unknown>;
