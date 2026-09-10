@@ -101,3 +101,6 @@ QA used `com.darkmatter.principia-desk.assessment-qa`, not the production learne
 database. No keys were changed, paid provider generations requested, or model
 weights downloaded or removed. Authenticated hosted model access is not implied
 by fixture tests.
+
+Later live execution tests, CLI isolation changes and remaining long-lesson
+failures are recorded in [Runner execution verification](RUNNER_EXECUTION_QA.md).

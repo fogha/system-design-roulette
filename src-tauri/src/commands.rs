@@ -496,6 +496,8 @@ pub async fn start_classroom_session(
     slot_id: Option<i64>,
     revisit: Option<bool>,
 ) -> CmdResult<serde_json::Value> {
+    let _start = state.class_start_gate.try_lock()
+        .map_err(|_| "A class lesson is already being prepared. Wait for it to finish before starting another.".to_string())?;
     {
         let conn = state.db.0.lock().unwrap();
         if !crate::classroom::has_enabled_schedule(&conn, subject_id.trim()).map_err(err)? {

@@ -1,4 +1,4 @@
-You are generating a daily {{FOCUS_LABEL}} course for an experienced full-stack developer who wants deep, staff-level judgment in {{FOCUS_CONTEXT}}
+You are generating a {{FOCUS_LABEL}} lesson that develops practical understanding and judgment in {{FOCUS_CONTEXT}}. Follow the learner's accepted starting point, recorded evidence and authoritative curriculum brief.
 
 Topic: {{TITLE}}
 Category: {{CATEGORY}}
@@ -12,9 +12,9 @@ Pedagogy requirements:
 - Explicit mental models: name the model, show where it breaks, and how to verify it.
 - Concrete executable experiments: include at least one runnable snippet or devtools/compiler experiment the reader can execute in under 10 minutes.
 - Source/runtime/compiler depth: go below the tutorial layer into implementation-relevant internals.
-- Production architecture lens: show where this mechanism belongs in a real frontend system. Name its component/route/package/server/browser boundary, who owns it, what data or state crosses it, the bottleneck at 10x traffic or 10x team size, how it fails, what telemetry exposes the failure, and how to migrate or roll it back.
+- Production architecture lens: show where this mechanism belongs in the subject's real working environment. Name its relevant process/file/service/component boundary, who owns it, what data or state crosses it, its scaling or workload limit, how it fails, what observations expose the failure, and how to migrate or roll it back.
 - Trade-offs must be decisions, not lists. For each major choice, state: "Choose X when …; choose Y when …; the signal to revisit this is …". Include scalability, operability, consistency, accessibility, security, DX, cost, and reversibility where they apply.
-- Practical artifact: end with a small production-grade exercise tied to today's topic that another engineer could plausibly adopt: a component/package contract, architecture decision record, devtools/CDP script, lint rule or codemod, performance/RUM harness, bundler plugin, browser API wrapper, typed boundary, migration check, or CI policy. Avoid abstract CLI toys disconnected from shipping UI.
+- Practical artifact: follow the curriculum's cumulative artifact and working environment. Appropriate outcomes include a reproducible shell workflow, command transcript, diagnostic script, service design, component contract, architecture decision record, runtime experiment, migration check or CI policy. Do not force terminal or system-design lessons into frontend UI work.
 - Do NOT imitate named living authors.
 
 2026 currency and evidence:
@@ -23,7 +23,7 @@ Pedagogy requirements:
 - If retrieved material contradicts your prior belief, follow the retrieved material and say what changed.
 - State version/date-sensitive facts precisely. Distinguish broadly available, newly available, experimental, deprecated, and framework-specific behavior. Include a progressive-enhancement or fallback path when support is not universal.
 - Do not make React or any single meta-framework the universal answer. Explain the underlying browser/system mechanism first, then compare how current React, Svelte, Vue, Angular, Astro, or standards-based approaches expose it when relevant.
-- For architecture topics, default to a well-bounded modular frontend. Introduce micro-frontends, distributed state, or independent deployment only when organizational or release constraints justify their coordination cost.
+- For architecture topics, start with the simplest design that meets the curriculum scenario. Introduce distributed components, state or independent deployment only when the stated constraints justify their coordination cost.
 
 Diagrams:
 - Use a fenced ```mermaid code block wherever a sequence, state machine, timeline, or set of relationships is genuinely clearer as a picture than as prose — most courses should have 1-3.
@@ -43,9 +43,9 @@ Requirements:
 - When code is central, show a small "naive version" and a production-ready revision, then explain the architectural difference. All code must be fenced with an accurate language tag.
 - Make the practical exercise a 30-60 minute deliberate-practice task with 3-5 observable acceptance criteria inside its instructions. It should create a reusable piece of the track's 30-day proof of skill, not a disposable kata. On dossier days 7, 14, 21, and 30, require the exercise to integrate at least two earlier concepts.
 - End the practical exercise with a short self-review: what evidence proves it works, which trade-off was chosen, and what would fail at 10x scale or team size.
-- Tone: direct, technical, no fluff. Assume the reader codes daily but has gaps in this specific depth layer. Plain language does not mean vague — it means precise words a newcomer could still follow.
-- Populate `resources` with 5 to 8 high-quality current sources. Start with every RETRIEVED SOURCE MATERIAL URL you used, then add others only if you are certain they exist. Every URL is checked over the network before the learner sees it, and unreachable links are deleted — so guessing a URL only shrinks the reading list. Prefer standards and maintainer documentation over SEO listicles.
-- Cite at least three different retrieved URLs as inline markdown links inside the course body, placed on the exact claims they support, not collected in a footer.
+- Tone: direct, technical, no fluff. Match explanations to the learner's accepted starting point and recorded evidence. Use precise words a newcomer can follow while letting experienced learners transfer what they already know.
+- Populate `resources` from the primary documentation already retrieved by the app. Include the supplied URLs you actually used; do not start another research task to reach an arbitrary source count. Every URL is checked before the learner sees it. If evidence is unavailable, qualify the affected claims instead of inventing sources.
+- Cite three different retrieved URLs as inline markdown links on the claims they support. If fewer than three sources were provided, cite the available ones; do not invent another source to satisfy the count. Do not collect citations in a footer.
 - Include exactly 5 exit_questions spanning the course's major sections. Each explanation must: (1) name the specific misconception a wrong answer reveals, (2) restate the correct mental model in plain language, ideally with a short analogy, (3) stay under 4 sentences.
 - The "exercise" field must be a self-contained, structured exercise separate from (but consistent with) the ## Practical exercise markdown section: a short title, clear instructions written as markdown, an optional starter code block the reader edits, a one-sentence "deliverable" describing what done looks like, and 1-3 short hints ordered from vaguest to most direct. This is worked on separately from the reading — do not require finishing it to understand the rest of the course.
 

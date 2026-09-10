@@ -238,9 +238,16 @@ pub async fn capture_events(
     match tokio::time::timeout(timeout, work).await {
         Ok(Ok((out, _, status, ()))) if status.success() => String::from_utf8(out)
             .map_err(|e| GenError::Parse(format!("agent output was not UTF-8: {e}"))),
-        Ok(Ok((_, err, status, ()))) => Err(GenError::BadExit(
+        Ok(Ok((out, err, status, ()))) => Err(GenError::BadExit(
             status.code().unwrap_or(-1),
-            String::from_utf8_lossy(&err).chars().take(1200).collect(),
+            String::from_utf8_lossy(if err.iter().all(u8::is_ascii_whitespace) {
+                &out
+            } else {
+                &err
+            })
+            .chars()
+            .take(1200)
+            .collect(),
         )),
         Ok(Err(e)) => {
             let _ = child.kill().await;
@@ -271,12 +278,14 @@ impl Scratch {
     pub fn new(root: &Path, call_id: &str) -> Result<Self> {
         std::fs::create_dir_all(root)?;
         let path = root.join(call_id);
-        std::fs::create_dir(&path)?;
+        let mut builder = std::fs::DirBuilder::new();
+        builder.recursive(false);
         #[cfg(unix)]
         {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700))?;
+            use std::os::unix::fs::DirBuilderExt;
+            builder.mode(0o700);
         }
+        builder.create(&path)?;
         Ok(Self(path))
     }
 }

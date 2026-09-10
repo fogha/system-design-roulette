@@ -16,6 +16,9 @@ pub struct ModelOption {
     pub context_length: Option<u64>,
     pub tools: bool,
     pub json_mode: bool,
+    /// Provider-advertised reasoning controls, absent for non-reasoners/routers.
+    #[serde(default)]
+    pub reasoning: Option<Value>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelCatalog {
@@ -43,6 +46,7 @@ pub fn option(id: &str) -> ModelOption {
         context_length: None,
         tools: false,
         json_mode: true,
+        reasoning: None,
     }
 }
 fn price(value: &Value) -> Option<f64> {
@@ -91,6 +95,7 @@ pub fn decode(id: RunnerId, value: Value) -> Vec<ModelOption> {
                 .trim_start_matches("models/")
                 .into();
             if id == RunnerId::OpenrouterApi {
+                model.reasoning = row.get("reasoning").filter(|v| v.is_object()).cloned();
                 model.input_usd_per_million = price(&row["pricing"]["prompt"]);
                 model.output_usd_per_million = price(&row["pricing"]["completion"]);
                 model.free = model.input_usd_per_million == Some(0.0)

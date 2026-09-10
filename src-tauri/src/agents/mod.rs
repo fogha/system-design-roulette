@@ -159,7 +159,7 @@ impl Runner {
             45
         });
         // Reasoning-capable APIs count internal reasoning against the output cap.
-        req.max_tokens = 1024;
+        req.max_tokens = 4096;
         let start = Instant::now();
         let result = self.run(&req, None).await;
         let (ok, detail) = match result {
@@ -173,7 +173,7 @@ impl Runner {
                 false,
                 "Runner answered, but did not return the expected connection-test response.".into(),
             ),
-            Err(error) => (false, error.to_string()),
+            Err(error) => (false, connection_failure(route.runner, &error)),
         };
         HealthCheck {
             runner: route.runner,
@@ -280,12 +280,18 @@ impl Runner {
                     GenError::NoBinary => "executable-missing",
                     GenError::Timeout(_) => "timeout",
                     GenError::BadExit(_, _) => "process-failed",
-                    GenError::Parse(_) => "invalid-response",
+                    GenError::Parse(_) | GenError::ProviderResponse { .. } => "invalid-response",
                     GenError::Io(_) => "io-failed",
                     GenError::Api(_) => "provider-failed",
                 };
                 if let Some(path) = &self.database {
-                    store::finish(path, id, &req.route.model, duration_ms, None, Some(kind))?;
+                    let (model, usage) = match &error {
+                        GenError::ProviderResponse { model, usage, .. } => {
+                            (model.as_str(), Some(usage.as_ref()))
+                        }
+                        _ => (req.route.model.as_str(), None),
+                    };
+                    store::finish(path, id, model, duration_ms, usage, Some(kind))?;
                 }
                 self.log(format!("{} · {kind}", req.route.runner.label()));
                 Err(error)
@@ -368,6 +374,36 @@ impl Runner {
 }
 pub fn new_call_id() -> String {
     format!("call-{:032x}", rand::random::<u128>())
+}
+
+fn connection_failure(runner: RunnerId, error: &GenError) -> String {
+    let detail = error.to_string();
+    let lower = detail.to_ascii_lowercase();
+    if runner == RunnerId::ClaudeCli
+        && lower.contains("--safe-mode")
+        && lower.contains("unknown option")
+    {
+        return "This Claude Code version does not support isolated study calls. Update Claude Code to version 2.1.169 or later, then test again.".into();
+    }
+    if runner == RunnerId::CursorCli && lower.contains("authentication required") {
+        return "Cursor Agent is installed but is not signed in. Run `cursor-agent login` in Terminal, then test again.".into();
+    }
+    if runner == RunnerId::CodexCli
+        && lower.contains("unexpected argument")
+        && lower.contains("--ignore-user-config")
+    {
+        return "This Codex CLI version does not support isolated study calls. Update Codex CLI, then test again.".into();
+    }
+    if runner == RunnerId::GeminiCli
+        && (lower.contains("projectidrequirederror")
+            || lower.contains("requires setting the google_cloud_project"))
+    {
+        return "Gemini CLI's account requires a Google Cloud project. Set GOOGLE_CLOUD_PROJECT in your Gemini CLI environment (for example ~/.gemini/.env), then test again.".into();
+    }
+    if matches!(error, GenError::Timeout(_)) {
+        return format!("{} did not finish the connection test in time. Check its authentication and model availability, then retry. Local models may need time to load into memory.", runner.label());
+    }
+    detail
 }
 
 #[cfg(test)]

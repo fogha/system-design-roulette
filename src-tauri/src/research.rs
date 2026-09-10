@@ -650,12 +650,13 @@ pub fn format_source_material(sources: &[ResearchSource]) -> String {
         })
         .collect::<Vec<_>>()
         .join("\n\n---\n\n");
+    let required = sources.len().min(3);
     format!(
         "RETRIEVED SOURCE MATERIAL (fetched live from primary documentation by this app, not by \
          you):\n\n{documents}\n\nHow to use this material:\n\
          - Teach from these documents. Ground every version-sensitive or standards claim in them.\n\
          - Cite them inline as markdown links using the exact URLs above, e.g. \
-         `[MDN: Navigation API](https://developer.mozilla.org/...)`. At least three different \
+         `[MDN: Navigation API](https://developer.mozilla.org/...)`. At least {required} different \
          retrieved URLs must appear as inline links in the course body.\n\
          - Quote or paraphrase precisely, and attribute the publisher when the claim is \
          contested, recent, or partially supported across browsers.\n\
@@ -779,7 +780,7 @@ mod tests {
         let block = format_source_material(&sources);
 
         assert!(block.contains("https://web.dev/articles/vitals"));
-        assert!(block.contains("At least three different"));
+        assert!(block.contains(&format!("At least {} different", sources.len().min(3))));
         assert!(format_source_material(&[]).is_empty());
     }
 

@@ -4,6 +4,7 @@
   import { DESTINATIONS } from './navigation';
   import ClusterBar from '../components/ClusterBar.svelte';
   import StatusLED from '../components/StatusLED.svelte';
+  import PreparationStatus from '../features/classes/PreparationStatus.svelte';
   import mark from '../../../docs/logo-mark.svg';
   let { children }: { children: Snippet } = $props();
   const selected = $derived(app.screen === 'dashboard' ? 'progress' : app.destination);
@@ -24,6 +25,7 @@
       {/each}
     </nav>
   </header>
+  {#if app.preparingClass}<PreparationStatus />{/if}
   <main id="desk-content" tabindex="-1" bind:this={content}>{@render children()}</main>
 </div>
 

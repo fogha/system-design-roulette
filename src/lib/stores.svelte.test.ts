@@ -139,3 +139,30 @@ it('keeps the latest session when refreshes and timer events arrive out of order
     vi.restoreAllMocks();
   }
 });
+
+it('keeps preparation visible across navigation and prevents duplicate starts until failure releases it', async () => {
+  app.state = state();
+  app.screen = 'idle';
+  let rejectStart!: (cause: Error) => void;
+  const start = vi.spyOn(api, 'startClassroomSession').mockImplementationOnce(() => new Promise((_, reject) => { rejectStart = reject; }));
+  try {
+    const pending = app.startClass('linux-bash', 12);
+    expect(app.preparingClass?.subjectId).toBe('linux-bash');
+    app.navigate('classes');
+    await app.startClass('german', 13);
+    expect(start).toHaveBeenCalledTimes(1);
+    expect(app.preparingClass?.subjectId).toBe('linux-bash');
+    rejectStart(new Error('Provider unavailable'));
+    await pending;
+    expect(app.preparingClass).toBeNull();
+    expect(app.error).toContain('Provider unavailable');
+    start.mockRejectedValueOnce(new Error('Authentication required'));
+    await app.startClass('german', 13);
+    expect(start).toHaveBeenCalledTimes(2);
+    expect(app.preparingClass).toBeNull();
+    expect(app.error).toContain('Authentication required');
+  } finally {
+    vi.restoreAllMocks();
+    app.error = '';
+  }
+});

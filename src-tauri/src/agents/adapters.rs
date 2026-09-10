@@ -43,11 +43,12 @@ pub async fn run_cli(runner: &Runner, req: &RunRequest, call_id: &str) -> Result
         let prompt = merged_prompt(req);
         let mut substituted = false;
         for arg in &words[1..] {
+            let arg = arg.replace("{model}", &req.route.model);
             if arg.contains("{prompt}") {
                 substituted = true;
                 command.arg(arg.replace("{prompt}", &prompt));
             } else {
-                command.arg(arg);
+                command.arg(&arg);
             }
         }
         if !substituted {
@@ -55,7 +56,20 @@ pub async fn run_cli(runner: &Runner, req: &RunRequest, call_id: &str) -> Result
         }
         command
     } else {
-        Command::new(runner.binary(id).ok_or(GenError::NoBinary)?)
+        let binary = runner.binary(id).ok_or(GenError::NoBinary)?;
+        #[cfg(target_os = "macos")]
+        if id == RunnerId::ClaudeCli {
+            // Match a shell-launched CLI's process setup in the desktop host.
+            // The script is constant; executable/arguments remain separate argv
+            // values and the prompt stays on stdin, never in shell source.
+            let mut command = Command::new("/bin/sh");
+            command.args(["-c", "exec \"$@\"", "principia-claude", &binary]);
+            command
+        } else {
+            Command::new(binary)
+        }
+        #[cfg(not(target_os = "macos"))]
+        Command::new(binary)
     };
     let model = req.route.model.as_str();
     let model_flag = model != "default" && !model.is_empty();
@@ -66,6 +80,11 @@ pub async fn run_cli(runner: &Runner, req: &RunRequest, call_id: &str) -> Result
         RunnerId::ClaudeCli => {
             command.args([
                 "-p",
+                // Keep the app's lesson contract independent of personal CLI
+                // skills/plugins/hooks. Loading those can stall GUI launches.
+                "--safe-mode",
+                "--effort",
+                "medium",
                 "--output-format",
                 "stream-json",
                 "--verbose",
@@ -81,6 +100,14 @@ pub async fn run_cli(runner: &Runner, req: &RunRequest, call_id: &str) -> Result
             if req.allow_web {
                 command.args(["--allowedTools", "WebSearch,WebFetch"]);
             }
+            command.args([
+                "--tools",
+                if req.allow_web {
+                    "WebSearch,WebFetch"
+                } else {
+                    ""
+                },
+            ]);
             command.args(["--disallowedTools", "Bash,Edit,Write,NotebookEdit"]);
             input = Some(req.prompt.as_str());
         }
@@ -88,6 +115,23 @@ pub async fn run_cli(runner: &Runner, req: &RunRequest, call_id: &str) -> Result
             command
                 .args([
                     "exec",
+                    // A lesson is an application writing task, independent of
+                    // personal coding hooks, agents and MCP servers. This flag
+                    // retains the CLI's authentication without loading config.
+                    "--ignore-user-config",
+                    "--ephemeral",
+                    "--disable",
+                    "multi_agent",
+                    "--disable",
+                    "shell_tool",
+                    "--disable",
+                    "apps",
+                    "--disable",
+                    "hooks",
+                    "-c",
+                    "web_search=\"disabled\"",
+                    "-c",
+                    "model_reasoning_effort=\"medium\"",
                     "--skip-git-repo-check",
                     "--color",
                     "never",
@@ -253,7 +297,16 @@ pub fn parse_compatible(value: Value, req: &RunRequest) -> Result<AdapterResult>
         return Err(GenError::Api("provider returned an error response".into()));
     }
     let message = &value["choices"][0]["message"];
-    let text = message["content"].as_str().unwrap_or_default().to_string();
+    let text = match &message["content"] {
+        Value::String(text) => text.clone(),
+        Value::Array(parts) => parts
+            .iter()
+            .filter(|part| matches!(part["type"].as_str(), Some("text" | "output_text")))
+            .filter_map(|part| part["text"].as_str())
+            .collect::<Vec<_>>()
+            .join("\n"),
+        _ => String::new(),
+    };
     let tool_calls: Vec<_> = message["tool_calls"]
         .as_array()
         .into_iter()
@@ -276,15 +329,10 @@ pub fn parse_compatible(value: Value, req: &RunRequest) -> Result<AdapterResult>
             })
         })
         .collect();
-    if text.trim().is_empty() && tool_calls.is_empty() {
-        return Err(GenError::Parse(
-            "provider returned no answer or tool calls".into(),
-        ));
-    }
     let u = &value["usage"];
     let input = u["prompt_tokens"].as_u64();
     let output = u["completion_tokens"].as_u64();
-    Ok(AdapterResult {
+    let result = AdapterResult {
         model: value["model"].as_str().unwrap_or(&req.route.model).into(),
         usage: Usage {
             input_tokens: tokens(
@@ -306,7 +354,50 @@ pub fn parse_compatible(value: Value, req: &RunRequest) -> Result<AdapterResult>
         },
         text,
         tool_calls,
-    })
+    };
+    validate_response(
+        result,
+        req,
+        value["choices"][0]["finish_reason"].as_str(),
+        message["refusal"].as_str().is_some_and(|s| !s.is_empty()),
+    )
+}
+
+/// Retain provider accounting even when an answer cannot be used. Never substitute
+/// private reasoning for the public answer or log it as a parsing diagnostic.
+pub fn validate_response(
+    mut result: AdapterResult,
+    req: &RunRequest,
+    finish: Option<&str>,
+    refused: bool,
+) -> Result<AdapterResult> {
+    if req.route.runner == RunnerId::OllamaApi
+        || (req.route.runner == RunnerId::OpenrouterApi
+            && super::models::free_model_id(&result.model))
+    {
+        result.usage.metered = false;
+        result.usage.cost_usd = Some(0.0);
+    }
+    let reason = if refused || matches!(finish, Some("content_filter" | "SAFETY" | "RECITATION")) {
+        Some(
+            "The provider declined this request. Review the task or choose another saved model."
+                .to_string(),
+        )
+    } else if matches!(finish, Some("length" | "max_tokens" | "MAX_TOKENS")) {
+        Some(format!("The model reached its output limit ({} completion tokens) before finishing. Retry with a model that can complete this task within the output budget.", result.usage.output_tokens))
+    } else if result.text.trim().is_empty() && result.tool_calls.is_empty() {
+        Some(format!("The model returned no answer or tool calls ({} completion tokens). Retry or choose another saved model.", result.usage.output_tokens))
+    } else {
+        None
+    };
+    if let Some(reason) = reason {
+        return Err(GenError::ProviderResponse {
+            model: result.model,
+            reason,
+            usage: Box::new(result.usage),
+        });
+    }
+    Ok(result)
 }
 
 pub async fn run_deepseek(_runner: &Runner, req: &RunRequest) -> Result<AdapterResult> {

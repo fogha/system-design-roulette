@@ -153,6 +153,7 @@ pub fn run() {
                 prev_muted: Mutex::new(None),
                 frontend_ready: AtomicBool::new(false),
                 gen_notify: tokio::sync::Notify::new(),
+                class_start_gate: tokio::sync::Mutex::new(()),
                 chat_threads: Mutex::new(std::collections::HashMap::new()),
             });
 

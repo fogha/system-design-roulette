@@ -49,7 +49,7 @@
   {/if}
   <div class="overview">
     <section aria-label="Class agenda"><NodeCard Icon={Clock} name="class-agenda" badge={dueSlots.length ? dueSlots.length+' due' : 'upcoming'} badgeTone={dueSlots.length ? 'amber' : 'teal'}>
-      {#each dueSlots as slot}<div class="study-row"><div><strong>{slot.label}</strong><p class="mono">{String(slot.hour).padStart(2,'0')}:{String(slot.minute).padStart(2,'0')} · due</p></div><button class="ghost mono-ghost" disabled={busy || resumable.some(s => s.subject_id === slot.subject_id)} onclick={() => start(slot)}>Start class</button></div>{/each}
+      {#each dueSlots as slot}<div class="study-row"><div><strong>{slot.label}</strong><p class="mono">{String(slot.hour).padStart(2,'0')}:{String(slot.minute).padStart(2,'0')} · due</p></div><button class="ghost mono-ghost" disabled={busy || !!app.preparingClass || resumable.some(s => s.subject_id === slot.subject_id)} onclick={() => start(slot)}>Start class</button></div>{/each}
       {#if !app.state?.schedule_paused}{#each upcoming as slot}<button class="agenda-link" onclick={() => app.openClass(slot.subject_id,'schedule')}><span><strong>{slot.label}</strong><small>{appointment(slot)}</small></span><ArrowRight size={13} /></button>{/each}{/if}
       {#if !dueSlots.length && (!upcoming.length || app.state?.schedule_paused)}<div class="queue-state"><StatusLED tone="ok" /><p>{app.state?.schedule_paused ? 'Appointments are paused.' : 'Add study times inside a class to build your week.'}</p></div>{/if}
       <button class="ghost mono-ghost" onclick={() => app.openClass(null,'schedule')}>Manage class schedules<ArrowRight size={12} /></button>

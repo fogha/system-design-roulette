@@ -90,6 +90,9 @@ pub fn body(req: &RunRequest, known: Option<&ModelOption>) -> Value {
     }
     if id == RunnerId::OpenrouterApi {
         body["usage"] = json!({"include":true});
+        if let Some(reasoning) = reasoning_budget(known, req.max_tokens) {
+            body["reasoning"] = reasoning;
+        }
         // Capability claims come from OpenRouter's actual catalogue.
         if known.is_some_and(|m| !m.json_mode) {
             body.as_object_mut().unwrap().remove("response_format");
@@ -97,9 +100,31 @@ pub fn body(req: &RunRequest, known: Option<&ModelOption>) -> Value {
     }
     body
 }
+
+/// Reserve room for the requested answer instead of spending the entire output
+/// allowance on optional reasoning. Use only advertised controls; mandatory
+/// reasoners retain reasoning, and dynamic routers retain provider defaults.
+fn reasoning_budget(known: Option<&ModelOption>, output_tokens: u32) -> Option<Value> {
+    let controls = known?.reasoning.as_ref()?;
+    if controls["supports_max_tokens"] == true && output_tokens >= 4096 {
+        return Some(json!({"max_tokens":2048}));
+    }
+    if let Some(efforts) = controls.get("supported_efforts") {
+        for effort in ["low", "minimal", "medium", "high", "xhigh", "max"] {
+            if efforts.is_null()
+                || efforts
+                    .as_array()
+                    .is_some_and(|list| list.iter().any(|value| value == effort))
+            {
+                return Some(json!({"effort":effort}));
+            }
+        }
+    }
+    (controls["mandatory"] != true).then(|| json!({"enabled":false}))
+}
 pub fn parse(req: &RunRequest, value: Value) -> Result<AdapterResult> {
     let id = req.route.runner;
-    let mut result = match id {
+    let result = match id {
         RunnerId::AnthropicApi => {
             let text = value["content"]
                 .as_array()
@@ -155,21 +180,19 @@ pub fn parse(req: &RunRequest, value: Value) -> Result<AdapterResult> {
                 },
             }
         }
-        _ => adapters::parse_compatible(value, req)?,
+        _ => return adapters::parse_compatible(value, req),
     };
-    if result.text.trim().is_empty() && result.tool_calls.is_empty() {
-        return Err(GenError::Parse(format!(
-            "{} returned no answer",
-            id.label()
-        )));
-    }
-    if id == RunnerId::OllamaApi
-        || (id == RunnerId::OpenrouterApi && models::free_model_id(&result.model))
-    {
-        result.usage.metered = false;
-        result.usage.cost_usd = Some(0.0);
-    }
-    Ok(result)
+    let finish = if id == RunnerId::AnthropicApi {
+        value["stop_reason"].as_str()
+    } else {
+        value["candidates"][0]["finishReason"].as_str()
+    };
+    adapters::validate_response(
+        result,
+        req,
+        finish,
+        value["promptFeedback"]["blockReason"].is_string(),
+    )
 }
 pub async fn run(runner: &Runner, req: &RunRequest) -> Result<AdapterResult> {
     let id = req.route.runner;

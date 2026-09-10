@@ -83,7 +83,7 @@ pub fn finish(
     error: Option<&str>,
 ) -> Result<()> {
     let conn = connection(path)?;
-    let count = conn.execute("UPDATE agent_calls SET finished_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'),model=?2,status=?3,input_tokens=?4,output_tokens=?5,cached_tokens=?6,tokens_estimated=?7,cost_usd=?8,duration_ms=?9,error_kind=?10 WHERE id=?1 AND status='running'", params![id,model,if error.is_some(){"failed"}else{"succeeded"},usage.map(|u|u.input_tokens),usage.map(|u|u.output_tokens),usage.map(|u|u.cached_tokens),usage.is_some_and(|u|u.tokens_estimated),usage.and_then(|u|u.cost_usd),duration,error]).map_err(storage_error)?;
+    let count = conn.execute("UPDATE agent_calls SET finished_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'),model=?2,status=?3,input_tokens=?4,output_tokens=?5,cached_tokens=?6,tokens_estimated=?7,cost_usd=?8,duration_ms=?9,error_kind=?10,metered=COALESCE(?11,metered) WHERE id=?1 AND status='running'", params![id,model,if error.is_some(){"failed"}else{"succeeded"},usage.map(|u|u.input_tokens),usage.map(|u|u.output_tokens),usage.map(|u|u.cached_tokens),usage.is_some_and(|u|u.tokens_estimated),usage.and_then(|u|u.cost_usd),duration,error,usage.map(|u|u.metered)]).map_err(storage_error)?;
     if count != 1 {
         return Err(storage_error("call record was changed or missing"));
     }

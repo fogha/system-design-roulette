@@ -52,6 +52,26 @@ fn runner_routes_cover_cli_api_and_local_without_colliding_provider_ids() {
     assert!(!RunnerId::OllamaApi.metered());
 }
 
+#[test]
+fn connection_errors_identify_required_setup_without_exposing_cli_stack_traces() {
+    let cursor = connection_failure(
+        RunnerId::CursorCli,
+        &GenError::BadExit(
+            1,
+            "Error: Authentication required. Please run 'agent login' first".into(),
+        ),
+    );
+    assert!(cursor.contains("cursor-agent login"));
+    let gemini = connection_failure(RunnerId::GeminiCli, &GenError::BadExit(1, "DeprecationWarning\nError authenticating: ProjectIdRequiredError\n at internal/path.js:85:15".into()));
+    assert!(gemini.contains("GOOGLE_CLOUD_PROJECT"));
+    assert!(!gemini.contains("internal/path"));
+    let denied = GenError::Api("OpenRouter 403: selected model is not allowed for this key".into());
+    assert_eq!(
+        connection_failure(RunnerId::OpenrouterApi, &denied),
+        denied.to_string()
+    );
+}
+
 #[tokio::test]
 async fn hosted_and_local_adapters_send_selected_model_and_decode_provider_answers() {
     for id in [
@@ -200,6 +220,43 @@ fn model_catalogues_keep_real_prices_and_exclude_non_chat_models() {
 }
 
 #[test]
+fn openrouter_reserves_answer_space_using_advertised_reasoning_controls() {
+    let mut req = request(RunnerId::OpenrouterApi, "Write a lesson");
+    req.max_tokens = 32_768;
+    for (controls, expected) in [
+        (json!({"mandatory":false}), json!({"enabled":false})),
+        (json!({"mandatory":true}), Value::Null),
+        (
+            json!({"mandatory":true,"supports_max_tokens":true}),
+            json!({"max_tokens":2048}),
+        ),
+        (
+            json!({"mandatory":true,"supported_efforts":["high","medium"]}),
+            json!({"effort":"medium"}),
+        ),
+        (
+            json!({"mandatory":false,"supported_efforts":null}),
+            json!({"effort":"low"}),
+        ),
+    ] {
+        let decoded = models::decode(
+            RunnerId::OpenrouterApi,
+            json!({"data":[{
+                "id":"reasoner", "supported_parameters":["reasoning"], "reasoning":controls
+            }]}),
+        );
+        let body = api::body(&req, decoded.first());
+        assert_eq!(body["reasoning"], expected);
+        assert_eq!(body["max_tokens"], 32_768);
+    }
+    // A dynamic router or an older catalogue must not acquire unsupported flags.
+    assert!(api::body(&req, Some(&models::option("openrouter/free")))
+        .get("reasoning")
+        .is_none());
+    assert!(api::body(&req, None).get("reasoning").is_none());
+}
+
+#[test]
 fn local_tutor_rejects_cloud_and_embedding_weights_and_decodes_download_termination() {
     for name in ["", "foo;touch /tmp/no", "model:cloud", "model-cloud"] {
         assert!(local::validate_name(name).is_err());
@@ -280,6 +337,38 @@ fn script(runner: &Runner, name: &str, body: &str) -> String {
 
 #[cfg(unix)]
 #[tokio::test]
+async fn custom_command_passes_the_selected_model_and_preserves_literal_prompt_arguments() {
+    let runner = fixture();
+    let bin = script(
+        &runner,
+        "custom fixture.py",
+        "import json, sys\nprint(json.dumps({'model': sys.argv[1], 'prompt': sys.argv[2]}))",
+    );
+    let mut req = request(
+        RunnerId::CustomCli,
+        "Explain '$HOME' and {model} literally; do not expand them.",
+    );
+    req.route.custom_command = format!("'{bin}' '{{model}}' '{{prompt}}'");
+    req.route.model = "a/model:version".into();
+    let result = runner.run(&req, None).await.unwrap().json.unwrap();
+    assert_eq!(result["model"], "a/model:version");
+    assert_eq!(result["prompt"], req.prompt);
+    let failing = script(
+        &runner,
+        "stdout failure.py",
+        "import sys\nprint('Authentication required: sign in first.')\nsys.exit(1)",
+    );
+    req.route.custom_command = format!("'{failing}'");
+    assert!(runner
+        .run(&req, None)
+        .await
+        .unwrap_err()
+        .to_string()
+        .contains("Authentication required"));
+}
+
+#[cfg(unix)]
+#[tokio::test]
 async fn concurrent_codex_calls_have_distinct_output_models_and_persisted_usage() {
     let mut runner = fixture();
     runner.codex_bin = Some(script(
@@ -288,6 +377,10 @@ async fn concurrent_codex_calls_have_distinct_output_models_and_persisted_usage(
         r#"
 import json, pathlib, sys, time
 args=sys.argv
+assert '--ignore-user-config' in args and '--ephemeral' in args
+assert 'model_reasoning_effort="medium"' in args
+disabled=[args[i+1] for i,arg in enumerate(args[:-1]) if arg=='--disable']
+assert all(feature in disabled for feature in ['multi_agent','shell_tool','apps','hooks'])
 prompt=sys.stdin.read()
 model=args[args.index('--model')+1]
 time.sleep(0.04)
@@ -380,6 +473,9 @@ async fn fallback_is_explicit_and_uses_its_own_model_and_health_requires_real_an
         r#"
 import json,sys
 sys.stdin.read()
+assert '--safe-mode' in sys.argv
+assert sys.argv[sys.argv.index('--effort')+1] == 'medium'
+assert sys.argv[sys.argv.index('--tools')+1] == ''
 print(json.dumps({'type':'result','result':json.dumps({'status':'pong','model':sys.argv[sys.argv.index('--model')+1]}),'usage':{'input_tokens':2,'output_tokens':3},'total_cost_usd':0.00001}))
 "#,
     );
@@ -556,4 +652,66 @@ async fn persistence_failure_does_not_repeat_an_already_completed_provider_call(
     let calls = store::recent(runner.database.as_ref().unwrap()).unwrap();
     assert_eq!(calls.len(), 1);
     assert_eq!(calls[0].status, "running");
+}
+
+#[test]
+fn provider_response_validation_keeps_public_text_and_reports_truncation_without_reasoning() {
+    let req = request(RunnerId::OpenrouterApi, "Return JSON");
+    let result = api::parse(&req, json!({"model":"actual/free:free", "choices":[{"finish_reason":"stop","message":{"content":[{"type":"reasoning","text":"private reasoning"},{"type":"text","text":"{\"ok\":true}"}]}}],"usage":{"prompt_tokens":12,"completion_tokens":30}})).unwrap();
+    assert_eq!(result.text, "{\"ok\":true}");
+    assert!(!result.usage.metered);
+    assert_eq!(result.usage.cost_usd, Some(0.0));
+    for (id, response) in [
+        (
+            RunnerId::OpenrouterApi,
+            json!({"model":"actual/reasoner:free","choices":[{"finish_reason":"length","message":{"content":null,"reasoning":"private reasoning"}}],"usage":{"prompt_tokens":12,"completion_tokens":16384,"cost":0}}),
+        ),
+        (
+            RunnerId::OpenaiApi,
+            json!({"model":"actual-openai","choices":[{"finish_reason":"length","message":{"content":"{\"partial\":"}}],"usage":{"prompt_tokens":12,"completion_tokens":16384}}),
+        ),
+        (
+            RunnerId::AnthropicApi,
+            json!({"model":"actual-claude","stop_reason":"max_tokens","content":[{"type":"text","text":"{\"partial\":"}],"usage":{"input_tokens":12,"output_tokens":16384}}),
+        ),
+        (
+            RunnerId::GoogleApi,
+            json!({"modelVersion":"actual-google","candidates":[{"finishReason":"MAX_TOKENS","content":{"parts":[{"thought":true,"text":"private reasoning"}]}}],"usageMetadata":{"promptTokenCount":12,"thoughtsTokenCount":16384}}),
+        ),
+    ] {
+        let error = api::parse(&request(id, "Return JSON"), response)
+            .err()
+            .unwrap();
+        assert!(error.to_string().contains("output limit"));
+        assert!(!error.to_string().contains("private reasoning"));
+        let GenError::ProviderResponse { model, usage, .. } = error else {
+            panic!("missing response metadata")
+        };
+        assert!(model.starts_with("actual"));
+        assert_eq!(usage.output_tokens, 16384);
+        assert_eq!(usage.input_tokens, 12);
+    }
+}
+
+#[tokio::test]
+async fn unusable_provider_response_still_accounts_actual_model_tokens_and_cost() {
+    let mut runner = fixture();
+    let (endpoint, server) = server(vec![
+        json!({"model":"actual-reasoner","choices":[{"finish_reason":"length","message":{"content":null,"reasoning":"private reasoning"}}],"usage":{"prompt_tokens":12,"completion_tokens":2048,"cost":0.025}}),
+    ]);
+    runner.test_deepseek = Some((endpoint, "fixture-not-a-secret".into()));
+    let error = runner
+        .run(&request(RunnerId::DeepseekApi, "Return JSON"), None)
+        .await
+        .err()
+        .unwrap();
+    assert!(matches!(error, GenError::ProviderResponse { .. }));
+    server.join().unwrap();
+    let calls = store::recent(runner.database.as_ref().unwrap()).unwrap();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].model, "actual-reasoner");
+    assert_eq!(calls[0].status, "failed");
+    assert_eq!(calls[0].error_kind.as_deref(), Some("invalid-response"));
+    assert_eq!(calls[0].output_tokens, Some(2048));
+    assert_eq!(calls[0].cost_usd, Some(0.025));
 }

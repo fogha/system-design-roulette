@@ -31,6 +31,9 @@ pub struct AppState {
     pub frontend_ready: AtomicBool,
     /// Background generation worker wakeup.
     pub gen_notify: tokio::sync::Notify,
+    /// Only one class Start request may prepare work at a time. A cancelled or
+    /// failed request releases the guard; it never leaves a persisted blocker.
+    pub class_start_gate: tokio::sync::Mutex<()>,
     /// Session-only, course-grounded chat threads keyed by owner key
     /// ("course:{id}" or "classroom:{id}"). Never written to the database —
     /// cleared on completion, skip, and implicitly on every app restart

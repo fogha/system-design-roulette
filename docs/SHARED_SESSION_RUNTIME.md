@@ -8,7 +8,7 @@ A session receives a stable `study-…` ID before provider work begins. A caller
 
 Class sessions reference the exact accepted path and curriculum snapshot. Planning snapshots the current tutor, focus preference, goal and pace alongside the subject adapter's selected lesson/unit, reason, prerequisite advice and stage sequence. Revising the path or tutor does not rewrite existing sessions. Planning against a stale path or curriculum fails before new work is created.
 
-The unassigned daily routine has an explicit compatibility owner and a service date in its provenance. It does not create a class or infer a permanent subject assignment. Its date is not session identity. Legacy import and routine-assignment UI are still pending.
+Earlier daily study has an explicit compatibility owner and a service date in its provenance. It does not create a class or infer a permanent subject assignment. Its date is not session identity. The daily routine has since been retired: preserve its history and resumable work through import/recovery, without creating new daily appointments or an assignment UI.
 
 ## Lifecycle and preparation
 
@@ -73,7 +73,7 @@ Still required: migrate primary state and content into `study_sessions` and
 `lesson_versions`, bind the preparation worker and assessment ownership to that
 runtime, cut over due/consumed/history projections together, and support legacy
 assignment and multiple voluntary sessions without using a date as identity.
-# Primary import preflight
+## Primary import preflight
 
 `storage/primary_import.rs` now inspects schema-v7 primary learning records in one
 read-only SQLite snapshot. It validates the frozen migration ledger and identity

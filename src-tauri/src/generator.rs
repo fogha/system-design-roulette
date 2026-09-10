@@ -12,6 +12,12 @@ pub enum GenError {
     BadExit(i32, String),
     #[error("could not parse agent output: {0}")]
     Parse(String),
+    #[error("provider returned an unusable response ({model}): {reason}")]
+    ProviderResponse {
+        model: String,
+        reason: String,
+        usage: Box<crate::agents::Usage>,
+    },
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
     #[error("provider API error: {0}")]
@@ -88,29 +94,12 @@ impl CourseQualityScores {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct CourseEditorialReview {
     scores: CourseQualityScores,
-    /// Models express "nothing removed" as `""`, `null`, or `[]` about equally
-    /// often, and the editor's bookkeeping is not worth failing a course over.
-    #[serde(default, deserialize_with = "string_or_list")]
-    unsupported_claims_removed: Vec<String>,
+    /// The prompt permits free-form editorial notes, including named claims and
+    /// reasons in objects. Preserve that metadata without treating its shape as
+    /// a lesson failure. Scores and the revised course remain strictly typed.
+    #[serde(default)]
+    unsupported_claims_removed: serde_json::Value,
     revised_course: GeneratedCourse,
-}
-
-fn string_or_list<'de, D>(deserializer: D) -> std::result::Result<Vec<String>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum Either {
-        One(String),
-        Many(Vec<String>),
-    }
-    Ok(match Option::<Either>::deserialize(deserializer)? {
-        None => Vec::new(),
-        Some(Either::One(value)) if value.trim().is_empty() => Vec::new(),
-        Some(Either::One(value)) => vec![value],
-        Some(Either::Many(values)) => values,
-    })
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1461,7 +1450,9 @@ impl Generator {
                 &agent,
                 &custom_bin,
                 &prompt,
-                true,
+                // Research was already retrieved by the app. The writing turn
+                // must not start a second, unbounded CLI research workflow.
+                false,
                 Duration::from_secs(720),
                 &model,
             )
@@ -1518,7 +1509,7 @@ impl Generator {
                 &profile.agent,
                 &profile.custom_bin,
                 &prompt,
-                true,
+                false,
                 Duration::from_secs(720),
                 &profile.model,
             )
@@ -2018,13 +2009,13 @@ CURATED_LESSON:
             Ok(parsed) => parsed,
             Err(parse_error) => {
                 self.log(format!(
-                    "{agent} returned malformed JSON; requesting one same-provider repair"
+                    "{agent} returned JSON that did not match the requested structure; requesting one same-provider repair"
                 ));
-                self.repair_json_for::<T>(agent, custom_bin, &raw, model)
+                self.repair_json_for::<T>(agent, custom_bin, &raw, model, prompt)
                     .await
                     .map_err(|repair_error| {
                         GenError::Parse(format!(
-                            "configured provider returned malformed JSON ({parse_error}); \
+                            "configured provider returned unusable JSON ({parse_error}); \
                              its same-provider repair pass also failed ({repair_error})"
                         ))
                     })?
@@ -2078,7 +2069,7 @@ CURATED_LESSON:
         let parsed = match parse_json_payload::<T>(&result.text) {
             Ok(parsed) => parsed,
             Err(_) => {
-                self.repair_json_for(actual, custom_bin, &result.text, &result.model)
+                self.repair_json_for(actual, custom_bin, &result.text, &result.model, prompt)
                     .await?
             }
         };
@@ -2156,6 +2147,12 @@ CURATED_LESSON:
             custom_command: call.custom_bin.into(),
         };
         let mut request = crate::agents::RunRequest::new(route, prompt);
+        if matches!(
+            self.purpose.as_str(),
+            "lesson" | "quality-review" | "json-repair"
+        ) {
+            request.system = Some("You are writing teaching material for an application. Return only the requested text or JSON. Use the source excerpts supplied in the request; qualify claims they do not support. Describe experiments and exercises for the learner to perform, but do not execute them, create files, delegate tasks, or start another research workflow.".into());
+        }
         request.json = matches!(call.wire, Wire::Json);
         request.allow_web = call.web_tools;
         request.timeout = call.timeout;
@@ -2182,15 +2179,24 @@ CURATED_LESSON:
         custom_bin: &str,
         raw: &str,
         model: &str,
+        original_request: &str,
     ) -> Result<T> {
         let scoped = self.scoped("json-repair");
-        let truncated: String = raw.chars().take(60_000).collect();
+        if raw.chars().count() > 240_000 {
+            return Err(GenError::Parse("The response is too large to repair without losing content. Choose a model that follows the requested output structure.".into()));
+        }
+        let failure = parse_json_payload::<T>(raw)
+            .err()
+            .map(|e| e.to_string())
+            .unwrap_or_default();
         let prompt = format!(
-            "The following response was supposed to be one RFC 8259 JSON object but is malformed. \
-             Repair JSON syntax only. Preserve every field and all substantive content exactly: do not summarize, \
-             omit, replace, or invent lesson content. Correctly escape quotation marks, backslashes, control \
-             characters, and newlines inside strings. Output only the corrected bare JSON object with no markdown \
-             fence or commentary.\n\nMALFORMED_RESPONSE:\n{truncated}"
+            "Repair the response so it is valid JSON and matches the field names, types and \
+             nesting required by the original request. The validation error is: {failure}. \
+             Preserve valid lesson content, source citations, answers and the requested subject. \
+             Correct malformed fields using the original contract and the supplied response; \
+             do not summarize the lesson or replace it with another topic. Return ONLY the \
+             complete corrected JSON, without markdown fences or commentary.\n\n\
+             ORIGINAL_REQUEST:\n{original_request}\n\nMALFORMED_RESPONSE:\n{raw}"
         );
         let out = scoped
             .run_primary_for(
@@ -2531,44 +2537,36 @@ mod quality_gate_tests {
     }
 
     #[test]
-    fn editor_bookkeeping_accepts_a_string_a_list_or_nothing() {
-        let parse = |json: &str| {
-            serde_json::from_str::<super::CourseEditorialReview>(json)
-                .map(|review| review.unsupported_claims_removed)
-        };
-        let scores = r#""scores":{"coverage_depth":5,"mechanism_depth":5,"specificity":5,
-            "production_transfer":5,"dossier_adherence":5,"exercise_alignment":5,
-            "source_discipline":5}"#;
-        let course = serde_json::to_string(&GeneratedCourse {
+    fn editor_notes_preserve_structured_claims_without_relaxing_quality_scores() {
+        let course = GeneratedCourse {
             title: "A reviewed course".into(),
             markdown: complete_course_markdown(),
             resources: Vec::new(),
             key_takeaways: Vec::new(),
             exit_questions: Vec::new(),
             exercise: None,
-        })
-        .expect("serialize course");
-
-        assert_eq!(
-            parse(&format!(
-                "{{{scores},\"unsupported_claims_removed\":\"\",\"revised_course\":{course}}}"
-            ))
-            .expect("empty string parses"),
-            Vec::<String>::new()
-        );
-        assert_eq!(
-            parse(&format!(
-                "{{{scores},\"unsupported_claims_removed\":\"dropped one claim\",\
-                 \"revised_course\":{course}}}"
-            ))
-            .expect("single string parses"),
-            vec!["dropped one claim".to_string()]
-        );
-        assert_eq!(
-            parse(&format!("{{{scores},\"revised_course\":{course}}}"))
-                .expect("a missing field parses"),
-            Vec::<String>::new()
-        );
+        };
+        for notes in [
+            serde_json::Value::Null,
+            serde_json::json!(""),
+            serde_json::json!("qualified one claim"),
+            serde_json::json!([]),
+            serde_json::json!([{"claim":"Version-specific behavior","reason":"Not covered by the supplied source"}]),
+            serde_json::json!({"removed":[],"qualified":["Availability depends on the installed version"]}),
+        ] {
+            let mut value = serde_json::json!({
+                "scores":{"coverage_depth":5,"mechanism_depth":5,"specificity":5,"production_transfer":5,"dossier_adherence":5,"exercise_alignment":5,"source_discipline":5},
+                "unsupported_claims_removed":notes,"revised_course":course
+            });
+            let review: super::CourseEditorialReview =
+                serde_json::from_value(value.clone()).unwrap();
+            assert_eq!(review.unsupported_claims_removed, notes);
+            assert_eq!(review.revised_course.markdown, course.markdown);
+            review.scores.validate().unwrap();
+            value["scores"]["source_discipline"] = serde_json::json!(2);
+            let weak: super::CourseEditorialReview = serde_json::from_value(value).unwrap();
+            assert!(weak.scores.validate().is_err());
+        }
     }
 
     #[test]
@@ -2738,6 +2736,47 @@ esac
         assert_eq!(value["course"], "preserved");
         assert_eq!(source, "custom");
         let _ = std::fs::remove_file(script);
+    }
+
+    #[tokio::test]
+    async fn schema_repair_receives_the_contract_error_and_complete_long_response() {
+        #[derive(serde::Deserialize)]
+        struct Repaired {
+            exit_questions: Vec<ExitCheck>,
+            markdown: String,
+        }
+        let script = std::env::temp_dir().join(format!(
+            "principia-schema-repair-{:032x}.py",
+            rand::random::<u128>()
+        ));
+        std::fs::write(&script, r#"#!/usr/bin/env python3
+import json,sys
+prompt=sys.argv[-1]
+if 'MALFORMED_RESPONSE:' in prompt:
+    assert 'ORIGINAL_REQUEST:' in prompt
+    assert 'exit_questions must contain full question objects' in prompt
+    assert 'expected struct ExitCheck' in prompt
+    assert 'END_OF_LESSON' in prompt
+    print(json.dumps({'exit_questions':[{'prompt':'Which boundary applies?','choices':['A','B','C','D'],'correct_answer':'A','explanation':'The file mode supplies this constraint.','section':'Core mechanics','learning_objective':'Apply file permissions'}],'markdown':'END_OF_LESSON'}))
+else:
+    print(json.dumps({'exit_questions':['exercise'],'markdown':'x'*65000+' END_OF_LESSON'}))
+"#).unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let (value, source) = test_generator()
+            .run_exact_for::<Repaired>(
+                "custom",
+                script.to_str().unwrap(),
+                "exit_questions must contain full question objects, plus markdown",
+                false,
+                Duration::from_secs(5),
+                "same-model",
+            )
+            .await
+            .unwrap();
+        assert_eq!(source, "custom");
+        assert_eq!(value.exit_questions[0].correct_answer, "A");
+        assert_eq!(value.markdown, "END_OF_LESSON");
+        std::fs::remove_file(script).unwrap();
     }
 
     #[tokio::test]

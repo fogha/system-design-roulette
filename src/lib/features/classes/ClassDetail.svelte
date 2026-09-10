@@ -15,6 +15,7 @@
   let { program, initialTab = 'overview', ontabchange }: { program: ClassroomProgramView; initialTab?: ClassTab; ontabchange?: (tab: ClassTab) => void } = $props();
   const uid = $props.id();
   const course = $derived(courseDefinition(program.subject_id)!);
+  const preparing = $derived(app.preparingClass !== null);
   const active = $derived(app.state?.active_classroom_sessions.find(s => s.subject_id === program.subject_id));
   const slots = $derived(app.state?.classroom_slots.filter(s => s.subject_id === program.subject_id) ?? []);
   let tab = $state<ClassTab>(untrack(() => initialTab));
@@ -57,7 +58,7 @@
 <article class="class-detail" aria-label={`${program.label} controls`}>
   <header class="class-header">
     <div class="identity"><CourseGlyph courseId={program.subject_id} size={46} /><div><div class="eyebrow mono">{program.kind === 'language' ? 'LANGUAGE' : 'ENGINEERING'} / {program.short_code}<span class:enabled={program.enabled} class="status">{program.completed ? 'Completed' : program.enabled ? 'Active' : 'Inactive'}</span></div><h2>{program.label}</h2><p>{program.native_label}</p></div></div>
-    <div class="header-actions"><button class="ghost mono-ghost" onclick={toggle} disabled={busy || opening}>{busy ? 'Saving…' : program.enabled ? 'Pause class' : slots.some(slot => slot.enabled) ? 'Activate class' : 'Set study times'}</button><button class="cta mono-cta" disabled={(!program.enabled && !active) || opening} onclick={() => open()}><Play size={13} />{opening ? 'Opening…' : active ? 'Resume' : program.completed ? 'Revisit' : 'Learn now'}</button></div>
+    <div class="header-actions"><button class="ghost mono-ghost" onclick={toggle} disabled={busy || opening || preparing}>{busy ? 'Saving…' : program.enabled ? 'Pause class' : slots.some(slot => slot.enabled) ? 'Activate class' : 'Set study times'}</button><button class="cta mono-cta" disabled={(!program.enabled && !active) || opening || preparing} onclick={() => open()}><Play size={13} />{opening ? 'Opening…' : active ? 'Resume' : program.completed ? 'Revisit' : 'Learn now'}</button></div>
   </header>
   {#if error}<p class="banner error" role="alert">{error}</p>{/if}
   <div class="tabs" role="tablist" aria-label={`${program.label} sections`}>
@@ -74,7 +75,7 @@
             {#if active}<p class="notice">Saved session: <strong>{active.title}</strong>. Resume from the class header.</p>{:else if !program.enabled}<p class="notice">Set your starting point and add a study time, then activate this class when you’re ready.</p>{/if}
           </div>
         {:else if item.id === 'settings'}<ClassSettings {program} />
-        {:else if item.id === 'schedule'}<ClassSchedule {program} {opening} onstart={open} />
+        {:else if item.id === 'schedule'}<ClassSchedule {program} opening={opening || preparing} onstart={open} />
         {:else if item.id === 'entry'}
           {#if pathLoading}<p class="loading" role="status">Loading your starting point…</p>{:else if pathError}<p class="error" role="alert">{pathError}</p><button class="ghost mono-ghost" onclick={loadPath}>Retry</button>{:else if pathLoaded}
             {#if path && !editingPath}<PathPreview embedded path={path.recommendation} acceptedRevision={path.revision} onclose={() => select('overview')} onfoundations={() => editingPath = true} />{:else}<EnrollmentSetup embedded courseId={program.subject_id} onclose={setupClosed} />{/if}

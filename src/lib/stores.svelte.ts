@@ -81,6 +81,7 @@ class AppStore {
   }
   genStatus = $state<string>('');
   genLog = $state<string[]>([]);
+  preparingClass = $state<{ subjectId: ClassroomSubjectId; label: string; agent: string; model: string; startedAt: number } | null>(null);
   timerRemaining = $state<number>(-1);
   error = $state<string>('');
   languageLesson = $state<LanguageLessonView | null>(null);
@@ -135,6 +136,11 @@ class AppStore {
   }
 
   async startClass(subjectId: ClassroomSubjectId, slotId?: number | null, revisit = false) {
+    if (this.preparingClass) return;
+    const program = this.state?.classroom_programs.find(p => p.subject_id === subjectId);
+    this.preparingClass = { subjectId, label: program?.label ?? subjectId, agent: program?.agent ?? '', model: program?.model ?? '', startedAt: Date.now() };
+    this.error = '';
+    this.genLog = [];
     try {
       const session = await api.startClassroomSession(subjectId, slotId, revisit);
       if (session.kind === 'language') {
@@ -146,6 +152,8 @@ class AppStore {
       }
     } catch (e) {
       this.error = String(e);
+    } finally {
+      this.preparingClass = null;
     }
   }
 
