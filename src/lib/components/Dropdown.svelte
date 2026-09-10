@@ -94,6 +94,13 @@
     open = true;
     void highlight(index < 0 ? enabled[0] : index);
   }
+  function focusTrigger(event: PointerEvent) {
+    if (unavailable || event.button !== 0) return;
+    // WebKit can blur a focused button on pointer press, before click runs.
+    // Keep focus here so blur cannot close the menu and make click reopen it.
+    event.preventDefault();
+    trigger.focus({ preventScroll: true });
+  }
   function commit(index: number) {
     const option = options[index];
     if (!option || option.disabled || unavailable) return;
@@ -142,6 +149,7 @@
   <button bind:this={trigger} id={`${id}-trigger`} type="button" class="dropdown-trigger" class:open disabled={unavailable}
     role="combobox" aria-haspopup="listbox" aria-expanded={open} aria-controls={open ? `${id}-list` : undefined}
     aria-labelledby={`${id}-label ${id}-value`} aria-activedescendant={open && active >= 0 ? `${id}-option-${active}` : undefined}
+    onpointerdown={focusTrigger}
     onclick={() => { typed = ''; if (open) open = false; else expand(); }} onkeydown={keydown} onblur={() => (open = false)}>
     <span id={`${id}-value`} class:placeholder={!selected}>{selected?.label ?? placeholder}</span><ChevronDown size={14} />
   </button>
