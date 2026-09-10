@@ -239,5 +239,12 @@ Language lesson on the shared runtime (same profile, 2026-09-10): German gained 
 published the curated A1 seed (`curated` provenance) into an active session and
 rendered the mission, dialogue player and five checks. Two answers saved at
 revision 2; the session stayed active and resumable after leaving the screen.
-Submission of a language check was verified by `tests/language_runtime.rs`, not
-natively, in this pass (screenshot 33).
+After relaunch and Resume, focusing a visible radio by accessibility and using
+Tab/Space selected the remaining three answers (revision 5); a German writing
+response was typed and CHECK ANSWERS AND RECORD PRACTICE (pressed through the
+accessibility action) completed the session at revision 7: `study_results`
+held a 0.38 result with `passed` false and current level A1, the checkpoint kept
+the writing response, `language_unit_progress` gained one encounter without pass
+credit, `language_skill_scores` recorded listening, reading,
+vocabulary/pragmatics and writing, and a second assessment submission existed
+(screenshots 33, 35, 36).
