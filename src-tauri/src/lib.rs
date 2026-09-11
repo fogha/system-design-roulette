@@ -13,6 +13,7 @@ pub mod generator;
 pub mod keychain;
 pub mod kiosk;
 pub mod language;
+pub mod lesson_shape;
 pub mod mastery;
 pub mod progress;
 pub mod readiness;

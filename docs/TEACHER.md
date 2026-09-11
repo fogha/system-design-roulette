@@ -64,10 +64,19 @@ content substitution: the configured provider must return a lesson with five
 validated checks and a structured exercise. Malformed JSON or a missed quality
 gate gets one correction pass through that same provider and model; if the
 corrected lesson still fails, the real error is shown. Engineering courses
-target 3,500–4,500 words and cannot pass below 3,200; per-section depth floors
-prevent a long but padded section from disguising thin mechanisms, production
-transfer, failure analysis, observability, or practice. The editorial rubric
-scores coverage depth separately from mechanism depth and specificity.
+are written in point form to be read in about fourteen minutes of a
+thirty-minute session (the rest is practice and the check): they target
+1,500–2,100 words, cannot pass below 1,200 or above 2,600, and scale to one and
+a half times that for an hour. Per-section floors prevent a long but padded
+section from disguising thin mechanisms, production transfer, failure
+analysis, observability, or practice. Every section opens with an italic
+reading hint (`*~2 min · what to look for*`), the points that matter are
+labelled callouts (`> **Key idea:**`, `> **Watch out:**`, `> **Try it:**`,
+`> **Example:**`, `> **Decision:**`), and at least two mermaid diagrams picture
+the mental model and the production scenario; the gate checks all three and a
+lesson that overruns is condensed rather than expanded. The editorial rubric
+scores coverage depth separately from mechanism depth and specificity, and
+depth means precision, not length.
 
 German and Italian deliberately do not reuse the frontend-engineering dossier.
 `language.rs` owns their CEFR evidence model with seven strands: listening,

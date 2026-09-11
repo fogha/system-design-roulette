@@ -710,6 +710,7 @@ pub fn view(conn: &Connection, id: &SessionId) -> Result<Option<EngineeringLesso
         .map(|result| outcome_result(&result.outcome))
         .transpose()?
         .flatten();
+    let minutes = session_minutes(conn, id, program.session_minutes);
     Ok(Some(EngineeringLessonView {
         session_id: id.0.clone(),
         runtime: "study".into(),
@@ -756,7 +757,8 @@ pub fn view(conn: &Connection, id: &SessionId) -> Result<Option<EngineeringLesso
         agent_used: stored.source,
         prompt_profile: program.prompt_profile,
         prompt_version: program.prompt_version,
-        estimated_minutes: session_minutes(conn, id, program.session_minutes),
+        estimated_minutes: minutes,
+        plan: crate::generator::LessonBudget::for_minutes(minutes).plan(),
         status: legacy_status(session.status).into(),
     }))
 }

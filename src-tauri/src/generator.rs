@@ -196,6 +196,15 @@ fn course_audit_schema() -> serde_json::Value {
     object_schema(serde_json::json!({"scores":scores,"issues":{"type":"array","items":issue}}))
 }
 
+/// One string per listed section title, nothing else.
+fn section_hints_schema(titles: &[&str]) -> serde_json::Value {
+    let mut properties = serde_json::Map::new();
+    for title in titles {
+        properties.insert((*title).to_string(), serde_json::json!({"type":"string"}));
+    }
+    object_schema(serde_json::Value::Object(properties))
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Exercise {
     pub title: String,
@@ -397,18 +406,26 @@ pub fn validate_generated_quiz(questions: &[GeneratedQuestion]) -> std::result::
     Ok(())
 }
 
-/// Deterministic quality floor for generated courses. The prompt targets
-/// 3,500-4,500 words; this lower bound allows natural variation without
-/// accepting the half-length lessons that previously felt thin.
-const MIN_COURSE_WORDS: usize = 3_200;
+/// Deterministic length window for a base lesson. The prompt targets
+/// 1,500-2,100 words of point-form Markdown, read in about fourteen minutes
+/// of a thirty-minute session; the floor allows natural variation without
+/// accepting a lesson that skips its mechanism, and the ceiling rejects the
+/// prose-heavy drafts that a learner could not finish inside the session.
+const MIN_COURSE_WORDS: usize = 1_200;
+const MAX_COURSE_WORDS: usize = 2_600;
+/// A picture of the mental model and one of the production scenario, at
+/// least: a lesson that is all prose is harder to take in than one that shows
+/// its shape.
+const MIN_COURSE_DIAGRAMS: usize = 2;
 
 /// How much lesson a session's minutes deserve.
 ///
-/// Thirty minutes is the base lesson. Up to an hour the lesson goes deeper: a
-/// larger word budget, so the tutor adds a second worked trace and a fuller
-/// practical rather than compressing. Past an hour more words would only be
-/// padding, so the scale stops at one and a half times the base and the
-/// remaining time is spent on further topics instead.
+/// Thirty minutes is the base lesson: fourteen to read, ten to practise, six
+/// to check. Up to an hour the lesson goes deeper: a larger word budget, so
+/// the tutor adds a second worked trace and a fuller practical rather than
+/// compressing. Past an hour more words would only be padding, so the scale
+/// stops at one and a half times the base and the remaining time is spent on
+/// further topics instead.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LessonBudget {
     /// The session's real length, which the lesson reports as its estimate.
@@ -440,20 +457,40 @@ impl LessonBudget {
     pub fn section_minimum(&self, index: usize) -> usize {
         self.scaled(MIN_COURSE_SECTION_WORDS[index])
     }
-    /// The range the prompt asks for, matching the base prompt's 3,500-4,500.
+    /// The most words the gate accepts: past this a learner cannot finish
+    /// the reading inside the session.
+    pub fn max_words(&self) -> usize {
+        self.scaled(MAX_COURSE_WORDS)
+    }
+    /// The range the prompt asks for, matching the base prompt's 1,500-2,100.
     pub fn target_words(&self) -> (usize, usize) {
-        (self.scaled(3_500), self.scaled(4_500))
+        (self.scaled(1_500), self.scaled(2_100))
+    }
+    /// The budgeted depth in minutes: the session's length, held to the
+    /// thirty-to-sixty window the word figures are scaled over.
+    pub fn depth_minutes(&self) -> i64 {
+        self.minutes
+            .clamp(Self::BASE_MINUTES, Self::DEEPEST_MINUTES)
+    }
+    /// How the session's minutes divide between reading, practice and check.
+    pub fn plan(&self) -> crate::lesson_shape::SessionPlan {
+        crate::lesson_shape::SessionPlan::for_depth(self.depth_minutes())
     }
     /// Stated last in the prompt, so it overrides the base figures above it.
     pub fn prompt_line(&self) -> String {
         let (low, high) = self.target_words();
-        let depth = self
-            .minutes
-            .clamp(Self::BASE_MINUTES, Self::DEEPEST_MINUTES);
+        let depth = self.depth_minutes();
+        let plan = self.plan();
         format!(
-            "LENGTH FOR THIS SESSION (this overrides the general figures above): the learner has {depth} minutes for this lesson. Write {low}-{high} words of markdown; a deterministic gate rejects anything below {} words and scales every section minimum by {}%. Reach the length through substance — a further worked trace, a fuller practical, a production decision with its evidence — never through restatement.",
+            "LENGTH AND PACE FOR THIS SESSION (this overrides the general figures above): the learner has {depth} minutes in total — about {} to read, {} to practise and {} to answer the check. Write {low}-{high} words of point-form Markdown; a deterministic gate rejects anything below {} words or above {} words and scales every section minimum by {}%. The reading hints under the headings must add up to about {} minutes, and the practical exercise must fit inside {} minutes. Reach the length through substance — a further worked trace, a fuller practical, a production decision with its evidence — never through restatement, and never past the ceiling.",
+            plan.learn_minutes,
+            plan.practice_minutes,
+            plan.check_minutes,
             self.min_words(),
-            self.scale_percent
+            self.max_words(),
+            self.scale_percent,
+            plan.learn_minutes,
+            plan.practice_minutes,
         )
     }
 }
@@ -491,10 +528,11 @@ const MIN_GROUNDED_SOURCES: usize = 2;
 /// behaving correctly, not cutting corners.
 const MIN_INLINE_CITATIONS: usize = 2;
 
-/// A total word count alone can be padded. These floors ensure the additional
-/// material is distributed across explanation, mechanism, production transfer,
-/// failure analysis, and deliberate practice.
-const MIN_COURSE_SECTION_WORDS: [usize; 10] = [120, 220, 600, 220, 240, 400, 320, 260, 280, 80];
+/// A total word count alone can be padded. These floors ensure the material
+/// is distributed across explanation, mechanism, production transfer, failure
+/// analysis and deliberate practice. They are floors for point form: a
+/// section that meets one in bullets has said what it must.
+const MIN_COURSE_SECTION_WORDS: [usize; 10] = [50, 90, 240, 90, 100, 160, 130, 100, 80, 40];
 
 fn course_section_word_counts(markdown: &str) -> std::result::Result<[usize; 10], String> {
     let mut counts = [0; 10];
@@ -785,8 +823,9 @@ fn is_depth_failure(reason: &str) -> bool {
 fn course_depth_report(markdown: &str, budget: LessonBudget) -> String {
     let total = markdown.split_whitespace().count();
     let mut lines = vec![format!(
-        "- whole course: {total} words, needs at least {}",
-        budget.min_words()
+        "- whole course: {total} words, needs at least {} and at most {}",
+        budget.min_words(),
+        budget.max_words()
     )];
     match course_section_word_counts(markdown) {
         Ok(counts) => {
@@ -857,8 +896,44 @@ fn validate_course_body(
     if !simple_section.contains("analogy breaks") {
         return Err("simple explanation does not state where its analogy breaks".into());
     }
+    let max_words = budget.max_words();
+    if word_count > max_words {
+        return Err(format!(
+            "course is too long: {word_count} words; at most {max_words} fit the reading time of a {}-minute session — condense to point form and cut restatement",
+            budget.depth_minutes()
+        ));
+    }
+    let (_, sections) = split_course_sections(&course.markdown);
+    let missing =
+        crate::lesson_shape::sections_without_hints(&REQUIRED_COURSE_SECTION_TITLES, &sections);
+    if !missing.is_empty() {
+        return Err(format!(
+            "course sections without a reading hint line: {}; each section must open with a line like `*~2 min · what to look for and whether to skim*`",
+            missing.join(", ")
+        ));
+    }
+    let diagrams = crate::lesson_shape::diagram_count(&course.markdown);
+    if diagrams < MIN_COURSE_DIAGRAMS {
+        return Err(format!(
+            "course has {diagrams} mermaid diagram(s); at least {MIN_COURSE_DIAGRAMS} are required — picture the mental model and the production scenario"
+        ));
+    }
     Ok(())
 }
+
+/// Whether a gate failure is about a lesson too long for its session.
+fn is_length_failure(reason: &str) -> bool {
+    reason.contains("too long")
+}
+
+/// Whether a gate failure is only about missing reading hints.
+fn is_hint_failure(reason: &str) -> bool {
+    reason.contains("without a reading hint")
+}
+
+/// The gate-relevant conventions, restated for every correction prompt so a
+/// rewrite aimed at one defect does not undo another.
+const LESSON_SHAPE_CONTRACT: &str = "SHAPE CONTRACT (a deterministic gate checks all of it):\n- Point form: every section opens with a one-line lede, then bullets of one idea each (at most about 25 words a bullet, at most six bullets a list); no paragraph over three sentences.\n- Reading hint: the first line under every `##` heading is an italic hint like `*~2 min · What to look for, and whether to skim.*` — the time a careful reader needs and what the section is for.\n- Callouts: use `> **Key idea:**`, `> **Watch out:**`, `> **Try it:**`, `> **Example:**` and `> **Decision:**` blockquotes for the points that matter most; at least one Key idea in each of Core mechanics, Mental model and Production architecture lens.\n- Diagrams: at least two fenced ```mermaid blocks (flowchart, sequenceDiagram or stateDiagram-v2 only; quoted labels; under twelve nodes), each followed by a one-sentence caption.\n- The lesson stays inside its word window; the analogy sentence beginning `Where the analogy breaks:` stays in The simple version.";
 
 fn validate_course_metadata(course: &GeneratedCourse) -> std::result::Result<(), String> {
     if course.title.trim().is_empty() {
@@ -907,6 +982,37 @@ fn validate_course_metadata(course: &GeneratedCourse) -> std::result::Result<(),
         return Err("resource URL must be absolute HTTP(S)".into());
     }
     Ok(())
+}
+
+/// A lesson body in the shape the gate expects: every section opens with a
+/// reading hint, the simple version names its analogy's limit, and the
+/// mental model and production sections each draw a diagram.
+#[cfg(test)]
+pub(crate) fn fixture_course_markdown(analogy_limit: &str) -> String {
+    REQUIRED_COURSE_SECTION_TITLES
+        .iter()
+        .enumerate()
+        .map(|(index, title)| {
+            let foundation = if *title == "The simple version" {
+                format!("Where the analogy breaks: {analogy_limit} ")
+            } else {
+                String::new()
+            };
+            let diagram = match *title {
+                "Mental model" => "```mermaid\nflowchart LR\n  A[\"call\"] --> B[\"queue\"]\n```\n\nThe call waits in the queue.\n\n",
+                "Production architecture lens" => "```mermaid\nsequenceDiagram\n  Client->>Service: request\n```\n\nOne request crosses the boundary.\n\n",
+                _ => "",
+            };
+            let extra_depth = if *title == "Core mechanics" { 200 } else { 20 };
+            format!(
+                "## {title}\n\n*~1 min · Fixture orientation for {title}.*\n\n{diagram}{foundation}{}",
+                "mechanism evidence decision experiment ".repeat(
+                    (MIN_COURSE_SECTION_WORDS[index] + extra_depth) / 4 + 1
+                )
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n\n")
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1340,9 +1446,15 @@ impl Generator {
             let markdown = if is_depth_failure(&reason) {
                 self.expand_course_body(&course, agent, custom_bin, model, context, budget)
                     .await?
+            } else if is_length_failure(&reason) {
+                self.condense_course_body(&course, agent, custom_bin, model, context, budget)
+                    .await?
+            } else if is_hint_failure(&reason) {
+                self.write_section_hints(&course, agent, custom_bin, model, context, budget)
+                    .await?
             } else {
                 let prompt = format!(
-                    "Correct only this lesson's Markdown. Return plain Markdown, never JSON.\n\nCOURSE_CONTEXT: {context}\nQUALITY_GATE_FAILURE: {reason}\nREQUIRED_SECTION_ORDER (exact headings, no numbering or subtitles):\n{}\nDEPTH REQUIREMENTS:\n{}\n\nPreserve the topic, worked examples, code, citations and section depth. Use the canonical section order. In The simple version include an explicit sentence beginning `Where the analogy breaks:`. Do not add assessment metadata.\n\nLESSON_BODY:\n{}",
+                    "Correct only this lesson's Markdown. Return plain Markdown, never JSON.\n\nCOURSE_CONTEXT: {context}\nQUALITY_GATE_FAILURE: {reason}\nREQUIRED_SECTION_ORDER (exact headings, no numbering or subtitles):\n{}\nDEPTH REQUIREMENTS:\n{}\n{LESSON_SHAPE_CONTRACT}\n\nPreserve the topic, worked examples, code, citations and section depth. Use the canonical section order. In The simple version include an explicit sentence beginning `Where the analogy breaks:`. Do not add assessment metadata.\n\nLESSON_BODY:\n{}",
                     REQUIRED_COURSE_SECTION_TITLES.map(|title| format!("## {title}")).join("\n"), course_depth_report(&course.markdown, budget), course.markdown
                 );
                 self.run_prose_for(agent, custom_bin, &prompt, Duration::from_secs(720), model)
@@ -1407,7 +1519,9 @@ impl Generator {
                  Rewrite this section so it reaches the required length through substance a reader \
                  could act on: the next step of the mechanism, a worked trace with the observation \
                  it produces, a production decision with its evidence and cost, a failure mode with \
-                 how it is detected, or a measurement with the numbers to expect. Keep every inline \
+                 how it is detected, or a measurement with the numbers to expect. Keep the point-form \
+                 shape: the italic reading-hint line first, then a lede and bullets of one idea each, \
+                 with `> **Key idea:**`-style callouts and any mermaid diagram kept. Keep every inline \
                  source citation link that is already there and keep the code that earns its place. \
                  Do not restate other sections, do not add a summary, and do not pad — padding is \
                  measured and rejected.{}\n\nDo not output the `## {title}` heading itself and do \
@@ -1421,10 +1535,13 @@ impl Generator {
                 sections[index].trim(),
                 course.markdown
             );
-            let rewritten = extract_single_section(
-                &self
-                    .run_prose_for(agent, custom_bin, &prompt, Duration::from_secs(420), model)
-                    .await?,
+            let rewritten = crate::lesson_shape::keep_hint(
+                &sections[index],
+                &extract_single_section(
+                    &self
+                        .run_prose_for(agent, custom_bin, &prompt, Duration::from_secs(420), model)
+                        .await?,
+                ),
             );
             // A shorter answer than we started with is a regression, not a fix.
             let rewritten_words = rewritten.split_whitespace().count();
@@ -1441,6 +1558,111 @@ impl Generator {
             )));
         }
         self.log(format!("{agent} deepened {deepened} thin section(s)"));
+        Ok(rebuild_course_body(&preamble, &sections))
+    }
+
+    /// Bring a lesson that overran its session back inside its window, whole,
+    /// so the cuts fall where the restatement is rather than section by
+    /// section. Substance stays; the words it is said in go.
+    async fn condense_course_body(
+        &self,
+        course: &GeneratedCourse,
+        agent: &str,
+        custom_bin: &str,
+        model: &str,
+        context: &str,
+        budget: LessonBudget,
+    ) -> Result<String> {
+        let words = course.markdown.split_whitespace().count();
+        let (low, high) = budget.target_words();
+        let plan = budget.plan();
+        let prompt = format!(
+            "Condense this lesson without losing substance. Return plain Markdown, never JSON.\n\n\
+             COURSE_CONTEXT: {context}\nCURRENT LENGTH: {words} words\nREQUIRED LENGTH: between \
+             {low} and {high} words — the learner reads it in about {} minutes of a {}-minute \
+             session, so the ceiling matters as much as the floor.\nSECTION FLOORS:\n{}\n\
+             {LESSON_SHAPE_CONTRACT}\n\nKeep every `##` heading in its order, every section's \
+             opening hint line, every mermaid diagram with its caption, the code that earns its \
+             place and every inline citation link. Turn paragraphs into bullets of one idea each, \
+             delete transitions, restatements and summaries that repeat another section, and cut \
+             worked examples to the step that carries the point. Do not drop a mechanism, a \
+             decision, a failure mode or its evidence — say it in fewer words. Keep the sentence \
+             beginning exactly `Where the analogy breaks:` in The simple version. Do not add \
+             assessment metadata.\n\nLESSON_BODY:\n{}",
+            plan.learn_minutes,
+            budget.depth_minutes(),
+            course_depth_report(&course.markdown, budget),
+            course.markdown
+        );
+        let condensed = self
+            .run_prose_for(agent, custom_bin, &prompt, Duration::from_secs(720), model)
+            .await?;
+        self.log(format!(
+            "{agent} condensed the lesson from {words} to {} words",
+            condensed.split_whitespace().count()
+        ));
+        Ok(condensed)
+    }
+
+    /// Write the reading hints the sections are missing, one structured call,
+    /// and put each under its heading. Nothing else in the lesson changes.
+    async fn write_section_hints(
+        &self,
+        course: &GeneratedCourse,
+        agent: &str,
+        custom_bin: &str,
+        model: &str,
+        context: &str,
+        budget: LessonBudget,
+    ) -> Result<String> {
+        let (preamble, mut sections) = split_course_sections(&course.markdown);
+        let missing =
+            crate::lesson_shape::sections_without_hints(&REQUIRED_COURSE_SECTION_TITLES, &sections);
+        let plan = budget.plan();
+        let mut scoped = self.scoped("section-hints");
+        scoped.output_schema = Some(section_hints_schema(&missing));
+        let prompt = format!(
+            "Write the reading hint for each listed section of this lesson. Return only one JSON \
+             object whose keys are exactly the section titles listed and whose values are the hint \
+             lines.\n\nCOURSE_CONTEXT: {context}\nSECTIONS NEEDING A HINT: {}\n\nA hint line has the \
+             form `*~N min · orientation*`: N is the minutes a careful reader needs for that \
+             section (1 to 4), and the orientation is one sentence saying what to look for and \
+             whether a reader who already knows the idea may skim. The hints of the whole lesson add \
+             up to about {} minutes. Example value: `*~2 min · Read closely: the exercise is built \
+             on this ordering rule.*`\n\nLESSON_BODY:\n{}",
+            missing.join("; "),
+            plan.learn_minutes,
+            course.markdown
+        );
+        let (hints, _) = scoped
+            .run_exact_for::<std::collections::HashMap<String, String>>(
+                agent,
+                custom_bin,
+                &prompt,
+                false,
+                Duration::from_secs(300),
+                model,
+            )
+            .await?;
+        for (index, title) in REQUIRED_COURSE_SECTION_TITLES.iter().enumerate() {
+            if !missing.contains(title) {
+                continue;
+            }
+            let line = hints
+                .get(*title)
+                .map(|hint| hint.trim())
+                .filter(|hint| crate::lesson_shape::parse_hint_line(hint).is_some())
+                .ok_or_else(|| {
+                    GenError::Quality(format!(
+                        "{context}: the provider returned no usable reading hint for {title}"
+                    ))
+                })?;
+            sections[index] = format!("{line}\n\n{}", sections[index].trim_start());
+        }
+        self.log(format!(
+            "{agent} wrote reading hints for {} section(s)",
+            missing.len()
+        ));
         Ok(rebuild_course_body(&preamble, &sections))
     }
 
@@ -1545,7 +1767,7 @@ impl Generator {
                 }
                 let minimum = context.budget.section_minimum(index);
                 let correction = format!(
-                    "Correct only the `{title}` section of this lesson. Return that section's Markdown body only, without its heading, any other section, or JSON. Resolve each listed defect while preserving useful mechanisms, code and citations. Keep at least {minimum} substantive words. Do not rewrite or summarize other sections.\n\nEDITOR_FEEDBACK:\n{}\nCURRICULUM_BRIEF: {brief}\nLEARNER_DOSSIER: {}\nRETRIEVED SOURCE MATERIAL:\n{}\nCURRENT_SECTION:\n{}\nFULL_LESSON_FOR_CONTEXT:\n{}",
+                    "Correct only the `{title}` section of this lesson. Return that section's Markdown body only, without its heading, any other section, or JSON. Resolve each listed defect while preserving useful mechanisms, code and citations. Keep at least {minimum} substantive words and stay in point form: the italic reading-hint line first, then a lede and bullets of one idea each, callouts and any diagram kept. Do not rewrite or summarize other sections.\n\nEDITOR_FEEDBACK:\n{}\nCURRICULUM_BRIEF: {brief}\nLEARNER_DOSSIER: {}\nRETRIEVED SOURCE MATERIAL:\n{}\nCURRENT_SECTION:\n{}\nFULL_LESSON_FOR_CONTEXT:\n{}",
                     issues.join("\n"), context.dossier, crate::research::format_source_material(sources), sections[index], course.markdown,
                 );
                 let replacement = self
@@ -1563,7 +1785,7 @@ impl Generator {
                         "The editor returned no corrected text for {title}."
                     )));
                 }
-                sections[index] = replacement;
+                sections[index] = crate::lesson_shape::keep_hint(&sections[index], &replacement);
                 changed_body = true;
             }
             if changed_body {
@@ -2706,8 +2928,7 @@ mod targeting_tests {
 mod quality_gate_tests {
     use super::{
         normalize_course_headings, validate_generated_course, validate_generated_quiz, Exercise,
-        ExitCheck, GeneratedCourse, GeneratedQuestion, MIN_COURSE_SECTION_WORDS,
-        REQUIRED_COURSE_SECTION_TITLES,
+        ExitCheck, GeneratedCourse, GeneratedQuestion, REQUIRED_COURSE_SECTION_TITLES,
     };
 
     fn exit_check(index: usize) -> ExitCheck {
@@ -2746,25 +2967,9 @@ mod quality_gate_tests {
     }
 
     fn complete_course_markdown() -> String {
-        REQUIRED_COURSE_SECTION_TITLES
-            .iter()
-            .enumerate()
-            .map(|(index, title)| {
-                let foundation = if *title == "The simple version" {
-                    "Where the analogy breaks: the runtime has stricter ordering rules than the physical comparison. "
-                } else {
-                    ""
-                };
-                let extra_depth = if *title == "Core mechanics" { 600 } else { 20 };
-                format!(
-                    "## {title}\n\n{foundation}{}",
-                    "mechanism evidence decision experiment ".repeat(
-                        (MIN_COURSE_SECTION_WORDS[index] + extra_depth) / 4 + 1
-                    )
-                )
-            })
-            .collect::<Vec<_>>()
-            .join("\n\n")
+        super::fixture_course_markdown(
+            "the runtime has stricter ordering rules than the physical comparison.",
+        )
     }
 
     #[test]
@@ -2821,7 +3026,10 @@ mod quality_gate_tests {
         assert_eq!(base, LessonBudget::default());
         assert_eq!(base.scale_percent, 100);
         assert_eq!(base.min_words(), super::MIN_COURSE_WORDS);
-        assert_eq!(base.target_words(), (3_500, 4_500));
+        assert_eq!(base.max_words(), super::MAX_COURSE_WORDS);
+        assert_eq!(base.target_words(), (1_500, 2_100));
+        assert_eq!(base.plan().learn_minutes, 14);
+        assert_eq!(base.plan().practice_minutes, 10);
 
         // Less than the base is still a base lesson: a short slot does not
         // produce a thin one.
@@ -2830,23 +3038,110 @@ mod quality_gate_tests {
 
         let mid = LessonBudget::for_minutes(45);
         assert_eq!(mid.scale_percent, 125);
-        assert_eq!(mid.min_words(), 4_000);
+        assert_eq!(mid.min_words(), 1_500);
 
         let hour = LessonBudget::for_minutes(60);
         assert_eq!(hour.scale_percent, 150);
-        assert_eq!(hour.min_words(), 4_800);
+        assert_eq!(hour.min_words(), 1_800);
+        assert_eq!(hour.max_words(), 3_900);
         assert_eq!(
             hour.section_minimum(2),
-            900,
+            360,
             "core mechanics grows with the rest"
         );
+        assert_eq!(hour.plan().learn_minutes, 28);
 
         // Past an hour the words stop growing; the time goes to more topics.
         let afternoon = LessonBudget::for_minutes(240);
         assert_eq!(afternoon.scale_percent, 150);
         assert_eq!(afternoon.minutes, 240, "the real length is still reported");
         assert!(afternoon.prompt_line().contains("60 minutes"));
-        assert!(hour.prompt_line().contains("4800 words") || hour.prompt_line().contains("4,800"));
+        assert!(
+            hour.prompt_line().contains("1800 words"),
+            "{}",
+            hour.prompt_line()
+        );
+        assert!(hour.prompt_line().contains("above 3900 words"));
+        assert!(base
+            .prompt_line()
+            .contains("about 14 to read, 10 to practise and 6 to answer"));
+    }
+
+    /// The bundled example of the shape the tutor is asked for. If the gate
+    /// ever rejects it, the contract and the example have drifted apart.
+    #[test]
+    fn the_shaped_reference_lesson_passes_the_gate_and_reads_in_fourteen_minutes() {
+        let markdown = include_str!("../seed/lessons/cap-theorem-shaped.md");
+        let course = GeneratedCourse {
+            title: "CAP in practice".into(),
+            markdown: markdown.into(),
+            resources: Vec::new(),
+            key_takeaways: vec!["Decide per route.".into()],
+            exit_questions: (0..5).map(exit_check).collect(),
+            exercise: Some(Exercise {
+                title: "A partition timeline for one route".into(),
+                instructions: "**You will produce:** a partition timeline for one route.\n\n### Steps\n1. Pick the email field or the avatar URL.\n2. Trace one partition through it.\n3. Decide the branch and name the mechanism.\n4. State the number that changes your mind.\n\n### Done when\n- The timeline names the detector and both branches.\n- The policy names a mechanism and an owner.\n- The revisit signal is a measurable number.\n- It reads as one row of the capstone table.".into(),
+                starter_code: None,
+                deliverable: Some("One route's timeline, policy and revisit signal.".into()),
+                hints: vec!["Start from the request that crosses the link.".into()],
+            }),
+            review_notes: Vec::new(),
+        };
+        validate_generated_course(&course).unwrap();
+        let (_, sections) = super::split_course_sections(markdown);
+        assert_eq!(crate::lesson_shape::reading_minutes(&sections), 14);
+        let words = markdown.split_whitespace().count();
+        let (low, high) = super::LessonBudget::default().target_words();
+        assert!((low..=high).contains(&words), "{words} words");
+    }
+
+    #[test]
+    fn the_gate_holds_a_lesson_to_its_session_shape() {
+        let base = |markdown: String| {
+            GeneratedCourse {
+            title: "A shaped course".into(),
+            markdown,
+            resources: Vec::new(),
+            key_takeaways: vec!["Use evidence.".into()],
+            exit_questions: (0..5).map(exit_check).collect(),
+            exercise: Some(Exercise {
+                title: "Build the production slice".into(),
+                instructions: "Implement the smallest useful slice, measure its behavior, test the failure path, document the chosen trade-off, and show how another engineer can run it. "
+                    .repeat(6),
+                starter_code: None,
+                deliverable: Some("A tested artifact plus before-and-after evidence.".into()),
+                hints: vec!["Start at the boundary.".into()],
+            }),
+            review_notes: Vec::new(),
+        }
+        };
+        assert!(validate_generated_course(&base(complete_course_markdown())).is_ok());
+
+        // Past the ceiling the learner cannot finish inside the session.
+        let mut long = complete_course_markdown();
+        long.push_str(&" restatement".repeat(super::MAX_COURSE_WORDS));
+        let error = validate_generated_course(&base(long)).unwrap_err();
+        assert!(
+            error.contains("too long") && error.contains("30-minute"),
+            "{error}"
+        );
+        assert!(super::is_length_failure(&error));
+
+        // Every section opens with a reading hint the reader can render.
+        let unhinted = complete_course_markdown()
+            .replace("*~1 min · Fixture orientation for Mental model.*\n\n", "");
+        let error = validate_generated_course(&base(unhinted)).unwrap_err();
+        assert!(
+            error.contains("without a reading hint line: Mental model"),
+            "{error}"
+        );
+        assert!(super::is_hint_failure(&error));
+
+        // Two diagrams at least: the mental model and the production scenario.
+        let undrawn = complete_course_markdown()
+            .replace("```mermaid\nsequenceDiagram", "```text\nsequenceDiagram");
+        let error = validate_generated_course(&base(undrawn)).unwrap_err();
+        assert!(error.contains("1 mermaid diagram(s)"), "{error}");
     }
 
     #[test]
@@ -3000,7 +3295,7 @@ mod quality_gate_tests {
     #[test]
     fn depth_report_names_the_short_section_and_its_shortfall() {
         let thin = complete_course_markdown().replace(
-            &"mechanism evidence decision experiment ".repeat(200),
+            &"mechanism evidence decision experiment ".repeat(100),
             "one short paragraph. ",
         );
         let report = super::course_depth_report(&thin, super::LessonBudget::default());
@@ -3017,7 +3312,7 @@ mod quality_gate_tests {
 mod generation_policy_tests {
     use super::{
         CourseRequest, Exercise, ExitCheck, GenError, GeneratedCourse, GenerationProfile,
-        Generator, Resource, MIN_COURSE_SECTION_WORDS, REQUIRED_COURSE_SECTION_TITLES,
+        Generator, Resource,
     };
     use std::{
         os::unix::fs::PermissionsExt,
@@ -3038,24 +3333,8 @@ mod generation_policy_tests {
     }
 
     fn corrected_course() -> GeneratedCourse {
-        let markdown = REQUIRED_COURSE_SECTION_TITLES
-            .iter()
-            .enumerate()
-            .map(|(index, title)| {
-                let foundation = if *title == "The simple version" {
-                    "Where the analogy breaks: runtime ordering is stricter than a physical queue. "
-                } else {
-                    ""
-                };
-                let extra_depth = if *title == "Core mechanics" { 600 } else { 20 };
-                format!(
-                    "## {title}\n\n{foundation}{}",
-                    "mechanism evidence decision experiment "
-                        .repeat((MIN_COURSE_SECTION_WORDS[index] + extra_depth) / 4 + 1)
-                )
-            })
-            .collect::<Vec<_>>()
-            .join("\n\n");
+        let markdown =
+            super::fixture_course_markdown("runtime ordering is stricter than a physical queue.");
         GeneratedCourse {
             title: "A corrected course".into(),
             markdown,
@@ -3275,12 +3554,18 @@ print((root/f'response-{index}').read_text(),end='')
     async fn one_short_section_does_not_rewrite_other_valid_sections() {
         let mut course = corrected_course();
         let (preamble, mut sections) = super::split_course_sections(&course.markdown);
-        sections[5] = "production decision evidence ".repeat(124);
+        // Thin, but shaped: the hint and the diagram stay so only depth fails.
+        sections[5] = format!(
+            "*~1 min · Fixture orientation for Production architecture lens.*\n\n```mermaid\nsequenceDiagram\n  Client->>Service: request\n```\n\nOne request crosses the boundary.\n\n{}",
+            "production decision evidence ".repeat(40)
+        );
         let original_sections = sections.clone();
         course.markdown = super::rebuild_course_body(&preamble, &sections);
         assert!(course.markdown.split_whitespace().count() > super::MIN_COURSE_WORDS);
-        let provider =
-            WritingProvider::new(&["ownership boundary observation rollback ".repeat(130)]);
+        let provider = WritingProvider::new(&[format!(
+            "```mermaid\nsequenceDiagram\n  Client->>Service: request\n```\n\nOne request crosses the boundary.\n\n{}",
+            "ownership boundary observation rollback ".repeat(130)
+        )]);
         let repaired = test_generator()
             .ensure_course_quality(
                 course,

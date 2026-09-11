@@ -40,6 +40,7 @@ import type {
   LanguageProgramView,
   LanguageSessionResult,
   PlannedSlot,
+  SessionPlan,
 } from './ipc';
 
 // References and course metadata share the native authoring inputs. Browser
@@ -53,6 +54,17 @@ interface ReferenceLesson {
   questions: { prompt: string; kind: string; choices: string[] | null; correct_answer: string; explanation: string; section: string; learning_objective: string }[];
 }
 const referenceFiles = import.meta.glob<ReferenceLesson>('../../src-tauri/seed/fallback_courses/*.json', { eager: true, import: 'default' });
+// The bundled example of the point-form shape the tutor is asked for; `?shaped`
+// in the preview URL opens it so the reader's decorations can be seen.
+const shapedLessons = import.meta.glob<string>('../../src-tauri/seed/lessons/*.md', { eager: true, query: '?raw', import: 'default' });
+const SHAPED_EXERCISE: NonNullable<EngineeringLessonView['exercise']> = {
+  title: 'A partition timeline for one more route',
+  instructions:
+    '**You will produce:** a partition timeline for one route of the checkout scenario, with its policy defended.\n\n### Steps\n1. Pick either the profile email field or the avatar URL and write its normal-path request in one line.\n2. Cut the replication link mid-request and trace what each region answers, in the sequence-diagram style of the lesson.\n3. Decide the branch for the route, name the mechanism that enforces it and who owns it.\n4. State the measurable signal that would make you switch the branch.\n\n### Done when\n- The timeline names the detector and shows both branches at the cut.\n- The policy names a mechanism and an owning team.\n- The revisit signal is a number you could put on a dashboard.\n- The result reads as one row of the capstone consistency table.',
+  starter_code: null,
+  deliverable: 'One route traced through a partition, with its branch, mechanism, owner and revisit signal, ready to paste into the capstone table.',
+  hints: ['Start from the request that crosses the failed link.', 'Ask what the client sees on each branch; that is the policy made visible.', 'The revisit signal is usually the partition rate or the oversell count.'],
+};
 function referenceFor(focus: FocusArea): ReferenceLesson {
   const slug = courseDefinition(focus)!.reference_lessons[0];
   const lesson = Object.values(referenceFiles).find((lesson) => lesson.slug === slug);
@@ -547,6 +559,7 @@ function mockClassroomProgram(subjectId: ClassroomSubjectId): ClassroomProgramVi
 function mockEngineeringLesson(subjectId: FocusArea): EngineeringLessonView {
   const catalog = CLASSROOM_CATALOG.find((item) => item.id === subjectId)!;
   const reference = referenceFor(subjectId);
+  const shaped = params.has('shaped') ? Object.values(shapedLessons)[0] : undefined;
   const concept = seedConcepts.find((concept) => concept.slug === reference.slug)!;
   return {
     session_id: String(mockEngineeringSessionId),
@@ -559,7 +572,7 @@ function mockEngineeringLesson(subjectId: FocusArea): EngineeringLessonView {
     subject_id: subjectId,
     label: catalog.label,
     short_code: catalog.short,
-    title: reference.title,
+    title: shaped ? 'CAP in practice: choosing partition behaviour, not a permanent label' : reference.title,
     concept_slug: reference.slug,
     concept_title: concept.title,
     category: concept.category,
@@ -567,22 +580,31 @@ function mockEngineeringLesson(subjectId: FocusArea): EngineeringLessonView {
     prerequisites: concept.prereqs,
     session_index: 1,
     why_now: 'Browser preview: a bundled reference lesson from this course. Native selection follows curriculum eligibility.',
-    markdown: reference.markdown,
+    markdown: shaped ?? reference.markdown,
     resources: reference.resources,
     review_notes: [],
     questions: reference.questions.filter((question) => question.kind === 'mcq').map((question, index) => ({
       id: index + 1, prompt: question.prompt, choices: question.choices!,
       section: question.section, learning_objective: question.learning_objective,
     })),
-    exercise: reference.exercise,
+    exercise: shaped ? SHAPED_EXERCISE : reference.exercise,
     kind: 'lesson' as const,
     fresh_sample: true,
     agent_used: mockClassroomSettings[subjectId].agent,
     prompt_profile: `classroom.${subjectId}`,
     prompt_version: `classroom.${subjectId}.v1`,
     estimated_minutes: mockClassroomSettings[subjectId].sessionMinutes,
+    plan: sessionPlan(mockClassroomSettings[subjectId].sessionMinutes),
     status: 'in_progress',
   };
+}
+
+/** The desk's split of a session: under half to read, then practise, then check. */
+function sessionPlan(minutes: number): SessionPlan {
+  const depth = Math.min(60, Math.max(30, minutes));
+  const learn_minutes = Math.floor((depth * 47) / 100);
+  const check_minutes = Math.floor((depth * 20) / 100);
+  return { learn_minutes, practice_minutes: depth - learn_minutes - check_minutes, check_minutes };
 }
 
 function appState(): AppStateView {

@@ -398,6 +398,13 @@ export interface LessonCheckView {
   submitted: boolean;
 }
 
+/** How a session's minutes divide between reading, practice and the check. */
+export interface SessionPlan {
+  learn_minutes: number;
+  practice_minutes: number;
+  check_minutes: number;
+}
+
 export interface EngineeringLessonView {
   /** Legacy classroom row ID or shared-runtime `study-…` ID; see `runtime`. */
   session_id: string;
@@ -432,6 +439,8 @@ export interface EngineeringLessonView {
   prompt_profile: string;
   prompt_version: string;
   estimated_minutes: number;
+  /** How the session's minutes divide between reading, practice and the check. */
+  plan: SessionPlan;
   status: 'in_progress' | 'completed' | 'skipped';
 }
 

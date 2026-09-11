@@ -44,17 +44,24 @@
 <script lang="ts">
   import DOMPurify from 'dompurify';
   import { tick } from 'svelte';
+  import { decorateLesson, type LessonSection } from '../features/lessons/sections';
 
   let {
     markdown = '',
     locked = false,
     inline = false,
     compact = false,
+    lesson = false,
+    onsections,
   }: {
     markdown: string;
     locked?: boolean;
     inline?: boolean;
     compact?: boolean;
+    /** Decorate the ten lesson sections: icons, reading hints, callouts. */
+    lesson?: boolean;
+    /** Told the sections found each time a lesson renders, for a section map. */
+    onsections?: (sections: LessonSection[]) => void;
   } = $props();
 
   let container = $state<HTMLElement | undefined>(undefined);
@@ -72,13 +79,18 @@
     // Re-run whenever `html` changes — new diagram placeholders appear
     // each time the markdown source changes (new course, new question).
     void html;
-    renderDiagrams();
+    enhance();
   });
 
-  async function renderDiagrams() {
+  async function enhance() {
     await tick();
     const root = container;
     if (!root) return;
+    if (lesson) onsections?.(decorateLesson(root));
+    await renderDiagrams(root);
+  }
+
+  async function renderDiagrams(root: HTMLElement) {
     const blocks = Array.from(
       root.querySelectorAll<HTMLElement>('.mermaid-block:not([data-rendered])')
     );
@@ -131,6 +143,7 @@
   class:inline
   class:compact
   class:locked
+  class:lesson
   bind:this={container}
   use:interceptLinks
 >
@@ -140,8 +153,9 @@
 <style>
   .md {
     user-select: text;
-    font-size: 16px;
-    line-height: 1.8;
+    /* The reader sets --reading-font from its text-size control. */
+    font-size: var(--reading-font, 16px);
+    line-height: 1.75;
   }
   .md.inline {
     display: inline;
@@ -193,12 +207,16 @@
     line-height: 1.3;
   }
   .md :global(h2) {
-    font-size: 24px;
+    font-size: 1.5em;
     border-bottom: 1px solid var(--border);
     padding-bottom: 8px;
   }
   .md :global(h3) {
-    font-size: 19px;
+    font-size: 1.18em;
+  }
+  .md :global(h4) {
+    font-size: 1em;
+    margin: 1.4em 0 0.4em;
   }
   .md :global(p) {
     margin: 0 0 1em;
@@ -311,5 +329,159 @@
     .md :global(.mermaid-block) {
       transition: none;
     }
+  }
+
+  /* --- Lesson shape: numbered, iconed sections with a reading hint ------- */
+  /* The lesson opens with its title as a heading; the shell already shows it. */
+  .md.lesson :global(> h1:first-child) {
+    display: none;
+  }
+  .md.lesson :global(h2.lesson-heading) {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-top: 2.2em;
+    padding-bottom: 10px;
+    scroll-margin-top: 16px;
+  }
+  .md.lesson :global(h2.lesson-heading:first-of-type) {
+    margin-top: 0.8em;
+  }
+  .md.lesson :global(.lesson-heading-mark) {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 10px 7px 8px;
+    border: 1px solid var(--node-border, var(--border));
+    border-radius: var(--radius-detail, 8px);
+    background: var(--surface);
+    color: var(--accent);
+    font-family: var(--font-mono);
+  }
+  .md.lesson :global(.lesson-heading-index) {
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: var(--faint);
+  }
+  .md.lesson :global(.lesson-heading-title) {
+    min-width: 0;
+  }
+  .md.lesson :global(.lesson-hint) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 14px;
+    margin: -2px 0 1.1em;
+    padding: 8px 12px;
+    border-left: 2px solid var(--accent);
+    border-radius: 0 var(--radius-control, 6px) var(--radius-control, 6px) 0;
+    background: color-mix(in srgb, var(--accent) 7%, transparent);
+    font-size: 0.82em;
+    line-height: 1.5;
+    color: var(--muted);
+  }
+  .md.lesson :global(.lesson-hint-time) {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--accent);
+    font-size: 0.85em;
+    letter-spacing: 0.6px;
+    white-space: nowrap;
+  }
+  .md.lesson :global(.lesson-icon) {
+    flex: none;
+    vertical-align: -0.15em;
+  }
+
+  /* Point form breathes: lists carry the lesson, so they get room. */
+  .md.lesson :global(ul),
+  .md.lesson :global(ol) {
+    padding-left: 1.5em;
+    margin: 0.4em 0 1.1em;
+  }
+  .md.lesson :global(li) {
+    margin-bottom: 0.45em;
+    line-height: 1.6;
+  }
+  .md.lesson :global(li::marker) {
+    color: var(--accent);
+  }
+  .md.lesson :global(li > ul),
+  .md.lesson :global(li > ol) {
+    margin: 0.35em 0 0.2em;
+  }
+  .md.lesson :global(p) {
+    margin: 0 0 0.9em;
+  }
+  .md.lesson :global(table) {
+    width: 100%;
+    font-size: 0.9em;
+    line-height: 1.45;
+  }
+  .md.lesson :global(th) {
+    background: var(--surface);
+    font-family: var(--font-mono);
+    font-size: 0.78em;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .md.lesson :global(.lesson-caption) {
+    margin: -0.6em 0 1.4em;
+    text-align: center;
+    font-size: 0.82em;
+    color: var(--muted);
+  }
+
+  /* Callouts: the points that matter, told apart by kind. */
+  .md.lesson :global(blockquote.lesson-callout) {
+    --callout: var(--accent);
+    margin: 1.1em 0;
+    padding: 12px 16px 12px 16px;
+    border: 1px solid color-mix(in srgb, var(--callout) 35%, var(--border));
+    border-left: 3px solid var(--callout);
+    border-radius: var(--radius-panel, 10px);
+    background: color-mix(in srgb, var(--callout) 6%, var(--surface));
+    color: var(--fg);
+    font-size: 0.95em;
+  }
+  .md.lesson :global(blockquote.lesson-callout p) {
+    margin: 0;
+  }
+  .md.lesson :global(blockquote.lesson-callout p + p) {
+    margin-top: 0.5em;
+  }
+  .md.lesson :global(.lesson-callout-label) {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: 6px;
+    padding: 2px 8px 2px 6px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--callout) 18%, transparent);
+    color: var(--callout);
+    font-family: var(--font-mono);
+    font-size: 0.72em;
+    font-weight: 500;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    vertical-align: 0.1em;
+  }
+  .md.lesson :global(blockquote.lesson-callout-warn) {
+    --callout: var(--bad-fg);
+  }
+  .md.lesson :global(blockquote.lesson-callout-try) {
+    --callout: var(--ok-fg);
+  }
+  .md.lesson :global(blockquote.lesson-callout-example) {
+    --callout: var(--warn-fg);
+  }
+  .md.lesson :global(blockquote.lesson-callout-decision) {
+    --callout: var(--fg);
+  }
+  .md.lesson :global(blockquote.lesson-callout-evidence) {
+    --callout: var(--muted);
   }
 </style>

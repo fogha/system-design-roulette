@@ -1810,6 +1810,8 @@ pub struct EngineeringLessonView {
     pub prompt_profile: String,
     pub prompt_version: String,
     pub estimated_minutes: i64,
+    /// How the session's minutes divide between reading, practice and check.
+    pub plan: crate::lesson_shape::SessionPlan,
     pub status: String,
 }
 
@@ -1908,6 +1910,7 @@ fn engineering_view(conn: &Connection, session_id: i64) -> Result<Option<Enginee
                 prompt_profile,
                 prompt_version,
                 estimated_minutes: minutes,
+                plan: crate::generator::LessonBudget::for_minutes(minutes).plan(),
                 status,
             })
         },

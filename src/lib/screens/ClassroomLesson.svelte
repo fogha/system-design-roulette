@@ -11,6 +11,8 @@
   import CoursePurpose from '../components/CoursePurpose.svelte';
   import ExerciseWorkspace from '../components/ExerciseWorkspace.svelte';
   import Markdown from '../components/Markdown.svelte';
+  import LessonMap from '../features/lessons/LessonMap.svelte';
+  import type { LessonSection } from '../features/lessons/sections';
   import { ExternalLink, MessageCircle, Sparkles } from 'lucide-svelte';
 
   const lesson = $derived(app.engineeringLesson);
@@ -23,6 +25,9 @@
   let exerciseSection = $state<HTMLElement | undefined>(undefined);
   let checkSection = $state<HTMLElement | undefined>(undefined);
   let restoredFor: string | null = null;
+  /** The lesson's sections as rendered, for the map and the reading position. */
+  let sections = $state<LessonSection[]>([]);
+  let currentSection = $state(0);
 
   const anchors = () => ({ practice: exerciseSection, check: checkSection });
 
@@ -78,6 +83,23 @@
 
   function track() {
     if (session && scroller) session.trackPosition(scroller, anchors(), !!result);
+    placeInSections();
+  }
+
+  /** The section whose heading last passed the top of the reading pane. */
+  function placeInSections() {
+    if (!scroller || sections.length === 0) return;
+    const top = scroller.getBoundingClientRect().top + 140;
+    let at = 0;
+    for (const section of sections) {
+      if (section.element.getBoundingClientRect().top <= top) at = section.index;
+      else break;
+    }
+    currentSection = at;
+  }
+
+  function jump(section: LessonSection) {
+    section.element.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   /** A Focused/Strict session that engaged the kiosk cannot be paused here. */
@@ -168,6 +190,9 @@
     {#if !retrieval}<CoursePurpose whyNow={lesson.why_now} curriculum={lesson.curriculum} prerequisites={lesson.prerequisites} />{/if}
 
     <article class="reading-pane" style="font-size: var(--reading-font)">
+      {#if !retrieval}
+        <LessonMap {sections} current={currentSection} plan={lesson.plan} onjump={jump} />
+      {/if}
       {#if lesson.review_notes?.length}
         <aside class="review-notes" aria-label="Editor's notes on this lesson">
           <p class="mono">EDITOR'S NOTES · read these claims with care</p>
@@ -175,7 +200,7 @@
           <ul>{#each lesson.review_notes as note (note)}<li>{note}</li>{/each}</ul>
         </aside>
       {/if}
-      <Markdown markdown={lesson.markdown} />
+      <Markdown markdown={lesson.markdown} lesson={!retrieval} onsections={(found) => { sections = found; placeInSections(); }} />
 
       {#if lesson.resources.length && !retrieval}
         <section class="sources" aria-labelledby="class-sources-title">
@@ -197,12 +222,12 @@
 
       {#if !retrieval}
         <section class="exercise-end" aria-label="course exercise" bind:this={exerciseSection}>
-          <ExerciseWorkspace classroomSessionId={session.study ? undefined : Number(lesson.session_id)} studySessionId={session.study ? lesson.session_id : undefined} />
+          <ExerciseWorkspace classroomSessionId={session.study ? undefined : Number(lesson.session_id)} studySessionId={session.study ? lesson.session_id : undefined} minutes={lesson.plan.practice_minutes} />
         </section>
       {/if}
 
       <aside class="practice-pane" aria-labelledby="class-check-title" bind:this={checkSection}>
-        <span class="eyebrow mono">{retrieval ? 'DELAYED RETRIEVAL' : 'RETRIEVAL GATE'}</span>
+        <span class="eyebrow mono">{retrieval ? 'DELAYED RETRIEVAL' : `RETRIEVAL GATE · ABOUT ${lesson.plan.check_minutes} MIN`}</span>
         <h2 id="class-check-title">{retrieval ? 'Retrieve it without the lesson' : 'Prove the mechanism'}</h2>
         <p class="practice-intro">{retrieval ? (lesson.fresh_sample ? 'These samples were not shown in your last lesson on this topic. Your result updates this topic’s review interval.' : 'These are the same questions as your last lesson on this topic; a repeated sample is not proof of fresh transfer, so the result is recorded as a repeat.') : 'Answer from the lesson’s mechanism and evidence. Your result updates only this class.'}</p>
 

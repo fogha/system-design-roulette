@@ -2,19 +2,22 @@
   import { api, type ExerciseOwner, type ExerciseView } from '../ipc';
   import { createDraftSaver, type SaveStatus } from '../draft-save';
   import Markdown from './Markdown.svelte';
-  import { Lightbulb, Copy, Check, RotateCcw } from 'lucide-svelte';
+  import { Lightbulb, Copy, Check, RotateCcw, CircleCheck, Timer } from 'lucide-svelte';
 
   let {
     courseId,
     classroomSessionId,
     studySessionId,
-  }: { courseId?: number; classroomSessionId?: number; studySessionId?: string } = $props();
+    minutes,
+  }: { courseId?: number; classroomSessionId?: number; studySessionId?: string; minutes?: number } = $props();
 
   let exercise = $state<ExerciseView | null>(null);
   let loading = $state(true);
   let loadError = $state('');
   let draft = $state('');
-  let reflection = $state('');
+  let evidence = $state('');
+  let tradeoff = $state('');
+  let scaleFailure = $state('');
   let completed = $state(false);
   let revealedHints = $state(0);
   let saveStatus = $state<SaveStatus>('idle');
@@ -30,6 +33,27 @@
         ? { classroom_session_id: classroomSessionId }
         : { course_id: courseId },
   );
+  const draftWords = $derived(draft.trim() ? draft.trim().split(/\s+/).length : 0);
+
+  /**
+   * The reflection is stored as one text with three labelled lines, so the
+   * record stays readable on its own and older free-text notes still load
+   * (they land in the evidence field).
+   */
+  const LABELS = { evidence: 'Evidence', tradeoff: 'Trade-off', scale: '10× failure' } as const;
+  function splitReflection(text: string) {
+    const pick = (label: string) => text.match(new RegExp(`^${label.replace('×', '[×x]')}:\\s*(.*)$`, 'mi'))?.[1]?.trim() ?? '';
+    const parts = { evidence: pick(LABELS.evidence), tradeoff: pick(LABELS.tradeoff), scale: pick(LABELS.scale) };
+    if (!parts.evidence && !parts.tradeoff && !parts.scale) parts.evidence = text.trim();
+    return parts;
+  }
+  function joinReflection(): string {
+    return [
+      `${LABELS.evidence}: ${evidence.trim()}`,
+      `${LABELS.tradeoff}: ${tradeoff.trim()}`,
+      `${LABELS.scale}: ${scaleFailure.trim()}`,
+    ].join('\n');
+  }
 
   $effect(() => {
     const capturedOwner = { ...owner };
@@ -59,7 +83,10 @@
         exercise = e;
         const recovered = currentSaver.recoveredDraft();
         draft = recovered ?? e?.draft ?? e?.starter_code ?? '';
-        reflection = e?.reflection ?? '';
+        const parts = splitReflection(e?.reflection ?? '');
+        evidence = parts.evidence;
+        tradeoff = parts.tradeoff;
+        scaleFailure = parts.scale;
         completed = e?.completed ?? false;
         loading = false;
         if (recovered !== null && e) currentSaver.schedule(recovered);
@@ -111,13 +138,13 @@
     if (!exercise) return;
     const capturedOwner = { ...owner };
     const version = loadVersion;
-    const savedReflection = reflection;
     completionError = '';
-    if (nextCompleted && reflection.trim().split(/\s+/).filter(Boolean).length < 5) {
+    if (nextCompleted && (!evidence.trim() || !tradeoff.trim() || !scaleFailure.trim())) {
       completionStatus = 'error';
-      completionError = 'Add a short note naming your evidence and the trade-off you chose.';
+      completionError = 'Fill in all three: what proves it works, the trade-off you chose, and what breaks at 10×.';
       return;
     }
+    const savedReflection = joinReflection();
     completionStatus = 'saving';
     try {
       await saver?.flush();
@@ -144,9 +171,10 @@
     <p class="mono dim">No structured exercise was generated for this course.</p>
   {:else}
     <header class="ex-head">
+      <span class="eyebrow mono"><span>PRACTICE</span>{#if minutes}<span class="eyebrow-sep">·</span><Timer size={10} /><span>ABOUT {minutes} MIN</span>{/if}</span>
       <h3>{exercise.title}</h3>
       {#if exercise.deliverable}
-        <p class="deliverable"><strong>Done looks like:</strong> {exercise.deliverable}</p>
+        <p class="deliverable"><span class="deliverable-label"><CircleCheck size={13} /> Done looks like</span> {exercise.deliverable}</p>
       {/if}
     </header>
 
@@ -171,53 +199,60 @@
       </div>
     {/if}
 
-    <div class="draft-block">
-      <div class="draft-head mono">
-        <span>your draft — autosaved</span>
-        <span class="save-status" class:err={saveStatus === 'error'}>
+    <section class="draft-block" aria-labelledby="exercise-draft-title">
+      <div class="block-head">
+        <div>
+          <h4 id="exercise-draft-title">Your work</h4>
+          <p>Build the artifact here. Markdown is fine; it autosaves, and leaving never loses it.</p>
+        </div>
+        <span class="save-status mono" class:err={saveStatus === 'error'} aria-live="polite">
           {saveStatus === 'saving'
             ? 'saving…'
             : saveStatus === 'saved'
               ? 'saved'
               : saveStatus === 'error'
                 ? 'save failed — recovery copy retained'
-                : ''}
+                : draftWords > 0 ? `${draftWords} words` : ''}
         </span>
         {#if saveStatus === 'error'}
-          <button type="button" onclick={() => saver?.flush()}>Retry save</button>
+          <button type="button" class="ghost mono-ghost small" onclick={() => saver?.flush()}>Retry save</button>
         {/if}
       </div>
       <textarea
         class="draft-input mono"
         value={draft}
         oninput={onDraftInput}
-        placeholder="Build the artifact here. The draft never blocks leaving; mark it complete only when your evidence meets the acceptance criteria."
-        rows="12"
+        placeholder="Write or paste your artifact here…"
+        rows="14"
         aria-label="exercise draft"
       ></textarea>
-    </div>
+    </section>
 
-    <div class="evidence-block" class:complete={completed}>
-      <div class="evidence-head">
+    <section class="evidence-block" class:complete={completed} aria-labelledby="exercise-evidence-title">
+      <div class="block-head">
         <div>
-          <h4>{completed ? 'Practice evidence recorded' : 'Close the learning loop'}</h4>
-          <p>
-            Name what proves it works, the trade-off you chose, and what would fail at 10× scale
-            or team size.
-          </p>
+          <h4 id="exercise-evidence-title">{completed ? 'Practice evidence recorded' : 'Close the learning loop'}</h4>
+          <p>Three short answers. They are what turns a finished artifact into evidence.</p>
         </div>
         {#if completed}<Check size={18} aria-hidden="true" />{/if}
       </div>
-      <textarea
-        class="reflection-input mono"
-        bind:value={reflection}
-        rows="4"
-        aria-label="exercise evidence and trade-off reflection"
-        placeholder="Evidence: …&#10;Trade-off: …&#10;10× failure: …"
-      ></textarea>
+      <div class="evidence-fields">
+        <label class="evidence-field">
+          <span class="field-label"><span class="field-num mono">1</span> What proves it works?</span>
+          <input type="text" bind:value={evidence} disabled={completionStatus === 'saving'} placeholder="the test, trace or measurement you ran" />
+        </label>
+        <label class="evidence-field">
+          <span class="field-label"><span class="field-num mono">2</span> Which trade-off did you choose?</span>
+          <input type="text" bind:value={tradeoff} disabled={completionStatus === 'saving'} placeholder="what you gave up, and why it was worth it" />
+        </label>
+        <label class="evidence-field">
+          <span class="field-label"><span class="field-num mono">3</span> What breaks at 10× scale or team size?</span>
+          <input type="text" bind:value={scaleFailure} disabled={completionStatus === 'saving'} placeholder="the first thing to give way, and the signal" />
+        </label>
+      </div>
       <div class="evidence-actions">
         <button
-          class="ghost mono-ghost"
+          class="cta mono-cta complete-button"
           class:complete={completed}
           onclick={() => saveCompletion(true)}
           disabled={completionStatus === 'saving'}
@@ -241,17 +276,17 @@
       {#if completionError}
         <p class="mono completion-error" role="alert">{completionError}</p>
       {/if}
-    </div>
+    </section>
 
     {#if exercise.hints.length > 0}
       <div class="hints-block">
-        <div class="hints-head mono"><Lightbulb size={12} /> hints</div>
+        <div class="hints-head mono"><Lightbulb size={12} /> hints · {revealedHints} of {exercise.hints.length} shown</div>
         {#each exercise.hints.slice(0, revealedHints) as hint, i}
-          <p class="hint"><span class="hint-num mono">{i + 1}.</span> {hint}</p>
+          <p class="hint"><span class="hint-num mono">{i + 1}</span> {hint}</p>
         {/each}
         {#if revealedHints < exercise.hints.length}
           <button class="ghost mono-ghost small" onclick={revealNextHint}>
-            reveal hint {revealedHints + 1} of {exercise.hints.length}
+            {revealedHints === 0 ? 'stuck? reveal the first hint' : `reveal hint ${revealedHints + 1}`}
           </button>
         {/if}
       </div>
@@ -261,7 +296,7 @@
 
 <style>
   .exercise-workspace {
-    max-width: 68ch;
+    max-width: 72ch;
     margin: 0 auto;
     padding: 28px 24px 80px;
   }
@@ -273,18 +308,126 @@
     color: var(--bad-fg);
     font-size: 12px;
   }
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--accent);
+    font-size: 9px;
+    letter-spacing: 1.4px;
+  }
+  .eyebrow-sep {
+    color: var(--faint);
+  }
   .ex-head h3 {
     font-size: 22px;
-    margin-bottom: 8px;
+    margin: 6px 0 10px;
+    line-height: 1.25;
   }
   .deliverable {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 8px;
+    margin: 0;
+    padding: 10px 14px;
+    border: 1px solid color-mix(in srgb, var(--ok-fg) 40%, var(--border));
+    border-radius: var(--radius-panel);
+    background: color-mix(in srgb, var(--ok-fg) 7%, var(--surface));
     font-size: 13px;
-    color: var(--muted);
     line-height: 1.5;
-    margin: 0 0 4px;
+    color: var(--fg);
   }
+  .deliverable-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--ok-fg);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  /* The instructions arrive as `**You will produce:**`, `### Steps` (an
+     ordered list) and `### Done when` (a bulleted list). Older exercises are
+     a paragraph and get plain paragraph styling. */
   .ex-instructions {
     margin: 18px 0 6px;
+    font-size: 14px;
+  }
+  .ex-instructions :global(.md p) {
+    line-height: 1.6;
+  }
+  .ex-instructions :global(.md h3) {
+    margin: 18px 0 8px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .ex-instructions :global(.md ol) {
+    list-style: none;
+    counter-reset: step;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .ex-instructions :global(.md ol > li) {
+    counter-increment: step;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    margin: 0;
+    padding: 10px 12px;
+    border: 1px solid var(--node-border);
+    border-radius: var(--radius-control);
+    background: color-mix(in srgb, var(--surface) 70%, transparent);
+    line-height: 1.5;
+  }
+  .ex-instructions :global(.md ol > li::before) {
+    content: counter(step);
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--accent-fg);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .ex-instructions :global(.md ul) {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .ex-instructions :global(.md ul > li) {
+    position: relative;
+    margin: 0;
+    padding: 4px 0 4px 24px;
+    line-height: 1.5;
+  }
+  .ex-instructions :global(.md ul > li::before) {
+    content: '';
+    position: absolute;
+    left: 2px;
+    top: 9px;
+    width: 12px;
+    height: 12px;
+    border: 1.5px solid var(--ok-fg);
+    border-radius: 3px;
+    opacity: 0.85;
   }
   .starter-block {
     margin: 20px 0;
@@ -317,33 +460,48 @@
     white-space: pre;
     margin: 0;
   }
-  .draft-block {
-    margin: 22px 0;
-  }
-  .draft-head {
+  .block-head {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
-    font-size: 10.5px;
-    letter-spacing: 0.5px;
-    color: var(--faint);
-    margin-bottom: 6px;
+    gap: 12px 16px;
+    margin-bottom: 10px;
+  }
+  .block-head h4 {
+    margin: 0 0 3px;
+    color: var(--fg);
+    font-size: 14px;
+  }
+  .block-head p {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--muted);
+  }
+  .draft-block {
+    margin: 26px 0;
   }
   .save-status {
-    color: var(--muted);
+    flex: none;
+    font-size: 10px;
+    letter-spacing: 0.5px;
+    color: var(--faint);
+    padding-top: 3px;
   }
   .save-status.err {
     color: var(--bad-fg);
   }
   .draft-input {
+    width: 100%;
     font-size: 13px;
-    line-height: 1.6;
+    line-height: 1.65;
     resize: vertical;
-    min-height: 220px;
+    min-height: 260px;
+    padding: 14px 16px;
   }
   .evidence-block {
     margin: 22px 0;
-    padding: 16px;
+    padding: 18px;
     border: 1px solid var(--border);
     border-radius: var(--radius-panel);
     background: color-mix(in srgb, var(--surface) 82%, transparent);
@@ -351,36 +509,53 @@
   .evidence-block.complete {
     border-color: color-mix(in srgb, var(--good-fg) 45%, var(--border));
   }
-  .evidence-head {
+  .evidence-fields {
     display: flex;
-    justify-content: space-between;
-    gap: 16px;
-    color: var(--muted);
+    flex-direction: column;
+    gap: 10px;
   }
-  .evidence-head h4 {
-    margin: 0 0 4px;
-    color: var(--text);
-    font-size: 14px;
+  .evidence-field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
   }
-  .evidence-head p {
-    margin: 0 0 12px;
-    font-size: 12px;
-    line-height: 1.5;
+  .field-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12.5px;
+    color: var(--fg);
   }
-  .reflection-input {
-    min-height: 92px;
-    resize: vertical;
-    font-size: 12px;
-    line-height: 1.55;
+  .field-num {
+    display: inline-grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 1px solid var(--node-border);
+    color: var(--accent);
+    font-size: 9.5px;
+  }
+  .evidence-field input {
+    width: 100%;
+    font-size: 13px;
+    padding: 9px 12px;
   }
   .evidence-actions {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin-top: 9px;
+    gap: 10px;
+    margin-top: 14px;
   }
-  .evidence-actions .complete {
-    border-color: color-mix(in srgb, var(--good-fg) 45%, var(--border));
+  .complete-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 9px 16px;
+    font-size: 11px;
+  }
+  .complete-button.complete {
+    background: color-mix(in srgb, var(--good-fg) 22%, var(--surface));
     color: var(--good-fg);
   }
   .completion-status {
@@ -409,14 +584,23 @@
     color: var(--faint);
   }
   .hint {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
     font-size: 13px;
     line-height: 1.5;
     color: var(--fg);
     margin: 0;
   }
   .hint-num {
+    flex: none;
+    display: inline-grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--accent) 18%, transparent);
     color: var(--accent);
-    font-size: 11px;
-    margin-right: 4px;
+    font-size: 9.5px;
   }
 </style>

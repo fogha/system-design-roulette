@@ -544,7 +544,9 @@ fn generation_prompts_preserve_the_learning_quality_contract() {
     assert!(FIRST_PRINCIPLES_PROMPT.contains("smallest building"));
     assert!(FIRST_PRINCIPLES_PROMPT.contains("where the analogy breaks"));
     assert!(FIRST_PRINCIPLES_PROMPT.contains("identify the missing building block"));
-    assert!(COURSE_PROMPT.contains("roughly 30 minutes (3500-4500 words"));
+    assert!(COURSE_PROMPT.contains("1500-2100 words"));
+    assert!(COURSE_PROMPT.contains("reading hint"));
+    assert!(COURSE_PROMPT.contains("> **Key idea:**"));
     assert!(COURSE_PROMPT.contains("3-5 observable acceptance criteria"));
     assert!(COURSE_PROMPT.contains("what would fail at 10x scale or team size"));
     assert!(COURSE_PROMPT.contains("irreducible building blocks and constraints"));
