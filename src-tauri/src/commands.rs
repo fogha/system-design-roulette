@@ -502,7 +502,6 @@ pub async fn complete_setup(
         // Day-1 content generates after the student picks a focus at session start.
     }
     refresh_os_schedule(&state)?;
-    state.gen_notify.notify_one();
     let _ = app.emit("classroom:state", serde_json::json!({ "refresh": true }));
     get_app_state(state)
 }

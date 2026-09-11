@@ -170,7 +170,6 @@ pub fn run() {
                 escape_failures: Mutex::new(Vec::new()),
                 prev_muted: Mutex::new(None),
                 frontend_ready: AtomicBool::new(false),
-                gen_notify: tokio::sync::Notify::new(),
                 class_start_gate: tokio::sync::Mutex::new(()),
                 chat_threads: Mutex::new(std::collections::HashMap::new()),
                 focus: enforcement::Coordinator::default(),
@@ -244,8 +243,6 @@ pub fn run() {
                             let _ = handle.emit("classroom:owed", due);
                         }
                     }
-                    // Kick the pregen queue on every triggered launch (wake catch-up).
-                    state.gen_notify.notify_one();
                 });
             }
             log::info!("local study runtime ready");

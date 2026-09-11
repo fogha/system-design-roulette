@@ -21,8 +21,6 @@ pub struct AppState {
     /// engages before this: a dead webview has no escape hatch, and locking
     /// behind one bricks the machine at every login.
     pub frontend_ready: AtomicBool,
-    /// Background generation worker wakeup.
-    pub gen_notify: tokio::sync::Notify,
     /// Only one class Start request may prepare work at a time. A cancelled or
     /// failed request releases the guard; it never leaves a persisted blocker.
     pub class_start_gate: tokio::sync::Mutex<()>,
