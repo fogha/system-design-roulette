@@ -51,6 +51,14 @@ class AppStore {
   genLog = $state<string[]>([]);
   preparingClass = $state<{ subjectId: ClassroomSubjectId; label: string; agent: string; model: string; startedAt: number } | null>(null);
   error = $state<string>('');
+  /** A passing confirmation (a file written, a record saved), with one optional action. */
+  notice = $state<{ message: string; action?: { label: string; run: () => void } } | null>(null);
+  private noticeTimer: ReturnType<typeof setTimeout> | null = null;
+  notify(message: string, action?: { label: string; run: () => void }) {
+    if (this.noticeTimer) clearTimeout(this.noticeTimer);
+    this.notice = { message, action };
+    this.noticeTimer = setTimeout(() => { this.notice = null; }, 10_000);
+  }
   languageLesson = $state<LanguageLessonView | null>(null);
   engineeringLesson = $state<EngineeringLessonView | null>(null);
 

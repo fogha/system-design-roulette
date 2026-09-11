@@ -6,7 +6,7 @@
   import ExerciseWorkspace from '../components/ExerciseWorkspace.svelte';
   import Dropdown from '../components/Dropdown.svelte';
   import CourseGlyph from '../components/CourseGlyph.svelte';
-  import { ArrowLeft, ArrowUpRight, BookOpen, ChevronLeft, ChevronRight, Hammer, Layers, Search, X } from 'lucide-svelte';
+  import { ArrowLeft, ArrowUpRight, BookOpen, ChevronLeft, ChevronRight, Download, Hammer, Layers, Search, X } from 'lucide-svelte';
 
   let data = $state<DashboardView | null>(null);
   let selected = $state('');
@@ -17,6 +17,8 @@
   let busy = $state(true);
   let error = $state('');
   let viewing = $state<ProgressLesson | null>(null);
+  let viewingEntry = $state<ProgressEntry | null>(null);
+  let downloading = $state(false);
   let opening = $state('');
   let archiveTab = $state<'read' | 'exercise'>('read');
   let compactTab = $state<'summary' | 'history'>('summary');
@@ -57,12 +59,23 @@
     try {
       const lesson=await api.getProgressLesson(entry.source,entry.owner_id);
       if (!lesson) throw new Error('This session has no saved lesson to read.');
-      viewing=lesson; archiveTab='read';
+      viewing=lesson; viewingEntry=entry; archiveTab='read';
       await tick(); document.getElementById('progress-archive-heading')?.focus();
     } catch(e) { error=String(e); }
     finally { opening=''; }
   }
-  async function closeLesson() { viewing=null; await tick(); opener?.focus(); }
+  async function closeLesson() { viewing=null; viewingEntry=null; await tick(); opener?.focus(); }
+  /** Write the open lesson and its questions as a CSV file beside the profile exports. */
+  async function download() {
+    const entry=viewingEntry;
+    if (!entry||downloading) return;
+    downloading=true;
+    try {
+      const saved=await api.exportLessonCsv(entry.source,entry.owner_id);
+      app.notify(`Saved ${saved.file_name} with ${saved.questions} questions${saved.answer_key?' and the answer key':'; the answer key joins once the check is submitted'}.`,{label:'Show file',run:()=>void api.revealExport(saved.path)});
+    } catch(e) { error=String(e); }
+    finally { downloading=false; }
+  }
   function openClass() {
     const program=app.state?.classroom_programs.find(c=>c.subject_id===selected);
     if (program) { app.classSelection=program.subject_id; app.classTab='curriculum'; }
@@ -120,7 +133,7 @@
   </div>
   {#if viewing}
     <section class="archive" aria-label="Saved lesson">
-      <header><button class="ghost mono-ghost" onclick={closeLesson}><ArrowLeft size={14}/> Progress</button><div><h2 id="progress-archive-heading" tabindex="-1">{viewing.title}</h2><p>{dateLabel(viewing.date,true)} · Saved lesson</p></div></header>
+      <header><button class="ghost mono-ghost" onclick={closeLesson}><ArrowLeft size={14}/> Progress</button><div><h2 id="progress-archive-heading" tabindex="-1">{viewing.title}</h2><p>{dateLabel(viewing.date,true)} · Saved lesson</p></div>{#if viewingEntry}<button class="ghost mono-ghost download" onclick={download} disabled={downloading} title="Save this lesson and its questions as a CSV file"><Download size={13}/> {downloading?'Saving…':'Download CSV'}</button>{/if}</header>
       <div class="archive-tabs" aria-label="Saved lesson sections"><button class:active={archiveTab==='read'} aria-pressed={archiveTab==='read'} onclick={()=>archiveTab='read'}><BookOpen size={14}/> Lesson</button>{#if viewing.course_id!==null||viewing.classroom_session_id!==null||viewing.study_session_id!==null}<button class:active={archiveTab==='exercise'} aria-pressed={archiveTab==='exercise'} onclick={()=>archiveTab='exercise'}><Hammer size={14}/> Practice</button>{/if}</div>
       <div class="archive-scroll"><article class="theme-scholar reader-card">{#if archiveTab==='exercise'}<ExerciseWorkspace courseId={viewing.course_id??undefined} classroomSessionId={viewing.classroom_session_id??undefined} studySessionId={viewing.study_session_id??undefined}/>{:else}<Markdown markdown={viewing.markdown}/>{/if}</article></div>
     </section>
@@ -165,7 +178,7 @@
   @container progress (max-height:500px) { .page-heading .meta-label { display:none; } .page-heading h1 { font-size:23px; margin:0; } .page-heading { margin-bottom:10px; } .overview-heading { display:none; } .compact-tabs { display:flex; align-items:center; gap:6px; margin-bottom:12px; flex-shrink:0; } .compact-tabs span { flex:1; min-width:0; font-size:11px; color:var(--muted); } .compact-tabs button { border:1px solid var(--node-border); padding:7px 10px; font:10px var(--font-mono); background:var(--bg); color:var(--muted); } .compact-tabs button.active { background:var(--violet-bg); color:var(--violet-fg); border-color:var(--violet); } .hide-on-compact { display:none!important; } .history-heading { display:none; } .history-scroll { min-height:0; } }
   @container progress (max-height:500px) and (max-width:780px) { .overview { position:relative; } .mobile-filter { width:calc(100% - 152px); margin-bottom:12px; } .compact-tabs { position:absolute; top:16px; right:16px; margin:0; } .compact-tabs span { display:none; } }
   .error { display:flex; gap:12px; align-items:center; padding:10px 12px; margin-bottom:12px; border:1px solid var(--bad-fg); border-radius:var(--radius-control); color:var(--bad-fg); background:var(--bad-bg); font-size:11px; } .error>span { flex:1; } .mobile-filter { display:none; }
-  .archive { display:flex; flex-direction:column; flex:1; min-height:0; border:1px solid var(--node-border); border-radius:var(--radius-panel); background:var(--node-bg); overflow:hidden; } .archive>header { display:flex; align-items:center; gap:22px; padding:16px 20px; flex-shrink:0; } .archive h2 { font-size:20px; } .archive header p { font:10px var(--font-mono); color:var(--muted); margin:7px 0 0; } .archive-tabs { display:flex; gap:8px; padding:0 20px 12px; border-bottom:1px solid var(--node-border); flex-shrink:0; } .archive-tabs button { display:flex; gap:7px; align-items:center; padding:8px 12px; color:var(--muted); background:var(--bg); border:1px solid var(--node-border); font:11px var(--font-mono); cursor:pointer; } .archive-tabs button.active { border-color:var(--violet); color:var(--violet-fg); background:var(--violet-bg); } .archive-scroll { flex:1; min-height:0; overflow:auto; padding:20px; } .reader-card { margin:0 auto; max-width:800px; padding:24px 32px; border-radius:var(--radius-panel); background:var(--bg); color:var(--fg); }
+  .archive { display:flex; flex-direction:column; flex:1; min-height:0; border:1px solid var(--node-border); border-radius:var(--radius-panel); background:var(--node-bg); overflow:hidden; } .archive>header { display:flex; align-items:center; gap:22px; padding:16px 20px; flex-shrink:0; } .archive>header>div { flex:1; min-width:0; } .archive>header .download { display:inline-flex; align-items:center; gap:7px; white-space:nowrap; } .archive h2 { font-size:20px; } .archive header p { font:10px var(--font-mono); color:var(--muted); margin:7px 0 0; } .archive-tabs { display:flex; gap:8px; padding:0 20px 12px; border-bottom:1px solid var(--node-border); flex-shrink:0; } .archive-tabs button { display:flex; gap:7px; align-items:center; padding:8px 12px; color:var(--muted); background:var(--bg); border:1px solid var(--node-border); font:11px var(--font-mono); cursor:pointer; } .archive-tabs button.active { border-color:var(--violet); color:var(--violet-fg); background:var(--violet-bg); } .archive-scroll { flex:1; min-height:0; overflow:auto; padding:20px; } .reader-card { margin:0 auto; max-width:800px; padding:24px 32px; border-radius:var(--radius-panel); background:var(--bg); color:var(--fg); }
   @media(min-width:1500px) { .progress-page { width:100%; max-width:1500px; margin:auto; } }
   @media(max-width:1050px) { .progress-workspace { grid-template-columns:205px minmax(0,1fr); } .overview { padding:16px 16px 0; } .summary-grid { gap:8px; } .metric { padding:12px 10px; } .metric .meta-label { font-size:8px; letter-spacing:.5px; } .metric small { display:none; } }
   @media(max-width:780px) { .progress-workspace { grid-template-columns:minmax(0,1fr); } aside { display:none; } .mobile-filter { display:block; margin-bottom:12px; } .page-heading p { display:none; } .overview-heading { margin-bottom:12px; } }

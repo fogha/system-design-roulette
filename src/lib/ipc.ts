@@ -640,6 +640,16 @@ export interface ExerciseView {
   reflection: string;
 }
 
+/** Where a lesson's CSV was written, and what it holds. */
+export interface LessonCsvResult {
+  path: string;
+  file_name: string;
+  title: string;
+  questions: number;
+  /** True once the lesson's check has been submitted; before that the key is withheld. */
+  answer_key: boolean;
+}
+
 export interface ExerciseOwner {
   course_id?: number | null;
   classroom_session_id?: number | null;
@@ -853,6 +863,10 @@ const realApi = {
   getEscapePhrase: () => invoke<string>('get_escape_phrase'),
   getDashboard: (query: ProgressQuery = {}) => invoke<DashboardView>('get_dashboard', { query }),
   getProgressLesson: (source: ProgressEntry['source'], ownerId: string) => invoke<ProgressLesson | null>('get_progress_lesson', { source, ownerId }),
+  /** Write a saved lesson and its questions as a CSV file beside the profile exports. */
+  exportLessonCsv: (source: ProgressEntry['source'], ownerId: string) => invoke<LessonCsvResult>('export_lesson_csv', { source, ownerId }),
+  /** Show an exported file in the system file browser. */
+  revealExport: (path: string) => invoke<void>('reveal_export', { path }),
 };
 
 /** Demo mode: outside Tauri (plain `vite dev`), serve canned data from mock.ts. */

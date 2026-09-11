@@ -12,7 +12,7 @@ use principia_desk_lib::{
         classes, enrollment,
         sessions::{self, PreparedLesson, ReadingPosition, Session, Stage, Status},
     },
-    language, mastery,
+    language, lesson_export, mastery,
     progress::{self, ProgressQuery},
     subjects::engineering,
 };
@@ -667,4 +667,76 @@ fn a_lease_left_by_a_crashed_run_is_released_at_startup_so_start_is_never_trappe
     assert!(sessions::claim_preparation(&conn, &session.id, now, 60)
         .unwrap()
         .is_some());
+}
+
+#[test]
+fn a_lesson_exports_as_csv_and_keeps_its_key_until_the_check_is_submitted() {
+    let (_, conn) = fixture();
+    activate(&conn, "javascript", 9);
+    let planned = plan(&conn, "javascript", None);
+    let refused = lesson_export::export(&conn, "study", &planned.id.0).unwrap_err();
+    assert!(refused.contains("not been prepared"), "{refused}");
+
+    let session = publish(&conn, &planned);
+    engineering::activate(&conn, &session.id).unwrap();
+    let check = answer_all(&conn, &session, &[2]);
+
+    // Drafted answers travel with the lesson; the key does not, yet.
+    let before = lesson_export::export(&conn, "study", &session.id.0).unwrap();
+    assert_eq!(before.questions, 5);
+    assert!(!before.answer_key);
+    assert!(
+        before.file_stem.starts_with(&format!("js-{TODAY}-")),
+        "{}",
+        before.file_stem
+    );
+    let csv = before.csv();
+    assert!(csv.starts_with("\u{feff}kind,position,section,text,detail,choice_a"));
+    assert!(csv.contains("meta,,answer_key,withheld until the check is submitted"));
+    assert!(csv.contains("meta,,status,in progress"));
+    assert!(csv.contains("section,1,The simple version,A grounded fixture lesson.,"));
+    assert!(csv.contains("exercise,,,Build the probe,Implement it.,"));
+    assert!(csv.contains("exercise_deliverable,,,A probe,"));
+    assert!(csv.contains("exercise_starter_code,,,echo start,"));
+    let questions: Vec<&str> = csv
+        .lines()
+        .filter(|line| line.starts_with("question,"))
+        .collect();
+    assert_eq!(questions.len(), 5);
+    assert!(
+        questions[1].ends_with("Question 2,Objective 2,right,wrong,also wrong,no,,,wrong,,"),
+        "{}",
+        questions[1]
+    );
+    assert!(!csv.contains("Because of mechanism"));
+
+    engineering::submit(
+        &conn,
+        &session.id,
+        &check.round_id,
+        check.revision,
+        "Traced.",
+        TODAY,
+    )
+    .unwrap();
+    let after = lesson_export::export(&conn, "study", &session.id.0).unwrap();
+    assert!(after.answer_key);
+    let csv = after.csv();
+    assert!(csv.contains("meta,,answer_key,included"));
+    assert!(csv.contains("meta,,status,completed"));
+    assert!(csv.contains("meta,,score,80%"));
+    let questions: Vec<&str> = csv
+        .lines()
+        .filter(|line| line.starts_with("question,"))
+        .collect();
+    assert!(
+        questions[0].ends_with(",no,right,Because of mechanism 1.,right,correct,"),
+        "{}",
+        questions[0]
+    );
+    assert!(
+        questions[1].ends_with(",no,right,Because of mechanism 2.,wrong,incorrect,"),
+        "{}",
+        questions[1]
+    );
 }

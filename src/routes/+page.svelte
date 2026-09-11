@@ -56,6 +56,13 @@
     <EscapeHatch />
   {/if}
 
+  {#if app.notice}
+    <div class="notice-toast" role="status">
+      <span>{app.notice.message}</span>
+      {#if app.notice.action}<button class="more" onclick={() => { app.notice?.action?.run(); app.notice = null; }}>{app.notice.action.label}</button>{/if}
+      <button onclick={() => (app.notice = null)} aria-label="Dismiss">×</button>
+    </div>
+  {/if}
   {#if app.error}
     <div class="error-toast" role="alert">
       <span>{app.error.length > 220 ? `${app.error.slice(0, 220)}…` : app.error}</span>
@@ -87,5 +94,37 @@
     color: inherit;
     font-size: 16px;
     cursor: pointer;
+  }
+  .notice-toast {
+    position: fixed;
+    bottom: 16px;
+    left: 16px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    max-width: 480px;
+    padding: 10px 14px;
+    border: 1px solid var(--node-border);
+    border-radius: 10px;
+    background: var(--surface);
+    color: var(--fg);
+    font-size: 13px;
+    z-index: 60;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  }
+  .notice-toast button {
+    background: none;
+    border: none;
+    color: inherit;
+    font-size: 16px;
+    cursor: pointer;
+  }
+  .notice-toast .more,
+  .error-toast .more {
+    font: 500 11px var(--font-mono);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: var(--accent);
+    white-space: nowrap;
   }
 </style>

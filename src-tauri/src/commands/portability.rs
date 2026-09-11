@@ -96,6 +96,51 @@ pub fn import_profile(
 }
 
 /// Reveal an exported file in the system file browser.
+#[derive(Debug, Serialize)]
+pub struct LessonCsvResult {
+    pub path: String,
+    pub file_name: String,
+    pub title: String,
+    pub questions: usize,
+    /// Whether the file carries correct answers and explanations. It does
+    /// once the lesson's check has been submitted.
+    pub answer_key: bool,
+}
+
+/// Write one saved lesson, with its questions, as a CSV file next to the
+/// profile exports. A file of the same name from an earlier download is
+/// left alone; the new one gets a time suffix.
+#[tauri::command]
+pub fn export_lesson_csv(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    source: String,
+    owner_id: String,
+) -> CmdResult<LessonCsvResult> {
+    let export = {
+        let conn = state.db.0.lock().unwrap();
+        crate::lesson_export::export(&conn, &source, &owner_id)?
+    };
+    let directory = export_directory(&app, &state).join("lessons");
+    std::fs::create_dir_all(&directory).map_err(err)?;
+    let mut path = directory.join(format!("{}.csv", export.file_stem));
+    if path.exists() {
+        let stamp = chrono::Local::now().format("%H%M%S");
+        path = directory.join(format!("{}-{stamp}.csv", export.file_stem));
+    }
+    std::fs::write(&path, export.csv()).map_err(err)?;
+    Ok(LessonCsvResult {
+        file_name: path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default(),
+        path: path.to_string_lossy().into_owned(),
+        title: export.title,
+        questions: export.questions,
+        answer_key: export.answer_key,
+    })
+}
+
 #[tauri::command]
 pub fn reveal_export(app: AppHandle, path: String) -> CmdResult<()> {
     use tauri_plugin_opener::OpenerExt;

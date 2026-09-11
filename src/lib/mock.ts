@@ -39,6 +39,7 @@ import type {
   LanguageLessonView,
   LanguageProgramView,
   LanguageSessionResult,
+  LessonCsvResult,
   PlannedSlot,
   SessionPlan,
 } from './ipc';
@@ -1230,5 +1231,25 @@ export const mockApi = {
     return {today:dateAt(0), classes:programs.map(p=>({...p,completed_sessions:history.filter(h=>h.subject_id===p.subject_id && h.status==='completed').length})), completed_sessions:completed.length, study_days:dates.size, streak, activity:Array.from({length:28},(_,i)=>({date:dateAt(27-i),completed:completed.filter(h=>h.date===dateAt(27-i)).length})), history:matching.slice(page*8,page*8+8),history_total:matching.length,page,page_size:8};
   },
   getProgressLesson: async (_source: ProgressEntry['source'], _ownerId: string): Promise<ProgressLesson | null> => ({ title: 'Preview lesson', date: new Date().toISOString().slice(0,10), markdown: COURSE_MD, course_id: null, classroom_session_id: null, study_session_id: null }),
+  exportLessonCsv: async (_source: ProgressEntry['source'], ownerId: string): Promise<LessonCsvResult> => {
+    // The desktop writes the file natively; the preview hands the browser a
+    // small stand-in so the control can be exercised end to end.
+    const lesson = mockEngineeringLesson(mockSelectedFocus);
+    const quote = (value: string) => `"${value.replace(/"/g, '""')}"`;
+    const lines = [
+      'kind,position,section,text,detail,choice_a,choice_b,choice_c,choice_d,correct_answer,explanation,your_answer,result,url',
+      `meta,,title,${quote(lesson.title)},,,,,,,,,,`,
+      ...lesson.questions.map((question, index) => `question,${index + 1},${quote(question.section)},${quote(question.prompt)},${quote(question.learning_objective)},${question.choices.map(quote).join(',')},,,,,`),
+    ];
+    const fileName = `preview-${ownerId}.csv`;
+    if (typeof document !== 'undefined') {
+      const url = URL.createObjectURL(new Blob([`\ufeff${lines.join('\r\n')}\r\n`], { type: 'text/csv' }));
+      const anchor = document.createElement('a');
+      anchor.href = url; anchor.download = fileName; anchor.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+    return { path: `~/Documents/Principia Desk/lessons/${fileName}`, file_name: fileName, title: lesson.title, questions: lesson.questions.length, answer_key: false };
+  },
+  revealExport: async (_path: string) => {},
   markFrontendReady: async () => {},
 };

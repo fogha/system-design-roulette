@@ -13,6 +13,7 @@ pub mod generator;
 pub mod keychain;
 pub mod kiosk;
 pub mod language;
+pub mod lesson_export;
 pub mod lesson_shape;
 pub mod mastery;
 pub mod progress;
@@ -373,6 +374,7 @@ pub fn run() {
             commands::portability::inspect_archive,
             commands::portability::import_profile,
             commands::portability::reveal_export,
+            commands::portability::export_lesson_csv,
             commands::get_curriculum_map,
             commands::configure_classroom_program,
             commands::upsert_classroom_slot,
