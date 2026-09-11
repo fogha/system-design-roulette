@@ -667,6 +667,13 @@ export interface StudyPulse {
   pass_rate: number | null;
 }
 
+/** What a line typed at the recovery console comes back with. */
+export interface RecoveryReply {
+  lines: string[];
+  released: boolean;
+  close: boolean;
+}
+
 export type SearchProvider = 'none' | 'searxng' | 'brave' | 'tavily';
 
 /** The web search the desk uses to find documentation, and whether it works right now. */
@@ -804,6 +811,10 @@ const realApi = {
   saveRunnerConfiguration: (configuration: RunnerConfiguration) => invoke<RunnerConfiguration>('save_runner_configuration', { configuration }),
   getRunnerModels: (runner: string, refresh = false) => invoke<ModelCatalog>('get_runner_models', { runner, refresh }),
   setRunnerKey: (runner: string, value: string) => invoke<void>('set_runner_key', { runner, value }),
+  /** One line typed at the recovery console. */
+  recoveryCommand: (line: string) => invoke<RecoveryReply>('recovery_command', { line }),
+  openRecoveryConsole: () => invoke<void>('open_recovery_console'),
+  closeRecoveryConsole: () => invoke<void>('close_recovery_console'),
   getSearchSettings: () => invoke<SearchSettingsView>('get_search_settings'),
   setSearchSettings: (provider: SearchProvider, searxngUrl: string) => invoke<SearchSettingsView>('set_search_settings', { provider, searxngUrl }),
   setSearchKey: (provider: SearchProvider, value: string) => invoke<SearchSettingsView>('set_search_key', { provider, value }),

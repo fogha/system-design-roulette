@@ -8,6 +8,7 @@
   import RunnerSetup from '../features/runners/RunnerSetup.svelte';
   import RunnerFallback from '../features/runners/RunnerFallback.svelte';
   import SearchSetup from '../features/runners/SearchSetup.svelte';
+  import RecoveryGuide from '../features/recovery/RecoveryGuide.svelte';
   let agent = $state('claude');
   let customBin = $state('');
   let model = $state('opus');
@@ -23,8 +24,11 @@
     <RunnerFallback />
   </section></FlowStage>
   <FlowStage number="02"><section aria-label="Web search"><SearchSetup /></section></FlowStage>
-  <FlowStage number="03" last><section aria-label="Recovery"><NodeCard Icon={ShieldAlert} name="break-glass" badge={app.state?.enforcement_disarmed ? 'disarmed' : 'standby'} badgeTone="red">
-    <div class="recovery"><span class="recovery-tag mono">RECOVERY</span><div><p>Your emergency phrase and <code>principia-unlock</code> release token remain available during enforced study.</p><p class="mono">{app.state?.enforcement_disarmed ? 'Enforcement disarmed · recovery file present' : 'Recovery file absent'}</p></div></div>
+  <FlowStage number="03" last><section aria-label="Recovery"><NodeCard Icon={ShieldAlert} name="recovery" badge={app.state?.enforcement_disarmed ? 'disarmed · release token present' : 'armed · standby'} badgeTone={app.state?.enforcement_disarmed ? 'amber' : 'red'}>
+    <div class="recovery">
+      <p class="recovery-lead">The way out of an enforced session, kept here so it can always be read. Every route below works without the main window, and none of them needs a terminal.</p>
+      <RecoveryGuide />
+    </div>
   </NodeCard></section></FlowStage>
 </div>
 <style>
@@ -33,8 +37,6 @@
   h1 { font-size: 28px; margin: 8px 0 6px; }
   p { font-size: 13px; color: var(--muted); margin: 0; }
   header p { max-width: 56ch; }
-  .recovery { display: flex; align-items: flex-start; gap: 14px; border: 1px dashed #793030; border-radius: var(--radius-control); padding: 12px; background: #1f1316; }
-  .recovery-tag { border: 1px solid #793030; border-radius: var(--radius-detail); font-size: 9px; color: var(--led-err); padding: 5px 7px; margin-top: 4px; }
-  .recovery p + p { font-size: 10px; margin-top: 9px; }
-  @media (max-width: 620px) { .recovery { flex-direction: column; gap: 8px; } }
+  .recovery { display: flex; flex-direction: column; gap: 16px; }
+  .recovery-lead { max-width: 70ch; font-size: 12px; line-height: 1.55; }
 </style>

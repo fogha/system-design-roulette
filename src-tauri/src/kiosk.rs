@@ -175,6 +175,15 @@ pub(crate) mod mac {
         let _: () = msg_send![ns_window, orderFrontRegardless];
     }
 
+    /// One level above the kiosk, so the recovery console shows over a
+    /// locked desk and its blankers.
+    pub unsafe fn raise_console(ns_window: *mut AnyObject) {
+        let _: () = msg_send![ns_window, setLevel: SCREEN_SAVER_WINDOW_LEVEL + 1];
+        let behavior = CAN_JOIN_ALL_SPACES | STATIONARY | FULL_SCREEN_AUXILIARY;
+        let _: () = msg_send![ns_window, setCollectionBehavior: behavior];
+        let _: () = msg_send![ns_window, orderFrontRegardless];
+    }
+
     pub unsafe fn reset_window(ns_window: *mut AnyObject) {
         let _: () = msg_send![ns_window, setLevel: 0isize];
     }
@@ -394,6 +403,15 @@ pub fn engage_at(app: &AppHandle, state: &AppState, level: KioskLevel) {
             let Some(window) = app2.get_webview_window("main") else {
                 continue;
             };
+            // The recovery console is ours and sits above the desk on
+            // purpose; leave the keyboard with it.
+            if app2
+                .get_webview_window(crate::recovery::WINDOW)
+                .and_then(|console| console.is_focused().ok())
+                .unwrap_or(false)
+            {
+                continue;
+            }
             #[cfg(target_os = "macos")]
             {
                 let win = window.clone();

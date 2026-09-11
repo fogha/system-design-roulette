@@ -42,6 +42,7 @@ import type {
   LessonDocument,
   LessonFileResult,
   PlannedSlot,
+  RecoveryReply,
   SearchProvider,
   SearchResult,
   SearchSettingsView,
@@ -768,6 +769,19 @@ export const mockApi = {
   getRunnerModels: async (runner: string, _refresh = false) => previewModels(runner),
   setRunnerKey: desktopRequired,
   getStudyPulse: async (): Promise<StudyPulse> => mockPulse(),
+  recoveryCommand: async (line: string): Promise<RecoveryReply> => {
+    const verb = line.trim().toLowerCase().split(/\s+/)[0];
+    if (verb === 'help') return { lines: ['Principia recovery console. Four commands, in order, end an enforced session:', '  1. unlock', '     Explains what will happen and issues a six-character challenge code.', '  2. confirm <code>', '     Type the code back. It proves a person is at the keyboard.', '  3. phrase <your escape phrase>', '     The break-glass phrase you set during setup.', '  4. release', '     Pauses the session with its work intact, breaks the streak, and frees the machine.', '', 'Also: status · cancel · close · help'], released: false, close: false };
+    if (verb === 'status') return { lines: ['desk: not locked', 'focused session: none', 'sequence: not started (type: unlock)'], released: false, close: false };
+    if (verb === 'unlock') return { lines: ['desk: not locked', '', 'Releasing pauses the session with its work intact and breaks your streak.', 'Challenge code: K7PM2X', 'To continue, type:  confirm K7PM2X'], released: false, close: false };
+    if (verb === 'confirm') return { lines: ['Confirmed.', 'Now type:  phrase <your escape phrase>'], released: false, close: false };
+    if (verb === 'phrase') return { lines: ['Phrase accepted.', 'Type:  release'], released: false, close: false };
+    if (verb === 'release') return { lines: ['Released. The lock is down.', 'This console closes in a moment.'], released: true, close: false };
+    if (verb === 'close' || verb === 'exit' || verb === 'quit') return { lines: [], released: false, close: true };
+    return { lines: [`Unknown command: ${verb}. Type help.`], released: false, close: false };
+  },
+  openRecoveryConsole: async () => { if (typeof window !== 'undefined') window.open('/recovery', 'principia-recovery', 'width=720,height=460'); },
+  closeRecoveryConsole: async () => { if (typeof window !== 'undefined' && window.name === 'principia-recovery') window.close(); },
   getSearchSettings: async (): Promise<SearchSettingsView> => mockSearch(),
   setSearchSettings: async (provider: SearchProvider, searxngUrl: string): Promise<SearchSettingsView> => { mockSearchProvider = provider; mockSearxngUrl = searxngUrl || 'http://127.0.0.1:8899'; return mockSearch(); },
   setSearchKey: async (provider: SearchProvider, value: string): Promise<SearchSettingsView> => { if (provider === 'brave') mockBraveKey = !!value.trim(); if (provider === 'tavily') mockTavilyKey = !!value.trim(); return mockSearch(); },

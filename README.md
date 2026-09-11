@@ -56,17 +56,27 @@ Each class carries a focus policy: **advisory** (the window comes to front, noth
 
 ### Ways out of a locked session
 
-Strict mode blocks Cmd+Tab, Force Quit and logout, so it must never be the only thing standing between you and your own machine. Four ways out, in the order you would reach for them:
+Strict mode blocks Cmd+Tab, Force Quit and logout, so it must never be the only thing standing between you and your own machine. Five ways out, in the order you would reach for them:
 
 1. **Finish the check.**
 2. **Break glass.** A dim link reveals a long phrase rendered as non-copyable SVG (paste disabled). Typing it pauses the focused class lesson with its work kept and releases the lock; three wrong attempts lock the input for 60 seconds.
-3. **A release token.** Create a file or folder named `principia-unlock` in any of these places and the lock releases within a second:
+3. **The recovery console.** Press **Control + Option + Shift + U** (Ctrl + Alt + Shift + U on Linux and Windows). A small console opens above every window, a locked desk included; the combination is registered with the system, not the page, so a blank or frozen desk cannot swallow it. Four commands, typed in order, end the session:
+
+   | # | Type | What happens |
+   |---|------|--------------|
+   | 1 | `unlock` | Reports the desk's state, says what releasing will do and issues a six-character challenge code (valid for five minutes). |
+   | 2 | `confirm <code>` | Type the code back. It proves a person is at the keyboard; a wrong code keeps the challenge, an expired one starts over. |
+   | 3 | `phrase <your escape phrase>` | The break-glass phrase from setup, exactly as written. Three wrong attempts lock this step for 60 seconds. |
+   | 4 | `release` | Pauses the session with its work intact, breaks the streak, drops the lock and closes the console. |
+
+   `status` shows where you are in the sequence, `cancel` starts it over, `close` (or Esc) leaves the console with the desk untouched. Nothing changes until the fourth command. If the console itself cannot appear, **press the combination five times within ten seconds** and the lock releases on its own. The same steps are shown in Settings › Recovery, with a walkthrough you can replay.
+4. **A release token.** Create a file or folder named `principia-unlock` in any of these places and the lock releases within a second:
    - your home directory (`touch ~/principia-unlock`),
    - the temporary directory (`/tmp` on macOS and Linux),
    - **the root of any mounted volume** — a USB stick, an external disk, a mounted share.
 
    The volume rule is the one that needs no terminal and no second machine: prepare a stick once, keep it near the desk, and plug it in. While a token exists the kiosk also refuses to engage at all, so a machine that boots with the stick in stays free. Delete the token to re-arm.
-4. **The dead man's switch.** A lock releases itself after three hours regardless of what the app believes. No lesson runs that long; a lock still standing is a stuck process, and it lets go.
+5. **The dead man's switch.** A lock releases itself after three hours regardless of what the app believes. No lesson runs that long; a lock still standing is a stuck process, and it lets go.
 
 A force shutdown alone does not end a session: an active focused session reopens at its saved position on the next launch. Boot with the release token in place instead.
 
@@ -74,16 +84,17 @@ A force shutdown alone does not end a session: an active focused session reopens
 
 The kiosk refuses to engage until the webview reports ready (white-screen guard), so a dead frontend cannot hold a lock. If you are ever stuck anyway:
 
-1. **Plug in the release stick** described above, or create the file from another machine over SSH or Screen Sharing:
+1. **Open the recovery console** with Control + Option + Shift + U and walk the four steps above; or press the combination five times in ten seconds if no console appears.
+2. **Plug in the release stick** described above, or create the file from another machine over SSH or Screen Sharing:
    ```bash
    touch ~/principia-unlock
    launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.darkmatter.principia-desk.plist
    rm -f ~/Library/LaunchAgents/com.darkmatter.principia-desk.plist
    ```
-2. **Safe Mode** (Apple Silicon: hold power → pick disk → hold Shift): third-party LaunchAgents do not load. Run the same commands in Terminal, reboot.
-3. **Recovery Mode Terminal**: `rm "/Volumes/Macintosh HD/Users/<you>/Library/LaunchAgents/com.darkmatter.principia-desk.plist"` and `touch "/Volumes/Macintosh HD/Users/<you>/principia-unlock"`, then reboot.
+3. **Safe Mode** (Apple Silicon: hold power → pick disk → hold Shift): third-party LaunchAgents do not load. Run the same commands in Terminal, reboot.
+4. **Recovery Mode Terminal**: `rm "/Volumes/Macintosh HD/Users/<you>/Library/LaunchAgents/com.darkmatter.principia-desk.plist"` and `touch "/Volumes/Macintosh HD/Users/<you>/principia-unlock"`, then reboot.
 
-Nothing here depends on the app being healthy: the token is checked by the same loop that holds focus, and the dead man's switch fires without any input at all.
+Nothing here depends on the main window being healthy: the console is its own window on a system-wide shortcut, the token is checked by the same loop that holds focus, and the dead man's switch fires without any input at all.
 
 ## Content generation: your provider
 

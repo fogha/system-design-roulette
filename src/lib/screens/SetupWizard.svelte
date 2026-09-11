@@ -4,6 +4,7 @@
   import ClusterBar from '../components/ClusterBar.svelte';
   import RunnerSetup from '../features/runners/RunnerSetup.svelte';
   import SearchSetup from '../features/runners/SearchSetup.svelte';
+  import RecoveryGuide from '../features/recovery/RecoveryGuide.svelte';
   import type { SearchSettingsView } from '../ipc';
   import { ArrowLeft, ArrowRight, Check, Rocket, X } from 'lucide-svelte';
 
@@ -19,7 +20,7 @@
   const STEPS = [
     { title: 'Tutor', heading: 'Choose the tutor that writes your lessons', blurb: 'Pick a runner and the model it should use. You can keep a shortlist of models per provider and change any of this later, per class.' },
     { title: 'Search', heading: 'Give the tutor a way to look things up', blurb: 'Optional. A tutor on Ollama, OpenRouter or a bare API cannot browse; with a search engine set, the desk finds and fetches documentation itself and hands the tutor only pages it retrieved. Leave it off and lessons use the pages the curriculum names.' },
-    { title: 'Recovery', heading: 'Set your break-glass phrase', blurb: 'Typing this phrase ends an enforced session. It is deliberately long so it cannot be reflexive, and using it breaks your streak.' },
+    { title: 'Recovery', heading: 'Set your break-glass phrase, and learn the way out', blurb: 'An enforced session holds the machine until the lesson is done. This phrase ends one early: it is deliberately long so it cannot be typed on reflex, and using it breaks your streak. Below it, the recovery console: a key combination that works even if the desk goes blank.' },
     { title: 'Deploy', heading: 'Review and deploy', blurb: 'This writes your preferences and opens the desk. Next you choose a class, set its starting point and add study times.' },
   ];
   const RECOVERY = 2;
@@ -106,11 +107,15 @@
       {:else if step === 1}
         <SearchSetup />
       {:else if step === RECOVERY}
-        <div class="break-glass">
-          <div class="bg-tag mono">BREAK<br />GLASS</div>
+        <div class="break-glass" class:ready={phraseReady}>
+          <div class="bg-tag mono"><span class="bg-tag-line"></span>BREAK<br />GLASS<span class="bg-tag-line"></span></div>
           <div class="bg-fields">
-            <label class="bg-label mono" for="escape-phrase">ESCAPE_PHRASE — circuit breaker · trips streak to 0 · min 40 chars</label>
+            <label class="bg-label mono" for="escape-phrase">ESCAPE_PHRASE · circuit breaker · trips the streak to 0</label>
             <input id="escape-phrase" class="bg-input mono" type="text" bind:value={phrase} />
+            <div class="bg-meter" role="progressbar" aria-label="Phrase length" aria-valuemin="0" aria-valuemax="40" aria-valuenow={Math.min(40, phrase.trim().length)}>
+              <span class="bg-meter-fill" style={`width: ${Math.min(100, (phrase.trim().length / 40) * 100)}%`}></span>
+              <span class="bg-meter-text mono">{phrase.trim().length} / 40 characters{phrase.trim().length >= 40 ? ' · long enough' : ' · keep going'}</span>
+            </div>
             <input
               class="bg-input mono"
               type="text"
@@ -119,9 +124,13 @@
               bind:value={phrase2}
             />
             <p class="bg-state mono" role="status">
-              {phraseReady ? 'phrase confirmed' : phraseProblem}
+              {phraseReady ? '✓ phrase confirmed' : phraseProblem}
             </p>
           </div>
+        </div>
+        <div class="recovery-guide">
+          <div class="rg-head"><span class="meta-label">THE WAY OUT</span><h3>If the desk ever goes blank</h3></div>
+          <RecoveryGuide {phrase} autoplay />
         </div>
       {:else}
         <dl class="review">
@@ -262,21 +271,37 @@
     background: #1f1316;
     border: 1px dashed #793030;
     border-radius: var(--radius-panel);
-    padding: 12px 14px;
+    padding: 14px 16px;
     display: flex;
-    gap: 14px;
+    gap: 16px;
     align-items: flex-start;
+    transition: border-color 0.3s, background 0.3s;
   }
+  .break-glass.ready { border-color: color-mix(in srgb, var(--ok-fg) 55%, #793030); background: #17191a; }
   .bg-tag {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
     font-size: 10px;
+    letter-spacing: 1.5px;
     color: var(--led-err);
     border: 1px solid #793030;
     border-radius: var(--radius-detail);
-    padding: 6px 8px;
+    padding: 8px 10px;
     text-align: center;
     line-height: 1.5;
-    margin-top: 14px;
+    margin-top: 6px;
+    background: repeating-linear-gradient(-45deg, transparent 0 6px, rgba(121, 48, 48, 0.18) 6px 8px);
   }
+  .bg-tag-line { width: 100%; height: 1px; background: #793030; }
+  .break-glass.ready .bg-tag { color: var(--ok-fg); border-color: color-mix(in srgb, var(--ok-fg) 50%, #793030); }
+  .break-glass.ready .bg-tag-line { background: color-mix(in srgb, var(--ok-fg) 50%, #793030); }
+  .bg-meter { position: relative; height: 18px; border-radius: 4px; background: var(--bg); overflow: hidden; border: 1px solid #3a2228; }
+  .bg-meter-fill { position: absolute; inset: 0 auto 0 0; background: linear-gradient(90deg, #793030, color-mix(in srgb, var(--ok-fg) 70%, #793030)); transition: width 0.2s; }
+  .bg-meter-text { position: relative; display: block; padding: 0 8px; font-size: 9.5px; line-height: 18px; color: #d8b0a8; letter-spacing: 0.4px; }
+  .recovery-guide { display: flex; flex-direction: column; gap: 14px; margin-top: 18px; padding: 16px; border: 1px solid var(--node-border); border-radius: var(--radius-panel); background: var(--node-bg); }
+  .rg-head h3 { margin: 4px 0 0; font-size: 15px; }
   .bg-fields {
     flex: 1;
     display: flex;

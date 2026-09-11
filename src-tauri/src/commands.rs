@@ -1236,6 +1236,35 @@ pub fn escape_session(
     }
 }
 
+/// One line typed at the recovery console.
+#[tauri::command]
+pub fn recovery_command(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    recovery: State<'_, crate::recovery::RecoveryState>,
+    line: String,
+) -> CmdResult<crate::recovery::Reply> {
+    if line.len() > 400 {
+        return Err("that line is too long".into());
+    }
+    Ok(crate::recovery::command(&app, &state, &recovery, &line))
+}
+
+/// Open the console from Settings, to see it before it is needed.
+#[tauri::command]
+pub fn open_recovery_console(app: AppHandle) -> CmdResult<()> {
+    crate::recovery::open_console(&app)
+}
+
+#[tauri::command]
+pub fn close_recovery_console(app: AppHandle) -> CmdResult<()> {
+    use tauri::Manager;
+    if let Some(window) = app.get_webview_window(crate::recovery::WINDOW) {
+        window.hide().map_err(err)?;
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub fn get_escape_phrase(state: State<'_, AppState>) -> CmdResult<String> {
     let conn = state.db.0.lock().unwrap();

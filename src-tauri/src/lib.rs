@@ -18,6 +18,7 @@ pub mod lesson_shape;
 pub mod mastery;
 pub mod progress;
 pub mod readiness;
+pub mod recovery;
 pub mod research;
 pub mod scheduler;
 pub mod search;
@@ -107,6 +108,7 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(move |app| {
             log::info!("initializing local study storage");
             let data_dir = app.path().app_data_dir().expect("app data dir resolvable");
@@ -205,6 +207,8 @@ pub fn run() {
             );
             generator.runner.database = Some(data_dir.join("principia.db"));
             generator.researcher.set_search(search::load(&conn));
+            app.manage(recovery::RecoveryState::default());
+            recovery::install(app.handle());
             app.manage(AppState {
                 db: db::Db(Mutex::new(conn)),
                 generator,
@@ -421,6 +425,9 @@ pub fn run() {
             commands::pause_schedule,
             commands::resume_schedule,
             commands::escape_session,
+            commands::recovery_command,
+            commands::open_recovery_console,
+            commands::close_recovery_console,
             commands::get_escape_phrase,
             commands::get_dashboard,
             commands::get_progress_lesson,
