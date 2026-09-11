@@ -41,8 +41,23 @@ import type {
   LanguageSessionResult,
   LessonCsvResult,
   PlannedSlot,
+  SearchProvider,
+  SearchResult,
+  SearchSettingsView,
   SessionPlan,
 } from './ipc';
+
+let mockSearchProvider: SearchProvider = 'none';
+let mockSearxngUrl = 'http://127.0.0.1:8899';
+let mockBraveKey = false;
+let mockTavilyKey = false;
+function mockSearch(): SearchSettingsView {
+  const available = mockSearchProvider === 'searxng' || (mockSearchProvider === 'brave' && mockBraveKey) || (mockSearchProvider === 'tavily' && mockTavilyKey);
+  const why = mockSearchProvider === 'none' ? "Web search is off. Lessons use only the curriculum's own sources."
+    : mockSearchProvider === 'searxng' ? `SearXNG is answering at ${mockSearxngUrl}.`
+    : available ? `${mockSearchProvider === 'brave' ? 'Brave Search' : 'Tavily'} key is set.` : `No ${mockSearchProvider === 'brave' ? 'Brave Search' : 'Tavily'} key is set.`;
+  return { provider: mockSearchProvider, searxng_url: mockSearxngUrl, default_searxng_url: 'http://127.0.0.1:8899', brave_key_set: mockBraveKey, tavily_key_set: mockTavilyKey, available, why };
+}
 
 // References and course metadata share the native authoring inputs. Browser
 // demos should never label an event-loop lesson as Bash or System Design.
@@ -716,6 +731,13 @@ export const mockApi = {
   listAgentRunners: async () => previewRunners(),
   getRunnerModels: async (runner: string, _refresh = false) => previewModels(runner),
   setRunnerKey: desktopRequired,
+  getSearchSettings: async (): Promise<SearchSettingsView> => mockSearch(),
+  setSearchSettings: async (provider: SearchProvider, searxngUrl: string): Promise<SearchSettingsView> => { mockSearchProvider = provider; mockSearxngUrl = searxngUrl || 'http://127.0.0.1:8899'; return mockSearch(); },
+  setSearchKey: async (provider: SearchProvider, value: string): Promise<SearchSettingsView> => { if (provider === 'brave') mockBraveKey = !!value.trim(); if (provider === 'tavily') mockTavilyKey = !!value.trim(); return mockSearch(); },
+  testSearch: async (query: string): Promise<SearchResult[]> => [
+    { title: 'Redirections (Bash Reference Manual)', url: 'https://www.gnu.org/software/bash/manual/html_node/Redirections.html', snippet: `Preview result for “${query}”: before a command is executed, its input and output may be redirected using a special notation interpreted by the shell.`, engine: 'preview' },
+    { title: 'bash(1) — Linux manual page', url: 'https://man7.org/linux/man-pages/man1/bash.1.html', snippet: 'REDIRECTION: Before a command is executed, its input and output may be redirected.', engine: 'preview' },
+  ],
   getLocalModels: async () => previewLocal(),
   getLocalPulls: async () => [],
   installLocalRunner: desktopRequired,

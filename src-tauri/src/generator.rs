@@ -1848,6 +1848,15 @@ impl Generator {
                 RESEARCH_SOURCE_TARGET,
             )
             .await;
+        if !gathered.discovered.is_empty() {
+            self.log(format!(
+                "research: web search suggested {} page(s) on the subject's hosts",
+                gathered.discovered.len()
+            ));
+        }
+        if let Some(reason) = &gathered.search_error {
+            self.log(format!("research: web search failed — {reason}"));
+        }
         for (url, reason) in &gathered.skipped {
             self.log(format!("research: skipped {url} — {reason}"));
         }

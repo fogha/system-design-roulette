@@ -363,6 +363,10 @@ pub struct Gathered {
     pub sources: Vec<ResearchSource>,
     pub skipped: Vec<(String, String)>,
     pub substituted: Vec<(String, String)>,
+    /// Pages the configured web search added beyond the curated seeds.
+    pub discovered: Vec<String>,
+    /// Why the web search produced nothing, when it was configured and failed.
+    pub search_error: Option<String>,
 }
 
 impl Gathered {
@@ -384,6 +388,9 @@ impl Gathered {
 pub struct Researcher {
     client: reqwest::Client,
     cache: Arc<Mutex<HashMap<String, CachedDocument>>>,
+    /// The web search the desk may use to find pages beyond the curated
+    /// seeds; shared with the settings commands, which replace it on change.
+    search: Arc<Mutex<crate::search::SearchConfig>>,
 }
 
 impl Default for Researcher {
@@ -404,6 +411,64 @@ impl Researcher {
         Self {
             client,
             cache: Arc::new(Mutex::new(HashMap::new())),
+            search: Arc::new(Mutex::new(crate::search::SearchConfig::default())),
+        }
+    }
+
+    /// Replace the search configuration for every lesson from now on.
+    pub fn set_search(&self, config: crate::search::SearchConfig) {
+        if let Ok(mut current) = self.search.lock() {
+            *current = config;
+        }
+    }
+
+    pub fn search_config(&self) -> crate::search::SearchConfig {
+        self.search
+            .lock()
+            .map(|config| config.clone())
+            .unwrap_or_default()
+    }
+
+    /// The HTTP client, for probes that share its timeout and user agent.
+    pub fn client(&self) -> &reqwest::Client {
+        &self.client
+    }
+
+    /// Ask the configured engine for documentation pages about the topic,
+    /// restricted to the subject's allowed hosts. Nothing configured, or an
+    /// engine error, yields no candidates and a reason for the log.
+    async fn discover_web(
+        &self,
+        focus: &str,
+        topic: &str,
+        limit: usize,
+    ) -> (Vec<String>, Option<String>) {
+        let config = self.search_config();
+        if !config.enabled() {
+            return (Vec::new(), None);
+        }
+        let Some(course) = crate::catalog::course(focus) else {
+            return (Vec::new(), None);
+        };
+        let query = format!("{topic} {}", course.label);
+        match crate::search::search(
+            &self.client,
+            &config,
+            &query,
+            limit + 4,
+            course.source_hosts,
+        )
+        .await
+        {
+            Ok(results) => (
+                results
+                    .into_iter()
+                    .map(|result| result.url)
+                    .filter(|url| is_source_for(focus, url))
+                    .collect(),
+                None,
+            ),
+            Err(reason) => (Vec::new(), Some(reason)),
         }
     }
 
@@ -591,6 +656,17 @@ impl Researcher {
                 }
             }
         }
+        let mut gathered = Gathered::default();
+        if candidates.len() < limit {
+            let (found, error) = self.discover_web(focus, topic, limit).await;
+            gathered.search_error = error;
+            for discovered in found {
+                if !candidates.contains(&discovered) {
+                    gathered.discovered.push(discovered.clone());
+                    candidates.push(discovered);
+                }
+            }
+        }
         // A documentation landing page teaches far less than the page about the
         // actual mechanism, and some spec roots are enormous. Rank by how
         // specific the path is, keeping curated seeds ahead of discovery on ties.
@@ -609,7 +685,6 @@ impl Researcher {
         // the vague pages we just deprioritized.
         candidates.truncate(limit.saturating_add(2));
 
-        let mut gathered = Gathered::default();
         let mut failed: Vec<String> = Vec::new();
         for (url, outcome) in self.fetch_all(&candidates, None).await {
             match outcome {
@@ -1188,6 +1263,8 @@ mod tests {
                 ("https://man7.org/x".into(), "404".into()),
             ],
             substituted: Vec::new(),
+            discovered: Vec::new(),
+            search_error: None,
         };
         assert_eq!(
             gathered.unreachable_hosts(),

@@ -11,6 +11,7 @@ use tauri::{AppHandle, Emitter, State};
 type CmdResult<T> = Result<T, String>;
 pub mod placement;
 pub mod portability;
+pub mod search;
 
 #[tauri::command]
 pub fn get_enrollment_options(

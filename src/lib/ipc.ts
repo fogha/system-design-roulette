@@ -642,6 +642,26 @@ export interface ExerciseView {
   reflection: string;
 }
 
+export type SearchProvider = 'none' | 'searxng' | 'brave' | 'tavily';
+
+/** The web search the desk uses to find documentation, and whether it works right now. */
+export interface SearchSettingsView {
+  provider: SearchProvider;
+  searxng_url: string;
+  default_searxng_url: string;
+  brave_key_set: boolean;
+  tavily_key_set: boolean;
+  available: boolean;
+  why: string;
+}
+
+export interface SearchResult {
+  title: string;
+  url: string;
+  snippet: string;
+  engine: string;
+}
+
 /** Where a lesson's CSV was written, and what it holds. */
 export interface LessonCsvResult {
   path: string;
@@ -704,6 +724,10 @@ const realApi = {
   saveRunnerConfiguration: (configuration: RunnerConfiguration) => invoke<RunnerConfiguration>('save_runner_configuration', { configuration }),
   getRunnerModels: (runner: string, refresh = false) => invoke<ModelCatalog>('get_runner_models', { runner, refresh }),
   setRunnerKey: (runner: string, value: string) => invoke<void>('set_runner_key', { runner, value }),
+  getSearchSettings: () => invoke<SearchSettingsView>('get_search_settings'),
+  setSearchSettings: (provider: SearchProvider, searxngUrl: string) => invoke<SearchSettingsView>('set_search_settings', { provider, searxngUrl }),
+  setSearchKey: (provider: SearchProvider, value: string) => invoke<SearchSettingsView>('set_search_key', { provider, value }),
+  testSearch: (query: string) => invoke<SearchResult[]>('test_search', { query }),
   getLocalModels: () => invoke<LocalStatus>('get_local_models'),
   getLocalPulls: () => invoke<LocalPull[]>('get_local_pulls'),
   installLocalRunner: () => invoke<string>('install_local_runner'),

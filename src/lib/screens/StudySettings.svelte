@@ -7,6 +7,7 @@
   import { ShieldAlert } from 'lucide-svelte';
   import RunnerSetup from '../features/runners/RunnerSetup.svelte';
   import RunnerFallback from '../features/runners/RunnerFallback.svelte';
+  import SearchSetup from '../features/runners/SearchSetup.svelte';
   let agent = $state('claude');
   let customBin = $state('');
   let model = $state('opus');
@@ -16,12 +17,13 @@
 </script>
 
 <div class="settings-page">
-  <header><div class="meta-label">CONFIGURATION — TUTOR · RECOVERY</div><h1>Configure your desk</h1><p>Each service has its own controls. Class-specific tutor preferences live with the class.</p></header>
+  <header><div class="meta-label">CONFIGURATION — TUTOR · SEARCH · RECOVERY</div><h1>Configure your desk</h1><p>Each service has its own controls. Class-specific tutor preferences live with the class.</p></header>
   <FlowStage number="01"><section aria-label="Tutor configuration">
     <RunnerSetup bind:agent bind:model bind:customBin onUse={saveTutor} onKeyChanged={() => app.refresh()} />
     <RunnerFallback />
   </section></FlowStage>
-  <FlowStage number="02" last><section aria-label="Recovery"><NodeCard Icon={ShieldAlert} name="break-glass" badge={app.state?.enforcement_disarmed ? 'disarmed' : 'standby'} badgeTone="red">
+  <FlowStage number="02"><section aria-label="Web search"><SearchSetup /></section></FlowStage>
+  <FlowStage number="03" last><section aria-label="Recovery"><NodeCard Icon={ShieldAlert} name="break-glass" badge={app.state?.enforcement_disarmed ? 'disarmed' : 'standby'} badgeTone="red">
     <div class="recovery"><span class="recovery-tag mono">RECOVERY</span><div><p>Your emergency phrase and <code>principia-unlock</code> release token remain available during enforced study.</p><p class="mono">{app.state?.enforcement_disarmed ? 'Enforcement disarmed · recovery file present' : 'Recovery file absent'}</p></div></div>
   </NodeCard></section></FlowStage>
 </div>

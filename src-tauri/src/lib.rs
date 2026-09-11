@@ -20,6 +20,7 @@ pub mod progress;
 pub mod readiness;
 pub mod research;
 pub mod scheduler;
+pub mod search;
 pub mod selection;
 pub mod state;
 pub mod storage;
@@ -203,6 +204,7 @@ pub fn run() {
                 execution_log::Feed::new(log_tx),
             );
             generator.runner.database = Some(data_dir.join("principia.db"));
+            generator.researcher.set_search(search::load(&conn));
             app.manage(AppState {
                 db: db::Db(Mutex::new(conn)),
                 generator,
@@ -375,6 +377,10 @@ pub fn run() {
             commands::portability::import_profile,
             commands::portability::reveal_export,
             commands::portability::export_lesson_csv,
+            commands::search::get_search_settings,
+            commands::search::set_search_settings,
+            commands::search::set_search_key,
+            commands::search::test_search,
             commands::get_curriculum_map,
             commands::configure_classroom_program,
             commands::upsert_classroom_slot,

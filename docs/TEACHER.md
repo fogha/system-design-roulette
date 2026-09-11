@@ -78,6 +78,25 @@ lesson that overruns is condensed rather than expanded. The editorial rubric
 scores coverage depth separately from mechanism depth and specificity, and
 depth means precision, not length.
 
+Retrieval reports what it did. Every source it skipped is logged with its
+reason (a timeout, a 404, too few readable words), and a page it could not
+reach may be read from a mirror: the GNU Bash, coreutils, grep, sed, awk,
+find, make and tar manual pages fall back to the same material on man7.org,
+quoting the section about the page's own topic. A lesson written with no
+retrieved documentation carries a note naming the hosts that could not be
+reached, shown above the lesson in the reader, and a link the curriculum
+itself names stays in the reading list even when it cannot be reached at
+the time, marked as such.
+
+Tutors without web access (Ollama, OpenRouter, any bare chat API) can be
+given a search engine in Settings → Web search: a SearXNG instance (a URL
+and no key; Remote Ledger's local instance on port 8899 is the default),
+the Brave Search API or Tavily (a key each, kept in the system keychain).
+The desk searches for itself, restricted to the subject's allowed hosts,
+fetches what it finds, and hands the tutor only pages it retrieved; a
+search result is a candidate, never a citation. With search off, lessons
+use the curriculum's own sources and their mirrors.
+
 German and Italian deliberately do not reuse the frontend-engineering dossier.
 `language.rs` owns their CEFR evidence model with seven strands: listening,
 reading, spoken interaction, spoken production, writing, grammar, and
