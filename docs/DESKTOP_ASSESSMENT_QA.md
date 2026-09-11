@@ -403,3 +403,21 @@ only while the Mac had been idle for over five minutes:
   samples is covered by `tests/challenges.rs` and the preview test rather than
   a capture. The route card on the overview sits below the metrics and was not
   scrolled into the capture.
+
+## Changed curriculum and path review — 2026-09-11
+
+Rebuilding the QA bundle with the new reference lessons changed every
+engineering course's fingerprint, so the profile's accepted paths were stale:
+
+- The first build left the desk on its loading screen with the toast "The
+  curriculum changed. Review a new path before starting another lesson."
+  (screenshot 79): the overview route summary's selection peek failed the
+  whole app state. After the fix, Classes opened normally (screenshot 82) and
+  the Starting point tab showed the accepted revision with "revise starting
+  point" (screenshot 83).
+- Revise opened the embedded setup with "Start from the foundations" selected
+  and Review path / Save & return (screenshot 84); Review path showed the
+  recommendation (screenshot 85) and Accept learning path recorded revision 4
+  with the new fingerprint `379763f7…` while revisions 1–3 keep the old one
+  (screenshot 86). The class row now points at the new revision, the overview
+  shows "Next:" again and no curriculum-changed notice remains.

@@ -4,7 +4,7 @@ export type LanguageId = "german" | "italian";
 export type ClassroomSubjectId = FocusArea | LanguageId;
 export const COURSE_FINGERPRINTS: Record<ClassroomSubjectId, string> = {
   "system-design": "2b6ee917fda6e1b2eccb10a01748f0426e44c8befbe6cbd324646778a1ffc200",
-  "javascript": "b804c653fcc839e1c34b000e91404ed43011d6584dee310ce27bc467ded0da54",
+  "javascript": "b03b2c7257dab1f884dbad94f58ae6d1873d0f50a77f900a46cc567d7ae973b2",
   "typescript": "379763f7182cc4cecd5f12c89f4fda45cf60559c8cb29fe8a0a9448b5ae41c16",
   "frontend-architecture": "fbdebc631e57f3669900032e3c4de8f9a07cef86dd1e7a2937616932cd967698",
   "developer-tooling": "0c746bd8a7c7e42883817f5cfda47ed4508baeeeb21a3dcf8fdbd54f090c51de",

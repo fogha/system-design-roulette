@@ -2345,21 +2345,21 @@
     "curriculum": {
       "phase": "foundations",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Event loop: macrotasks, microtasks, and rendering when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Predict the order in which tasks, microtasks and rendering steps run for a given sequence of browser events.",
       "mechanisms": [
-        "The first-principles mechanism behind Event loop: macrotasks, microtasks, and rendering",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The runtime trade-off and its failure boundary"
+        "task queue selection per turn",
+        "microtask checkpoint after each callback",
+        "rendering opportunity between tasks"
       ],
-      "production_scenario": "Apply Event loop: macrotasks, microtasks, and rendering inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "A form submit handler awaits a fetch and the spinner never paints before the request completes.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "Microtasks are not 'higher priority tasks'; they run to exhaustion before rendering and can starve the frame."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A recorded trace showing the task, its microtasks and the following frame in order.",
+      "artifact": "A timing notebook that predicts and confirms ordering for three interaction patterns.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise",
+        "https://html.spec.whatwg.org/multipage/webappapis.html#event-loops"
       ],
       "related_concepts": []
     }
@@ -2374,21 +2374,21 @@
     "curriculum": {
       "phase": "foundations",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Closures, scope chains, and lexical environments when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Predict what a captured variable holds when a closure finally runs and choose what to capture on purpose.",
       "mechanisms": [
-        "The first-principles mechanism behind Closures, scope chains, and lexical environments",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The language trade-off and its failure boundary"
+        "lexical environment chain resolved at call time",
+        "per-iteration let bindings",
+        "parameters as value snapshots"
       ],
-      "production_scenario": "Apply Closures, scope chains, and lexical environments inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "Handlers created in a loop all report the last index and a debounced search keeps an old configuration.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "A closure captures the binding, not the value it held when the function was created."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A transcript where the same closure prints different values as the outer binding changes.",
+      "artifact": "A stale-closure diagnosis with three rewritten versions and their observed outputs.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Closures",
+        "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/let"
       ],
       "related_concepts": []
     }
@@ -2403,21 +2403,21 @@
     "curriculum": {
       "phase": "foundations",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Prototype chains and property descriptors when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Trace property lookup through a prototype chain and control it with property descriptors.",
       "mechanisms": [
-        "The first-principles mechanism behind Prototype chains and property descriptors",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The language trade-off and its failure boundary"
+        "[[Prototype]] lookup walk",
+        "own versus inherited property descriptors",
+        "shadowing and Object.create"
       ],
-      "production_scenario": "Apply Prototype chains and property descriptors inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "A shared default object on a prototype is mutated by one instance and every instance changes.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "Assignment through an instance creates an own property; it never writes to the prototype."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A lookup trace with Object.getOwnPropertyDescriptor output before and after assignment.",
+      "artifact": "A prototype-chain diagram with a descriptor table for one real class hierarchy.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Inheritance_and_the_prototype_chain",
+        "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/defineProperty"
       ],
       "related_concepts": []
     }
@@ -2432,21 +2432,21 @@
     "curriculum": {
       "phase": "foundations",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply ES modules vs CommonJS loading semantics when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Explain how ES modules and CommonJS load, link and evaluate differently and where interop breaks.",
       "mechanisms": [
-        "The first-principles mechanism behind ES modules vs CommonJS loading semantics",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The modules trade-off and its failure boundary"
+        "static linking with live bindings",
+        "synchronous require evaluation order",
+        "dual-package hazard"
       ],
-      "production_scenario": "Apply ES modules vs CommonJS loading semantics inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "A library ships both formats and an application ends up with two copies of a singleton.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "import and require are not interchangeable spellings; they bind and evaluate on different schedules."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A module graph trace showing evaluation order and binding liveness.",
+      "artifact": "A dual-package audit with a chosen exports map and a test for a single instance.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Modules",
+        "https://nodejs.org/api/packages.html#dual-commonjsmodule-packages"
       ],
       "related_concepts": []
     }
@@ -2463,21 +2463,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply async/await desugaring and continuation scheduling when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Rewrite an async function as explicit promise reactions and predict how many microtask turns it takes.",
       "mechanisms": [
-        "The first-principles mechanism behind async/await desugaring and continuation scheduling",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The async trade-off and its failure boundary"
+        "await as promise resolution plus continuation",
+        "implicit try/catch to rejection",
+        "return await versus return"
       ],
-      "production_scenario": "Apply async/await desugaring and continuation scheduling inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "An error thrown after an await is swallowed because a caller forgot to await the returned promise.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "await does not block the event loop; it schedules the rest of the function as a continuation."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A side-by-side trace of the async function and its desugared form with turn counts.",
+      "artifact": "A desugaring notebook for three async patterns with observed microtask ordering.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/async_function",
+        "https://tc39.es/ecma262/#sec-async-function-objects"
       ],
       "related_concepts": []
     }
@@ -2494,21 +2494,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Promise reactions and microtask queue ordering when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Order promise reactions correctly and explain why chained then callbacks interleave as they do.",
       "mechanisms": [
-        "The first-principles mechanism behind Promise reactions and microtask queue ordering",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The async trade-off and its failure boundary"
+        "reaction jobs in the microtask queue",
+        "then returning a new promise",
+        "resolve with a thenable adds turns"
       ],
-      "production_scenario": "Apply Promise reactions and microtask queue ordering inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "Two logging helpers disagree about ordering and a race in tests passes only sometimes.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "Promise callbacks are not called synchronously even when the promise is already settled."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A predicted-then-observed ordering table for a chain that resolves with a thenable.",
+      "artifact": "A microtask ordering cheat sheet verified against the engine for five chains.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Using_promises",
+        "https://tc39.es/ecma262/#sec-promise-jobs"
       ],
       "related_concepts": []
     }
@@ -2525,21 +2525,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply V8 hidden classes and inline caching when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Explain how object shapes and inline caches make property access fast and what breaks them.",
       "mechanisms": [
-        "The first-principles mechanism behind V8 hidden classes and inline caching",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The engine trade-off and its failure boundary"
+        "hidden class transitions on property addition order",
+        "monomorphic to megamorphic inline caches",
+        "dictionary mode fallback"
       ],
-      "production_scenario": "Apply V8 hidden classes and inline caching inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "A hot loop slows tenfold after objects start being created with properties in varying order.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "Objects with the same keys are not the same shape if their properties were added in a different order."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A microbenchmark showing monomorphic versus megamorphic access with %DebugPrint or a profile.",
+      "artifact": "A shape-stability guideline with a benchmark proving the difference for one data type.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://v8.dev/blog/fast-properties",
+        "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Working_with_objects"
       ],
       "related_concepts": []
     }
@@ -2556,21 +2556,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Generational garbage collection and write barriers when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Explain generational collection and write barriers well enough to predict allocation pressure and pauses.",
       "mechanisms": [
-        "The first-principles mechanism behind Generational garbage collection and write barriers",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The engine trade-off and its failure boundary"
+        "nursery scavenges versus old-space marking",
+        "promotion after survival",
+        "write barriers tracking old-to-young pointers"
       ],
-      "production_scenario": "Apply Generational garbage collection and write barriers inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "A dashboard allocates short-lived objects per frame and the page stutters on collection pauses.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "Garbage collection cost tracks live objects and pointer churn, not how much memory is unused."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "An allocation timeline correlating scavenge events with frame drops.",
+      "artifact": "An allocation-reduction change with before and after GC traces.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://v8.dev/blog/trash-talk",
+        "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Memory_management"
       ],
       "related_concepts": []
     }
@@ -2587,21 +2587,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Interpreter tiers, JIT compilation, and deoptimization when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Explain interpreter tiers, optimizing compilation and deoptimization and read a deopt reason.",
       "mechanisms": [
-        "The first-principles mechanism behind Interpreter tiers, JIT compilation, and deoptimization",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The engine trade-off and its failure boundary"
+        "bytecode interpretation before optimization",
+        "speculative optimization on type feedback",
+        "deoptimization on invalidated assumptions"
       ],
-      "production_scenario": "Apply Interpreter tiers, JIT compilation, and deoptimization inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "A function optimized for numbers receives a string once and the whole hot path keeps deoptimizing.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "Optimized code is a bet on observed types; a single unexpected value can throw it away."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A --trace-deopt or profiler output naming the deoptimization reason for one function.",
+      "artifact": "A deopt investigation note with the fix and the confirmed stable tier.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://v8.dev/docs/turbofan",
+        "https://v8.dev/blog/ignition-interpreter"
       ],
       "related_concepts": []
     }
@@ -2618,21 +2618,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Proxy traps and invariant enforcement when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Implement a Proxy trap correctly, including the invariants the engine enforces against it.",
       "mechanisms": [
-        "The first-principles mechanism behind Proxy traps and invariant enforcement",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The language trade-off and its failure boundary"
+        "trap dispatch on internal methods",
+        "Reflect as the default behavior",
+        "non-configurable property invariants"
       ],
-      "production_scenario": "Apply Proxy traps and invariant enforcement inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "A validation proxy throws TypeError because a trap reports a value that contradicts a frozen target.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "A Proxy cannot lie about non-configurable or non-extensible targets; invariants are checked after the trap."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A trap log showing which internal method each operation invoked.",
+      "artifact": "A logged, invariant-safe proxy wrapper with tests for frozen targets.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Proxy",
+        "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Reflect"
       ],
       "related_concepts": []
     }
@@ -2649,21 +2649,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply WeakRef, FinalizationRegistry, and lifecycle edges when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Use WeakRef and FinalizationRegistry only where their timing is acceptable and explain why cleanup is not guaranteed.",
       "mechanisms": [
-        "The first-principles mechanism behind WeakRef, FinalizationRegistry, and lifecycle edges",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The memory trade-off and its failure boundary"
+        "weak targets dereferenced per turn",
+        "finalization callbacks scheduled after collection",
+        "KeepDuringJob semantics"
       ],
-      "production_scenario": "Apply WeakRef, FinalizationRegistry, and lifecycle edges inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "A cache built on WeakRef clears entries mid-request on one device and never on another.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "Finalization callbacks are not destructors; they may run late or never."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A trace showing deref results across turns and the delayed finalization callback.",
+      "artifact": "A cache design note stating what must not depend on finalization timing.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/WeakRef",
+        "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/FinalizationRegistry"
       ],
       "related_concepts": []
     }
@@ -2681,21 +2681,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Web Workers, structured cloning, and transferables when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Move CPU work off the main thread with workers and choose between cloning and transferring data.",
       "mechanisms": [
-        "The first-principles mechanism behind Web Workers, structured cloning, and transferables",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The concurrency trade-off and its failure boundary"
+        "dedicated worker message passing",
+        "structured clone cost",
+        "transferable ownership handoff"
       ],
-      "production_scenario": "Apply Web Workers, structured cloning, and transferables inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "Parsing a large file in a worker still stalls the page because the result is cloned back each time.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "Posting a message is not free: cloning copies the whole graph, and transfer moves ownership."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A profile comparing clone and transfer for the same payload with main-thread task lengths.",
+      "artifact": "A worker pipeline with measured message cost and a transfer strategy.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Using_web_workers",
+        "https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Transferable_objects"
       ],
       "related_concepts": []
     }
@@ -2712,21 +2712,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply WebAssembly linear memory, typed views, and JavaScript interop when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Exchange data with a WebAssembly module through linear memory and typed views without corrupting it.",
       "mechanisms": [
-        "The first-principles mechanism behind WebAssembly linear memory, typed views, and JavaScript interop",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The interop trade-off and its failure boundary"
+        "linear memory as one ArrayBuffer",
+        "typed array views over offsets",
+        "memory growth detaching views"
       ],
-      "production_scenario": "Apply WebAssembly linear memory, typed views, and JavaScript interop inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "A view into wasm memory goes stale after the module grows memory and reads garbage.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "A typed array view is not a live pointer; memory growth replaces the buffer."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A test that grows memory and shows the old view detached.",
+      "artifact": "A boundary helper that refreshes views and documents the allocation contract.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/WebAssembly/Guides/Understanding_the_text_format",
+        "https://developer.mozilla.org/en-US/docs/WebAssembly/Reference/JavaScript_interface/Memory"
       ],
       "related_concepts": []
     }
@@ -2743,21 +2743,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply RegExp engines: backtracking vs Thompson NFA when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Recognize patterns that backtrack catastrophically and rewrite them for linear behavior.",
       "mechanisms": [
-        "The first-principles mechanism behind RegExp engines: backtracking vs Thompson NFA",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The engine trade-off and its failure boundary"
+        "backtracking search with nested quantifiers",
+        "Thompson NFA and linear engines",
+        "atomic groups and possessive rewrites"
       ],
-      "production_scenario": "Apply RegExp engines: backtracking vs Thompson NFA inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "A log-parsing regex hangs a request thread on one malformed line.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "A regex that matches quickly on valid input can still take exponential time on invalid input."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A timing table for the pattern against crafted inputs before and after the rewrite.",
+      "artifact": "A catalogue of the service's regexes with worst-case inputs and safe rewrites.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Regular_expressions",
+        "https://v8.dev/blog/non-backtracking-regexp"
       ],
       "related_concepts": []
     }
@@ -2774,21 +2774,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Error stack capture, async stacks, and source maps when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Read a captured stack, keep async frames, and map production traces back to source.",
       "mechanisms": [
-        "The first-principles mechanism behind Error stack capture, async stacks, and source maps",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The debugging trade-off and its failure boundary"
+        "Error.captureStackTrace at construction",
+        "async stack tagging across awaits",
+        "source map remapping of frames"
       ],
-      "production_scenario": "Apply Error stack capture, async stacks, and source maps inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "A production error points at a minified line in the wrong file and the async caller is missing.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "A stack is captured when the Error is created, not when it is thrown."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A remapped trace with async frames next to the original minified one.",
+      "artifact": "An error-reporting setup that uploads maps and verifies remapped frames.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Error/stack",
+        "https://v8.dev/docs/stack-trace-api"
       ],
       "related_concepts": []
     }
@@ -2805,21 +2805,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Temporal semantics, Date pitfalls, and polyfilling a non-Baseline API when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Use Temporal for correct calendar and time-zone arithmetic and know when a polyfill is required.",
       "mechanisms": [
-        "The first-principles mechanism behind Temporal semantics, Date pitfalls, and polyfilling a non-Baseline API",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The language trade-off and its failure boundary"
+        "plain versus zoned types",
+        "calendar-aware arithmetic",
+        "polyfill detection for a non-Baseline API"
       ],
-      "production_scenario": "Apply Temporal semantics, Date pitfalls, and polyfilling a non-Baseline API inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "A scheduling feature adds one day across a DST change and lands an hour off.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "Adding 24 hours is not adding one calendar day."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A test suite crossing DST and month boundaries with Date and Temporal side by side.",
+      "artifact": "A date-handling policy with polyfill loading and covered edge cases.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://tc39.es/proposal-temporal/docs/",
+        "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Temporal"
       ],
       "related_concepts": []
     }
@@ -2837,21 +2837,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply PerformanceObserver, long tasks, and event-loop debt when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Attribute long tasks and event-loop debt to code using PerformanceObserver entries.",
       "mechanisms": [
-        "The first-principles mechanism behind PerformanceObserver, long tasks, and event-loop debt",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The profiling trade-off and its failure boundary"
+        "longtask and long-animation-frame entries",
+        "buffered entries for early events",
+        "attribution scripts and containers"
       ],
-      "production_scenario": "Apply PerformanceObserver, long tasks, and event-loop debt inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "Users report a sluggish page but the profiler is clean on the developer's machine.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "The absence of long tasks locally proves nothing about the devices that report the problem."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A field recording of long-task entries with attribution for one slow interaction.",
+      "artifact": "A field instrumentation hook that reports attributed long tasks.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/Web/API/PerformanceObserver",
+        "https://developer.mozilla.org/en-US/docs/Web/API/PerformanceLongTaskTiming"
       ],
       "related_concepts": []
     }
@@ -2869,21 +2869,21 @@
     "curriculum": {
       "phase": "synthesis",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Atomics, SharedArrayBuffer, and memory ordering when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Coordinate workers over shared memory with atomics and reason about memory ordering.",
       "mechanisms": [
-        "The first-principles mechanism behind Atomics, SharedArrayBuffer, and memory ordering",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The concurrency trade-off and its failure boundary"
+        "atomic load and store as publication points",
+        "wait and notify on shared cells",
+        "cross-origin isolation requirement"
       ],
-      "production_scenario": "Apply Atomics, SharedArrayBuffer, and memory ordering inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "A shared ring buffer shows torn frames because a plain flag read observes the flag before the data.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "Setting a plain flag does not order the writes before it for another thread."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A trace showing correct ordering with atomics and torn reads without.",
+      "artifact": "A measured shared-memory pipeline with an ordering argument and a rollback note.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Atomics",
+        "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/SharedArrayBuffer"
       ],
       "related_concepts": []
     }
@@ -2898,21 +2898,21 @@
     "curriculum": {
       "phase": "foundations",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply The DOM as a live tree: nodes, live collections, and mutation cost when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Explain the DOM as a live tree and estimate the cost of reads, writes and live collections.",
       "mechanisms": [
-        "The first-principles mechanism behind The DOM as a live tree: nodes, live collections, and mutation cost",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The dom trade-off and its failure boundary"
+        "node tree with parent and sibling links",
+        "live HTMLCollections versus static NodeLists",
+        "batch mutation via fragments"
       ],
-      "production_scenario": "Apply The DOM as a live tree: nodes, live collections, and mutation cost inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "A list rebuild appends nodes one by one inside a loop that also reads their sizes.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "A live collection re-evaluates on access; iterating it while appending can loop forever."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A timing comparison of per-node appends against a fragment insert.",
+      "artifact": "A DOM update helper with measured batch behavior.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/Web/API/Document_Object_Model/Introduction",
+        "https://developer.mozilla.org/en-US/docs/Web/API/DocumentFragment"
       ],
       "related_concepts": []
     }
@@ -2927,21 +2927,21 @@
     "curriculum": {
       "phase": "foundations",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply CSSOM, computed style, and the cascade at runtime when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Trace how the cascade produces computed style at runtime and what invalidates it.",
       "mechanisms": [
-        "The first-principles mechanism behind CSSOM, computed style, and the cascade at runtime",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The rendering trade-off and its failure boundary"
+        "cascade origins and specificity",
+        "computed versus resolved values",
+        "style invalidation scopes"
       ],
-      "production_scenario": "Apply CSSOM, computed style, and the cascade at runtime inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "Toggling one class recomputes styles for the whole document and the frame drops.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "getComputedStyle returns resolved values, which can force a synchronous style recalculation."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A trace showing recalculation scope for a targeted versus a broad selector change.",
+      "artifact": "A stylesheet change with measured recalc scope before and after.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/Web/API/CSS_Object_Model",
+        "https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_cascade/Cascade"
       ],
       "related_concepts": []
     }
@@ -2956,21 +2956,21 @@
     "curriculum": {
       "phase": "foundations",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Event capture, bubbling, and delegation at scale when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Handle events for thousands of elements with one listener using capture, bubbling and target checks.",
       "mechanisms": [
-        "The first-principles mechanism behind Event capture, bubbling, and delegation at scale",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The dom trade-off and its failure boundary"
+        "capture then target then bubble phases",
+        "event delegation at an ancestor",
+        "composed events across shadow roots"
       ],
-      "production_scenario": "Apply Event capture, bubbling, and delegation at scale inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "A table with ten thousand rows attaches a listener per cell and interaction lags.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "stopPropagation does not cancel the default action; preventDefault does."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A comparison of listener counts and input latency before and after delegation.",
+      "artifact": "A delegation utility with tests for phases and shadow-root boundaries.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/Learn_web_development/Core/Scripting/Events",
+        "https://developer.mozilla.org/en-US/docs/Web/API/Event/composedPath"
       ],
       "related_concepts": []
     }
@@ -2985,21 +2985,21 @@
     "curriculum": {
       "phase": "foundations",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Chrome DevTools Protocol: what the inspector is actually doing when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Explain which protocol domains the inspector uses and drive one of them from a script.",
       "mechanisms": [
-        "The first-principles mechanism behind Chrome DevTools Protocol: what the inspector is actually doing",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The debugging trade-off and its failure boundary"
+        "domains, commands and events over a socket",
+        "Runtime evaluation and Debugger pauses",
+        "Performance and Tracing domains"
       ],
-      "production_scenario": "Apply Chrome DevTools Protocol: what the inspector is actually doing inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "A flaky UI test needs the same trace the DevTools performance panel shows, captured in CI.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "The inspector is a client; anything it shows can be requested by another client."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A script that records a trace over the protocol and lists the captured events.",
+      "artifact": "A reproducible trace-capture script for one interaction.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.chrome.com/docs/devtools/",
+        "https://developer.chrome.com/docs/devtools/performance"
       ],
       "related_concepts": []
     }
@@ -3017,21 +3017,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Critical rendering path: parse, style, layout, paint, composite when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Order parse, style, layout, paint and composite and identify which resources block each step.",
       "mechanisms": [
-        "The first-principles mechanism behind Critical rendering path: parse, style, layout, paint, composite",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The rendering trade-off and its failure boundary"
+        "render-blocking CSS and parser-blocking scripts",
+        "layout after style",
+        "paint and compositing layers"
       ],
-      "production_scenario": "Apply Critical rendering path: parse, style, layout, paint, composite inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "A hero image appears late because a font stylesheet blocks first paint.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "A script at the end of the body still blocks the parser unless it is deferred or async."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A filmstrip and network waterfall annotated with the blocking resource.",
+      "artifact": "A render-path audit of one page with the change that moved first paint.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://web.dev/articles/critical-rendering-path",
+        "https://developer.mozilla.org/en-US/docs/Web/Performance/Guides/How_browsers_work"
       ],
       "related_concepts": []
     }
@@ -3048,21 +3048,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Fetch, Streams, and AbortController for real network code when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Consume and produce streaming responses and cancel requests correctly with AbortController.",
       "mechanisms": [
-        "The first-principles mechanism behind Fetch, Streams, and AbortController for real network code",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The networking trade-off and its failure boundary"
+        "response body as a ReadableStream",
+        "backpressure through reader pull",
+        "abort signals propagating to fetch"
       ],
-      "production_scenario": "Apply Fetch, Streams, and AbortController for real network code inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "A search page keeps applying results from an earlier request after the user typed more.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "Reading a response body consumes it; a body cannot be read twice without cloning."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A trace showing chunks arriving progressively and an aborted request rejecting.",
+      "artifact": "A streaming client helper with cancellation tests.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch",
+        "https://developer.mozilla.org/en-US/docs/Web/API/Streams_API"
       ],
       "related_concepts": []
     }
@@ -3079,21 +3079,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Reflow vs repaint: what invalidates layout and what doesn't when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Predict which property changes force layout, which only repaint, and how to avoid forced synchronous layout.",
       "mechanisms": [
-        "The first-principles mechanism behind Reflow vs repaint: what invalidates layout and what doesn't",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The rendering trade-off and its failure boundary"
+        "layout invalidation by geometry changes",
+        "forced synchronous layout on read after write",
+        "paint-only and compositor-only properties"
       ],
-      "production_scenario": "Apply Reflow vs repaint: what invalidates layout and what doesn't inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "An animation reads offsetHeight after changing widths in a loop and the frame rate collapses.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "Reading a layout property is not free; after a write it forces the layout to run immediately."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A performance trace with layout thrashing marks before and the batched version after.",
+      "artifact": "A read-then-write refactor with measured layout counts.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/Glossary/Reflow",
+        "https://web.dev/articles/avoid-large-complex-layouts-and-layout-thrashing"
       ],
       "related_concepts": []
     }
@@ -3110,21 +3110,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply The compositor thread: GPU layers and jank-free animation when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Explain which animations run on the compositor thread and why they survive main-thread jank.",
       "mechanisms": [
-        "The first-principles mechanism behind The compositor thread: GPU layers and jank-free animation",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The rendering trade-off and its failure boundary"
+        "layer promotion",
+        "transform and opacity handled off-thread",
+        "will-change and memory cost"
       ],
-      "production_scenario": "Apply The compositor thread: GPU layers and jank-free animation inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "A drawer animation stutters while a long task runs, but a transform-based one stays smooth.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "Promoting everything to a layer does not help; layers cost memory and can slow painting."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A layers panel capture and a trace comparing main-thread and compositor animations.",
+      "artifact": "An animation guideline with a measured compositor-only implementation.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://web.dev/articles/animations-guide",
+        "https://developer.mozilla.org/en-US/docs/Web/CSS/will-change"
       ],
       "related_concepts": []
     }
@@ -3141,21 +3141,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Intersection, Mutation, and Resize Observers instead of polling when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Replace polling with the observer that matches the question being asked.",
       "mechanisms": [
-        "The first-principles mechanism behind Intersection, Mutation, and Resize Observers instead of polling",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The browser apis trade-off and its failure boundary"
+        "intersection thresholds and root margins",
+        "mutation records batched per turn",
+        "resize observations delivered before paint"
       ],
-      "production_scenario": "Apply Intersection, Mutation, and Resize Observers instead of polling inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "A lazy-loading list checks scroll position on every scroll event and drops frames.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "MutationObserver callbacks are batched; a record list can describe many changes at once."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A comparison of callback counts for polling versus the observer.",
+      "artifact": "An observer-based implementation with a test for batching behavior.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/Web/API/Intersection_Observer_API",
+        "https://developer.mozilla.org/en-US/docs/Web/API/ResizeObserver"
       ],
       "related_concepts": []
     }
@@ -3172,21 +3172,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Web Storage, IndexedDB, and the Cache API storage tiers when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Choose the storage tier that matches size, structure and access pattern, and handle quota and versioning.",
       "mechanisms": [
-        "The first-principles mechanism behind Web Storage, IndexedDB, and the Cache API storage tiers",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The storage trade-off and its failure boundary"
+        "synchronous string storage",
+        "transactional object stores",
+        "cache storage for request and response pairs"
       ],
-      "production_scenario": "Apply Web Storage, IndexedDB, and the Cache API storage tiers inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "A large JSON blob is written to localStorage on every keystroke and blocks the main thread.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "localStorage is synchronous; large writes stall rendering."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A timing comparison of a large write across the three tiers.",
+      "artifact": "A storage layer with versioned upgrades and quota handling tests.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API",
+        "https://developer.mozilla.org/en-US/docs/Web/API/Storage_API"
       ],
       "related_concepts": []
     }
@@ -3203,21 +3203,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply WebSockets, SSE, and realtime transport trade-offs when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Choose between WebSockets, server-sent events and polling based on direction, ordering and reconnect needs.",
       "mechanisms": [
-        "The first-principles mechanism behind WebSockets, SSE, and realtime transport trade-offs",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The networking trade-off and its failure boundary"
+        "bidirectional framed sockets",
+        "one-way event streams with automatic reconnect",
+        "last-event id resume"
       ],
-      "production_scenario": "Apply WebSockets, SSE, and realtime transport trade-offs inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "A chat feature uses polling every second and the server falls over at scale.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "A WebSocket does not guarantee delivery after a reconnect; the application must resume."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A reconnect test showing missed events recovered by the resume mechanism.",
+      "artifact": "A transport decision record with a reconnect and ordering test.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API",
+        "https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events"
       ],
       "related_concepts": []
     }
@@ -3234,21 +3234,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply CORS, CSP, and the same-origin policy in practice when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Explain what the same-origin policy blocks, how CORS opts a reader in, and what CSP restricts.",
       "mechanisms": [
-        "The first-principles mechanism behind CORS, CSP, and the same-origin policy in practice",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The security trade-off and its failure boundary"
+        "origin as scheme, host and port",
+        "CORS enforced on responses with preflights",
+        "CSP sources, nonces and reports"
       ],
-      "production_scenario": "Apply CORS, CSP, and the same-origin policy in practice inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "A cross-origin fetch fails in the browser although curl to the same URL succeeds.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "A CORS error means the browser refused to expose the response, not that the request never happened."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A network log showing the preflight and the missing response header.",
+      "artifact": "A CSP and CORS configuration with tests for credentialed requests.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/Web/Security/Same-origin_policy",
+        "https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS"
       ],
       "related_concepts": []
     }
@@ -3266,21 +3266,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply Custom Elements and Shadow DOM encapsulation boundaries when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Build a custom element with a shadow root and explain which styles and events cross its boundary.",
       "mechanisms": [
-        "The first-principles mechanism behind Custom Elements and Shadow DOM encapsulation boundaries",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The components trade-off and its failure boundary"
+        "element definition lifecycle callbacks",
+        "shadow root style scoping",
+        "composed and retargeted events"
       ],
-      "production_scenario": "Apply Custom Elements and Shadow DOM encapsulation boundaries inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "A design-system component ignores the page theme and its click events show the host as target.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "Shadow DOM scopes selectors, not inheritance; inherited properties still cross the boundary."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A demo showing scoped selectors, inherited properties and event retargeting.",
+      "artifact": "A component with documented boundary behavior and tests.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/Web/API/Web_components/Using_custom_elements",
+        "https://developer.mozilla.org/en-US/docs/Web/API/Web_components/Using_shadow_DOM"
       ],
       "related_concepts": []
     }
@@ -3297,21 +3297,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply Pointer events, touch input, and building gesture systems when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Implement drag and pinch gestures with pointer events, capture and touch-action.",
       "mechanisms": [
-        "The first-principles mechanism behind Pointer events, touch input, and building gesture systems",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The dom trade-off and its failure boundary"
+        "unified pointer events",
+        "pointer capture",
+        "touch-action to avoid browser gestures"
       ],
-      "production_scenario": "Apply Pointer events, touch input, and building gesture systems inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "A drag handle works with a mouse but scrolls the page on touch devices.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "Handling touchstart alone does not stop the browser from panning; touch-action does."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A recording of a gesture with pointer capture across the element boundary.",
+      "artifact": "A gesture recognizer with tests for capture and touch-action.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/Web/API/Pointer_events",
+        "https://developer.mozilla.org/en-US/docs/Web/CSS/touch-action"
       ],
       "related_concepts": []
     }
@@ -3328,21 +3328,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply History API, SPA navigation, and the back-forward cache when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Manage SPA history entries and keep pages eligible for the back-forward cache.",
       "mechanisms": [
-        "The first-principles mechanism behind History API, SPA navigation, and the back-forward cache",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The navigation trade-off and its failure boundary"
+        "pushState and popstate",
+        "scroll restoration",
+        "bfcache blockers such as unload and open connections"
       ],
-      "production_scenario": "Apply History API, SPA navigation, and the back-forward cache inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "Pressing back reloads the whole app instead of restoring it instantly.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "An unload listener is not harmless; it makes the page ineligible for the back-forward cache."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A bfcache eligibility report from the browser with the blocker named.",
+      "artifact": "A navigation layer with bfcache eligibility verified.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/Web/API/History_API",
+        "https://web.dev/articles/bfcache"
       ],
       "related_concepts": []
     }
@@ -3359,21 +3359,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply The accessibility tree: how ARIA becomes a screen-reader experience when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Explain how DOM and ARIA produce the accessibility tree and verify what a screen reader announces.",
       "mechanisms": [
-        "The first-principles mechanism behind The accessibility tree: how ARIA becomes a screen-reader experience",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The accessibility trade-off and its failure boundary"
+        "role and name computation",
+        "tree pruning of hidden content",
+        "live regions"
       ],
-      "production_scenario": "Apply The accessibility tree: how ARIA becomes a screen-reader experience inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "A custom dropdown is visible but screen readers announce nothing when it opens.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "ARIA changes what assistive technology hears; it does not add behavior."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "An accessibility tree inspection before and after adding correct roles and names.",
+      "artifact": "An accessible component with an announced-behavior test.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA",
+        "https://www.w3.org/TR/accname/"
       ],
       "related_concepts": []
     }
@@ -3390,21 +3390,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply XSS and CSRF: attack shapes and concrete JS-level defenses when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Recognize injection and forged-request shapes and apply the JavaScript-level defenses that close them.",
       "mechanisms": [
-        "The first-principles mechanism behind XSS and CSRF: attack shapes and concrete JS-level defenses",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The security trade-off and its failure boundary"
+        "DOM injection sinks",
+        "output encoding by context",
+        "same-site cookies and tokens"
       ],
-      "production_scenario": "Apply XSS and CSRF: attack shapes and concrete JS-level defenses inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "A comment renders with innerHTML and a script tag from user content runs.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "Escaping once for HTML does not make a value safe inside a URL or a script attribute."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A demonstration of the attack input blocked after the sink is replaced.",
+      "artifact": "An input-handling audit with sinks replaced and tests.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/Web/Security/Attacks/XSS",
+        "https://developer.mozilla.org/en-US/docs/Web/Security/Attacks/CSRF"
       ],
       "related_concepts": []
     }
@@ -3422,21 +3422,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply Service workers, the request lifecycle, and offline-first apps when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Control the request lifecycle with a service worker and design an offline-first strategy.",
       "mechanisms": [
-        "The first-principles mechanism behind Service workers, the request lifecycle, and offline-first apps",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The pwa trade-off and its failure boundary"
+        "install, activate and fetch events",
+        "cache strategies per request type",
+        "update and skipWaiting flow"
       ],
-      "production_scenario": "Apply Service workers, the request lifecycle, and offline-first apps inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "Users keep seeing an old version because a new worker waits behind open tabs.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "Registering a service worker does not update the page immediately; activation waits for clients."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A trace of install, waiting and activation across two versions.",
+      "artifact": "A caching strategy per route with an update flow test.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/Web/API/Service_Worker_API/Using_Service_Workers",
+        "https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Offline_and_background_operation"
       ],
       "related_concepts": []
     }
@@ -3454,21 +3454,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply Hunting memory leaks with heap snapshots and detached DOM when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Find the retaining path for a leak using heap snapshots and detached DOM views.",
       "mechanisms": [
-        "The first-principles mechanism behind Hunting memory leaks with heap snapshots and detached DOM",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The memory trade-off and its failure boundary"
+        "heap snapshot comparison",
+        "retainer paths",
+        "detached DOM trees"
       ],
-      "production_scenario": "Apply Hunting memory leaks with heap snapshots and detached DOM inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "Memory grows on every navigation in a single-page app until the tab crashes.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "A detached DOM node is still alive if any JavaScript reference retains it."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "Two heap snapshots with the retainer path to the leaked node.",
+      "artifact": "A leak fix with before and after snapshots.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.chrome.com/docs/devtools/memory-problems",
+        "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Memory_management"
       ],
       "related_concepts": []
     }
@@ -3486,21 +3486,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply Virtual DOM diffing and reconciliation: what frameworks actually do when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Explain how reconciliation matches elements and why keys change what is reused.",
       "mechanisms": [
-        "The first-principles mechanism behind Virtual DOM diffing and reconciliation: what frameworks actually do",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The architecture trade-off and its failure boundary"
+        "tree diff by type and position",
+        "keyed list matching",
+        "state preserved on reused instances"
       ],
-      "production_scenario": "Apply Virtual DOM diffing and reconciliation: what frameworks actually do inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "Reordering a list with index keys carries input text to the wrong rows.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "An index key tells the reconciler the row is the same element even after reordering."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A demo showing preserved state with index keys versus stable keys.",
+      "artifact": "A keyed-list guideline with a reproduction and the fix.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/Web/API/Document_Object_Model",
+        "https://web.dev/articles/rendering-on-the-web"
       ],
       "related_concepts": []
     }
@@ -3518,21 +3518,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply Dynamic import, code-splitting, and runtime module federation when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Split code at runtime with dynamic import and share modules across independently deployed builds.",
       "mechanisms": [
-        "The first-principles mechanism behind Dynamic import, code-splitting, and runtime module federation",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The architecture trade-off and its failure boundary"
+        "dynamic import as a promise of a module",
+        "chunk boundaries",
+        "shared module resolution at runtime"
       ],
-      "production_scenario": "Apply Dynamic import, code-splitting, and runtime module federation inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "Two teams' bundles load two React copies and hooks throw.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "Sharing a module requires one runtime instance, not merely the same version string."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A network log showing chunks loaded on demand and one shared instance.",
+      "artifact": "A federation setup with a single-instance test.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/import",
+        "https://web.dev/articles/reduce-javascript-payloads-with-code-splitting"
       ],
       "related_concepts": [
         "fa-microfrontend-decisions",
@@ -3553,21 +3553,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply Core Web Vitals: LCP, CLS, INP, and what actually moves them when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Explain what moves LCP, CLS and INP and measure them in the field, not only in the lab.",
       "mechanisms": [
-        "The first-principles mechanism behind Core Web Vitals: LCP, CLS, INP, and what actually moves them",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The performance trade-off and its failure boundary"
+        "largest contentful paint candidates",
+        "layout shift scoring",
+        "interaction to next paint phases"
       ],
-      "production_scenario": "Apply Core Web Vitals: LCP, CLS, INP, and what actually moves them inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "Lab scores are green while field data shows poor INP on low-end phones.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "A good Lighthouse score is not field performance; vitals are measured on real users."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "Field vitals with attribution for the worst interaction.",
+      "artifact": "A vitals improvement with field evidence.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://web.dev/articles/vitals",
+        "https://developer.mozilla.org/en-US/docs/Web/API/PerformanceEventTiming"
       ],
       "related_concepts": [
         "fa-performance-budgets",
@@ -3588,21 +3588,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply Hydration, resumability, and partial/progressive hydration when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Compare hydration, resumability and partial hydration by what work runs on the client and when.",
       "mechanisms": [
-        "The first-principles mechanism behind Hydration, resumability, and partial/progressive hydration",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The architecture trade-off and its failure boundary"
+        "server markup reattached to client state",
+        "islands hydrated on demand",
+        "serialized state versus resumed closures"
       ],
-      "production_scenario": "Apply Hydration, resumability, and partial/progressive hydration inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "A content page ships a large bundle only to reattach handlers to static markup.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "Hydration is not free rendering; it re-executes component logic on the client."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A trace showing hydration work per strategy for the same page.",
+      "artifact": "A hydration decision per route with measured cost.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://web.dev/articles/rendering-on-the-web",
+        "https://web.dev/articles/client-side-rendering-of-html-and-interactivity"
       ],
       "related_concepts": [
         "fa-islands-partial-hydration"
@@ -3622,21 +3622,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply CSR, SSR, SSG, and streaming rendering: choosing and mixing them when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Choose and mix client rendering, server rendering, static generation and streaming per route.",
       "mechanisms": [
-        "The first-principles mechanism behind CSR, SSR, SSG, and streaming rendering: choosing and mixing them",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The architecture trade-off and its failure boundary"
+        "render location per route",
+        "streaming responses",
+        "cache and revalidation of generated pages"
       ],
-      "production_scenario": "Apply CSR, SSR, SSG, and streaming rendering: choosing and mixing them inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "A personalized dashboard is statically generated and shows another user's data from the cache.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "A rendering strategy is a per-route decision, not a site-wide one."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A route table with the chosen strategy and its measured time to first byte and interaction.",
+      "artifact": "A rendering architecture record for one application.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://web.dev/articles/rendering-on-the-web",
+        "https://developer.mozilla.org/en-US/docs/Web/Performance/Guides/Navigation_and_resource_timings"
       ],
       "related_concepts": [
         "fa-rendering-strategy"
@@ -5436,21 +5436,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply scheduler.yield, scheduler.postTask, and cooperative main-thread scheduling when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Yield to the browser and prioritize work with scheduler.yield and scheduler.postTask.",
       "mechanisms": [
-        "The first-principles mechanism behind scheduler.yield, scheduler.postTask, and cooperative main-thread scheduling",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The performance trade-off and its failure boundary"
+        "yielding inside long tasks",
+        "task priorities",
+        "continuation ordering"
       ],
-      "production_scenario": "Apply scheduler.yield, scheduler.postTask, and cooperative main-thread scheduling inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "A data transformation blocks input for a second because it runs in one task.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "setTimeout zero is not a yield with priority; it is a low-priority task."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A trace showing the long task split into yielded chunks with input handled in between.",
+      "artifact": "A chunked processing helper with measured input latency.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/Web/API/Prioritized_Task_Scheduling_API",
+        "https://developer.mozilla.org/en-US/docs/Web/API/Scheduler/yield"
       ],
       "related_concepts": []
     }
@@ -5468,21 +5468,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply View Transitions for same-document and cross-document navigation when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Animate same-document and cross-document navigations with view transitions.",
       "mechanisms": [
-        "The first-principles mechanism behind View Transitions for same-document and cross-document navigation",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The navigation trade-off and its failure boundary"
+        "snapshot of old and new states",
+        "named transition groups",
+        "cross-document opt-in"
       ],
-      "production_scenario": "Apply View Transitions for same-document and cross-document navigation inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "A route change flashes and elements jump instead of moving.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "A view transition captures snapshots; it does not animate live DOM."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A recording of a transition with named elements moving between states.",
+      "artifact": "A navigation transition with a fallback when unsupported.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/Web/API/View_Transition_API",
+        "https://developer.mozilla.org/en-US/docs/Web/CSS/view-transition-name"
       ],
       "related_concepts": []
     }
@@ -5500,21 +5500,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply Speculation Rules: safe prefetch and prerender architecture when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Prefetch and prerender likely navigations safely with speculation rules.",
       "mechanisms": [
-        "The first-principles mechanism behind Speculation Rules: safe prefetch and prerender architecture",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The navigation trade-off and its failure boundary"
+        "document rules and eagerness",
+        "prerender lifecycle and activation",
+        "side-effect safety"
       ],
-      "production_scenario": "Apply Speculation Rules: safe prefetch and prerender architecture inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "A prerendered checkout page fires analytics and reserves stock before the user arrives.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "A prerendered page runs; anything with side effects must wait for activation."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A trace showing prerender activation and deferred side effects.",
+      "artifact": "A speculation policy with activation-safe scripts.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/Web/API/Speculation_Rules_API",
+        "https://developer.mozilla.org/en-US/docs/Web/API/Document/prerendering"
       ],
       "related_concepts": []
     }
@@ -5532,21 +5532,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply Debugging INP: input delay, processing, presentation, and long tasks when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Break an interaction into input delay, processing and presentation and fix the dominant phase.",
       "mechanisms": [
-        "The first-principles mechanism behind Debugging INP: input delay, processing, presentation, and long tasks",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The performance trade-off and its failure boundary"
+        "event timing entries",
+        "long animation frames",
+        "presentation delay from rendering"
       ],
-      "production_scenario": "Apply Debugging INP: input delay, processing, presentation, and long tasks inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "Tapping a filter feels slow although the handler itself is fast.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "A fast handler can still produce a slow interaction if rendering after it is expensive."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "An event timing breakdown for the slow interaction with the dominant phase named.",
+      "artifact": "An INP fix with before and after attribution.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/Web/API/PerformanceEventTiming",
+        "https://web.dev/articles/inp"
       ],
       "related_concepts": []
     }
@@ -5563,21 +5563,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply Worker data ownership: structured clone and transferable objects when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Decide when to clone, transfer or share data with a worker and prove ownership moved.",
       "mechanisms": [
-        "The first-principles mechanism behind Worker data ownership: structured clone and transferable objects",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The concurrency trade-off and its failure boundary"
+        "structured clone semantics",
+        "transfer lists",
+        "detached buffers after transfer"
       ],
-      "production_scenario": "Apply Worker data ownership: structured clone and transferable objects inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "A worker receives a large buffer per frame and both sides pay for the copy.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "After a transfer the sender's buffer is detached; using it throws."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A test showing the detached buffer after transfer and the timing difference.",
+      "artifact": "A data-ownership policy for one worker pipeline.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Transferable_objects",
+        "https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Structured_clone_algorithm"
       ],
       "related_concepts": []
     }
@@ -5595,21 +5595,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply Cross-origin isolation, COOP/COEP, and high-power browser APIs when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Enable cross-origin isolation with COOP and COEP and account for what stops loading.",
       "mechanisms": [
-        "The first-principles mechanism behind Cross-origin isolation, COOP/COEP, and high-power browser APIs",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The security trade-off and its failure boundary"
+        "opener policy isolating the browsing context",
+        "embedder policy requiring CORP or CORS",
+        "crossOriginIsolated gating APIs"
       ],
-      "production_scenario": "Apply Cross-origin isolation, COOP/COEP, and high-power browser APIs inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "Enabling shared memory breaks embedded third-party images across the site.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "Isolation is a page-wide contract; every embedded resource must opt in."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A report of blocked resources after enabling the headers and the fixes applied.",
+      "artifact": "An isolation rollout with a resource opt-in inventory.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Cross-Origin-Embedder-Policy",
+        "https://developer.mozilla.org/en-US/docs/Web/API/Window/crossOriginIsolated"
       ],
       "related_concepts": []
     }
@@ -5626,21 +5626,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply Trusted Types, CSP, sanitization, and DOM injection sinks when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Lock DOM injection sinks with Trusted Types and sanitize untrusted HTML at the boundary.",
       "mechanisms": [
-        "The first-principles mechanism behind Trusted Types, CSP, sanitization, and DOM injection sinks",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The security trade-off and its failure boundary"
+        "policy-created trusted values",
+        "sink enforcement via CSP",
+        "sanitizer configuration"
       ],
-      "production_scenario": "Apply Trusted Types, CSP, sanitization, and DOM injection sinks inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "A rich-text feature must render user HTML without opening an injection sink.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "Sanitizing once at input is not enough if the value is later interpreted in another context."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A CSP report showing blocked sink writes and the policy that allows sanitized values.",
+      "artifact": "A Trusted Types policy with sanitizer tests.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/Web/API/Trusted_Types_API",
+        "https://developer.mozilla.org/en-US/docs/Web/API/HTML_Sanitizer_API"
       ],
       "related_concepts": []
     }
@@ -5658,21 +5658,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply Browser RUM instrumentation with PerformanceObserver and attribution when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Instrument real-user monitoring with attribution that points at code, not only at a metric.",
       "mechanisms": [
-        "The first-principles mechanism behind Browser RUM instrumentation with PerformanceObserver and attribution",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The observability trade-off and its failure boundary"
+        "performance entries with attribution",
+        "sampling and beaconing",
+        "release and user context"
       ],
-      "production_scenario": "Apply Browser RUM instrumentation with PerformanceObserver and attribution inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "A vitals dashboard shows a regression but no one can tell which deploy or component caused it.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "A metric without attribution and release context cannot be acted on."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A beacon payload with attribution and release fields for one slow interaction.",
+      "artifact": "A RUM setup with attributed entries and a regression traced to a release.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/Web/API/PerformanceObserver",
+        "https://developer.mozilla.org/en-US/docs/Web/API/Navigator/sendBeacon"
       ],
       "related_concepts": []
     }
@@ -5690,21 +5690,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply Profiling JavaScript/WebAssembly call boundaries in browser workloads when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Profile calls across the JavaScript and WebAssembly boundary and reduce their overhead.",
       "mechanisms": [
-        "The first-principles mechanism behind Profiling JavaScript/WebAssembly call boundaries in browser workloads",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The performance trade-off and its failure boundary"
+        "boundary call cost",
+        "batching data across calls",
+        "avoiding per-element crossings"
       ],
-      "production_scenario": "Apply Profiling JavaScript/WebAssembly call boundaries in browser workloads inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "A wasm image filter is slower than JavaScript because it is called once per pixel.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "Moving code to WebAssembly does not help if the boundary is crossed for every element."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A profile comparing per-element calls with a batched call.",
+      "artifact": "A boundary redesign with measured call counts.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/WebAssembly/Guides/Exported_functions",
+        "https://developer.mozilla.org/en-US/docs/Web/API/Performance/now"
       ],
       "related_concepts": []
     }
@@ -5721,21 +5721,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply Permissions Policy, privacy constraints, and capability detection when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Restrict powerful features with Permissions Policy and detect capabilities without fingerprinting users.",
       "mechanisms": [
-        "The first-principles mechanism behind Permissions Policy, privacy constraints, and capability detection",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The security trade-off and its failure boundary"
+        "policy directives per origin",
+        "feature detection at runtime",
+        "privacy budgets and reduced entropy"
       ],
-      "production_scenario": "Apply Permissions Policy, privacy constraints, and capability detection inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "A third-party iframe requests geolocation on a page that never intended to allow it.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "A feature being present in the browser does not mean the page is allowed to use it."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A policy header with a test that the feature is denied in the iframe.",
+      "artifact": "A permissions policy with capability detection documented.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/Web/HTTP/Permissions_Policy",
+        "https://developer.mozilla.org/en-US/docs/Web/API/Permissions_API"
       ],
       "related_concepts": []
     }
@@ -7739,21 +7739,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Navigation API: intercepting and coordinating SPA navigations when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Intercept and coordinate single-page navigations with the Navigation API.",
       "mechanisms": [
-        "The first-principles mechanism behind Navigation API: intercepting and coordinating SPA navigations",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The navigation trade-off and its failure boundary"
+        "navigate event interception",
+        "navigation entries and state",
+        "abort on superseding navigation"
       ],
-      "production_scenario": "Apply Navigation API: intercepting and coordinating SPA navigations inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "Two quick clicks race and the app renders the earlier route last.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "Intercepting a navigation is a promise the app must settle; an unsettled one leaves the URL in limbo."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A trace of two navigations where the first is aborted by the second.",
+      "artifact": "A router built on the Navigation API with abort tests.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/Web/API/Navigation_API",
+        "https://developer.mozilla.org/en-US/docs/Web/API/NavigateEvent"
       ],
       "related_concepts": []
     }
@@ -7771,21 +7771,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Popover, dialog, and declarative invoker primitives when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Use popover, dialog and invoker attributes for accessible overlays without custom focus code.",
       "mechanisms": [
-        "The first-principles mechanism behind Popover, dialog, and declarative invoker primitives",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The dom trade-off and its failure boundary"
+        "top layer",
+        "light dismiss",
+        "invoker commands"
       ],
-      "production_scenario": "Apply Popover, dialog, and declarative invoker primitives inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "A custom modal traps focus wrongly and cannot be closed with Escape.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "A dialog opened with show() is not modal; only showModal() makes the rest inert."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A demo showing top-layer stacking, light dismiss and focus return.",
+      "artifact": "An overlay component using native primitives with an accessibility check.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/Web/API/Popover_API",
+        "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/dialog"
       ],
       "related_concepts": []
     }
@@ -7802,21 +7802,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Storage partitioning, CHIPS, and third-party privacy boundaries when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Explain storage partitioning by top-level site and use partitioned cookies where embedding requires them.",
       "mechanisms": [
-        "The first-principles mechanism behind Storage partitioning, CHIPS, and third-party privacy boundaries",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The security trade-off and its failure boundary"
+        "partitioned storage keys",
+        "CHIPS partitioned cookies",
+        "third-party context detection"
       ],
-      "production_scenario": "Apply Storage partitioning, CHIPS, and third-party privacy boundaries inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "An embedded widget loses its session between different host sites.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "Storage in a third-party iframe is keyed by the embedding site, not shared across hosts."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A test showing separate storage per top-level site and a working partitioned cookie.",
+      "artifact": "An embedding strategy with partitioned storage handling.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/Web/Privacy/Guides/State_Partitioning",
+        "https://developer.mozilla.org/en-US/docs/Web/Privacy/Guides/Privacy_sandbox/Partitioned_cookies"
       ],
       "related_concepts": []
     }
@@ -7833,21 +7833,21 @@
     "curriculum": {
       "phase": "synthesis",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply WebGPU and OffscreenCanvas workload architecture when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Move rendering work to a worker with OffscreenCanvas and structure WebGPU workloads for responsiveness.",
       "mechanisms": [
-        "The first-principles mechanism behind WebGPU and OffscreenCanvas workload architecture",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The performance trade-off and its failure boundary"
+        "canvas control transferred to a worker",
+        "GPU pipelines and buffers",
+        "frame scheduling off the main thread"
       ],
-      "production_scenario": "Apply WebGPU and OffscreenCanvas workload architecture inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "A visualization stalls input because it draws on the main thread each frame.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "GPU work is asynchronous; submitting it does not mean the frame is ready."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A trace showing main-thread idle time with rendering in a worker.",
+      "artifact": "A worker-rendered pipeline with measured main-thread cost.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/Web/API/OffscreenCanvas",
+        "https://developer.mozilla.org/en-US/docs/Web/API/WebGPU_API"
       ],
       "related_concepts": []
     }
@@ -7864,21 +7864,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Intl runtime: locale-sensitive formatting, plural rules, and segmentation when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Format numbers, dates and plurals per locale and segment text correctly with Intl.",
       "mechanisms": [
-        "The first-principles mechanism behind Intl runtime: locale-sensitive formatting, plural rules, and segmentation",
-        "browser scheduling, lifecycle, and observable runtime behavior",
-        "The globalization trade-off and its failure boundary"
+        "locale negotiation",
+        "plural and relative-time rules",
+        "grapheme and word segmentation"
       ],
-      "production_scenario": "Apply Intl runtime: locale-sensitive formatting, plural rules, and segmentation inside a browser interaction under production traffic, device, responsiveness, accessibility, and security constraints.",
+      "production_scenario": "A counter says '1 items' and a name is truncated inside an emoji.",
       "misconceptions": [
-        "Treating the API surface as the mechanism instead of tracing browser queues, lifecycle, and rendering consequences."
+        "String length counts code units, not characters a user sees."
       ],
-      "evidence": "A reproducible browser experiment plus DevTools or RUM evidence that distinguishes the naive and production behavior.",
-      "artifact": "Extend the cumulative browser-performance case study with a measured implementation, diagnosis, and rollback note.",
+      "evidence": "A table of formatted outputs across three locales with segmentation examples.",
+      "artifact": "A localization helper with plural and segmentation tests.",
       "primary_sources": [
-        "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-        "https://html.spec.whatwg.org/"
+        "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl",
+        "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/Segmenter"
       ],
       "related_concepts": []
     }
