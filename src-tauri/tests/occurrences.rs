@@ -432,25 +432,10 @@ fn a_class_lesson_started_from_an_appointment_resolves_it_on_completion() {
 #[test]
 fn an_unfired_appointment_can_move_within_its_day_and_keeps_the_move_until_the_rule_changes() {
     let conn = fixture();
-    let zone = ScriptedZone {
-        gap_day: NaiveDate::from_ymd_opt(2026, 3, 29).unwrap(),
-        fold_day: NaiveDate::from_ymd_opt(2026, 10, 25).unwrap(),
-    };
     let rule_id = rule(&conn, "typescript", 9, 0, vec![1, 2, 3, 4, 5, 6, 7]);
     activate(&conn, "typescript");
-    let today = NaiveDate::from_ymd_opt(2026, 9, 14).unwrap();
-    let at = |h: u32, m: u32| {
-        Utc.from_utc_datetime(&NaiveDateTime::new(
-            today,
-            NaiveTime::from_hms_opt(h, m, 0).unwrap(),
-        ))
-    };
-    let clock = |h: u32, m: u32| schedule::Clock {
-        zone: &zone,
-        now: at(h, m),
-        today,
-    };
-    schedule::materialize(&conn, &clock(8, 0), false).unwrap();
+    let morning = at(&ZONE, "2026-09-14", "08:00");
+    schedule::materialize(&conn, &morning, false).unwrap();
     let occurrence = schedule::today_for_rule(&conn, rule_id, "2026-09-14")
         .unwrap()
         .unwrap();
@@ -462,13 +447,13 @@ fn an_unfired_appointment_can_move_within_its_day_and_keeps_the_move_until_the_r
         ("scheduled", "09:00")
     );
     // Moving earlier than now makes it due at once; moving later keeps it scheduled.
-    let moved = schedule::reschedule(&conn, &occurrence.id, "07:30", &zone, at(8, 0)).unwrap();
+    let moved = schedule::reschedule(&conn, &occurrence.id, "07:30", &ZONE, morning.now).unwrap();
     assert_eq!(
         (moved.disposition.as_str(), moved.local_time.as_str()),
         ("due", "07:30")
     );
     assert!(moved.fires_at < occurrence.fires_at);
-    let later = schedule::reschedule(&conn, &occurrence.id, "18:15", &zone, at(8, 0)).unwrap();
+    let later = schedule::reschedule(&conn, &occurrence.id, "18:15", &ZONE, morning.now).unwrap();
     assert_eq!(
         (later.disposition.as_str(), later.local_time.as_str()),
         ("scheduled", "18:15")
@@ -478,24 +463,18 @@ fn an_unfired_appointment_can_move_within_its_day_and_keeps_the_move_until_the_r
         vec![(18, 15)]
     );
     // Materializing again keeps the move while the rule is unchanged.
-    schedule::materialize(&conn, &clock(8, 5), false).unwrap();
+    schedule::materialize(&conn, &at(&ZONE, "2026-09-14", "08:05"), false).unwrap();
     assert_eq!(
         schedule::get(&conn, &occurrence.id).unwrap().local_time,
         "18:15"
     );
     assert!(
-        schedule::reschedule(&conn, &occurrence.id, "7pm", &zone, at(8, 0))
+        schedule::reschedule(&conn, &occurrence.id, "7pm", &ZONE, morning.now)
             .unwrap_err()
             .to_string()
             .contains("HH:MM")
     );
     // Skipped appointments cannot move.
-    schedule::skip(&conn, &occurrence.id, at(8, 10)).unwrap();
-    assert!(
-        schedule::reschedule(&conn, &occurrence.id, "10:00", &zone, at(8, 11))
-            .unwrap_err()
-            .to_string()
-            .contains("cannot be moved")
-            || schedule::reschedule(&conn, &occurrence.id, "10:00", &zone, at(8, 11)).is_err()
-    );
+    schedule::skip(&conn, &occurrence.id, at(&ZONE, "2026-09-14", "08:10").now).unwrap();
+    assert!(schedule::reschedule(&conn, &occurrence.id, "10:00", &ZONE, morning.now).is_err());
 }
