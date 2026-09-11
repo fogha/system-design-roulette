@@ -6,11 +6,6 @@
   import Classes from '../lib/features/classes/Classes.svelte';
   import StudySettings from '../lib/screens/StudySettings.svelte';
   import DeskShell from '../lib/app/DeskShell.svelte';
-  import Quiz from '../lib/screens/Quiz.svelte';
-  import AnswerReview from '../lib/screens/AnswerReview.svelte';
-  import Roulette from '../lib/screens/Roulette.svelte';
-  import CourseReader from '../lib/screens/CourseReader.svelte';
-  import Completion from '../lib/screens/Completion.svelte';
   import LanguageLesson from '../lib/screens/LanguageLesson.svelte';
   import ClassroomLesson from '../lib/screens/ClassroomLesson.svelte';
   import Dashboard from '../lib/screens/Dashboard.svelte';
@@ -49,16 +44,6 @@
       {:else if app.destination === 'settings'}<StudySettings />
       {:else}<Today />{/if}
     </DeskShell>
-  {:else if app.screen === 'quiz'}
-    {#key app.session?.session_id}<Quiz />{/key}
-  {:else if app.screen === 'review'}
-    {#key app.session?.session_id}<AnswerReview />{/key}
-  {:else if app.screen === 'roulette'}
-    {#key app.session?.session_id}<Roulette />{/key}
-  {:else if app.screen === 'course'}
-    {#key app.session?.session_id}<CourseReader />{/key}
-  {:else if app.screen === 'completion'}
-    {#key app.session?.session_id}<Completion />{/key}
   {:else if app.screen === 'language'}
     <LanguageLesson />
   {:else if app.screen === 'classroom'}

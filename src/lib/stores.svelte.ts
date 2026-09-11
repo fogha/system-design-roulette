@@ -15,51 +15,21 @@ export type Screen =
   | 'loading'
   | 'setup'
   | 'idle'
-  | 'quiz'
-  | 'review'
-  | 'roulette'
-  | 'course'
-  | 'completion'
   | 'language'
   | 'classroom'
   | 'dashboard';
 
 export interface RouteDecision {
   screen: Screen;
-  stepAway: boolean;
 }
 
-export function resolveRoute(
-  state: AppStateView,
-  currentScreen: Screen,
-  currentStepAway: boolean,
-): RouteDecision {
-  if (!state.onboarded) return { screen: 'setup', stepAway: false };
-  const session = state.session;
-  if (session.status === 'in_progress') {
-    const stepAway = session.locked || state.owed ? false : currentStepAway;
-    if (stepAway) {
-      return {
-        screen: currentScreen === 'loading' ? 'idle' : currentScreen,
-        stepAway,
-      };
-    }
-    return {
-      screen: session.step === 'done' ? 'completion' : (session.step as Screen),
-      stepAway: false,
-    };
-  }
-  if (
-    (session.status === 'completed' || session.status === 'skipped') &&
-    !['dashboard', 'idle', 'language', 'classroom'].includes(currentScreen)
-  ) {
-    return { screen: 'completion', stepAway: false };
-  }
-  if (state.owed) return { screen: 'idle', stepAway: false };
+/** The retired daily routine no longer opens screens: a saved primary session
+ *  is recovery data, so routing follows onboarding and owed state only. */
+export function resolveRoute(state: AppStateView, currentScreen: Screen): RouteDecision {
+  if (!state.onboarded) return { screen: 'setup' };
+  if (state.owed) return { screen: 'idle' };
   return {
-    screen:
-      currentScreen === 'loading' || currentScreen === 'setup' ? 'idle' : currentScreen,
-    stepAway: false,
+    screen: currentScreen === 'loading' || currentScreen === 'setup' ? 'idle' : currentScreen,
   };
 }
 
@@ -88,13 +58,9 @@ class AppStore {
   genStatus = $state<string>('');
   genLog = $state<string[]>([]);
   preparingClass = $state<{ subjectId: ClassroomSubjectId; label: string; agent: string; model: string; startedAt: number } | null>(null);
-  timerRemaining = $state<number>(-1);
   error = $state<string>('');
   languageLesson = $state<LanguageLessonView | null>(null);
   engineeringLesson = $state<EngineeringLessonView | null>(null);
-  /** User stepped away from an UNLOCKED in-progress session (early start /
-   *  extension). Cleared the moment the session is owed or locked. */
-  stepAway = $state(false);
 
   get session(): SessionView | null {
     return this.state?.session ?? null;
@@ -128,7 +94,6 @@ class AppStore {
     try {
       const next = await api.getAppState();
       if (request !== this.refreshRequest) return;
-      if (next.session.session_id !== this.session?.session_id) this.timerRemaining = -1;
       this.state = next;
       this.route();
       this.followFocus();
@@ -141,9 +106,7 @@ class AppStore {
   route() {
     const s = this.state;
     if (!s) return;
-    const decision = resolveRoute(s, this.screen, this.stepAway);
-    this.screen = decision.screen;
-    this.stepAway = decision.stepAway;
+    this.screen = resolveRoute(s, this.screen).screen;
   }
 
   private focusFollowed: string | null = null;
@@ -178,19 +141,6 @@ class AppStore {
     }
     this.focusFollowed = null;
     await this.refresh();
-  }
-
-  /** Leave an unlocked in-progress session for the idle/dashboard screens. */
-  leaveSession() {
-    if (this.locked) return;
-    this.stepAway = true;
-    this.screen = 'idle';
-  }
-
-  /** Return to the in-progress session at its saved step. */
-  resumeSession() {
-    this.stepAway = false;
-    this.route();
   }
 
   async startClass(subjectId: ClassroomSubjectId, slotId?: number | null, revisit = false, occurrenceId?: string | null) {
@@ -271,9 +221,6 @@ class AppStore {
     await onEvent<string>('gen:log', (line) => {
       const ts = new Date().toTimeString().slice(0, 8);
       this.genLog = [...this.genLog.slice(-49), `${ts}  ${line}`];
-    });
-    await onEvent<{ session_id: string; remaining: number }>('timer:tick', (tick) => {
-      if (tick.session_id === this.session?.session_id) this.timerRemaining = tick.remaining;
     });
   }
 }

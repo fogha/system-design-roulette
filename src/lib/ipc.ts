@@ -492,69 +492,11 @@ export interface AppStateView {
   focus: FocusView | null;
 }
 
-export interface QuizQuestionView {
-  id: number;
-  prompt: string;
-  kind: 'mcq' | 'free';
-  choices: string[] | null;
-  origin: 'fresh' | 'carryover';
-  answered: boolean;
-  draft: string | null;
-}
-export interface QuizRoundView {
-  round_id: AssessmentRoundId | null;
-  revision: number;
-  questions: QuizQuestionView[];
-}
-
-export interface ReviewItem {
-  question_id: number;
-  prompt: string;
-  kind: string;
-  user_answer: string;
-  correct: boolean | null;
-  feedback: string;
-  correct_answer: string;
-  explanation: string;
-  returns_tomorrow: boolean;
-}
-
-export interface ReviewData {
-  items: ReviewItem[];
-  score: number;
-  self_assess: boolean;
-}
-
-export interface RouletteView {
-  pool: string[];
-  chosen_index: number;
-  concept_title: string;
-  concept_category: string;
-  pool_unlocked: number;
-  pool_total: number;
-  track_complete: boolean;
-}
-
 export interface Resource {
   title: string;
   url: string;
   type?: string;
   why?: string;
-}
-
-export interface CourseView {
-  course_id: number;
-  title: string;
-  concept_slug: string;
-  curriculum: CurriculumBrief;
-  prerequisites: string[];
-  session_index: number;
-  why_now: string;
-  markdown: string;
-  resources: Resource[];
-  source: string;
-  remaining_seconds: number;
-  total_seconds: number;
 }
 
 export interface HistoryEntry {
@@ -626,42 +568,6 @@ export interface ProgressLesson {
   study_session_id: string | null;
 }
 
-export interface AudioLine {
-  speaker: 'teacher' | 'student';
-  text: string;
-  file?: string | null;
-}
-
-export interface AudioView {
-  lines: AudioLine[];
-  engine: 'speech' | 'vibevoice';
-}
-
-export interface ExitQuizQuestion {
-  id: number;
-  prompt: string;
-  choices: string[];
-}
-
-export interface ExitQuizFeedback {
-  question_id: number;
-  prompt: string;
-  user_answer: string;
-  correct_answer: string;
-  explanation: string;
-  section: string;
-  learning_objective: string;
-}
-
-export interface ExitQuizResult {
-  passed: boolean;
-  correct: number[];
-  incorrect: ExitQuizFeedback[];
-  round: number;
-  next_question_count: number;
-  next_focus_areas: string[];
-}
-
 /**
  * One turn of the session-only, course-grounded chat. Held only in the
  * Rust process's memory for the active app session — never persisted, and
@@ -674,14 +580,6 @@ export interface ChatMessage {
   section: string | null;
   /** Three course-grounded prompts for productive follow-up. */
   follow_ups: string[];
-}
-
-export interface ArchivedCourse {
-  course_id: number;
-  session_date: string;
-  title: string;
-  markdown: string;
-  resources: Resource[];
 }
 
 /**
@@ -900,30 +798,10 @@ const realApi = {
   }) => invoke<LanguageSessionResult>('submit_language_session', { input }),
   pauseSchedule: () => invoke<void>('pause_schedule'),
   resumeSchedule: () => invoke<void>('resume_schedule'),
-  getQuiz: (sessionId: string) => invoke<QuizRoundView>('get_quiz', { sessionId }),
-  submitAnswer: (sessionId: string, roundId: AssessmentRoundId, expectedRevision: number, questionId: number, answer: string, confirmed: boolean) =>
-    invoke<number>('submit_answer', { sessionId, roundId, expectedRevision, questionId, answer, confirmed }),
-  finishQuiz: (sessionId: string, roundId: AssessmentRoundId, expectedRevision: number) => invoke<ReviewData>('finish_quiz', { sessionId, roundId, expectedRevision }),
-  getReview: (sessionId: string) => invoke<ReviewData>('get_review', { sessionId }),
-  finishReview: (sessionId: string) => invoke<SessionView>('finish_review', { sessionId }),
-  completeTrackDay: (sessionId: string) => invoke<SessionView>('complete_track_day', { sessionId }),
-  getRoulette: (sessionId: string, revisit?: boolean) => invoke<RouletteView>('get_roulette', { sessionId, revisit }),
-  ensureCourse: (sessionId: string) => invoke<CourseView>('ensure_course', { sessionId }),
-  startCourse: (sessionId: string) => invoke<SessionView>('start_course', { sessionId }),
-  finishCourse: (sessionId: string) => invoke<SessionView>('finish_course', { sessionId }),
   escapeSession: (phrase: string) => invoke<boolean>('escape_session', { phrase }),
-  ensureAudio: (sessionId: string) => invoke<AudioView>('ensure_audio', { sessionId }),
-  getAudioEnabled: () => invoke<boolean>('get_audio_enabled'),
-  setAudioEnabled: (enabled: boolean) => invoke<void>('set_audio_enabled', { enabled }),
-  getExitQuiz: (sessionId: string) => invoke<ExitQuizQuestion[]>('get_exit_quiz', { sessionId }),
-  submitExitQuiz: (sessionId: string, answers: Record<number, string>) =>
-    invoke<ExitQuizResult>('submit_exit_quiz', { sessionId, answers }),
   getEscapePhrase: () => invoke<string>('get_escape_phrase'),
   getDashboard: (query: ProgressQuery = {}) => invoke<DashboardView>('get_dashboard', { query }),
   getProgressLesson: (source: ProgressEntry['source'], ownerId: string) => invoke<ProgressLesson | null>('get_progress_lesson', { source, ownerId }),
-  getPastCourse: (date: string) =>
-    invoke<ArchivedCourse | null>('get_past_course', { date }),
-  openResources: (sessionId: string) => invoke<number>('open_resources', { sessionId }),
 };
 
 /** Demo mode: outside Tauri (plain `vite dev`), serve canned data from mock.ts. */

@@ -2,7 +2,6 @@ import { previewConfiguration, savePreviewConfiguration, previewRunners, preview
 import type { FocusPolicy, CurriculumConceptView, RouteSummary } from './ipc';
 import type { RevisePath } from './contracts/classes';
 import type { AgentPolicy, RunnerId } from './contracts/agents';
-import type { AssessmentRoundId } from './contracts/assessments';
 import { previewEnrollmentOptions, previewEnrollmentDraft, savePreviewEnrollmentDraft } from './enrollment-preview';
 import { getPreviewPlacement, startPreviewPlacement, savePreviewPlacement, submitPreviewPlacement, continuePreviewPlacement, finishPreviewPlacement, recommendPreviewPath } from './placement-preview';
 import type { SaveEnrollmentDraft } from './contracts/enrollment';
@@ -19,12 +18,10 @@ import seedConcepts from '../../src-tauri/seed/concepts.json';
  */
 import type {
   AppStateView,
-  ArchivedCourse,
   ProgressQuery,
   ProgressEntry,
   ProgressLesson,
   ChatMessage,
-  CourseView,
   DashboardView,
   ExerciseView,
   CefrLevel,
@@ -43,10 +40,6 @@ import type {
   LanguageProgramView,
   LanguageSessionResult,
   PlannedSlot,
-  QuizQuestionView,
-  QuizRoundView,
-  ReviewData,
-  RouletteView,
   SessionView,
 } from './ipc';
 
@@ -132,46 +125,7 @@ JS runs on a single call stack per agent. Host environments enqueue work: the ti
 
 State the loop as: run script → macrotask → microtask checkpoint (repeat). Give the sync/micro/macro log ordering example, then explain starvation. Close with where \`await\` schedules — microtask, same turn as the resolving promise.`;
 
-const RESOURCES = [
-  {
-    title: 'HTML Standard — event loops',
-    url: 'https://html.spec.whatwg.org/multipage/webappapis.html#event-loops',
-    type: 'spec',
-    why: 'Normative definition of macrotasks, microtasks, and rendering steps.',
-  },
-  {
-    title: 'Tasks, microtasks, queues and schedules',
-    url: 'https://jakearchibald.com/2015/tasks-microtasks-queues-and-schedules/',
-    type: 'article',
-    why: 'Classic walkthrough of browser scheduling with runnable examples.',
-  },
-  {
-    title: 'Node.js event loop documentation',
-    url: 'https://nodejs.org/en/docs/guides/event-loop-timers-and-nexttick',
-    type: 'docs',
-    why: 'How libuv phases map onto the same mental model in Node.',
-  },
-];
-
 const MOCK_COURSE_ID = 42;
-
-const MOCK_CURRICULUM: CurriculumBrief = {
-  phase: 'mechanisms',
-  core: true,
-  learner_outcome:
-    'Diagnose browser scheduling behavior in production and defend a mitigation with measured runtime evidence.',
-  mechanisms: [
-    'task queues and microtask checkpoints',
-    'rendering opportunities and main-thread contention',
-  ],
-  production_scenario:
-    'Trace a slow interaction through scheduling, rendering, telemetry, and an explicit rollback decision.',
-  misconceptions: ['Promises do not automatically yield to a browser rendering opportunity.'],
-  evidence: 'A reproducible trace and before-and-after responsiveness measurement.',
-  artifact: 'Extend the browser performance case study with a measured scheduling intervention.',
-  primary_sources: ['https://html.spec.whatwg.org/', 'https://developer.mozilla.org/'],
-  related_concepts: ['fa-performance-budgets'],
-};
 
 const MOCK_EXERCISE: Omit<ExerciseView, 'draft'> = {
   course_id: MOCK_COURSE_ID,
@@ -227,77 +181,10 @@ const state = {
       : 'pending') as SessionView['status'],
   score: jump ? 2 / 3 : (null as number | null),
   remaining: 30,
-  timerId: 0 as ReturnType<typeof setInterval> | 0,
   voluntary: false,
 };
 
-let mockExitRound = 1;
-let mockExitCount = 5;
-let mockExitQuestions: {
-  id: number;
-  prompt: string;
-  choices: string[];
-  section: string;
-  learning_objective: string;
-}[] = [];
-
-const MOCK_EXIT_PROMPTS: { prompt: string; section: string; learning_objective: string }[] = [
-  {
-    prompt: 'Which queue runs before the next macrotask after synchronous code completes?',
-    section: 'Core mechanics',
-    learning_objective: 'microtasks drain before the next macrotask',
-  },
-  {
-    prompt: 'How does `await` resume an async function after its operand settles?',
-    section: 'Mental model',
-    learning_objective: 'await continuations are microtasks',
-  },
-  {
-    prompt: 'What is the main risk of an unbounded `queueMicrotask` chain?',
-    section: 'Trade-offs and failure modes',
-    learning_objective: 'recursive microtasks can starve rendering',
-  },
-  {
-    prompt: 'What actually blocks JavaScript’s event loop?',
-    section: 'Core mechanics',
-    learning_objective: 'synchronous CPU work blocks the stack, not promises',
-  },
-  {
-    prompt: 'When can the browser render relative to task and microtask processing?',
-    section: 'The simple version',
-    learning_objective: 'rendering happens after microtasks drain',
-  },
-  {
-    prompt: 'Why can `setTimeout(fn, 0)` still run noticeably later?',
-    section: 'Core mechanics',
-    learning_objective: 'macrotasks wait for the full microtask drain first',
-  },
-  {
-    prompt: 'Which ordering follows sync code, a resolved Promise, and `setTimeout(0)`?',
-    section: 'Core mechanics',
-    learning_objective: 'sync, then microtasks, then macrotasks',
-  },
-  {
-    prompt: 'What does a host API do when its asynchronous work completes?',
-    section: 'Core mechanics',
-    learning_objective: 'host APIs enqueue macrotasks on completion',
-  },
-  {
-    prompt: 'Why does `await` not move synchronous CPU work off the main thread?',
-    section: 'Trade-offs and failure modes',
-    learning_objective: 'await only defers scheduling, not computation',
-  },
-  {
-    prompt: 'Which experiment best reveals microtask starvation?',
-    section: 'Runnable experiment',
-    learning_objective: 'recursive .then() chains starve macrotasks',
-  },
-];
-
 const PREVIEW_PRIMARY_ID = 'primary-preview-session';
-function requirePreviewPrimary(id: string) {
-  if (id !== PREVIEW_PRIMARY_ID) throw new Error('This study session is unavailable.');
-}
 function session(): SessionView {
   return {
     session_id: PREVIEW_PRIMARY_ID,
@@ -783,90 +670,6 @@ function appState(): AppStateView {
         : []),
     ],
   };
-}
-
-const QUESTIONS: QuizQuestionView[] = [
-  {
-    id: 1,
-    prompt:
-      'What is the guaranteed console order for this snippet?\n\n```js\nconsole.log("A");\nsetTimeout(() => console.log("B"), 0);\nPromise.resolve().then(() => console.log("C"));\n```',
-    kind: 'mcq',
-    choices: ['A, B, C', 'A, C, B', 'C, A, B', 'B, C, A'],
-    origin: 'carryover',
-    answered: false,
-    draft: null,
-  },
-  {
-    id: 2,
-    prompt: 'Why can an infinite chain of Promise.then callbacks prevent setTimeout from firing?',
-    kind: 'mcq',
-    choices: [
-      'Microtasks drain completely before the next macrotask, starving the timer queue',
-      'Promises run on a separate thread that blocks the timer thread',
-      'setTimeout(0) is coalesced into the same microtask turn',
-      'The call stack cannot unwind until all promises settle',
-    ],
-    origin: 'fresh',
-    answered: false,
-    draft: null,
-  },
-  {
-    id: 3,
-    prompt:
-      'An async function awaits a resolved promise, logs "after", and the caller logs "caller" immediately after invoking it. Explain the ordering and which queue resumes the async function.',
-    kind: 'free',
-    choices: null,
-    origin: 'fresh',
-    answered: false,
-    draft: null,
-  },
-];
-
-const REVIEW: ReviewData = {
-  score: 2 / 3,
-  self_assess: false,
-  items: [
-    {
-      question_id: 1,
-      prompt: QUESTIONS[0].prompt,
-      kind: 'mcq',
-      user_answer: 'A, C, B',
-      correct: true,
-      feedback: '',
-      correct_answer: 'A, C, B',
-      explanation:
-        'Synchronous A runs first; microtask C runs before the next macrotask B — the canonical event-loop ordering check.',
-      returns_tomorrow: false,
-    },
-    {
-      question_id: 3,
-      prompt: QUESTIONS[2].prompt,
-      kind: 'free',
-      user_answer: 'The async function runs synchronously until await, so caller logs first.',
-      correct: false,
-      feedback:
-        'Close on the sync portion, but you missed that await schedules the continuation as a microtask after caller logs.',
-      correct_answer:
-        'The async body runs synchronously until await; caller logs next; then the microtask resumes the async function and logs "after".',
-      explanation:
-        'await on an already-resolved promise still yields — the continuation is a microtask, not synchronous stack work.',
-      returns_tomorrow: true,
-    },
-  ],
-};
-
-let previewQuiz: QuizRoundView & { result: ReviewData | null } = {
-  round_id: 'preview-primary-round-v1' as AssessmentRoundId, revision: 0, questions: structuredClone(QUESTIONS), result: null,
-};
-try {
-  const saved = globalThis.localStorage?.getItem('principia:preview-primary-round-v1');
-  if (saved) {
-    const value = JSON.parse(saved);
-    if (value.round_id === previewQuiz.round_id && Number.isInteger(value.revision) && Array.isArray(value.questions) && value.questions.length === QUESTIONS.length) previewQuiz = value;
-  }
-} catch { /* Browser-only preview storage can be unavailable. */ }
-function savePreviewQuiz() {
-  try { globalThis.localStorage?.setItem('principia:preview-primary-round-v1', JSON.stringify(previewQuiz)); } catch { /* In-memory preview still works. */ }
 }
 
 let previewFreeOnly = true;
@@ -1402,131 +1205,6 @@ export const mockApi = {
   resumeSchedule: async () => {
     mockPaused = false;
   },
-  getQuiz: async (sessionId: string): Promise<QuizRoundView> => { requirePreviewPrimary(sessionId); return structuredClone(previewQuiz); },
-  submitAnswer: async (sessionId: string, roundId: AssessmentRoundId, expectedRevision: number, id: number, answer: string, confirmed: boolean) => {
-    requirePreviewPrimary(sessionId);
-    if (roundId !== previewQuiz.round_id) throw new Error('This is no longer the displayed quiz round.');
-    if (previewQuiz.result || state.step !== 'quiz') throw new Error('This session is not awaiting quiz answers.');
-    const q = previewQuiz.questions.find((q) => q.id === id);
-    if (!q) throw new Error('Question does not belong to the displayed round.');
-    if (confirmed && !answer.trim()) throw new Error('Enter an answer before continuing.');
-    if (q.kind === 'mcq' && answer && !q.choices?.includes(answer)) throw new Error('Choose one of the displayed answers.');
-    if (new TextEncoder().encode(answer).length > 65_536) throw new Error('Assessment answer exceeds 64 KiB.');
-    if (q.draft === answer && q.answered === confirmed) return previewQuiz.revision;
-    if (expectedRevision !== previewQuiz.revision) throw new Error('Assessment answers changed; reload the saved round before editing.');
-    q.draft = answer; q.answered = confirmed; previewQuiz.revision += 1; savePreviewQuiz();
-    return previewQuiz.revision;
-  },
-  finishQuiz: async (sessionId: string, roundId: AssessmentRoundId, expectedRevision: number) => {
-    requirePreviewPrimary(sessionId);
-    if (roundId !== previewQuiz.round_id) throw new Error('This is no longer the displayed quiz round.');
-    if (!previewQuiz.result) {
-      if (expectedRevision !== previewQuiz.revision) throw new Error('Answers changed; reload the saved round before submitting.');
-      if (previewQuiz.questions.some((q) => !q.answered || !q.draft?.trim())) throw new Error('Answer every question before submitting.');
-      const items = previewQuiz.questions.map((q) => {
-        const reference = REVIEW.items.find((item) => item.question_id === q.id);
-        const correctAnswer = reference?.correct_answer ?? QUESTIONS[1].choices![0];
-        const correct = q.kind === 'mcq' ? q.draft === correctAnswer : null;
-        return { question_id: q.id, prompt: q.prompt, kind: q.kind, user_answer: q.draft ?? '', correct,
-          feedback: correct === null ? 'Preview has no live grader; compare your explanation with the model answer.' : '',
-          correct_answer: correctAnswer, explanation: reference?.explanation ?? 'The microtask queue drains before the next timer task.', returns_tomorrow: correct === false };
-      });
-      const graded = items.filter((item) => item.correct !== null);
-      previewQuiz.result = { items, score: graded.length ? graded.filter((item) => item.correct).length / graded.length : 1, self_assess: items.some((item) => item.correct === null) };
-      savePreviewQuiz();
-    }
-    if (state.step === 'quiz') state.step = 'review';
-    state.score = previewQuiz.result.score;
-    return structuredClone(previewQuiz.result);
-  },
-  getReview: async (sessionId: string) => { requirePreviewPrimary(sessionId); return structuredClone(previewQuiz.result ?? REVIEW); },
-  finishReview: async (sessionId: string) => {
-    requirePreviewPrimary(sessionId);
-    state.step = 'roulette';
-    mockEmit('session:state', session());
-    return session();
-  },
-  completeTrackDay: async (sessionId: string) => {
-    requirePreviewPrimary(sessionId);
-    state.step = 'done';
-    state.status = 'completed';
-    mockEmit('session:state', session());
-    return session();
-  },
-  getRoulette: async (sessionId: string): Promise<RouletteView> => (requirePreviewPrimary(sessionId), {
-    pool: [
-      'Closures and lexical scope',
-      'Prototypes vs classes',
-      'The event loop and task queues',
-      'V8 hidden classes and inline caches',
-      'WeakMap and garbage collection',
-      'Proxy and Reflect traps',
-      'Structured cloning algorithm',
-      'Atomics and SharedArrayBuffer',
-      'import() and module graphs',
-      'Error stack trace mechanics',
-      'Intl and locale-sensitive APIs',
-      'Temporal proposal patterns',
-    ],
-    chosen_index: 2,
-    concept_title: 'The event loop and task queues',
-    concept_category: 'runtime',
-    pool_unlocked: 31,
-    pool_total: 72,
-    track_complete: false,
-  }),
-  ensureCourse: async (sessionId: string): Promise<CourseView> => {
-    requirePreviewPrimary(sessionId);
-    // Demo the live agent log the way a real generation streams it.
-    const feed = [
-      'spawn: agent · model opus',
-      'tool: WebSearch javascript event loop microtasks spec',
-      'tool: WebFetch https://html.spec.whatwg.org/multipage/webappapis.html',
-      'tool: WebSearch node event loop libuv phases',
-      'draft: 2,100 chars written',
-      'draft: 8,400 chars written',
-      'done: agent returned 19,872 chars',
-    ];
-    for (const line of feed) {
-      mockEmit('gen:log', line);
-      await new Promise((r) => setTimeout(r, 350));
-    }
-    return {
-      course_id: MOCK_COURSE_ID,
-      title: 'The JavaScript event loop and task queues',
-      concept_slug: 'js-event-loop',
-      curriculum: MOCK_CURRICULUM,
-      prerequisites: [],
-      session_index: 6,
-      why_now:
-        'Session 6 advances the mechanisms phase by turning prior scheduling vocabulary into production diagnosis.',
-      markdown: COURSE_MD,
-      resources: RESOURCES,
-      source: 'claude',
-      remaining_seconds: state.remaining,
-      total_seconds: 30 * 60,
-    };
-  },
-  startCourse: async (sessionId: string) => {
-    requirePreviewPrimary(sessionId);
-    state.step = 'course';
-    state.remaining = 27 * 60 + 14;
-    if (!state.timerId) {
-      state.timerId = setInterval(() => {
-        state.remaining = Math.max(0, state.remaining - 1);
-        mockEmit('timer:tick', { session_id: PREVIEW_PRIMARY_ID, remaining: state.remaining });
-      }, 1000);
-    }
-    return session();
-  },
-  finishCourse: async (sessionId: string) => {
-    requirePreviewPrimary(sessionId);
-    state.step = 'done';
-    state.status = 'completed';
-    clearMockChatThreads();
-    mockEmit('session:state', session());
-    return session();
-  },
   escapeSession: async () => {
     clearMockChatThreads();
     return true;
@@ -1549,92 +1227,5 @@ export const mockApi = {
     return {today:dateAt(0), classes:programs.map(p=>({...p,completed_sessions:history.filter(h=>h.subject_id===p.subject_id && h.status==='completed').length})), completed_sessions:completed.length, study_days:dates.size, streak, activity:Array.from({length:28},(_,i)=>({date:dateAt(27-i),completed:completed.filter(h=>h.date===dateAt(27-i)).length})), history:matching.slice(page*8,page*8+8),history_total:matching.length,page,page_size:8};
   },
   getProgressLesson: async (_source: ProgressEntry['source'], _ownerId: string): Promise<ProgressLesson | null> => ({ title: 'Preview lesson', date: new Date().toISOString().slice(0,10), markdown: COURSE_MD, course_id: null, classroom_session_id: null, study_session_id: null }),
-  getPastCourse: async (): Promise<ArchivedCourse | null> => ({
-    course_id: MOCK_COURSE_ID,
-    session_date: new Date().toISOString().slice(0, 10),
-    title: 'The JavaScript event loop and task queues',
-    markdown: COURSE_MD,
-    resources: RESOURCES,
-  }),
-  openResources: async (sessionId: string) => { requirePreviewPrimary(sessionId); return RESOURCES.length; },
   markFrontendReady: async () => {},
-  ensureAudio: async (sessionId: string) => (requirePreviewPrimary(sessionId), {
-    engine: 'speech' as const,
-    lines: [
-      { speaker: 'teacher' as const, text: "Today we're on the event loop — the scheduler every async API shares. Before I explain: what order do you expect from sync code, a zero-delay timer, and a resolved promise?" },
-      { speaker: 'student' as const, text: 'Sync first, then the timer, then the promise — because the timer was scheduled first?' },
-      { speaker: 'teacher' as const, text: "That's the trap. Microtasks — promise reactions — drain completely before the next macrotask. You'll see sync, then the promise, then the timer." },
-      { speaker: 'student' as const, text: 'So await is also a microtask continuation?' },
-      { speaker: 'teacher' as const, text: 'Exactly. await suspends the async function and resumes on a microtask when the operand settles — same queue, same starvation rules if you recurse without yielding.' },
-      { speaker: 'student' as const, text: 'And blocking the loop is really blocking the call stack with sync CPU work.' },
-      { speaker: 'teacher' as const, text: "Now you've got the mental model. Build a tiny log-ordering experiment in the console — that's the executable proof you'll reuse forever." },
-    ],
-  }),
-  getAudioEnabled: async () => false,
-  setAudioEnabled: async () => {},
-  getExitQuiz: async (sessionId: string) => {
-    requirePreviewPrimary(sessionId);
-    if (mockExitQuestions.length === 0) {
-      mockExitQuestions = Array.from({ length: mockExitCount }, (_, index) => {
-        const source = MOCK_EXIT_PROMPTS[((mockExitRound - 1) * 5 + index) % MOCK_EXIT_PROMPTS.length];
-        return {
-          id: mockExitRound * 100 + index,
-          prompt: source.prompt,
-          section: source.section,
-          learning_objective: source.learning_objective,
-          choices: [
-            'The mechanism described in the course',
-            'Whichever callback was registered first',
-            'A separate worker always handles it',
-            'The runtime chooses randomly',
-          ],
-        };
-      });
-    }
-    return mockExitQuestions.map(({ id, prompt, choices }) => ({ id, prompt, choices }));
-  },
-  submitExitQuiz: async (sessionId: string, answers: Record<number, string>) => {
-    requirePreviewPrimary(sessionId);
-    const correctAnswer = 'The mechanism described in the course';
-    const correct = mockExitQuestions
-      .filter((question) => answers[question.id] === correctAnswer)
-      .map((question) => question.id);
-    const incorrect = mockExitQuestions
-      .filter((question) => answers[question.id] !== correctAnswer)
-      .map((question) => ({
-        question_id: question.id,
-        prompt: question.prompt,
-        user_answer: answers[question.id] ?? '',
-        correct_answer: correctAnswer,
-        explanation:
-          'The misconception: assuming this follows intuition rather than the loop\'s actual queue order. The course traces this behavior through the call stack, host scheduling, and the microtask checkpoint — like a chef finishing every add-on ticket before touching the next new order.',
-        section: question.section,
-        learning_objective: question.learning_objective,
-      }));
-    const passed = incorrect.length === 0 && correct.length === mockExitQuestions.length;
-    const round = mockExitRound;
-    const nextQuestionCount = mockExitCount + incorrect.length;
-    const nextFocusAreas = incorrect.map((item) =>
-      item.section && item.learning_objective
-        ? `${item.section} — ${item.learning_objective}`
-        : item.learning_objective || item.section || 'the missed question'
-    );
-    if (passed) {
-      state.remaining = 0;
-      mockEmit('timer:tick', { session_id: PREVIEW_PRIMARY_ID, remaining: 0 });
-      mockEmit('timer:done', { session_id: PREVIEW_PRIMARY_ID, remaining: 0 });
-    } else {
-      mockExitRound += 1;
-      mockExitCount = nextQuestionCount;
-      mockExitQuestions = [];
-    }
-    return {
-      passed,
-      correct,
-      incorrect,
-      round,
-      next_question_count: nextQuestionCount,
-      next_focus_areas: nextFocusAreas,
-    };
-  },
 };

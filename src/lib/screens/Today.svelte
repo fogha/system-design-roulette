@@ -16,7 +16,6 @@
   /** Engineering classes with spaced review due and no saved session in the way. */
   const reviews = $derived(activeClasses.filter(p => p.kind === 'engineering' && p.review_due > 0 && !resumable.some(s => s.subject_id === p.subject_id)));
   const upcoming = $derived(slots.filter(s => !s.owed).sort((a,b) => a.next_fire_at.localeCompare(b.next_fire_at)).slice(0,4));
-  const legacy = $derived(app.session?.status === 'in_progress');
   /** The class whose focused session holds the desk; other classes wait. */
   const held = $derived(app.state?.focus?.course_id ?? null);
   const heldLabel = $derived(held ? (app.state?.classroom_programs.find(p => p.subject_id === held)?.label ?? held) : '');
@@ -47,7 +46,7 @@
   {#if app.state?.enforcement_disarmed}<p class="recovery mono" role="status">ENFORCEMENT DISARMED · ~/sdr-unlock is present.</p>{/if}
   <section class="idle-center" aria-labelledby="today-title">
     <div class="meta-label">TODAY · {now.toLocaleDateString(undefined,{weekday:'long',month:'short',day:'numeric'})}</div>
-    <h1 id="today-title">{resumable.length || legacy ? 'Your study desk is waiting' : dueSlots.length ? 'Time for your next class' : 'Make room for learning'}</h1>
+    <h1 id="today-title">{resumable.length ? 'Your study desk is waiting' : dueSlots.length ? 'Time for your next class' : 'Make room for learning'}</h1>
     <p class="sub">{resumable.length ? resumable[0].title : dueSlots.length ? `${dueSlots.length} class appointment${dueSlots.length === 1 ? ' is' : 's are'} due.` : 'Your class schedules bring the next session here.'}</p>
     <div class="node-wrap"><NodeCard Icon={app.state?.schedule_paused ? Pause : Clock} name="class-scheduler" badge={app.state?.schedule_paused ? 'paused' : next ? 'next' : 'idle'} badgeTone="amber">
       <div class="meta-label">{app.state?.schedule_paused ? 'SCHEDULING PAUSED' : 'NEXT CLASS'}</div><div class="count mono">{next ? formatClassCountdown(next,now) : '—:—:—'}</div><div class="next-class">{next?.label ?? 'No upcoming appointments'}</div><div class="sched mono">{formatClassTime(next,now)}</div>
@@ -57,9 +56,8 @@
     <div class="quick-links"><button class="ghost mono-ghost" onclick={() => app.navigate('progress')}>Progress ledger</button><button class="ghost mono-ghost" onclick={pause} disabled={busy}>{app.state?.schedule_paused ? 'Resume appointments' : 'Pause appointments'}</button></div>
     {#if held}<p class="held mono" role="status">A focused {heldLabel} session holds the desk. Other classes wait until it finishes.</p>{/if}
   </section>
-  {#if resumable.length || legacy}
+  {#if resumable.length}
     <section class="saved" aria-label="Saved sessions"><NodeCard Icon={Play} name="saved-sessions" badge="resumable" badgeTone="teal">
-      {#if legacy}<div class="study-row"><div><strong>Saved daily session</strong><p>The daily routine has been retired. Continue this existing session at its saved step.</p></div><button class="ghost mono-ghost" onclick={() => app.resumeSession()}>Resume<ArrowRight size={12} /></button></div>{/if}
       {#each resumable as session}{@const pending = session.runtime === 'study' && ['planned', 'preparing'].includes(session.lifecycle)}<div class="study-row"><div><strong>{session.label}</strong><p>{session.title}{pending ? ' · preparation did not finish' : ''}</p></div>{#if pending}<button class="ghost mono-ghost" disabled={busy || !!app.preparingClass || heldElsewhere(session.subject_id)} onclick={() => app.startClass(session.subject_id)}>Retry<ArrowRight size={12} /></button>{:else}<button class="ghost mono-ghost" disabled={heldElsewhere(session.subject_id)} onclick={() => app.resumeClass(session.subject_id)}>Resume<ArrowRight size={12} /></button>{/if}</div>{/each}
     </NodeCard></section>
   {/if}

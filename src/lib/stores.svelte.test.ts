@@ -41,40 +41,21 @@ function state(overrides: Partial<AppStateView> = {}): AppStateView {
 }
 
 describe('authoritative screen routing', () => {
-  it('routes away from a classroom when the enforced primary session becomes owed', () => {
-    expect(resolveRoute(state({ owed: true }), 'classroom', false)).toEqual({
-      screen: 'idle',
-      stepAway: false,
-    });
+  it('returns to Today when the desk becomes owed', () => {
+    expect(resolveRoute(state({ owed: true }), 'classroom')).toEqual({ screen: 'idle' });
   });
 
-  it('allows an unlocked voluntary primary session to remain stepped away', () => {
+  it('keeps a saved daily-routine session as recovery data without opening a screen', () => {
     const current = state({
-      session: {
-        ...state().session,
-        status: 'in_progress',
-        step: 'course',
-      },
+      session: { ...state().session, status: 'in_progress', step: 'course', locked: true },
     });
-    expect(resolveRoute(current, 'idle', true)).toEqual({
-      screen: 'idle',
-      stepAway: true,
-    });
+    expect(resolveRoute(current, 'loading')).toEqual({ screen: 'idle' });
+    expect(resolveRoute(current, 'classroom')).toEqual({ screen: 'classroom' });
   });
 
-  it('clears step-away and restores the primary step when locked', () => {
-    const current = state({
-      session: {
-        ...state().session,
-        status: 'in_progress',
-        step: 'course',
-        locked: true,
-      },
-    });
-    expect(resolveRoute(current, 'classroom', true)).toEqual({
-      screen: 'course',
-      stepAway: false,
-    });
+  it('leaves the setup wizard only once onboarding is complete', () => {
+    expect(resolveRoute(state({ onboarded: false }), 'idle')).toEqual({ screen: 'setup' });
+    expect(resolveRoute(state(), 'setup')).toEqual({ screen: 'idle' });
   });
 });
 
@@ -111,32 +92,24 @@ describe('escape hatch visibility', () => {
   });
 });
 
-it('keeps the latest session when refreshes and timer events arrive out of order', async () => {
+it('keeps the latest app state when refreshes resolve out of order', async () => {
   const first = state();
-  const second = state({ session: { ...first.session, session_id: 'primary-next', status: 'in_progress', step: 'course' } });
+  const second = state({ session: { ...first.session, session_id: 'primary-next' } });
   const getState = vi.spyOn(api, 'getAppState').mockResolvedValue(first);
   vi.spyOn(api, 'markFrontendReady').mockResolvedValue(undefined);
   try {
     await app.init();
-    mockEmit('timer:tick', { session_id: first.session.session_id, remaining: 17 });
-    expect(app.timerRemaining).toBe(17);
-
     let releaseOld!: (value: AppStateView) => void;
     getState.mockImplementationOnce(() => new Promise((resolve) => { releaseOld = resolve; }));
     const oldRefresh = app.refresh();
     getState.mockResolvedValueOnce(second);
     await app.refresh();
-    expect(app.timerRemaining).toBe(-1);
-    mockEmit('timer:tick', { session_id: first.session.session_id, remaining: 0 });
-    expect(app.timerRemaining).toBe(-1);
-    mockEmit('timer:tick', { session_id: second.session.session_id, remaining: 29 });
-    expect(app.timerRemaining).toBe(29);
+    expect(app.session?.session_id).toBe('primary-next');
 
     releaseOld(first);
     await oldRefresh;
-    expect(app.session?.session_id).toBe(second.session.session_id);
-    expect(app.screen).toBe('course');
-    expect(app.timerRemaining).toBe(29);
+    expect(app.session?.session_id).toBe('primary-next');
+    expect(app.screen).toBe('idle');
   } finally {
     vi.restoreAllMocks();
   }
