@@ -260,19 +260,84 @@ button.bracket:disabled {
   cursor: not-allowed;
 }
 
+/* The everyday control: every button that is neither the call to action
+   nor a callout. A bordered key with a lit tick on its left edge and a
+   corner mark at the bottom right; under the pointer the tick runs the
+   full height, the mark lights, and a trailing arrow takes a step. */
 button.ghost {
-  background: transparent;
+  --key: var(--accent);
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 90%, transparent), color-mix(in srgb, var(--surface) 45%, transparent));
   color: var(--muted);
   border: 1px solid var(--border);
   border-radius: var(--cta-radius);
   font-family: var(--font-body);
   font-size: 13px;
-  padding: 8px 18px;
+  padding: 8px 18px 8px 20px;
   cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease, transform 0.12s ease;
 }
-button.ghost:hover {
+button.ghost::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 2px;
+  height: 10px;
+  transform: translateY(-50%);
+  border-radius: 0 1px 1px 0;
+  background: color-mix(in srgb, var(--key) 65%, var(--border));
+  transition: height 0.18s cubic-bezier(0.22, 1, 0.36, 1), background 0.15s ease;
+  pointer-events: none;
+}
+button.ghost::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 7px;
+  height: 7px;
+  background: var(--border);
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+  transition: background 0.15s ease;
+  pointer-events: none;
+}
+button.ghost svg:last-child:not(:first-child) {
+  transition: transform 0.15s cubic-bezier(0.22, 1, 0.36, 1);
+}
+button.ghost:hover:not(:disabled) {
   color: var(--fg);
-  border-color: var(--muted);
+  border-color: color-mix(in srgb, var(--key) 40%, var(--border));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--key) 9%, var(--surface)), color-mix(in srgb, var(--key) 3%, var(--surface)));
+}
+button.ghost:hover:not(:disabled)::before {
+  height: 100%;
+  background: var(--key);
+}
+button.ghost:hover:not(:disabled)::after {
+  background: var(--key);
+}
+/* A key that does something drastic keeps its own colour. */
+button.ghost.danger {
+  --key: var(--led-err);
+}
+button.ghost.danger:hover:not(:disabled) {
+  color: var(--led-err);
+}
+button.ghost:hover:not(:disabled) svg:last-child:not(:first-child) {
+  transform: translateX(2px);
+}
+button.ghost:active:not(:disabled) {
+  transform: translateY(1px);
+}
+button.ghost:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+button.ghost:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .pill {
@@ -470,7 +535,7 @@ button.ghost.mono-ghost {
   font-family: var(--font-mono);
   font-size: 11px;
   min-height: 34px;
-  padding: 7px 14px;
+  padding: 7px 14px 7px 16px;
   border-radius: var(--radius-control);
   letter-spacing: 0.5px;
   text-transform: lowercase;
