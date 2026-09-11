@@ -2,7 +2,7 @@ use crate::db::Db;
 use crate::generator::{ChatTurn, Generator};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicI64};
+use std::sync::atomic::AtomicBool;
 use std::sync::Mutex;
 
 pub struct AppState {
@@ -11,14 +11,6 @@ pub struct AppState {
     pub data_dir: PathBuf,
     /// Kiosk lock currently engaged.
     pub locked: AtomicBool,
-    /// Remaining required reading seconds for today's course step.
-    pub reading_remaining: AtomicI64,
-    /// Guards timer admission and counter updates for a captured primary owner.
-    pub reading_owner: Mutex<Option<ReadingOwner>>,
-    /// Course timer task is running.
-    pub timer_running: AtomicBool,
-    /// Pause flag (system sleep).
-    pub timer_paused: AtomicBool,
     /// --debug-day: shortened timer, no kiosk, ignore schedule.
     pub debug_day: bool,
     /// Failed escape attempts (rate limiting the hatch).
@@ -42,12 +34,6 @@ pub struct AppState {
     pub chat_threads: Mutex<HashMap<String, Vec<ChatTurn>>>,
     /// Owner of foreground enforcement for class sessions, if any.
     pub focus: crate::enforcement::Coordinator,
-}
-
-#[derive(Debug, Clone)]
-pub struct ReadingOwner {
-    pub session_id: String,
-    pub total_seconds: i64,
 }
 
 impl AppState {

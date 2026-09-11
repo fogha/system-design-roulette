@@ -16,13 +16,12 @@ pub mod progress;
 pub mod research;
 pub mod roulette;
 pub mod scheduler;
-pub mod session;
 pub mod state;
 pub mod storage;
 pub mod subjects;
 
 use state::AppState;
-use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use tauri::{Emitter, Manager};
 
@@ -167,10 +166,6 @@ pub fn run() {
                 generator,
                 data_dir,
                 locked: AtomicBool::new(false),
-                reading_remaining: AtomicI64::new(0),
-                reading_owner: Mutex::new(None),
-                timer_running: AtomicBool::new(false),
-                timer_paused: AtomicBool::new(false),
                 debug_day,
                 escape_failures: Mutex::new(Vec::new()),
                 prev_muted: Mutex::new(None),
@@ -203,12 +198,6 @@ pub fn run() {
                     }
                 }
             }
-
-            // Background generation worker.
-            let handle = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                session::generation_worker(handle).await;
-            });
 
             // Owed-session watcher: checks every 60s (covers app-already-running case).
             let handle = app.handle().clone();

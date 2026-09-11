@@ -6,20 +6,7 @@ import { app, resolveRoute, shouldShowEscapeHatch } from './stores.svelte';
 function state(overrides: Partial<AppStateView> = {}): AppStateView {
   return {
     onboarded: true,
-    session: {
-      session_id: "primary-fixture",
-      date: '2026-07-28',
-      status: 'pending',
-      step: 'quiz',
-      quiz_score: null,
-      streak: 3,
-      locked: false,
-      session_type: 'lesson',
-      plan_reason: '',
-      focus: 'javascript',
-    },
     selected_focus: 'javascript',
-    owed: false,
     schedule_hour: 9,
     schedule_minute: 0,
     debug_day: false,
@@ -41,16 +28,9 @@ function state(overrides: Partial<AppStateView> = {}): AppStateView {
 }
 
 describe('authoritative screen routing', () => {
-  it('returns to Today when the desk becomes owed', () => {
-    expect(resolveRoute(state({ owed: true }), 'classroom')).toEqual({ screen: 'idle' });
-  });
-
-  it('keeps a saved daily-routine session as recovery data without opening a screen', () => {
-    const current = state({
-      session: { ...state().session, status: 'in_progress', step: 'course', locked: true },
-    });
-    expect(resolveRoute(current, 'loading')).toEqual({ screen: 'idle' });
-    expect(resolveRoute(current, 'classroom')).toEqual({ screen: 'classroom' });
+  it('keeps the current screen once onboarded', () => {
+    expect(resolveRoute(state(), 'loading')).toEqual({ screen: 'idle' });
+    expect(resolveRoute(state(), 'classroom')).toEqual({ screen: 'classroom' });
   });
 
   it('leaves the setup wizard only once onboarding is complete', () => {
@@ -60,41 +40,15 @@ describe('authoritative screen routing', () => {
 });
 
 describe('escape hatch visibility', () => {
-  it('is visible in the pending-before-start owed window', () => {
-    expect(shouldShowEscapeHatch(state({ owed: true }))).toBe(true);
-  });
-
-  it('is visible whenever the session is locked or in progress', () => {
-    expect(
-      shouldShowEscapeHatch(
-        state({
-          session: { ...state().session, locked: true },
-        }),
-      ),
-    ).toBe(true);
-    expect(
-      shouldShowEscapeHatch(
-        state({
-          session: { ...state().session, status: 'in_progress' },
-        }),
-      ),
-    ).toBe(true);
-  });
-
-  it('stays hidden after a normal completed session', () => {
-    expect(
-      shouldShowEscapeHatch(
-        state({
-          session: { ...state().session, status: 'completed', step: 'done' },
-        }),
-      ),
-    ).toBe(false);
+  it('stays hidden without a focused holder', () => {
+    expect(shouldShowEscapeHatch(null)).toBe(false);
+    expect(shouldShowEscapeHatch(state())).toBe(false);
   });
 });
 
 it('keeps the latest app state when refreshes resolve out of order', async () => {
   const first = state();
-  const second = state({ session: { ...first.session, session_id: 'primary-next' } });
+  const second = state({ debug_day: true });
   const getState = vi.spyOn(api, 'getAppState').mockResolvedValue(first);
   vi.spyOn(api, 'markFrontendReady').mockResolvedValue(undefined);
   try {
@@ -104,11 +58,11 @@ it('keeps the latest app state when refreshes resolve out of order', async () =>
     const oldRefresh = app.refresh();
     getState.mockResolvedValueOnce(second);
     await app.refresh();
-    expect(app.session?.session_id).toBe('primary-next');
+    expect(app.state?.debug_day).toBe(true);
 
     releaseOld(first);
     await oldRefresh;
-    expect(app.session?.session_id).toBe('primary-next');
+    expect(app.state?.debug_day).toBe(true);
     expect(app.screen).toBe('idle');
   } finally {
     vi.restoreAllMocks();

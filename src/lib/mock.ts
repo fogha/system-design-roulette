@@ -40,7 +40,6 @@ import type {
   LanguageProgramView,
   LanguageSessionResult,
   PlannedSlot,
-  SessionView,
 } from './ipc';
 
 // References and course metadata share the native authoring inputs. Browser
@@ -169,39 +168,6 @@ const params =
   typeof location !== 'undefined' ? new URLSearchParams(location.search) : new URLSearchParams();
 const jump = params.get('step');
 const skippedPreview = params.has('skipped');
-
-const state = {
-  step: (skippedPreview ? 'done' : (jump ?? 'quiz')) as SessionView['step'],
-  status: (skippedPreview
-    ? 'skipped'
-    : jump === 'done'
-    ? 'completed'
-    : jump
-      ? 'in_progress'
-      : 'pending') as SessionView['status'],
-  score: jump ? 2 / 3 : (null as number | null),
-  remaining: 30,
-  voluntary: false,
-};
-
-const PREVIEW_PRIMARY_ID = 'primary-preview-session';
-function session(): SessionView {
-  return {
-    session_id: PREVIEW_PRIMARY_ID,
-    date: new Date().toISOString().slice(0, 10),
-    status: state.status,
-    step: state.step,
-    quiz_score: state.score,
-    streak: 17,
-    // &unlocked previews voluntary (early-start/extension) sessions.
-    locked: state.status === 'in_progress' && !params.has('unlocked') && !state.voluntary,
-    // ?type=pop_quiz previews an audit day in the browser demo.
-    session_type: params.get('type') === 'pop_quiz' ? 'pop_quiz' : 'lesson',
-    plan_reason:
-      params.get('type') === 'pop_quiz' ? 'review debt: 4 topics due — surprise audit' : '',
-    focus: mockSelectedFocus,
-  };
-}
 
 let setupCompleted = false;
 let mockPaused = params.has('paused');
@@ -622,10 +588,8 @@ function appState(): AppStateView {
   const inSetup = typeof location !== 'undefined' && location.search.includes('setup') && !setupCompleted;
   return {
     onboarded: !inSetup,
-    session: session(),
     selected_focus: mockSelectedFocus,
     // Recurring obligations now belong to classes; no separate daily trigger.
-    owed: false,
     schedule_hour: 19,
     schedule_minute: 0,
     debug_day: true,

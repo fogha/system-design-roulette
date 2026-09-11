@@ -7,7 +7,6 @@ use system_design_roulette_lib::{
         assessments::{self, Item, Owner, Purpose, Response, ResponseStatus},
         enrollment, primary_quiz,
     },
-    session,
 };
 
 fn path() -> PathBuf {
@@ -347,8 +346,10 @@ fn upgrade_preserves_and_imports_the_original_frozen_question_and_pending_answer
     .unwrap();
     drop(old);
     let conn = db::open(&path).unwrap();
-    let questions = session::questions_for_today(&conn, "2026-09-08", "2026-09-07").unwrap();
-    assert_eq!(questions[0].prompt, "Frozen prompt — Grüße");
+    let frozen = primary_quiz::frozen_questions(&conn, "2026-09-08")
+        .unwrap()
+        .unwrap();
+    assert_eq!(frozen[0].prompt, "Frozen prompt — Grüße");
     let round = primary_quiz::current(&conn, "2026-09-08").unwrap().unwrap();
     assert_eq!(round.responses["601"].answer, "A");
     assert_eq!(round.responses["601"].status, ResponseStatus::Answered);
@@ -364,7 +365,10 @@ fn upgrade_preserves_and_imports_the_original_frozen_question_and_pending_answer
         round
     );
     assert_eq!(
-        session::questions_for_today(&conn, "2026-09-08", "2026-09-07").unwrap()[0].prompt,
+        primary_quiz::frozen_questions(&conn, "2026-09-08")
+            .unwrap()
+            .unwrap()[0]
+            .prompt,
         "Frozen prompt — Grüße"
     );
     assert_eq!(count(&conn, "assessment_attempts"), 1);

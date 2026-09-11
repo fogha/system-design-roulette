@@ -7,20 +7,7 @@ import {
 function state(overrides: Partial<AppStateView> = {}): AppStateView {
   return {
     onboarded: true,
-    session: {
-      session_id: "primary-fixture",
-      date: '2026-07-27',
-      status: 'completed',
-      step: 'done',
-      quiz_score: 1,
-      streak: 4,
-      locked: false,
-      session_type: 'lesson',
-      plan_reason: '',
-      focus: 'javascript',
-    },
     selected_focus: 'javascript',
-    owed: false,
     schedule_hour: 9,
     schedule_minute: 0,
     debug_day: false,
@@ -73,7 +60,7 @@ describe('next scheduled class', () => {
   });
 
   it('does not turn an old daily time or obligation into a class appointment', () => {
-    expect(nextScheduledClass(state({ owed: true, schedule_hour: 9, schedule_minute: 0 }), now)).toBeNull();
+    expect(nextScheduledClass(state({ schedule_hour: 9, schedule_minute: 0 }), now)).toBeNull();
     expect(nextScheduledClass(state(), now)).toBeNull();
   });
 

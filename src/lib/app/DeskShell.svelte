@@ -14,7 +14,7 @@
 
 <div class="desk blueprint">
   <a class="skip-link" href="#desk-content">Skip to content</a>
-  <ClusterBar route={selected} status={app.state?.owed ? 'session owed — awaiting start' : 'all systems nominal'} tone={app.state?.owed ? 'warn' : 'ok'} />
+  <ClusterBar route={selected} status={app.locked ? 'focused session in progress' : 'all systems nominal'} tone={app.locked ? 'warn' : 'ok'} />
   <header class="command-bar">
     <button class="brand" onclick={() => app.navigate('today')} aria-label="Principia Desk home"><img src={mark} alt="" /><span>Principia Desk<small class="mono">PERSONAL LEARNING SYSTEM</small></span></button>
     <nav aria-label="Main navigation">

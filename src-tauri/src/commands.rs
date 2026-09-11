@@ -3,7 +3,6 @@ pub mod challenges;
 pub mod classes;
 use crate::db;
 use crate::domain::assessments::RoundId;
-use crate::session::{self, SessionView};
 use crate::state::AppState;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::Ordering;
@@ -57,8 +56,6 @@ fn err<E: std::fmt::Display>(e: E) -> String {
 #[derive(Serialize)]
 pub struct AppStateView {
     pub onboarded: bool,
-    pub session: SessionView,
-    pub owed: bool,
     pub schedule_hour: u32,
     pub schedule_minute: u32,
     pub agent_ok: Option<bool>,
@@ -221,24 +218,16 @@ pub fn get_app_state(state: State<'_, AppState>) -> CmdResult<AppStateView> {
         .unwrap_or(false);
     let (schedule_paused, kiosk_level, selected_focus) = {
         let conn = state.db.0.lock().unwrap();
-        let today = state.today();
         (
             matches!(db::get_config(&conn, "schedule_paused"), Ok(Some(v)) if v == "1"),
             db::get_config(&conn, "kiosk_level")
                 .ok()
                 .flatten()
                 .unwrap_or_else(|| "hard".into()),
-            db::current_primary_session(&conn, &today)
+            crate::mastery::get_profile(&conn, "preferred_focus")
                 .ok()
                 .flatten()
-                .map(|session| session.focus)
-                .filter(|focus| !focus.is_empty())
-                .or_else(|| {
-                    crate::mastery::get_profile(&conn, "preferred_focus")
-                        .ok()
-                        .flatten()
-                        .filter(|focus| crate::focus::is_selectable(focus))
-                }),
+                .filter(|focus| crate::focus::is_selectable(focus)),
         )
     };
     let (classroom_programs, classroom_slots, active_classroom_sessions, appointments) = {
@@ -258,9 +247,6 @@ pub fn get_app_state(state: State<'_, AppState>) -> CmdResult<AppStateView> {
     let classroom_due_count = classroom_slots.iter().filter(|slot| slot.owed).count();
     Ok(AppStateView {
         onboarded,
-        session: session::view(&state),
-        // Compatibility field for saved primary-session screens.
-        owed: false,
         schedule_hour: hour,
         schedule_minute: minute,
         agent_ok: None,
@@ -436,7 +422,7 @@ pub fn pause_schedule(app: AppHandle, state: State<'_, AppState>) -> CmdResult<(
     if !state.debug_day {
         crate::scheduler::uninstall()?;
     }
-    let _ = app.emit("session:state", session::view(&state));
+    let _ = app.emit("classroom:state", serde_json::json!({ "refresh": true }));
     Ok(())
 }
 
@@ -447,7 +433,7 @@ pub fn resume_schedule(app: AppHandle, state: State<'_, AppState>) -> CmdResult<
         db::set_config(&conn, "schedule_paused", "0").map_err(err)?;
     }
     refresh_os_schedule(&state)?;
-    let _ = app.emit("session:state", session::view(&state));
+    let _ = app.emit("classroom:state", serde_json::json!({ "refresh": true }));
     Ok(())
 }
 
@@ -517,7 +503,7 @@ pub async fn complete_setup(
     }
     refresh_os_schedule(&state)?;
     state.gen_notify.notify_one();
-    let _ = app.emit("session:state", session::view(&state));
+    let _ = app.emit("classroom:state", serde_json::json!({ "refresh": true }));
     get_app_state(state)
 }
 
@@ -1048,23 +1034,12 @@ pub fn escape_session(
 ) -> CmdResult<bool> {
     match crate::kiosk::verify_escape(&state, &phrase)? {
         true => {
-            // A focused class session is paused with its work intact; only an
-            // actually running legacy day is marked skipped. The retired daily
-            // routine never gains a new row here.
-            if crate::enforcement::escape(&app, &state).is_none() {
-                let today = state.today();
-                let conn = state.db.0.lock().unwrap();
-                if let Ok(Some(mut s)) = db::current_primary_session(&conn, &today) {
-                    if s.status == "in_progress" {
-                        s.status = "skipped".into();
-                        s.completed_at = Some(session::now_iso());
-                        let _ = db::upsert_session(&conn, &s);
-                    }
-                }
-            }
+            // A focused class session is paused with its work intact. The retired
+            // daily routine has no running day left to skip.
+            let _ = crate::enforcement::escape(&app, &state);
             state.clear_chat_threads();
             crate::kiosk::release(&app, &state);
-            let _ = app.emit("session:state", session::view(&state));
+            let _ = app.emit("classroom:state", serde_json::json!({ "refresh": true }));
             let _ = app.emit("classroom:state", serde_json::json!({ "escaped": true }));
             Ok(true)
         }

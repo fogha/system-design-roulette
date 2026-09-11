@@ -3,7 +3,7 @@
 use std::{
     path::PathBuf,
     sync::{
-        atomic::{AtomicBool, AtomicI64},
+        atomic::AtomicBool,
         Arc, Mutex,
     },
 };
@@ -48,10 +48,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         generator,
         data_dir,
         locked: AtomicBool::new(false),
-        reading_remaining: AtomicI64::new(0),
-        reading_owner: Mutex::new(None),
-        timer_running: AtomicBool::new(false),
-        timer_paused: AtomicBool::new(false),
         debug_day: true,
         escape_failures: Mutex::new(vec![]),
         prev_muted: Mutex::new(None),

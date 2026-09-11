@@ -454,24 +454,9 @@ export interface EngineeringSessionResult {
   fresh_sample: boolean;
 }
 
-export interface SessionView {
-  session_id: string | null;
-  date: string;
-  status: 'pending' | 'in_progress' | 'completed' | 'skipped';
-  step: 'quiz' | 'review' | 'roulette' | 'course' | 'done';
-  quiz_score: number | null;
-  streak: number;
-  locked: boolean;
-  session_type: 'lesson' | 'pop_quiz';
-  plan_reason: string;
-  focus: FocusArea;
-}
-
 export interface AppStateView {
   onboarded: boolean;
-  session: SessionView;
   selected_focus: FocusArea;
-  owed: boolean;
   schedule_hour: number;
   schedule_minute: number;
   debug_day: boolean;

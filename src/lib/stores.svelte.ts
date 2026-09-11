@@ -6,7 +6,6 @@ import {
   type ClassroomSubjectId,
   type EngineeringLessonView,
   type LanguageLessonView,
-  type SessionView,
 } from './ipc';
 import type { ClassTab } from './features/classes/class-navigation';
 import type { Destination } from './app/navigation';
@@ -24,23 +23,16 @@ export interface RouteDecision {
 }
 
 /** The retired daily routine no longer opens screens: a saved primary session
- *  is recovery data, so routing follows onboarding and owed state only. */
+ *  is recovery data, so routing follows onboarding only. */
 export function resolveRoute(state: AppStateView, currentScreen: Screen): RouteDecision {
   if (!state.onboarded) return { screen: 'setup' };
-  if (state.owed) return { screen: 'idle' };
   return {
     screen: currentScreen === 'loading' || currentScreen === 'setup' ? 'idle' : currentScreen,
   };
 }
 
 export function shouldShowEscapeHatch(state: AppStateView | null): boolean {
-  if (!state) return false;
-  return (
-    state.owed ||
-    state.session.locked ||
-    state.session.status === 'in_progress' ||
-    !!state.focus?.locked
-  );
+  return !!state?.focus?.locked;
 }
 
 class AppStore {
@@ -62,13 +54,9 @@ class AppStore {
   languageLesson = $state<LanguageLessonView | null>(null);
   engineeringLesson = $state<EngineeringLessonView | null>(null);
 
-  get session(): SessionView | null {
-    return this.state?.session ?? null;
-  }
-
-  /** True while the desk is enforced by a legacy day or a focused class session. */
+  /** True while a focused class session holds the desk. */
   get locked(): boolean {
-    return !!(this.session?.locked || this.state?.focus?.locked);
+    return !!this.state?.focus?.locked;
   }
 
   /** Whether the focus coordinator currently locks the given study session. */
@@ -211,8 +199,6 @@ class AppStore {
     // Tell Rust the webview booted — the kiosk refuses to lock before this.
     await api.markFrontendReady().catch(() => {});
     await this.refresh();
-    await onEvent('session:owed', () => this.refresh());
-    await onEvent('session:state', () => this.refresh());
     await onEvent('classroom:owed', () => this.refresh());
     await onEvent('classroom:state', () => this.refresh());
     await onEvent<string>('gen:status', (msg) => {
