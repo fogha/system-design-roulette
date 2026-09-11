@@ -10,6 +10,8 @@
   let now = $state(new Date());
   let busy = $state(false);
   let error = $state('');
+  let card = $state<HTMLDivElement | null>(null);
+  let entering = $state(true);
 
   async function load() {
     try {
@@ -20,8 +22,14 @@
   onMount(() => {
     void load();
     const tick = setInterval(() => (now = new Date()), 15_000);
-    const subscriptions = ['tray:refresh', 'alarm:state', 'classroom:state', 'classroom:owed'].map((name) => onEvent(name, () => void load()));
-    return () => { clearInterval(tick); void Promise.all(subscriptions).then((offs) => offs.forEach((off) => off())); };
+    const subscriptions = ['alarm:state', 'classroom:state', 'classroom:owed'].map((name) => onEvent(name, () => void load()));
+    // Each time the panel is shown it slides in; replay the enter motion.
+    subscriptions.push(onEvent('tray:refresh', () => { entering = true; void load(); setTimeout(() => (entering = false), 260); }));
+    // The window carries no dead space: report the card's height as it changes.
+    const observer = new ResizeObserver(() => { if (card) void api.sizeTrayPanel(card.offsetHeight + 24); });
+    if (card) observer.observe(card);
+    setTimeout(() => (entering = false), 260);
+    return () => { clearInterval(tick); observer.disconnect(); void Promise.all(subscriptions).then((offs) => offs.forEach((off) => off())); };
   });
 
   const alarm = $derived(desk?.alarm ?? null);
@@ -61,7 +69,7 @@
   const quit = () => run(() => api.quitDesk());
 </script>
 
-<div class="panel" class:due={health.tone === 'due'}>
+<div class="panel" class:due={health.tone === 'due'} class:entering bind:this={card}>
   <header class="head">
     <div>
       <p class="eyebrow mono">PRINCIPIA DESK</p>
@@ -128,8 +136,9 @@
 </div>
 
 <style>
-  :global(html, body) { background: transparent !important; margin: 0; }
-  .panel { box-sizing: border-box; width: 380px; min-height: 100%; display: grid; gap: 14px; align-content: start; padding: 18px 18px 14px; border-radius: 18px; border: 1px solid var(--node-border); background: color-mix(in srgb, var(--bg) 96%, black); color: var(--fg); font-family: var(--font-body); box-shadow: 0 18px 50px rgba(0, 0, 0, .55); }
+  .panel { box-sizing: border-box; width: 356px; margin: 12px; display: grid; gap: 14px; align-content: start; padding: 18px 18px 14px; border-radius: 18px; border: 1px solid var(--node-border); background: color-mix(in srgb, var(--bg) 96%, black); color: var(--fg); font-family: var(--font-body); box-shadow: 0 14px 40px rgba(0, 0, 0, .5); opacity: 1; transform: translateY(0); transition: opacity .22s ease, transform .26s cubic-bezier(.2,.8,.2,1); }
+  .panel.entering { opacity: 0; transform: translateY(-6px); }
+  @media (prefers-reduced-motion: reduce) { .panel, .panel.entering { transition: none; opacity: 1; transform: none; } }
   .panel.due { border-color: var(--accent); }
   .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
   .eyebrow { font-size: 9px; letter-spacing: .8px; color: var(--faint); margin: 0 0 4px; }

@@ -47,6 +47,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         locked: AtomicBool::new(false),
         alarm_ringing: AtomicBool::new(false),
         alarm_for: Mutex::new(None),
+        panel_height: Mutex::new(600.0),
         debug_day: true,
         escape_failures: Mutex::new(vec![]),
         prev_muted: Mutex::new(None),

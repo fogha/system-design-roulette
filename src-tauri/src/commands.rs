@@ -351,6 +351,12 @@ pub fn hide_tray_panel(app: AppHandle) {
     crate::tray::hide_panel(&app);
 }
 
+/// The panel measured its card; fit the window to it.
+#[tauri::command]
+pub fn size_tray_panel(app: AppHandle, height: f64) {
+    crate::tray::size_panel(&app, height);
+}
+
 /// Hold the alarm for a fixed number of minutes. It rings again afterwards;
 /// only starting the lesson ends it.
 #[tauri::command]

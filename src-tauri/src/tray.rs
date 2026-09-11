@@ -236,8 +236,10 @@ fn panel(app: &AppHandle) -> tauri::Result<tauri::WebviewWindow> {
         .title("Principia Desk")
         .decorations(false)
         .transparent(true)
+        .shadow(false)
         .resizable(false)
         .always_on_top(true)
+        .visible_on_all_workspaces(true)
         .skip_taskbar(true)
         .visible(false)
         .inner_size(PANEL_WIDTH, PANEL_HEIGHT)
@@ -257,13 +259,61 @@ fn toggle_panel(app: &AppHandle, rect: tauri::Rect) {
     let scale = window.scale_factor().unwrap_or(1.0);
     let position = rect.position.to_logical::<f64>(scale);
     let size = rect.size.to_logical::<f64>(scale);
+    let height = *app.state::<AppState>().panel_height.lock().unwrap();
     let x = (position.x + size.width / 2.0 - PANEL_WIDTH / 2.0).max(8.0);
-    let y = position.y + size.height + 6.0;
-    let _ = window.set_size(LogicalSize::new(PANEL_WIDTH, PANEL_HEIGHT));
-    let _ = window.set_position(LogicalPosition::new(x, y));
+    let y = position.y + size.height + 4.0;
+    // Slide in from the screen's right edge, the way a menu bar panel should.
+    let edge = window
+        .current_monitor()
+        .ok()
+        .flatten()
+        .map(|m| {
+            let s = m.scale_factor();
+            let p = m.position().to_logical::<f64>(s);
+            let z = m.size().to_logical::<f64>(s);
+            p.x + z.width
+        })
+        .unwrap_or(x + PANEL_WIDTH);
+    let _ = window.set_size(LogicalSize::new(PANEL_WIDTH, height));
+    let _ = window.set_position(LogicalPosition::new(edge, y));
     let _ = window.show();
+    #[cfg(target_os = "macos")]
+    {
+        // A tray click does not activate the app, so raise the panel above
+        // whatever is frontmost and on whichever space the person is on.
+        let w = window.clone();
+        let _ = window.run_on_main_thread(move || {
+            let _ = objc2::exception::catch(std::panic::AssertUnwindSafe(|| unsafe {
+                crate::kiosk::mac::activate_self();
+                if let Ok(ptr) = w.ns_window() {
+                    crate::kiosk::mac::raise_window(ptr as *mut objc2::runtime::AnyObject);
+                }
+            }));
+        });
+    }
     let _ = window.set_focus();
     let _ = app.emit("tray:refresh", ());
+    let slide = window.clone();
+    tauri::async_runtime::spawn(async move {
+        const STEPS: u32 = 14;
+        for step in 1..=STEPS {
+            let t = step as f64 / STEPS as f64;
+            let eased = 1.0 - (1.0 - t).powi(3);
+            let current = edge + (x - edge) * eased;
+            let _ = slide.set_position(LogicalPosition::new(current, y));
+            tokio::time::sleep(std::time::Duration::from_millis(11)).await;
+        }
+        let _ = slide.set_position(LogicalPosition::new(x, y));
+    });
+}
+
+/// The panel reports the height of its card so the window carries no dead space.
+pub fn size_panel(app: &AppHandle, height: f64) {
+    let bounded = height.clamp(160.0, 900.0);
+    *app.state::<AppState>().panel_height.lock().unwrap() = bounded;
+    if let Some(window) = app.get_webview_window(PANEL_LABEL) {
+        let _ = window.set_size(LogicalSize::new(PANEL_WIDTH, bounded));
+    }
 }
 
 /// Hide the panel, for instance when it loses focus or after an action.
@@ -310,18 +360,17 @@ pub fn refresh(app: &AppHandle, alarm: Option<&AlarmView>) {
         }
         Err(error) => log::warn!("menu bar refresh failed: {error}"),
     }
-    let title = alarm.map(|a| {
-        if a.snoozed_until.is_some() {
-            format!("{} snoozed", a.label)
-        } else {
-            format!("{} due", a.label)
-        }
-    });
-    let _ = tray.set_title(title.as_deref());
-    let _ = tray.set_tooltip(Some(
-        title
-            .clone()
-            .map(|t| format!("Principia Desk · {t}"))
-            .unwrap_or_else(|| "Principia Desk".into()),
-    ));
+    // The icon stands alone in the menu bar; the state lives in the tooltip
+    // and the panel rather than as text beside it.
+    let _ = tray.set_title(None::<&str>);
+    let tooltip = alarm
+        .map(|a| {
+            if a.snoozed_until.is_some() {
+                format!("Principia Desk · {} snoozed", a.label)
+            } else {
+                format!("Principia Desk · {} due", a.label)
+            }
+        })
+        .unwrap_or_else(|| "Principia Desk".into());
+    let _ = tray.set_tooltip(Some(tooltip));
 }

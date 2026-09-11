@@ -15,8 +15,16 @@ use tauri::{AppHandle, Emitter, Manager};
 /// Snooze lengths the interface offers, in minutes. Anything else is refused
 /// so a "snooze" cannot quietly become a dismissal.
 pub const SNOOZE_MINUTES: &[u32] = &[5, 10, 15];
-/// How often the ring repeats while an alarm stands.
-const RING_EVERY: std::time::Duration = std::time::Duration::from_secs(20);
+/// How often the ring repeats while an alarm stands, and how often once it
+/// has stood for a while. An alarm that can only be ended by starting the
+/// lesson has to be impossible to tune out.
+const RING_EVERY: std::time::Duration = std::time::Duration::from_secs(6);
+const RING_EVERY_LATER: std::time::Duration = std::time::Duration::from_secs(3);
+const ESCALATE_AFTER: std::time::Duration = std::time::Duration::from_secs(120);
+/// Every this many rings the desk speaks, and every this many it comes to the
+/// front, bounces the Dock icon and notifies again.
+const SPEAK_EVERY: u32 = 3;
+const NAG_EVERY: u32 = 5;
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct AlarmView {
@@ -153,13 +161,16 @@ fn notify(app: &AppHandle, view: &AlarmView) {
 }
 
 /// Play one ring through whatever the platform has. Best effort: a machine
-/// with no sound still gets the notification and the menu bar title.
+/// with no sound still gets the notification, the panel and the nagging.
 fn ring_once() {
     #[cfg(target_os = "macos")]
     {
-        let _ = std::process::Command::new("afplay")
-            .arg("/System/Library/Sounds/Sosumi.aiff")
-            .status();
+        // Two loud bursts back to back, amplified above the sound's own level.
+        for _ in 0..2 {
+            let _ = std::process::Command::new("afplay")
+                .args(["-v", "4", "/System/Library/Sounds/Sosumi.aiff"])
+                .status();
+        }
     }
     #[cfg(target_os = "linux")]
     {
@@ -178,6 +189,43 @@ fn ring_once() {
             .args(["-NoProfile", "-Command", "[console]::beep(880,700)"])
             .status();
     }
+}
+
+/// Say it out loud. Speech is the one sound a person cannot mistake for a
+/// message ping.
+fn speak(label: &str) {
+    let line =
+        format!("Time to study. Your {label} lesson is waiting. Start it to stop this alarm.");
+    #[cfg(target_os = "macos")]
+    {
+        let _ = std::process::Command::new("say").arg(&line).status();
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let _ = std::process::Command::new("espeak").arg(&line).status();
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let script = format!(
+            "Add-Type -AssemblyName System.Speech; (New-Object System.Speech.Synthesis.SpeechSynthesizer).Speak('{}')",
+            line.replace('\'', "")
+        );
+        let _ = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-Command", &script])
+            .status();
+    }
+}
+
+/// Put the desk in front of whatever the person is doing, bounce the Dock
+/// icon until they look, and notify again.
+fn nag(app: &AppHandle, view: &AlarmView) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+        let _ = window.request_user_attention(Some(tauri::UserAttentionType::Critical));
+    }
+    notify(app, view);
 }
 
 /// Re-read what is due and bring the alarm, the notification, the menu bar and
@@ -201,14 +249,34 @@ pub fn evaluate(app: &AppHandle) {
             notify(app, view);
         }
         let handle = app.clone();
+        let label = view.as_ref().map(|v| v.label.clone()).unwrap_or_default();
         tauri::async_runtime::spawn(async move {
+            let started = std::time::Instant::now();
+            let mut rings: u32 = 0;
             loop {
                 let state = handle.state::<AppState>();
                 if !state.alarm_ringing.load(Ordering::SeqCst) {
                     break;
                 }
+                rings += 1;
                 tokio::task::spawn_blocking(ring_once).await.ok();
-                tokio::time::sleep(RING_EVERY).await;
+                if rings.is_multiple_of(SPEAK_EVERY) {
+                    let spoken = label.clone();
+                    tokio::task::spawn_blocking(move || speak(&spoken))
+                        .await
+                        .ok();
+                }
+                if rings.is_multiple_of(NAG_EVERY) {
+                    if let Some(view) = current(&state) {
+                        nag(&handle, &view);
+                    }
+                }
+                let pause = if started.elapsed() > ESCALATE_AFTER {
+                    RING_EVERY_LATER
+                } else {
+                    RING_EVERY
+                };
+                tokio::time::sleep(pause).await;
             }
         });
     }

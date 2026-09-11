@@ -732,6 +732,7 @@ const realApi = {
   startFromTray: (occurrenceId: string) => invoke<void>('start_from_tray', { occurrenceId }),
   quitDesk: () => invoke<void>('quit_desk'),
   hideTrayPanel: () => invoke<void>('hide_tray_panel'),
+  sizeTrayPanel: (height: number) => invoke<void>('size_tray_panel', { height }),
   rescheduleAppointment: (occurrenceId: string, localTime: string) => invoke<AppointmentView>('reschedule_appointment', { occurrenceId, localTime }),
   getClassAppointments: (subjectId: ClassroomSubjectId) => invoke<AppointmentView[]>('get_class_appointments', { subjectId }),
   resumeClassroomSession: (subjectId: ClassroomSubjectId) =>

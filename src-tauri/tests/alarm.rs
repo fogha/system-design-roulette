@@ -42,6 +42,7 @@ fn app_state(dir: &std::path::Path, conn: Connection) -> AppState {
         locked: AtomicBool::new(false),
         alarm_ringing: AtomicBool::new(false),
         alarm_for: Mutex::new(None),
+        panel_height: Mutex::new(600.0),
         debug_day: false,
         escape_failures: Mutex::new(vec![]),
         prev_muted: Mutex::new(None),

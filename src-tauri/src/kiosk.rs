@@ -139,7 +139,7 @@ fn restore_media(state: &AppState) {
 }
 
 #[cfg(target_os = "macos")]
-mod mac {
+pub(crate) mod mac {
     use objc2::msg_send;
     use objc2::runtime::AnyObject;
 

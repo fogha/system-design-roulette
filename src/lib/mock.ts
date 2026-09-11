@@ -1170,6 +1170,7 @@ export const mockApi = {
   startFromTray: async () => {},
   quitDesk: async () => { throw new Error('The browser preview cannot quit the desk.'); },
   hideTrayPanel: async () => {},
+  sizeTrayPanel: async () => {},
   pauseSchedule: async () => {
     mockPaused = true;
   },
