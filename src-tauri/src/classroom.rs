@@ -2065,6 +2065,54 @@ pub fn validate_slot_start(
     Ok(())
 }
 
+/// A block in progress, labelled for the desk.
+#[derive(Debug, Clone, Serialize)]
+pub struct BlockView {
+    #[serde(flatten)]
+    pub progress: crate::domain::schedule::BlockProgress,
+    pub label: String,
+    /// Whether a session of this block is open right now.
+    pub in_session: bool,
+}
+
+/// Today's appointments that are blocks with a step still ahead of them.
+pub fn block_views(
+    conn: &Connection,
+    today: &str,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Result<Vec<BlockView>> {
+    let mut views = Vec::new();
+    for appointment in refresh_appointments(conn, today)? {
+        if appointment.disposition != "started" {
+            continue;
+        }
+        let Some(progress) = crate::domain::schedule::block_progress(conn, &appointment.id, now)
+            .map_err(|e| e.to_string())?
+        else {
+            continue;
+        };
+        let in_session = appointment
+            .session_ref
+            .as_deref()
+            .and_then(|r| r.strip_prefix("study:"))
+            .map(|id| {
+                conn.query_row(
+                    "SELECT EXISTS(SELECT 1 FROM study_sessions WHERE id=?1 AND status NOT IN ('completed','skipped'))",
+                    [id],
+                    |r| r.get::<_, bool>(0),
+                )
+                .unwrap_or(false)
+            })
+            .unwrap_or(false);
+        views.push(BlockView {
+            progress,
+            label: appointment.label,
+            in_session,
+        });
+    }
+    Ok(views)
+}
+
 /// Completed lessons for a class across the retired daily routine, legacy
 /// classroom rows and shared-runtime sessions.
 pub fn completed_lesson_count(conn: &Connection, subject_id: &str) -> Result<i64> {

@@ -47,6 +47,10 @@ pub struct Selection {
     /// Durable appointment this lesson serves, when started from one.
     #[serde(default)]
     pub occurrence_id: Option<String>,
+    /// Minutes this lesson was given inside a block, fixed at planning so the
+    /// estimate does not drift as the block runs down.
+    #[serde(default)]
+    pub minutes: Option<i64>,
     pub service_date: String,
     pub revisit: bool,
     pub reason: String,
@@ -141,6 +145,12 @@ pub fn plan(
             )
         }
     })?;
+    let minutes = occurrence_id.as_deref().and_then(|occurrence| {
+        crate::domain::schedule::block_progress(conn, occurrence, Utc::now())
+            .ok()
+            .flatten()
+            .map(|block| block.next_minutes)
+    });
     let selection = Selection {
         adapter: "engineering".into(),
         concept_id: concept.id,
@@ -149,6 +159,7 @@ pub fn plan(
         category: concept.category.clone(),
         slot_id,
         occurrence_id,
+        minutes,
         service_date: today.into(),
         revisit,
         reason: if revisit {
@@ -241,6 +252,7 @@ pub fn plan_review(conn: &Connection, program: &ProgramRow, today: &str) -> Resu
         category: concept.category.clone(),
         slot_id: None,
         occurrence_id: None,
+        minutes: None,
         service_date: today.into(),
         revisit: false,
         reason: format!("spaced review due {due}"),
@@ -640,6 +652,16 @@ fn lifecycle_legacy(status: Status) -> &'static str {
 /// The minutes this session was given. A session started from an appointment
 /// inherits that day's length; one started by hand takes the class default.
 pub fn session_minutes(conn: &Connection, id: &SessionId, default: i64) -> i64 {
+    // A block lesson carries the minutes it was given at planning.
+    if let Ok(Some(minutes)) = conn.query_row(
+        "SELECT json_extract(context_json,'$.selection.minutes') FROM study_sessions WHERE id = ?1",
+        [&id.0],
+        |r| r.get::<_, Option<i64>>(0),
+    ) {
+        if minutes > 0 {
+            return minutes;
+        }
+    }
     // The appointment is known before the claim through the session's own
     // context, and after it through the reference the claim records.
     conn.query_row(
@@ -1079,7 +1101,7 @@ pub fn submit(
                 mastery::record_course_read(tx, concept_id, &today)?;
             }
             mastery::record_quiz_outcome(tx, concept_id, &today, score)?;
-            crate::domain::schedule::resolve(tx, &format!("study:{}", id.0), true, Utc::now())?;
+            crate::domain::schedule::finish_step(tx, &format!("study:{}", id.0), true, Utc::now())?;
             Ok(json!({"kind": "completed", "concept_id": concept_id, "result": result_value}))
         },
     )
@@ -1102,7 +1124,12 @@ pub fn skip(conn: &Connection, id: &SessionId) -> Result<Session> {
         Disposition::Skipped,
         Utc::now(),
         |tx, _| {
-            crate::domain::schedule::resolve(tx, &format!("study:{}", id.0), false, Utc::now())?;
+            crate::domain::schedule::finish_step(
+                tx,
+                &format!("study:{}", id.0),
+                false,
+                Utc::now(),
+            )?;
             Ok(json!({"kind": "skipped"}))
         },
     )

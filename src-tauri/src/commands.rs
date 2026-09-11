@@ -90,6 +90,9 @@ pub struct AppStateView {
     /// The study alarm standing right now, if any. Only starting the lesson
     /// clears it; a snooze is reported with its end time.
     pub alarm: Option<crate::alarm::AlarmView>,
+    /// Study blocks in progress today: appointments longer than one lesson
+    /// that still have a next step.
+    pub blocks: Vec<crate::classroom::BlockView>,
     /// Generic advisory classroom. Every subject owns its schedule, prompt
     /// profile, generation provider, progress, and same-day sessions.
     /// Languages are classroom subjects too; their CEFR engine lives behind
@@ -270,6 +273,10 @@ pub fn get_app_state(state: State<'_, AppState>) -> CmdResult<AppStateView> {
         selected_focus,
         deepseek_key_configured: deepseek_key_configured(),
         alarm: crate::alarm::current(&state),
+        blocks: {
+            let conn = state.db.0.lock().unwrap();
+            crate::classroom::block_views(&conn, &state.today(), chrono::Utc::now()).map_err(err)?
+        },
         classroom_programs,
         classroom_slots,
         classroom_due_count,
@@ -418,6 +425,17 @@ fn claim_appointment(
     if planned_for.as_deref() != Some(found.id.as_str()) {
         return Ok(());
     }
+    if found.disposition == "started" {
+        crate::domain::schedule::continue_block(
+            conn,
+            &found.id,
+            course_id,
+            &format!("study:{session_id}"),
+            chrono::Utc::now(),
+        )
+        .map_err(err)?;
+        return Ok(());
+    }
     crate::domain::schedule::claim(
         conn,
         &found.id,
@@ -427,6 +445,24 @@ fn claim_appointment(
     )
     .map_err(err)?;
     Ok(())
+}
+
+/// End a study block before its time is spent: completed when a lesson
+/// finished, skipped when none did.
+#[tauri::command]
+pub fn end_block(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    occurrence_id: String,
+) -> CmdResult<crate::domain::schedule::Occurrence> {
+    let ended = {
+        let conn = state.db.0.lock().unwrap();
+        crate::domain::schedule::end_block(&conn, &occurrence_id, chrono::Utc::now())
+            .map_err(err)?
+    };
+    let _ = app.emit("classroom:state", serde_json::json!({ "refresh": true }));
+    crate::alarm::evaluate(&app);
+    Ok(ended)
 }
 
 fn refresh_os_schedule(state: &AppState) -> CmdResult<()> {
@@ -697,13 +733,27 @@ pub async fn start_classroom_session(
             if found.course_id != spec.id {
                 return Err("This appointment belongs to another class.".into());
             }
-            if found.consumed() {
+            let continuing = found.disposition == "started"
+                && crate::domain::schedule::block_progress(&conn, &found.id, chrono::Utc::now())
+                    .map_err(err)?
+                    .is_some_and(|block| block.next == crate::domain::schedule::BlockStep::Topic);
+            if found.consumed() && !continuing {
                 return Err("This appointment was already started or resolved.".into());
             }
         }
         found
     };
     let appointment_id = appointment.as_ref().map(|found| found.id.clone());
+    // Inside a block the rule's once-per-day guard has already been satisfied
+    // by the first lesson; the block itself decides whether another fits.
+    let slot_id = if appointment
+        .as_ref()
+        .is_some_and(|a| a.disposition == "started")
+    {
+        None
+    } else {
+        slot_id
+    };
     let value = match spec.kind {
         crate::classroom::SubjectKind::Language => {
             // A legacy in-progress row resumes as it was; every new lesson runs
@@ -947,6 +997,7 @@ pub fn start_class_review(
     app: AppHandle,
     state: State<'_, AppState>,
     subject_id: String,
+    occurrence_id: Option<String>,
 ) -> CmdResult<serde_json::Value> {
     let spec = crate::classroom::subject(subject_id.trim()).map_err(err)?;
     if spec.kind == crate::catalog::SubjectKind::Language {
@@ -965,6 +1016,17 @@ pub fn start_class_review(
         let program = crate::classroom::program_row(&conn, spec.id)?;
         let session = crate::subjects::engineering::plan_review(&conn, &program, &state.today())?;
         crate::subjects::engineering::prepare_review(&conn, &session.id)?;
+        if let Some(occurrence) = occurrence_id.as_deref() {
+            // The tail of a block: the review's end resolves the appointment.
+            crate::domain::schedule::continue_block(
+                &conn,
+                occurrence,
+                spec.id,
+                &format!("study:{}", session.id.0),
+                chrono::Utc::now(),
+            )
+            .map_err(err)?;
+        }
         session.id
     };
     crate::enforcement::activate(&app, &state, &planned)?;

@@ -148,11 +148,11 @@ class AppStore {
   }
 
   /** Delayed retrieval for a class with review due; prepared without a provider. */
-  async startReview(subjectId: ClassroomSubjectId) {
+  async startReview(subjectId: ClassroomSubjectId, occurrenceId?: string | null) {
     if (this.preparingClass) return;
     this.error = '';
     try {
-      this.showLesson(await api.startClassReview(subjectId));
+      this.showLesson(await api.startClassReview(subjectId, occurrenceId));
     } catch (e) {
       this.error = String(e);
     }

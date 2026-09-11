@@ -13,6 +13,15 @@ use principia_desk_lib::{
 use rusqlite::Connection;
 use std::sync::{atomic::AtomicBool, Arc, Mutex};
 
+/// The release token lives in the shared temporary directory, which every
+/// test in this binary sees, so these tests take turns.
+static SERIAL: Mutex<()> = Mutex::new(());
+fn serial() -> std::sync::MutexGuard<'static, ()> {
+    SERIAL
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 /// A fixed zone, so a due appointment is due regardless of the machine.
 struct Utc;
 impl ZoneResolver for Utc {
@@ -108,6 +117,7 @@ fn desk_with_due_class() -> (std::path::PathBuf, AppState) {
 
 #[test]
 fn an_alarm_stands_for_a_due_appointment_until_the_lesson_starts() {
+    let _turn = serial();
     let (_, state) = desk_with_due_class();
     let alarm = alarm::current(&state).expect("a due appointment rings");
     assert_eq!(alarm.course_id, "typescript");
@@ -132,6 +142,7 @@ fn an_alarm_stands_for_a_due_appointment_until_the_lesson_starts() {
 
 #[test]
 fn a_snooze_holds_the_alarm_for_a_fixed_time_and_is_never_a_dismissal() {
+    let _turn = serial();
     let (_, state) = desk_with_due_class();
     let alarm = alarm::current(&state).unwrap();
 
@@ -166,6 +177,7 @@ fn a_snooze_holds_the_alarm_for_a_fixed_time_and_is_never_a_dismissal() {
 
 #[test]
 fn pausing_the_schedule_and_the_release_token_outrank_the_alarm() {
+    let _turn = serial();
     let (dir, state) = desk_with_due_class();
     assert!(alarm::current(&state).is_some());
     {

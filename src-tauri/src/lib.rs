@@ -361,6 +361,7 @@ pub fn run() {
             commands::skip_class_lesson,
             commands::skip_appointment,
             commands::snooze_alarm,
+            commands::end_block,
             commands::show_desk,
             commands::start_from_tray,
             commands::quit_desk,

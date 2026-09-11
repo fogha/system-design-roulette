@@ -462,7 +462,7 @@ pub fn submit(
                 "progress": progress,
             });
             assessments::submit_in_transaction(tx, &owner, &round, &result, true)?;
-            crate::domain::schedule::resolve(tx, &format!("study:{}", id.0), true, Utc::now())?;
+            crate::domain::schedule::finish_step(tx, &format!("study:{}", id.0), true, Utc::now())?;
             Ok(json!({
                 "kind": "completed",
                 "level": chosen.level,

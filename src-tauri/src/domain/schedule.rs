@@ -373,6 +373,198 @@ pub fn resolve(
     Ok(())
 }
 
+/// A study block: an appointment longer than one lesson, filled with whole
+/// topics in route order and finished with retrieval practice.
+///
+/// A slot up to an hour is one lesson, however deep. Past that the
+/// appointment stays `started` after a lesson completes, and the desk offers
+/// the next topic while at least a whole topic's worth of time remains, then
+/// retrieval practice on earlier topics for anything shorter than a topic but
+/// worth a pass, and resolves the appointment when neither fits. A topic
+/// therefore always ends on the day it starts.
+pub const LESSON_CAP_MINUTES: i64 = 60;
+pub const BLOCK_TOPIC_MINUTES: i64 = 30;
+pub const BLOCK_RETRIEVAL_MINUTES: i64 = 10;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BlockStep {
+    /// Enough time for a whole topic.
+    Topic,
+    /// Less than a topic, more than a moment: retrieval on earlier topics.
+    Retrieval,
+    /// The block is spent.
+    Done,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BlockProgress {
+    pub occurrence_id: String,
+    pub course_id: String,
+    pub started_at: String,
+    pub duration_minutes: i64,
+    pub elapsed_minutes: i64,
+    pub remaining_minutes: i64,
+    pub lessons_completed: i64,
+    pub next: BlockStep,
+    /// Minutes the next step should be sized to.
+    pub next_minutes: i64,
+}
+
+fn next_step(remaining: i64) -> (BlockStep, i64) {
+    if remaining >= BLOCK_TOPIC_MINUTES {
+        (BlockStep::Topic, remaining.min(LESSON_CAP_MINUTES))
+    } else if remaining >= BLOCK_RETRIEVAL_MINUTES {
+        (BlockStep::Retrieval, remaining)
+    } else {
+        (BlockStep::Done, 0)
+    }
+}
+
+/// Where a started appointment stands, or None when it is not a block: an
+/// appointment of an hour or less is one lesson and resolves with it.
+pub fn block_progress(
+    conn: &Connection,
+    occurrence_id: &str,
+    now: DateTime<Utc>,
+) -> Result<Option<BlockProgress>> {
+    let occurrence = get(conn, occurrence_id)?;
+    if occurrence.disposition != "started" || occurrence.duration_minutes <= LESSON_CAP_MINUTES {
+        return Ok(None);
+    }
+    let started_at = occurrence
+        .resolved_at
+        .clone()
+        .ok_or_else(|| invalid("a started appointment records when it started"))?;
+    let started = DateTime::parse_from_rfc3339(&started_at)
+        .map_err(|_| invalid("appointment start time is unreadable"))?
+        .with_timezone(&Utc);
+    let elapsed = (now - started).num_minutes().max(0);
+    let remaining = (occurrence.duration_minutes - elapsed).max(0);
+    let lessons_completed: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM study_sessions WHERE status='completed' AND json_extract(context_json,'$.selection.occurrence_id') = ?1",
+        [occurrence_id],
+        |r| r.get(0),
+    )?;
+    let (next, next_minutes) = next_step(remaining);
+    Ok(Some(BlockProgress {
+        occurrence_id: occurrence.id,
+        course_id: occurrence.course_id,
+        started_at,
+        duration_minutes: occurrence.duration_minutes,
+        elapsed_minutes: elapsed,
+        remaining_minutes: remaining,
+        lessons_completed,
+        next,
+        next_minutes,
+    }))
+}
+
+/// Attach the next session of a block to its appointment. Only a started
+/// block whose previous session is finished may continue, and only while its
+/// next step is still a topic or a retrieval pass.
+pub fn continue_block(
+    conn: &Connection,
+    occurrence_id: &str,
+    course_id: &str,
+    session_ref: &str,
+    now: DateTime<Utc>,
+) -> Result<Occurrence> {
+    let tx = Transaction::new_unchecked(conn, TransactionBehavior::Immediate)?;
+    let occurrence = get(&tx, occurrence_id)?;
+    if occurrence.course_id != course_id {
+        return Err(invalid("This appointment belongs to another class."));
+    }
+    if occurrence.session_ref.as_deref() == Some(session_ref) {
+        tx.commit()?;
+        return Ok(occurrence);
+    }
+    let Some(progress) = block_progress(&tx, occurrence_id, now)? else {
+        return Err(invalid("This appointment is not a block in progress."));
+    };
+    if progress.next == BlockStep::Done {
+        return Err(invalid("This block's time is spent."));
+    }
+    if let Some(previous) = occurrence
+        .session_ref
+        .as_deref()
+        .and_then(|r| r.strip_prefix("study:"))
+    {
+        let open: bool = tx.query_row(
+            "SELECT EXISTS(SELECT 1 FROM study_sessions WHERE id=?1 AND status NOT IN ('completed','skipped'))",
+            [previous],
+            |r| r.get(0),
+        )?;
+        if open {
+            return Err(invalid(
+                "Finish the current lesson before starting the next one.",
+            ));
+        }
+    }
+    tx.execute(
+        "UPDATE schedule_occurrences SET session_ref=?2, updated_at=?3 WHERE id=?1 AND disposition='started'",
+        params![occurrence_id, session_ref, stamp(now)],
+    )?;
+    let updated = get(&tx, occurrence_id)?;
+    tx.commit()?;
+    Ok(updated)
+}
+
+/// A session that started or continued an appointment has ended. An ordinary
+/// appointment resolves at once. A block resolves only when its time is spent
+/// or it is ended on purpose; otherwise it stays started for its next step.
+/// Returns whether the appointment was resolved.
+pub fn finish_step(
+    conn: &Connection,
+    session_ref: &str,
+    completed: bool,
+    now: DateTime<Utc>,
+) -> Result<bool> {
+    let occurrence: Option<Occurrence> = conn
+        .query_row(
+            &format!("SELECT {COLUMNS} FROM schedule_occurrences WHERE session_ref=?1 AND disposition='started'"),
+            [session_ref],
+            row,
+        )
+        .optional()?;
+    let Some(occurrence) = occurrence else {
+        return Ok(false);
+    };
+    if let Some(progress) = block_progress(conn, &occurrence.id, now)? {
+        // Count this session's own completion, which the row may not show yet
+        // when this runs inside the finishing transaction.
+        let done_so_far = progress.lessons_completed + i64::from(completed);
+        if progress.next != BlockStep::Done {
+            return Ok(false);
+        }
+        resolve(conn, session_ref, done_so_far > 0, now)?;
+        return Ok(true);
+    }
+    resolve(conn, session_ref, completed, now)?;
+    Ok(true)
+}
+
+/// End a block before its time is spent. Completed when any lesson finished,
+/// skipped when none did.
+pub fn end_block(conn: &Connection, occurrence_id: &str, now: DateTime<Utc>) -> Result<Occurrence> {
+    let tx = Transaction::new_unchecked(conn, TransactionBehavior::Immediate)?;
+    let Some(progress) = block_progress(&tx, occurrence_id, now)? else {
+        return Err(invalid("This appointment is not a block in progress."));
+    };
+    let disposition = if progress.lessons_completed > 0 {
+        "completed"
+    } else {
+        "skipped"
+    };
+    tx.execute(
+        "UPDATE schedule_occurrences SET disposition=?2, resolved_at=?3, updated_at=?3 WHERE id=?1 AND disposition='started'",
+        params![occurrence_id, disposition, stamp(now)],
+    )?;
+    let updated = get(&tx, occurrence_id)?;
+    tx.commit()?;
+    Ok(updated)
+}
+
 /// Explicitly skip an open appointment without starting a session.
 pub fn skip(conn: &Connection, occurrence_id: &str, now: DateTime<Utc>) -> Result<Occurrence> {
     let tx = Transaction::new_unchecked(conn, TransactionBehavior::Immediate)?;

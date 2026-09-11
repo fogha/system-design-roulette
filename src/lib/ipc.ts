@@ -456,6 +456,21 @@ export interface EngineeringSessionResult {
   fresh_sample: boolean;
 }
 
+export type BlockStep = 'topic' | 'retrieval' | 'done';
+/** A study block in progress: an appointment longer than one lesson, filled with whole topics and finished with retrieval. */
+export interface BlockView {
+  occurrence_id: string;
+  course_id: ClassroomSubjectId;
+  label: string;
+  started_at: string;
+  duration_minutes: number;
+  elapsed_minutes: number;
+  remaining_minutes: number;
+  lessons_completed: number;
+  next: BlockStep;
+  next_minutes: number;
+  in_session: boolean;
+}
 export interface AlarmView {
   occurrence_id: string;
   course_id: ClassroomSubjectId;
@@ -478,6 +493,8 @@ export interface AppStateView {
   deepseek_key_configured: boolean;
   /** The study alarm standing right now. Only starting the lesson clears it; a snooze reports its end. */
   alarm: AlarmView | null;
+  /** Study blocks in progress today with a step still ahead of them. */
+  blocks: BlockView[];
   classroom_programs: ClassroomProgramView[];
   classroom_slots: ClassroomSlotView[];
   classroom_due_count: number;
@@ -742,7 +759,8 @@ const realApi = {
   resumeClassroomSession: (subjectId: ClassroomSubjectId) =>
     invoke<ClassroomSessionStart | null>('resume_classroom_session', { subjectId }),
   /** Start or resume a delayed-retrieval session for the class's most overdue topic. */
-  startClassReview: (subjectId: ClassroomSubjectId) => invoke<ClassroomSessionStart>('start_class_review', { subjectId }),
+  startClassReview: (subjectId: ClassroomSubjectId, occurrenceId?: string | null) => invoke<ClassroomSessionStart>('start_class_review', { subjectId, occurrenceId: occurrenceId ?? null }),
+  endBlock: (occurrenceId: string) => invoke<{ id: string; disposition: string }>('end_block', { occurrenceId }),
   submitClassroomEngineeringSession: (input: {
     session_id: number;
     answers: number[];

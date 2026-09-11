@@ -578,3 +578,185 @@ fn a_rule_can_last_a_different_time_on_each_day_and_appointments_snapshot_it() {
     )
     .is_ok());
 }
+
+#[test]
+fn a_long_appointment_is_a_block_of_whole_topics_then_retrieval_then_done() {
+    use principia_desk_lib::domain::schedule::{BlockStep, LESSON_CAP_MINUTES};
+    let conn = fixture();
+    // Four hours every day at 09:00.
+    let id = classroom::upsert_slot(
+        &conn,
+        &UpsertClassroomSlotInput {
+            id: None,
+            subject_id: "javascript".into(),
+            hour: 9,
+            minute: 0,
+            weekdays: vec![1, 2, 3, 4, 5, 6, 7],
+            enabled: true,
+            durations: (1..=7).map(|d| (d, 240)).collect(),
+        },
+    )
+    .unwrap();
+    activate(&conn, "javascript");
+    let due = schedule::materialize(&conn, &at(&ZONE, "2026-09-14", "09:30"), false)
+        .unwrap()
+        .remove(0);
+    assert_eq!(
+        (due.disposition.as_str(), due.duration_minutes),
+        ("due", 240)
+    );
+    assert!(
+        schedule::block_progress(&conn, &due.id, utc("2026-09-14T07:31:00Z"))
+            .unwrap()
+            .is_none(),
+        "an appointment is only a block once it has started"
+    );
+
+    // First lesson claims the block. It is sized to the lesson cap, not to the
+    // whole afternoon.
+    let program = classroom::program_row(&conn, "javascript").unwrap();
+    let started = utc("2026-09-14T07:31:00Z");
+    let first = engineering::plan(
+        &conn,
+        &program,
+        Some(id),
+        Some(due.id.clone()),
+        "2026-09-14",
+        false,
+    )
+    .unwrap();
+    schedule::claim(
+        &conn,
+        &due.id,
+        "javascript",
+        &format!("study:{}", first.id.0),
+        started,
+    )
+    .unwrap();
+    let block = schedule::block_progress(&conn, &due.id, started + chrono::Duration::minutes(1))
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        (block.next, block.next_minutes, block.lessons_completed),
+        (BlockStep::Topic, LESSON_CAP_MINUTES, 0)
+    );
+    assert_eq!(
+        engineering::session_minutes(&conn, &first.id, 30),
+        240,
+        "before the claim's own minutes are fixed, the appointment's length applies"
+    );
+
+    // Skipping the first lesson does not end the block: time remains for
+    // another topic, and the day's work is not written off.
+    engineering::skip(&conn, &first.id).unwrap();
+    assert_eq!(
+        schedule::get(&conn, &due.id).unwrap().disposition,
+        "started"
+    );
+
+    // The next lesson continues the block, and is planned with its own minutes.
+    let second = engineering::plan(
+        &conn,
+        &program,
+        None,
+        Some(due.id.clone()),
+        "2026-09-14",
+        false,
+    )
+    .unwrap();
+    assert_eq!(
+        engineering::selection(&second).unwrap().minutes,
+        Some(LESSON_CAP_MINUTES)
+    );
+    assert_eq!(
+        engineering::session_minutes(&conn, &second.id, 30),
+        LESSON_CAP_MINUTES
+    );
+    schedule::continue_block(
+        &conn,
+        &due.id,
+        "javascript",
+        &format!("study:{}", second.id.0),
+        started + chrono::Duration::minutes(40),
+    )
+    .unwrap();
+    // A third cannot start while the second is open.
+    assert!(schedule::continue_block(
+        &conn,
+        &due.id,
+        "javascript",
+        "study:third",
+        started + chrono::Duration::minutes(41)
+    )
+    .is_err());
+
+    // What the block offers depends only on the time left.
+    let late = |minutes: i64| {
+        schedule::block_progress(&conn, &due.id, started + chrono::Duration::minutes(minutes))
+            .unwrap()
+            .unwrap()
+    };
+    assert_eq!(late(200).next, BlockStep::Topic);
+    assert_eq!(
+        late(200).next_minutes,
+        40,
+        "a topic is sized to what is left, up to the cap"
+    );
+    assert_eq!(late(215).next, BlockStep::Retrieval);
+    assert_eq!(late(215).next_minutes, 25);
+    assert_eq!(late(235).next, BlockStep::Done);
+
+    // Ending the block early resolves it as skipped when no lesson finished.
+    let ended =
+        schedule::end_block(&conn, &due.id, started + chrono::Duration::minutes(50)).unwrap();
+    assert_eq!(ended.disposition, "skipped");
+    assert!(
+        schedule::block_progress(&conn, &due.id, started + chrono::Duration::minutes(51))
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[test]
+fn an_appointment_of_an_hour_or_less_is_one_lesson_and_resolves_with_it() {
+    let conn = fixture();
+    let id = rule(&conn, "javascript", 9, 0, vec![1, 2, 3, 4, 5, 6, 7]);
+    activate(&conn, "javascript");
+    let due = schedule::materialize(&conn, &at(&ZONE, "2026-09-14", "09:30"), false)
+        .unwrap()
+        .remove(0);
+    let program = classroom::program_row(&conn, "javascript").unwrap();
+    let planned = engineering::plan(
+        &conn,
+        &program,
+        Some(id),
+        Some(due.id.clone()),
+        "2026-09-14",
+        false,
+    )
+    .unwrap();
+    schedule::claim(
+        &conn,
+        &due.id,
+        "javascript",
+        &format!("study:{}", planned.id.0),
+        utc("2026-09-14T07:31:00Z"),
+    )
+    .unwrap();
+    assert!(
+        schedule::block_progress(&conn, &due.id, utc("2026-09-14T07:35:00Z"))
+            .unwrap()
+            .is_none()
+    );
+    assert!(schedule::finish_step(
+        &conn,
+        &format!("study:{}", planned.id.0),
+        true,
+        utc("2026-09-14T07:40:00Z")
+    )
+    .unwrap());
+    assert_eq!(
+        schedule::get(&conn, &due.id).unwrap().disposition,
+        "completed"
+    );
+}

@@ -19,6 +19,7 @@ function state(overrides: Partial<AppStateView> = {}): AppStateView {
     custom_agent_bin: '',
     deepseek_key_configured: false,
     alarm: null,
+    blocks: [],
     classroom_programs: [],
     classroom_slots: [],
     classroom_due_count: 0,

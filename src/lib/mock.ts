@@ -601,6 +601,7 @@ function appState(): AppStateView {
     custom_agent_bin: mockCustomBin,
     deepseek_key_configured: mockDeepseekKeyConfigured,
     alarm: null,
+    blocks: [],
     classroom_programs: CLASSROOM_CATALOG.map((item) => mockClassroomProgram(item.id)),
     classroom_slots: mockClassroomSlots,
     classroom_due_count: mockClassroomSlots.filter((slot) => slot.owed).length,
@@ -952,6 +953,7 @@ export const mockApi = {
     return { kind: 'engineering', lesson: mockActiveEngineering };
   },
   startClassReview: async () => { throw new Error('Reviews need the desktop app.'); },
+  endBlock: async () => { throw new Error('Blocks need the desktop app.'); },
   resumeClassroomSession: async (
     subjectId: ClassroomSubjectId,
   ): Promise<ClassroomSessionStart | null> => {

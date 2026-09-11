@@ -11,6 +11,31 @@
     if (!alarm || busy) return; busy = true;
     try { await api.snoozeAlarm(alarm.occurrence_id, minutes); await app.refresh(); } catch (e) { app.error = String(e); } finally { busy = false; }
   }
+  const blocks = $derived((app.state?.blocks ?? []).filter(b => b.next !== 'done'));
+  const BREAK_MINUTES = 5;
+  /** When each block last had no session open, so the suggested break counts down from then. */
+  let breakSince = $state<Record<string, number>>({});
+  $effect(() => {
+    for (const block of blocks) {
+      if (block.in_session) { if (breakSince[block.occurrence_id]) breakSince = { ...breakSince, [block.occurrence_id]: 0 }; }
+      else if (!breakSince[block.occurrence_id]) breakSince = { ...breakSince, [block.occurrence_id]: Date.now() };
+    }
+  });
+  function breakLeft(id: string) { const since = breakSince[id]; if (!since) return 0; return Math.max(0, BREAK_MINUTES * 60 - Math.floor((now.getTime() - since) / 1000)); }
+  function mmss(seconds: number) { return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`; }
+  function hoursLeft(minutes: number) { return minutes >= 60 ? `${Math.floor(minutes / 60)} h ${minutes % 60} min` : `${minutes} min`; }
+  async function continueBlock(block: { course_id: ClassroomSubjectId; occurrence_id: string }) {
+    if (busy) return; busy = true;
+    try { await app.startClass(block.course_id, null, false, block.occurrence_id); } finally { busy = false; }
+  }
+  async function retrieval(block: { course_id: ClassroomSubjectId; occurrence_id: string }) {
+    if (busy) return; busy = true;
+    try { await app.startReview(block.course_id, block.occurrence_id); } finally { busy = false; }
+  }
+  async function endBlock(id: string) {
+    if (busy) return; busy = true;
+    try { await api.endBlock(id); await app.refresh(); } catch (e) { app.error = String(e); } finally { busy = false; }
+  }
   function untilClock(value: string) { const d = new Date(value); return Number.isNaN(d.getTime()) ? '' : d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }); }
   const next = $derived(nextScheduledClass(app.state, now));
   const resumable = $derived(app.state?.active_classroom_sessions ?? []);
@@ -64,6 +89,37 @@
       </div>
     </section>
   {/if}
+  {#each blocks as block (block.occurrence_id)}
+    <section class="block" aria-label={`Study block: ${block.label}`}>
+      <div class="block-head">
+        <span class="mono">STUDY BLOCK · {block.label} · {hoursLeft(block.duration_minutes)}</span>
+        <span class="mono muted">{block.lessons_completed} lesson{block.lessons_completed === 1 ? '' : 's'} done · {hoursLeft(block.remaining_minutes)} left</span>
+      </div>
+      <div class="block-track" role="progressbar" aria-label="Block time used" aria-valuemin="0" aria-valuemax={block.duration_minutes} aria-valuenow={block.elapsed_minutes}><i style:width={`${Math.min(100, (block.elapsed_minutes / Math.max(1, block.duration_minutes)) * 100)}%`}></i></div>
+      {#if block.in_session}
+        <p>A lesson from this block is open. Resume it from the saved sessions below.</p>
+      {:else if block.next === 'topic'}
+        <div class="block-row">
+          <div>
+            <strong>{breakLeft(block.occurrence_id) > 0 ? `Break · ${mmss(breakLeft(block.occurrence_id))}` : 'Ready for the next topic'}</strong>
+            <p>The next topic on your route, sized to {block.next_minutes} minutes. A topic always ends today, so only whole topics start.</p>
+          </div>
+          <button class="cta mono-cta" disabled={busy || !!app.preparingClass} onclick={() => continueBlock(block)}><Play size={13} /> {breakLeft(block.occurrence_id) > 0 ? 'Skip the break, start now' : 'Start next topic'}</button>
+        </div>
+      {:else if (app.state?.classroom_programs ?? []).find(p => p.subject_id === block.course_id)?.kind === 'language'}
+        <p><strong>{block.next_minutes} minutes left.</strong> Not enough for a whole pass, and language retrieval sessions are not built yet, so end the block when you are ready.</p>
+      {:else}
+        <div class="block-row">
+          <div>
+            <strong>{block.next_minutes} minutes left: retrieval practice</strong>
+            <p>Not enough for a whole topic, so the rest of the block goes to earlier topics, which spaced repetition needs anyway.</p>
+          </div>
+          <button class="cta mono-cta" disabled={busy || !!app.preparingClass} onclick={() => retrieval(block)}><BookOpen size={13} /> Start retrieval</button>
+        </div>
+      {/if}
+      {#if !block.in_session}<button class="ghost mono-ghost end" disabled={busy} onclick={() => endBlock(block.occurrence_id)}>End block for today</button>{/if}
+    </section>
+  {/each}
   <section class="idle-center" aria-labelledby="today-title">
     <div class="meta-label">TODAY · {now.toLocaleDateString(undefined,{weekday:'long',month:'short',day:'numeric'})}</div>
     <h1 id="today-title">{resumable.length ? 'Your study desk is waiting' : dueSlots.length ? 'Time for your next class' : 'Make room for learning'}</h1>
@@ -108,6 +164,12 @@
   .alarm-copy { display: grid; gap: 4px; min-width: 0; } .alarm-copy .mono { font-size: 9px; letter-spacing: .7px; color: var(--accent); } .alarm.snoozed .alarm-copy .mono { color: var(--muted); }
   .alarm-copy strong { font-size: 14px; } .alarm-copy p { margin: 0; font-size: 11px; color: var(--muted); line-height: 1.55; }
   .alarm-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .block { display: grid; gap: 10px; padding: 14px 16px; border: 1px solid var(--violet); border-radius: var(--radius-panel); background: var(--surface); }
+  .block-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; } .block-head .mono { font-size: 9px; letter-spacing: .7px; color: var(--violet-fg); } .block-head .muted { color: var(--muted); }
+  .block-track { height: 4px; border-radius: 2px; background: var(--bg); overflow: hidden; } .block-track i { display: block; height: 100%; background: var(--violet-fg); }
+  .block p { margin: 0; font-size: 11px; color: var(--muted); line-height: 1.55; }
+  .block-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; } .block-row strong { display: block; font-size: 13px; margin-bottom: 3px; }
+  .block .end { justify-self: end; }
   .recovery { color: var(--bad-fg); border: 1px dashed var(--led-err); background: var(--bad-bg); padding: 9px 12px; border-radius: var(--radius-control); font-size: 11px; }
   @media(max-width:620px) { .today { padding: 22px 18px; } .overview { grid-template-columns: 1fr; } h1 { font-size: 28px; } .study-row { flex-wrap: wrap; } }
 </style>
