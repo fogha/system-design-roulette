@@ -476,10 +476,12 @@ mod imp {
                 let bytes = &out.stdout;
                 let xml = if bytes.starts_with(&[0xff, 0xfe]) || bytes.get(1) == Some(&0) {
                     let bytes = bytes.strip_prefix(&[0xff, 0xfe]).unwrap_or(bytes);
+                    let (pairs, _) = bytes.as_chunks::<2>();
                     String::from_utf16_lossy(
-                        &bytes
-                            .chunks_exact(2)
-                            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+                        &pairs
+                            .iter()
+                            .copied()
+                            .map(u16::from_le_bytes)
                             .collect::<Vec<_>>(),
                     )
                 } else {

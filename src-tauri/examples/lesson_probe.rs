@@ -2,10 +2,7 @@
 //! disposable database. No webview, scheduler, focus enforcement or seed edits.
 use std::{
     path::PathBuf,
-    sync::{
-        atomic::AtomicBool,
-        Arc, Mutex,
-    },
+    sync::{atomic::AtomicBool, Arc, Mutex},
 };
 use system_design_roulette_lib::{classroom, db, generator::Generator, state::AppState};
 
