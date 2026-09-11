@@ -2454,14 +2454,23 @@ pub fn pick_fallback(focus: &str, preferred_title: &str) -> FallbackCourse {
     let scored = all
         .iter()
         .map(|course| {
-            let phrase = course.slug.split('-').skip(1).collect::<Vec<_>>().join(" ");
-            let token_score = course
-                .slug
-                .split('-')
-                .skip(1)
-                .filter(|token| token.len() >= 3 && lower.contains(token))
+            // Slugs carry a course prefix ("js-event-loop"); a single-word slug
+            // ("idempotency") is its own token and must never match through an
+            // empty phrase.
+            let parts: Vec<&str> = course.slug.split('-').collect();
+            let tokens: Vec<&str> = if parts.len() > 1 {
+                parts[1..].to_vec()
+            } else {
+                parts
+            };
+            let phrase = tokens.join(" ");
+            let token_score = tokens
+                .iter()
+                .filter(|token| token.len() >= 3 && lower.contains(*token))
                 .count();
-            let score = if lower.contains(&course.slug) || lower.contains(&phrase) {
+            let score = if lower.contains(&course.slug)
+                || (!phrase.is_empty() && lower.contains(&phrase))
+            {
                 100
             } else {
                 token_score
