@@ -173,6 +173,93 @@ button.cta:disabled {
   cursor: not-allowed;
 }
 
+/* The control beside a call to action, drawn as a blueprint callout rather
+   than a filled key: corner brackets mark it like a reticle, its icon sits
+   in a small well, and under the pointer the brackets close in and the
+   well lights. Same height as the call to action, never its weight. */
+button.bracket {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 34px;
+  padding: 6px 14px 6px 7px;
+  border: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
+  border-radius: 3px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 85%, transparent), color-mix(in srgb, var(--surface) 30%, transparent));
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  text-transform: lowercase;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease, transform 0.12s ease;
+}
+button.bracket::before,
+button.bracket::after {
+  content: '';
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border: 1.5px solid color-mix(in srgb, var(--accent) 80%, transparent);
+  transition: inset 0.16s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.15s ease;
+  pointer-events: none;
+}
+button.bracket::before {
+  top: -4px;
+  left: -4px;
+  border-right: 0;
+  border-bottom: 0;
+}
+button.bracket::after {
+  right: -4px;
+  bottom: -4px;
+  border-left: 0;
+  border-top: 0;
+}
+.bracket-well {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  border-radius: 3px;
+  background: var(--surface-2);
+  color: color-mix(in srgb, var(--accent) 75%, var(--muted));
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+button.bracket:hover:not(:disabled) {
+  color: var(--fg);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 12%, var(--surface)), color-mix(in srgb, var(--accent) 4%, var(--surface)));
+}
+button.bracket:hover:not(:disabled)::before {
+  top: -2px;
+  left: -2px;
+  border-color: var(--accent);
+}
+button.bracket:hover:not(:disabled)::after {
+  right: -2px;
+  bottom: -2px;
+  border-color: var(--accent);
+}
+button.bracket:hover:not(:disabled) .bracket-well {
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface-2));
+  color: var(--accent);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+button.bracket:active:not(:disabled) {
+  transform: translateY(1px);
+}
+button.bracket:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+button.bracket:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 button.ghost {
   background: transparent;
   color: var(--muted);

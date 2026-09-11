@@ -6,7 +6,7 @@
   import StatusLED from '../components/StatusLED.svelte';
   import ProgressRing from '../features/today/ProgressRing.svelte';
   import StudyPulse from '../features/today/StudyPulse.svelte';
-  import { ArrowRight, BookOpen, Clock, Play, Pause, Activity, Sparkles } from 'lucide-svelte';
+  import { ArrowRight, BookOpen, Clock, Play, Pause, Activity, ScrollText, Sparkles } from 'lucide-svelte';
   let now = $state(new Date()), busy = $state(false);
   /** The habit view; loaded once per visit and again after anything that completes a lesson. */
   let pulse = $state<StudyPulseView | null>(null);
@@ -163,8 +163,8 @@
         {:else}
           <button class="cta mono-cta" onclick={() => app.openClass()}><BookOpen size={14} />Open classes</button>
         {/if}
-        <button class="ghost mono-ghost" onclick={() => app.navigate('progress')}>Progress ledger</button>
-        <button class="ghost mono-ghost" onclick={pause} disabled={busy}>{app.state?.schedule_paused ? 'Resume appointments' : 'Pause appointments'}</button>
+        <button class="bracket" onclick={() => app.navigate('progress')}><span class="bracket-well"><ScrollText size={12} /></span>Progress ledger</button>
+        <button class="bracket" onclick={pause} disabled={busy}><span class="bracket-well">{#if app.state?.schedule_paused}<Play size={12} />{:else}<Pause size={12} />{/if}</span>{app.state?.schedule_paused ? 'Resume appointments' : 'Pause appointments'}</button>
       </div>
       <div class="hero-facts mono">
         <span><i class="dot violet"></i>{activeClasses.length} active {activeClasses.length === 1 ? 'class' : 'classes'}</span>
