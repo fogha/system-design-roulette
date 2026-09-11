@@ -175,10 +175,12 @@ PROFILE: weak_areas=consensus, formal consistency models;
          responds well to concrete numbers and failure stories.
 ```
 
-## 3. Curriculum: the roulette grows up
+## 3. Curriculum: from a wheel to a personal path
 
-The flat least-picked-random wheel becomes a **progressive curriculum** while
-keeping the roulette ritual (the wheel stays; what changes is what's on it).
+The flat least-picked-random wheel became a **progressive curriculum** and then
+a personal path per class: selection follows the accepted starting point, path
+revisions, accepted bridge lessons and prerequisite order. An optional random
+choice among eligible next lessons remains available behind "Choose for me".
 
 - Every selectable concept carries a complete curriculum brief in
   `concepts.json`: learner outcome, irreducible mechanisms, production
@@ -208,10 +210,10 @@ have been practiced, never on consecutive days:
 
 | Type            | Cadence (guardrail)            | Shape                                                                 |
 | --------------- | ------------------------------ | --------------------------------------------------------------------- |
-| **lesson**      | default                        | today's flow: quiz on yesterday → roulette → 30-min course             |
+| **lesson**      | default                        | the shared runtime's Recall → Learn → Practice → Check → Feedback pass on the next topic of the personal path |
 | **pop-quiz**    | weekly checkpoint plus review-debt overrides; never 2 in a row | no new topic. 12 previously attempted questions, weighted toward `struggling`, `decayed`, and due-for-review concepts. Misses update mastery. |
 
-Pop-quiz is quiz+review without roulette/course. Audio is a delivery mode for
+A retrieval session is recall, check and feedback without a new lesson, served when a topic's spaced review is due. Audio is a delivery mode for
 a normal lesson, not a separate session type. Every normal lesson also appends
 up to two due/struggling spaced-retrieval questions. Design-lab and dedicated
 remediation-day variants remain future work; the current Teacher instead uses
@@ -283,7 +285,7 @@ Caveats to design around:
 | course/quiz output | parsed structured JSON is checked by deterministic gates, then engineering courses receive one same-provider editorial pass |
 | quiz | five fresh, course-grounded questions; malformed or invalid output gets one same-provider correction and never unrelated bundled substitution |
 | grade | verdicts + plain-language feedback + private teacher notes, with the dossier available to the grader |
-| roulette | focus-local prerequisite graph, core/current-phase first, complete foundations for tier 2/3, then debt-aware weighting |
+| selection | accepted path first (bridges, then required topics in phase order), prerequisite graph, complete foundations for tier 2/3, then debt-aware weighting |
 | model/provider | exact configured provider/model for engineering course, correction, editor, and aligned assessment; errors surface after the allowed same-provider correction |
 | pre-generation | plans lesson vs pop-quiz, then builds the course/quiz required for that day |
 
