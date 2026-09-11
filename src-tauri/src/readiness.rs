@@ -186,20 +186,21 @@ pub async fn prepare(app: &AppHandle, occurrence_id: &str, course_id: &str) -> R
         "preparation:state",
         serde_json::json!({ "phase": "started", "course_id": spec.id, "session_id": planned.id, "occurrence_id": occurrence_id }),
     );
-    *state.current_run.lock().unwrap() = Some((planned.id.0.clone(), spec.id.to_string()));
-    let outcome = match spec.kind {
-        crate::classroom::SubjectKind::Language => {
-            crate::subjects::language::prepare(&state, &planned.id)
-                .await
-                .map(|_| ())
-        }
-        crate::classroom::SubjectKind::Engineering => {
-            crate::subjects::engineering::prepare(&state, &planned.id)
-                .await
-                .map(|_| ())
+    let outcome = {
+        let _run = state.generator.feed.begin(&planned.id.0, spec.id);
+        match spec.kind {
+            crate::classroom::SubjectKind::Language => {
+                crate::subjects::language::prepare(&state, &planned.id)
+                    .await
+                    .map(|_| ())
+            }
+            crate::classroom::SubjectKind::Engineering => {
+                crate::subjects::engineering::prepare(&state, &planned.id)
+                    .await
+                    .map(|_| ())
+            }
         }
     };
-    *state.current_run.lock().unwrap() = None;
     let _ = app.emit(
         "preparation:state",
         serde_json::json!({

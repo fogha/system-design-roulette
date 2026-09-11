@@ -32,7 +32,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         codex_bin: Some("codex".into()),
         scratch_dir: scratch.clone(),
         database: Some(path.clone()),
-        log_tx: None,
+        feed: Default::default(),
     };
     for id in RunnerId::ALL {
         if selected.is_some_and(|selected| selected != id) {

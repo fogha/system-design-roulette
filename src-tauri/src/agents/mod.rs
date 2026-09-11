@@ -22,7 +22,8 @@ pub struct Runner {
     pub codex_bin: Option<String>,
     pub scratch_dir: PathBuf,
     pub database: Option<PathBuf>,
-    pub log_tx: Option<tokio::sync::broadcast::Sender<String>>,
+    /// Live activity lines for the interface and the execution log.
+    pub feed: crate::execution_log::Feed,
     #[cfg(test)]
     pub test_deepseek: Option<(String, String)>,
 }
@@ -76,9 +77,7 @@ impl Runner {
             .map(Option::flatten)
     }
     pub fn log(&self, message: String) {
-        if let Some(tx) = &self.log_tx {
-            let _ = tx.send(message);
-        }
+        self.feed.say(message);
     }
     pub fn binary(&self, id: RunnerId) -> Option<String> {
         match id {

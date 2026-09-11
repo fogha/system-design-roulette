@@ -24,10 +24,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if !classroom::has_enabled_schedule(&conn, &args[1])? {
         return Err("QA class needs an enabled study time".into());
     }
-    let (log_tx, mut log_rx) = tokio::sync::broadcast::channel::<String>(100);
+    let (log_tx, mut log_rx) =
+        tokio::sync::broadcast::channel::<principia_desk_lib::execution_log::Reported>(100);
     let logger = tokio::spawn(async move {
-        while let Ok(line) = log_rx.recv().await {
-            println!("{line}");
+        while let Ok(reported) = log_rx.recv().await {
+            println!("{}", reported.line);
         }
     });
     let mut generator = Generator::new(
@@ -37,7 +38,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Arc::new(Mutex::new(program.model.clone())),
         Arc::new(Mutex::new(program.agent.clone())),
         Arc::new(Mutex::new(program.custom_agent_bin.clone())),
-        Some(log_tx),
+        principia_desk_lib::execution_log::Feed::new(log_tx),
     );
     generator.runner.database = Some(path);
     let state = AppState {
@@ -49,7 +50,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         alarm_for: Mutex::new(None),
         panel_height: Mutex::new(600.0),
         preparing_ahead: AtomicBool::new(false),
-        current_run: Mutex::new(None),
         debug_day: true,
         escape_failures: Mutex::new(vec![]),
         prev_muted: Mutex::new(None),

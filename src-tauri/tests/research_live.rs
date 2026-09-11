@@ -108,7 +108,7 @@ async fn generated_course_cites_retrieved_sources_with_reachable_links() {
         std::sync::Arc::new(std::sync::Mutex::new("deepseek-chat".into())),
         std::sync::Arc::new(std::sync::Mutex::new("deepseek".into())),
         std::sync::Arc::new(std::sync::Mutex::new(String::new())),
-        None,
+        Default::default(),
     );
 
     let (course, source) = generator

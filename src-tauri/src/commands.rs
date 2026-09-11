@@ -820,10 +820,10 @@ pub async fn start_classroom_session(
                         "classroom:state",
                         serde_json::json!({ "planned": planned.id }),
                     );
-                    *state.current_run.lock().unwrap() =
-                        Some((planned.id.0.clone(), spec.id.to_string()));
-                    let prepared = crate::subjects::language::prepare(&state, &planned.id).await;
-                    *state.current_run.lock().unwrap() = None;
+                    let prepared = {
+                        let _run = state.generator.feed.begin(&planned.id.0, spec.id);
+                        crate::subjects::language::prepare(&state, &planned.id).await
+                    };
                     prepared?;
                     crate::enforcement::activate(&app, &state, &planned.id)?;
                     let conn = state.db.0.lock().unwrap();
@@ -864,10 +864,10 @@ pub async fn start_classroom_session(
                         "classroom:state",
                         serde_json::json!({ "planned": planned.id }),
                     );
-                    *state.current_run.lock().unwrap() =
-                        Some((planned.id.0.clone(), spec.id.to_string()));
-                    let prepared = crate::subjects::engineering::prepare(&state, &planned.id).await;
-                    *state.current_run.lock().unwrap() = None;
+                    let prepared = {
+                        let _run = state.generator.feed.begin(&planned.id.0, spec.id);
+                        crate::subjects::engineering::prepare(&state, &planned.id).await
+                    };
                     prepared?;
                     crate::enforcement::activate(&app, &state, &planned.id)?;
                     let conn = state.db.0.lock().unwrap();

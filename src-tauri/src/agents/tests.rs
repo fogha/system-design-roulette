@@ -15,7 +15,7 @@ fn fixture() -> Runner {
         codex_bin: Some("none".into()),
         scratch_dir: root.join("scratch"),
         database: Some(database),
-        log_tx: None,
+        feed: Default::default(),
         test_deepseek: None,
     }
 }
@@ -442,11 +442,14 @@ async fn capture_drains_stderr_and_kills_process_group_on_timeout_and_abort() {
         "noisy.py",
         "import sys\nsys.stderr.write('x'*1000000)\nsys.stderr.flush()\nprint('finished')",
     );
+    // The point is that a megabyte of stderr cannot wedge the pipe; a deadlock
+    // would hang until the deadline, so the deadline only has to outlast a
+    // Python start on a busy machine.
     assert_eq!(
         process::capture(
             tokio::process::Command::new(noisy),
             None,
-            Duration::from_secs(3)
+            Duration::from_secs(20)
         )
         .await
         .unwrap()

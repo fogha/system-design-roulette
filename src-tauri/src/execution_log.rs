@@ -8,6 +8,72 @@
 use crate::db::Result;
 use rusqlite::{params, Connection};
 use serde::Serialize;
+use std::sync::{Arc, Mutex};
+
+/// A line as the runner said it, stamped with the run it belonged to at that
+/// moment. Stamping happens on the sending side: a line that waits in the
+/// channel while the run ends must still land in that run.
+#[derive(Debug, Clone)]
+pub struct Reported {
+    /// (session id, course id) of the preparation under way, if any.
+    pub run: Option<(String, String)>,
+    pub line: String,
+}
+
+/// The runner's side of the live feed. Names the run in progress and reports
+/// lines under it. Cloning shares the run, so the generator and its runner
+/// see the same name.
+#[derive(Clone, Default)]
+pub struct Feed {
+    tx: Option<tokio::sync::broadcast::Sender<Reported>>,
+    run: Arc<Mutex<Option<(String, String)>>>,
+}
+
+/// Names the run for as long as it lives; dropping it ends the run, so a
+/// preparation that fails or is cancelled part way never leaves its name on
+/// lines said later.
+pub struct RunGuard {
+    run: Arc<Mutex<Option<(String, String)>>>,
+}
+
+impl Drop for RunGuard {
+    fn drop(&mut self) {
+        *self.run.lock().unwrap() = None;
+    }
+}
+
+impl Feed {
+    pub fn new(tx: tokio::sync::broadcast::Sender<Reported>) -> Self {
+        Self {
+            tx: Some(tx),
+            run: Arc::default(),
+        }
+    }
+
+    /// Report one line under the run in progress.
+    pub fn say(&self, line: impl Into<String>) {
+        if let Some(tx) = &self.tx {
+            let run = self.run.lock().unwrap().clone();
+            let _ = tx.send(Reported {
+                run,
+                line: line.into(),
+            });
+        }
+    }
+
+    /// Name the run whose lines follow, until the guard drops.
+    pub fn begin(&self, session_id: &str, course_id: &str) -> RunGuard {
+        *self.run.lock().unwrap() = Some((session_id.to_string(), course_id.to_string()));
+        RunGuard {
+            run: Arc::clone(&self.run),
+        }
+    }
+
+    /// The run in progress, if any.
+    pub fn current(&self) -> Option<(String, String)> {
+        self.run.lock().unwrap().clone()
+    }
+}
 
 /// Lines older than this are pruned at startup.
 const KEEP_DAYS: i64 = 30;
@@ -136,4 +202,46 @@ pub fn recent(conn: &Connection, limit: i64) -> Result<Vec<LogLine>> {
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     Ok(rows)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Feed;
+
+    #[test]
+    fn a_line_keeps_the_run_it_was_said_under_however_late_it_is_read() {
+        let (tx, mut rx) = tokio::sync::broadcast::channel(8);
+        let feed = Feed::new(tx);
+        let runner = feed.clone();
+        {
+            let _run = feed.begin("study-1", "typescript");
+            runner.say("Claude Code · drafting");
+            runner.say("Claude Code · finished in 74.3s");
+        }
+        feed.say("answering a course-chat question");
+        assert_eq!(feed.current(), None, "the guard ended the run");
+
+        // The drain reads only now, after the run ended: the stamps hold.
+        let first = rx.try_recv().unwrap();
+        assert_eq!(
+            first.run,
+            Some(("study-1".to_string(), "typescript".to_string()))
+        );
+        assert_eq!(first.line, "Claude Code · drafting");
+        assert!(rx.try_recv().unwrap().run.is_some());
+        let idle = rx.try_recv().unwrap();
+        assert_eq!(idle.run, None);
+        assert_eq!(idle.line, "answering a course-chat question");
+    }
+
+    #[test]
+    fn a_silent_feed_reports_nothing_and_still_names_runs() {
+        let feed = Feed::default();
+        let _run = feed.begin("study-2", "rust");
+        feed.say("dropped on the floor");
+        assert_eq!(
+            feed.current(),
+            Some(("study-2".to_string(), "rust".to_string()))
+        );
+    }
 }

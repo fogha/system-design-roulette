@@ -164,18 +164,27 @@ pub fn run() {
                     .unwrap_or_default(),
             ));
             // Live agent-activity feed: generator -> broadcast -> gen:log events.
-            let (log_tx, mut log_rx) = tokio::sync::broadcast::channel::<String>(64);
+            let (log_tx, mut log_rx) =
+                tokio::sync::broadcast::channel::<execution_log::Reported>(256);
             {
                 let handle = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
-                    while let Ok(line) = log_rx.recv().await {
-                        let _ = handle.emit("gen:log", &line);
+                    loop {
+                        let reported = match log_rx.recv().await {
+                            Ok(reported) => reported,
+                            // Falling behind loses lines; it must not end the feed.
+                            Err(tokio::sync::broadcast::error::RecvError::Lagged(missed)) => {
+                                log::warn!("the execution log fell behind by {missed} line(s)");
+                                continue;
+                            }
+                            Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                        };
+                        let _ = handle.emit("gen:log", &reported.line);
                         let state = handle.state::<AppState>();
-                        let run = state.current_run.lock().unwrap().clone();
                         let conn = state.db.0.lock().unwrap();
-                        let tagged = run.as_ref().map(|(r, c)| (r.as_str(), c.as_str()));
+                        let run = reported.run.as_ref().map(|(r, c)| (r.as_str(), c.as_str()));
                         if let Err(error) =
-                            execution_log::append(&conn, tagged, &line, chrono::Utc::now())
+                            execution_log::append(&conn, run, &reported.line, chrono::Utc::now())
                         {
                             log::warn!("could not store a runner line: {error}");
                         }
@@ -189,7 +198,7 @@ pub fn run() {
                 model,
                 agent,
                 custom_bin,
-                Some(log_tx),
+                execution_log::Feed::new(log_tx),
             );
             generator.runner.database = Some(data_dir.join("principia.db"));
             app.manage(AppState {
@@ -201,7 +210,6 @@ pub fn run() {
                 alarm_for: Mutex::new(None),
                 panel_height: Mutex::new(600.0),
                 preparing_ahead: AtomicBool::new(false),
-                current_run: Mutex::new(None),
                 debug_day,
                 escape_failures: Mutex::new(Vec::new()),
                 prev_muted: Mutex::new(None),

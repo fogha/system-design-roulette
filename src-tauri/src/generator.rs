@@ -955,8 +955,9 @@ pub struct Generator {
     /// Binary path used when agent == 'custom'. Contract: accepts the prompt
     /// as its final argument and prints the answer to stdout.
     pub custom_bin: std::sync::Arc<std::sync::Mutex<String>>,
-    /// Live agent-activity lines for the UI (gen:log). None in tests.
-    pub log_tx: Option<tokio::sync::broadcast::Sender<String>>,
+    /// Live agent-activity lines for the interface and the execution log.
+    /// Silent in tests.
+    pub feed: crate::execution_log::Feed,
     /// Fetches the primary documentation a lesson is taught from. Providers are
     /// never trusted to supply URLs from memory.
     pub researcher: crate::research::Researcher,
@@ -1221,7 +1222,7 @@ impl Generator {
         model: std::sync::Arc<std::sync::Mutex<String>>,
         agent: std::sync::Arc<std::sync::Mutex<String>>,
         custom_bin: std::sync::Arc<std::sync::Mutex<String>>,
-        log_tx: Option<tokio::sync::broadcast::Sender<String>>,
+        feed: crate::execution_log::Feed,
     ) -> Self {
         let _ = std::fs::create_dir_all(&scratch_dir);
         let runner = crate::agents::Runner {
@@ -1229,7 +1230,7 @@ impl Generator {
             codex_bin: codex_bin.clone(),
             scratch_dir: scratch_dir.clone(),
             database: None,
-            log_tx: log_tx.clone(),
+            feed: feed.clone(),
             #[cfg(test)]
             test_deepseek: None,
         };
@@ -1244,7 +1245,7 @@ impl Generator {
             model,
             agent,
             custom_bin,
-            log_tx,
+            feed,
             researcher: crate::research::Researcher::new(),
         }
     }
@@ -1264,9 +1265,7 @@ impl Generator {
     }
 
     fn log(&self, msg: impl Into<String>) {
-        if let Some(tx) = &self.log_tx {
-            let _ = tx.send(msg.into());
-        }
+        self.feed.say(msg);
     }
 
     async fn course_metadata(
@@ -3034,7 +3033,7 @@ mod generation_policy_tests {
             Arc::new(Mutex::new("unused".into())),
             Arc::new(Mutex::new("unused".into())),
             Arc::new(Mutex::new(String::new())),
-            None,
+            Default::default(),
         )
     }
 

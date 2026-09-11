@@ -85,7 +85,7 @@ async fn live_golden_courses_pass_the_editor_and_deterministic_gate() {
         Arc::new(Mutex::new(model)),
         Arc::new(Mutex::new(agent)),
         Arc::new(Mutex::new(custom_bin)),
-        None,
+        Default::default(),
     );
 
     for case in cases {

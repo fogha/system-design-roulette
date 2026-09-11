@@ -41,7 +41,7 @@ fn app_state(dir: &std::path::Path, conn: Connection) -> AppState {
         Arc::new(Mutex::new("opus".into())),
         Arc::new(Mutex::new("claude".into())),
         Arc::new(Mutex::new(String::new())),
-        None,
+        Default::default(),
     );
     generator.runner.database = Some(dir.join("principia.db"));
     AppState {
@@ -53,7 +53,6 @@ fn app_state(dir: &std::path::Path, conn: Connection) -> AppState {
         alarm_for: Mutex::new(None),
         panel_height: Mutex::new(600.0),
         preparing_ahead: AtomicBool::new(false),
-        current_run: Mutex::new(None),
         debug_day: false,
         escape_failures: Mutex::new(vec![]),
         prev_muted: Mutex::new(None),
