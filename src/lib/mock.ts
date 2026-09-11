@@ -569,6 +569,7 @@ function mockEngineeringLesson(subjectId: FocusArea): EngineeringLessonView {
     why_now: 'Browser preview: a bundled reference lesson from this course. Native selection follows curriculum eligibility.',
     markdown: reference.markdown,
     resources: reference.resources,
+    review_notes: [],
     questions: reference.questions.filter((question) => question.kind === 'mcq').map((question, index) => ({
       id: index + 1, prompt: question.prompt, choices: question.choices!,
       section: question.section, learning_objective: question.learning_objective,
@@ -954,6 +955,9 @@ export const mockApi = {
   },
   startClassReview: async () => { throw new Error('Reviews need the desktop app.'); },
   endBlock: async () => { throw new Error('Blocks need the desktop app.'); },
+  listExecutionRuns: async () => [],
+  getExecutionLog: async () => [],
+  getRecentExecutionLog: async () => [],
   resumeClassroomSession: async (
     subjectId: ClassroomSubjectId,
   ): Promise<ClassroomSessionStart | null> => {

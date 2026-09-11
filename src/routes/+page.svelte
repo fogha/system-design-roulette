@@ -5,6 +5,7 @@
   import Today from '../lib/screens/Today.svelte';
   import Classes from '../lib/features/classes/Classes.svelte';
   import StudySettings from '../lib/screens/StudySettings.svelte';
+  import Logs from '../lib/screens/Logs.svelte';
   import DeskShell from '../lib/app/DeskShell.svelte';
   import LanguageLesson from '../lib/screens/LanguageLesson.svelte';
   import ClassroomLesson from '../lib/screens/ClassroomLesson.svelte';
@@ -41,6 +42,7 @@
     <DeskShell>
       {#if app.screen === 'dashboard'}<Dashboard />
       {:else if app.destination === 'classes'}<Classes />
+      {:else if app.destination === 'logs'}<Logs />
       {:else if app.destination === 'settings'}<StudySettings />
       {:else}<Today />{/if}
     </DeskShell>
@@ -56,7 +58,8 @@
 
   {#if app.error}
     <div class="error-toast" role="alert">
-      {app.error}
+      <span>{app.error.length > 220 ? `${app.error.slice(0, 220)}…` : app.error}</span>
+      {#if app.error.length > 220}<button class="more" onclick={() => { app.error = ''; app.navigate('logs'); }}>Open logs</button>{/if}
       <button onclick={() => (app.error = '')}>×</button>
     </div>
   {/if}

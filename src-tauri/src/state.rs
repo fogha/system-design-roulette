@@ -17,6 +17,10 @@ pub struct AppState {
     pub alarm_for: Mutex<Option<String>>,
     /// Height the menu bar panel last reported for its card, in logical points.
     pub panel_height: Mutex<f64>,
+    /// A lesson is being prepared ahead of its appointment right now.
+    pub preparing_ahead: AtomicBool,
+    /// The preparation whose runner lines are being logged: (session id, course id).
+    pub current_run: Mutex<Option<(String, String)>>,
     /// --debug-day: shortened timer, no kiosk, ignore schedule.
     pub debug_day: bool,
     /// Failed escape attempts (rate limiting the hatch).

@@ -201,6 +201,19 @@ class AppStore {
     await this.refresh();
     await onEvent('classroom:owed', () => this.refresh());
     await onEvent('alarm:state', () => this.refresh());
+    await onEvent<{ phase: 'started' | 'ready' | 'failed'; course_id: ClassroomSubjectId; error?: string | null }>('preparation:state', (event) => {
+      if (event.phase === 'started') {
+        if (!this.preparingClass) {
+          const program = this.state?.classroom_programs.find((p) => p.subject_id === event.course_id);
+          this.preparingClass = { subjectId: event.course_id, label: program?.label ?? event.course_id, agent: program?.agent ?? '', model: program?.model ?? '', startedAt: Date.now() };
+          this.genLog = [];
+        }
+      } else if (this.preparingClass?.subjectId === event.course_id) {
+        this.preparingClass = null;
+        if (event.phase === 'failed' && event.error) this.error = event.error;
+      }
+      void this.refresh();
+    });
     await onEvent<{ course_id: ClassroomSubjectId; occurrence_id: string }>('tray:start', (start) => {
       this.navigate('today');
       void this.startClass(start.course_id, null, false, start.occurrence_id);

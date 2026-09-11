@@ -45,6 +45,8 @@
 
   /** One line and one colour for the whole desk, the way a health panel leads. */
   const health = $derived.by(() => {
+    if (alarm && !alarm.snoozed_until && alarm.readiness === 'preparing') return { word: 'Preparing', tone: 'warn', line: `${alarm.label} is due. The lesson is being written; the alarm rings when it is ready.` };
+    if (alarm && !alarm.snoozed_until && alarm.readiness === 'failed') return { word: 'Needs a retry', tone: 'due', line: `${alarm.label} is due but its lesson could not be prepared.` };
     if (alarm && !alarm.snoozed_until) return { word: 'Due now', tone: 'due', line: `${alarm.label} is waiting. The alarm stops when you start.` };
     if (alarm?.snoozed_until) return { word: 'Snoozed', tone: 'warn', line: `${alarm.label} rings again at ${clock(alarm.snoozed_until)}.` };
     if (locked) return { word: 'In session', tone: 'ok', line: 'A focused lesson holds the desk.' };
@@ -81,11 +83,11 @@
 
   {#if alarm}
     <section class="alarm" class:snoozed={!!alarm.snoozed_until} aria-label="Study alarm">
-      <div class="alarm-top"><Bell size={15} /><strong>{alarm.label}</strong><span class="mono">{alarm.snoozed_until ? `until ${clock(alarm.snoozed_until)}` : 'ringing'}</span></div>
-      <p>{alarm.queued ? `${alarm.queued} more ${alarm.queued === 1 ? 'appointment is' : 'appointments are'} waiting behind it.` : 'Only starting the lesson ends this.'}</p>
+      <div class="alarm-top"><Bell size={15} /><strong>{alarm.label}</strong><span class="mono">{alarm.snoozed_until ? `until ${clock(alarm.snoozed_until)}` : alarm.readiness === 'ready' ? 'ringing' : alarm.readiness === 'preparing' ? 'preparing…' : 'failed'}</span></div>
+      <p>{alarm.readiness === 'preparing' ? 'The tutor is writing the lesson. The alarm rings when it is ready.' : alarm.readiness === 'failed' ? 'Preparation failed. Retry prepares it again.' : alarm.queued ? `${alarm.queued} more ${alarm.queued === 1 ? 'appointment is' : 'appointments are'} waiting behind it.` : 'Only starting the lesson ends this.'}</p>
       <div class="alarm-actions">
-        <button class="primary" disabled={busy} onclick={start}><Play size={13} /> Start {alarm.label}</button>
-        {#if !alarm.snoozed_until}<div class="snoozes">{#each [5, 10, 15] as minutes (minutes)}<button disabled={busy} onclick={() => snooze(minutes)}>{minutes}m</button>{/each}</div>{/if}
+        {#if alarm.readiness !== 'preparing'}<button class="primary" disabled={busy} onclick={start}><Play size={13} /> {alarm.readiness === 'failed' ? 'Retry' : 'Start'} {alarm.label}</button>{/if}
+        {#if !alarm.snoozed_until && alarm.readiness === 'ready'}<div class="snoozes">{#each [5, 10, 15] as minutes (minutes)}<button disabled={busy} onclick={() => snooze(minutes)}>{minutes}m</button>{/each}</div>{/if}
       </div>
     </section>
   {/if}
@@ -130,7 +132,7 @@
   <footer class="foot">
     <button class="foot-btn" disabled={busy} onclick={open}><ChevronRight size={14} /> Open desk</button>
     <button class="foot-btn" disabled={busy} onclick={togglePause}>{#if paused}<Play size={13} /> Resume{:else}<Pause size={13} /> Pause{/if}</button>
-    <button class="foot-btn icon" title={alarm && !alarm.snoozed_until ? 'The alarm is ringing' : locked ? 'A focused session holds the desk' : 'Quit'} aria-label="Quit Principia Desk" disabled={busy || (!!alarm && !alarm.snoozed_until) || locked} onclick={quit}><Power size={14} /></button>
+    <button class="foot-btn icon" title={alarm && !alarm.snoozed_until && alarm.readiness === 'ready' ? 'The alarm is ringing' : locked ? 'A focused session holds the desk' : 'Quit'} aria-label="Quit Principia Desk" disabled={busy || (!!alarm && !alarm.snoozed_until && alarm.readiness === 'ready') || locked} onclick={quit}><Power size={14} /></button>
     <button class="foot-btn icon" title="Open settings" aria-label="Open settings" disabled={busy} onclick={open}><Settings2 size={14} /></button>
   </footer>
 </div>

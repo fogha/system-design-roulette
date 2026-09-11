@@ -53,6 +53,12 @@ pub struct GeneratedCourse {
     /// Structured, non-blocking exercise shown alongside the reader.
     #[serde(default)]
     pub exercise: Option<Exercise>,
+    /// What the editorial audit still wanted changed when the corrections
+    /// ran out. The lesson is published with these shown to the learner rather
+    /// than discarded, because a lesson with caveats beats no lesson. The
+    /// writer never emits this field, so it stays out of the metadata contract.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub review_notes: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -67,6 +73,24 @@ struct CourseQualityScores {
 }
 
 impl CourseQualityScores {
+    /// Below this on any axis the editor's complaint is about substance, not
+    /// polish, and the lesson is not published even with notes.
+    const PUBLISHABLE_FLOOR: u8 = 3;
+
+    fn publishable_with_notes(&self) -> bool {
+        [
+            self.coverage_depth,
+            self.mechanism_depth,
+            self.specificity,
+            self.production_transfer,
+            self.dossier_adherence,
+            self.exercise_alignment,
+            self.source_discipline,
+        ]
+        .into_iter()
+        .all(|score| score >= Self::PUBLISHABLE_FLOOR)
+    }
+
     fn validate(&self) -> std::result::Result<(), String> {
         let scores = [
             ("coverage depth", self.coverage_depth),
@@ -128,6 +152,7 @@ impl CourseMetadata {
             key_takeaways: self.key_takeaways,
             exit_questions: self.exit_questions,
             exercise: Some(self.exercise),
+            review_notes: Vec::new(),
         }
     }
 }
@@ -1469,6 +1494,26 @@ impl Generator {
                     .join("; ")
             );
             if attempt == MAX_QUALITY_CORRECTIONS {
+                // The corrections are spent. If the deterministic gate holds
+                // and no score is below the publishable floor, the editor's
+                // remaining points are refinements: publish, and show them.
+                let refinements = review.scores.publishable_with_notes()
+                    && validate_generated_course_for(&course, context.budget).is_ok();
+                if refinements {
+                    scoped.log(format!(
+                        "{} editor's remaining notes are attached to the lesson rather than blocking it: {reason}",
+                        context.agent
+                    ));
+                    course.review_notes = review
+                        .issues
+                        .iter()
+                        .map(|issue| format!("{}: {}", issue.section, issue.reason))
+                        .collect();
+                    if let Err(weak) = review.scores.validate() {
+                        course.review_notes.push(weak);
+                    }
+                    return Ok(course);
+                }
                 return Err(GenError::Quality(format!(
                     "{} failed its final editorial audit: {reason}",
                     context.label
@@ -2759,6 +2804,7 @@ mod quality_gate_tests {
                 deliverable: Some("A tested artifact plus before-and-after evidence.".into()),
                 hints: vec!["Start at the boundary.".into()],
             }),
+            review_notes: Vec::new(),
         };
         assert!(validate_generated_course(&course).is_ok());
 
@@ -2820,6 +2866,7 @@ mod quality_gate_tests {
                 deliverable: Some("A tested artifact plus before-and-after evidence.".into()),
                 hints: vec!["Start at the boundary.".into()],
             }),
+            review_notes: Vec::new(),
         };
         assert!(validate_generated_course(&course).is_ok());
         let error =
@@ -2847,6 +2894,7 @@ mod quality_gate_tests {
                 deliverable: Some("A tested artifact plus before-and-after evidence.".into()),
                 hints: vec!["Start at the boundary.".into()],
             }),
+            review_notes: Vec::new(),
         };
         let practical_start = course.markdown.find("## Practical exercise").unwrap();
         let takeaways_start = course.markdown.find("## Key takeaways").unwrap();
@@ -3032,6 +3080,7 @@ mod generation_policy_tests {
                 deliverable: Some("A tested artifact plus before-and-after evidence.".into()),
                 hints: vec!["Start at the boundary.".into()],
             }),
+            review_notes: Vec::new(),
         }
     }
 

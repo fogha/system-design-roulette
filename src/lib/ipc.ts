@@ -420,6 +420,8 @@ export interface EngineeringLessonView {
   why_now: string;
   markdown: string;
   resources: Resource[];
+  /** Points the tutor's editor still wanted changed when its corrections ran out; the lesson ships with them shown. */
+  review_notes: string[];
   questions: ClassroomQuestionView[];
   exercise: ClassroomExercise | null;
   /** `lesson`, or `retrieval` for a delayed review without a new lesson. */
@@ -456,6 +458,17 @@ export interface EngineeringSessionResult {
   fresh_sample: boolean;
 }
 
+export interface ExecutionRun {
+  run_id: string;
+  course_id: ClassroomSubjectId | null;
+  label: string;
+  started_at: string;
+  last_at: string;
+  lines: number;
+  outcome: 'running' | 'queued' | 'ready' | 'failed' | 'unknown' | string;
+  error: string | null;
+}
+export interface ExecutionLogLine { id: number; at: string; run_id: string | null; course_id: string | null; line: string }
 export type BlockStep = 'topic' | 'retrieval' | 'done';
 /** A study block in progress: an appointment longer than one lesson, filled with whole topics and finished with retrieval. */
 export interface BlockView {
@@ -471,12 +484,16 @@ export interface BlockView {
   next_minutes: number;
   in_session: boolean;
 }
+export type LessonReadiness = 'preparing' | 'ready' | 'failed';
 export interface AlarmView {
   occurrence_id: string;
   course_id: ClassroomSubjectId;
   label: string;
   snoozed_until: string | null;
   queued: number;
+  /** The alarm rings only when the lesson is ready; otherwise the desk shows the delay. */
+  readiness: LessonReadiness;
+  error: string | null;
 }
 export interface AppStateView {
   onboarded: boolean;
@@ -761,6 +778,9 @@ const realApi = {
   /** Start or resume a delayed-retrieval session for the class's most overdue topic. */
   startClassReview: (subjectId: ClassroomSubjectId, occurrenceId?: string | null) => invoke<ClassroomSessionStart>('start_class_review', { subjectId, occurrenceId: occurrenceId ?? null }),
   endBlock: (occurrenceId: string) => invoke<{ id: string; disposition: string }>('end_block', { occurrenceId }),
+  listExecutionRuns: () => invoke<ExecutionRun[]>('list_execution_runs'),
+  getExecutionLog: (runId: string) => invoke<ExecutionLogLine[]>('get_execution_log', { runId }),
+  getRecentExecutionLog: (limit?: number) => invoke<ExecutionLogLine[]>('get_recent_execution_log', { limit: limit ?? null }),
   submitClassroomEngineeringSession: (input: {
     session_id: number;
     answers: number[];

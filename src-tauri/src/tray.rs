@@ -54,9 +54,17 @@ fn build(app: &AppHandle, alarm: Option<&AlarmView>) -> tauri::Result<Menu<tauri
     let mut menu = MenuBuilder::new(app);
 
     if let Some(alarm) = alarm {
-        let headline = match &alarm.snoozed_until {
-            Some(until) => format!("{} · due, snoozed until {}", alarm.label, clock(until)),
-            None => format!("{} · due now", alarm.label),
+        let headline = match (&alarm.snoozed_until, alarm.readiness) {
+            (Some(until), _) => format!("{} · due, snoozed until {}", alarm.label, clock(until)),
+            (None, crate::readiness::Readiness::Ready) => {
+                format!("{} · ready, due now", alarm.label)
+            }
+            (None, crate::readiness::Readiness::Preparing) => {
+                format!("{} · due, lesson preparing…", alarm.label)
+            }
+            (None, crate::readiness::Readiness::Failed) => {
+                format!("{} · due, preparation failed", alarm.label)
+            }
         };
         menu = menu.item(&label_item(app, "alarm", &headline)?);
         if alarm.queued > 0 {
@@ -73,7 +81,7 @@ fn build(app: &AppHandle, alarm: Option<&AlarmView>) -> tauri::Result<Menu<tauri
             )
             .build(app)?,
         );
-        if alarm.snoozed_until.is_none() {
+        if alarm.ringing() {
             for minutes in alarm::SNOOZE_MINUTES {
                 menu = menu.item(
                     &MenuItemBuilder::with_id(
@@ -136,7 +144,7 @@ fn build(app: &AppHandle, alarm: Option<&AlarmView>) -> tauri::Result<Menu<tauri
         menu.item(&MenuItemBuilder::with_id("pause", "Pause appointments").build(app)?)
     };
     menu = menu.separator();
-    let ringing = alarm.is_some_and(|a| a.snoozed_until.is_none());
+    let ringing = alarm.is_some_and(AlarmView::ringing);
     let locked = state.locked.load(Ordering::SeqCst);
     menu = menu.item(
         &MenuItemBuilder::with_id("quit", "Quit Principia Desk")
@@ -364,11 +372,16 @@ pub fn refresh(app: &AppHandle, alarm: Option<&AlarmView>) {
     // and the panel rather than as text beside it.
     let _ = tray.set_title(None::<&str>);
     let tooltip = alarm
-        .map(|a| {
-            if a.snoozed_until.is_some() {
-                format!("Principia Desk · {} snoozed", a.label)
-            } else {
+        .map(|a| match (a.snoozed_until.is_some(), a.readiness) {
+            (true, _) => format!("Principia Desk · {} snoozed", a.label),
+            (false, crate::readiness::Readiness::Ready) => {
                 format!("Principia Desk · {} due", a.label)
+            }
+            (false, crate::readiness::Readiness::Preparing) => {
+                format!("Principia Desk · preparing {}", a.label)
+            }
+            (false, crate::readiness::Readiness::Failed) => {
+                format!("Principia Desk · {} needs a retry", a.label)
             }
         })
         .unwrap_or_else(|| "Principia Desk".into());

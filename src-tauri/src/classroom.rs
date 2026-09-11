@@ -1744,6 +1744,9 @@ pub struct StoredEngineeringLesson {
     pub title: String,
     pub markdown: String,
     pub resources: Vec<Resource>,
+    /// Points the editorial audit still wanted changed, shown to the learner.
+    #[serde(default)]
+    pub review_notes: Vec<String>,
     pub questions: Vec<StoredQuestion>,
     pub exercise: Option<Exercise>,
     pub source: String,
@@ -1794,6 +1797,9 @@ pub struct EngineeringLessonView {
     pub why_now: String,
     pub markdown: String,
     pub resources: Vec<Resource>,
+    /// Points the editorial audit still wanted changed, shown to the learner.
+    #[serde(default)]
+    pub review_notes: Vec<String>,
     pub questions: Vec<ClassroomQuestionView>,
     pub exercise: Option<Exercise>,
     /// `lesson` or `retrieval` (delayed review without a new lesson).
@@ -1885,6 +1891,7 @@ fn engineering_view(conn: &Connection, session_id: i64) -> Result<Option<Enginee
                 why_now,
                 markdown: stored.markdown,
                 resources: stored.resources,
+                review_notes: stored.review_notes,
                 questions: stored
                     .questions
                     .into_iter()
@@ -2293,6 +2300,7 @@ fn insert_engineering_session(
         title: course.title,
         markdown: course.markdown,
         resources: course.resources,
+        review_notes: course.review_notes,
         questions,
         exercise: course.exercise,
         source: source.clone(),
@@ -2563,6 +2571,7 @@ mod tests {
             key_takeaways: vec![],
             exit_questions: questions,
             exercise: None,
+            review_notes: Vec::new(),
         }
     }
 

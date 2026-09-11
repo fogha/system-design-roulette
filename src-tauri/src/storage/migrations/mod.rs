@@ -120,6 +120,15 @@ const MIGRATIONS: &[Migration] = &[
             Ok(())
         },
     },
+    Migration {
+        version: 11,
+        name: "execution_log",
+        sources: &[include_str!("011_execution_log.sql")],
+        apply: |conn| {
+            conn.execute_batch(include_str!("011_execution_log.sql"))?;
+            Ok(())
+        },
+    },
 ];
 
 pub fn enable_foreign_keys(conn: &Connection) -> Result<()> {

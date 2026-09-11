@@ -79,13 +79,20 @@
   {#if alarm}
     <section class="alarm" class:snoozed={!!alarm.snoozed_until} role="alert" aria-live="assertive" aria-label="Study alarm">
       <div class="alarm-copy">
-        <span class="mono">{alarm.snoozed_until ? `SNOOZED · RINGS AGAIN AT ${untilClock(alarm.snoozed_until)}` : 'STUDY ALARM · RINGING'}</span>
+        <span class="mono">{alarm.snoozed_until ? `SNOOZED · RINGS AGAIN AT ${untilClock(alarm.snoozed_until)}` : alarm.readiness === 'ready' ? 'STUDY ALARM · RINGING' : alarm.readiness === 'preparing' ? 'STUDY TIME · LESSON PREPARING' : 'STUDY TIME · PREPARATION FAILED'}</span>
         <strong>{alarm.label} is due{alarm.queued ? `, and ${alarm.queued} more ${alarm.queued === 1 ? 'is' : 'are'} waiting` : ''}.</strong>
-        <p>The alarm stops when you start the lesson. You can break the glass once you are in it, but not before.</p>
+        {#if alarm.readiness === 'preparing'}
+          <p>Your tutor is still preparing the lesson, so the alarm is holding. It rings the moment the lesson is ready, and starting then is immediate.</p>
+        {:else if alarm.readiness === 'failed'}
+          <p>The tutor could not prepare this lesson{alarm.error ? `: ${alarm.error.slice(0, 160)}${alarm.error.length > 160 ? '…' : ''}` : ''}. Retry prepares it again; the alarm rings once it is ready.</p>
+        {:else}
+          <p>The alarm stops when you start the lesson. You can break the glass once you are in it, but not before.</p>
+        {/if}
       </div>
       <div class="alarm-actions">
-        {#if alarmSlot}<button class="cta mono-cta" disabled={busy || !!app.preparingClass} onclick={() => start(alarmSlot)}><Play size={13} /> Start {alarm.label}</button>{/if}
-        {#if !alarm.snoozed_until}{#each [5, 10, 15] as minutes (minutes)}<button class="ghost mono-ghost" disabled={busy} onclick={() => snooze(minutes)}>Snooze {minutes} min</button>{/each}{/if}
+        {#if alarmSlot && alarm.readiness !== 'preparing'}<button class="cta mono-cta" disabled={busy || !!app.preparingClass} onclick={() => start(alarmSlot)}><Play size={13} /> {alarm.readiness === 'failed' ? `Retry ${alarm.label}` : `Start ${alarm.label}`}</button>{/if}
+        {#if alarm.readiness === 'preparing'}<span class="mono preparing-note">preparing…</span>{/if}
+        {#if !alarm.snoozed_until && alarm.readiness === 'ready'}{#each [5, 10, 15] as minutes (minutes)}<button class="ghost mono-ghost" disabled={busy} onclick={() => snooze(minutes)}>Snooze {minutes} min</button>{/each}{/if}
       </div>
     </section>
   {/if}
@@ -161,6 +168,7 @@
   .row-actions { display: flex; gap: 6px; flex-shrink: 0; }
   .alarm { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 14px 16px; border: 1px solid var(--accent); border-radius: var(--radius-panel); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
   .alarm.snoozed { border-style: dashed; background: var(--surface); }
+  .preparing-note { font-size: 10px; color: var(--muted); align-self: center; }
   .alarm-copy { display: grid; gap: 4px; min-width: 0; } .alarm-copy .mono { font-size: 9px; letter-spacing: .7px; color: var(--accent); } .alarm.snoozed .alarm-copy .mono { color: var(--muted); }
   .alarm-copy strong { font-size: 14px; } .alarm-copy p { margin: 0; font-size: 11px; color: var(--muted); line-height: 1.55; }
   .alarm-actions { display: flex; gap: 8px; flex-wrap: wrap; }

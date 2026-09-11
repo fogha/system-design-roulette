@@ -134,6 +134,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         title: format!("{} (QA reference lesson)", bundled.title),
         markdown: bundled.markdown,
         resources: bundled.resources,
+        review_notes: vec![],
         questions,
         exercise: bundled.exercise,
         source: "qa-fixture".into(),

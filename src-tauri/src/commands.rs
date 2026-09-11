@@ -364,6 +364,35 @@ pub fn size_tray_panel(app: AppHandle, height: f64) {
     crate::tray::size_panel(&app, height);
 }
 
+/// Runs the tutor made while preparing lessons, newest first.
+#[tauri::command]
+pub fn list_execution_runs(
+    state: State<'_, AppState>,
+) -> CmdResult<Vec<crate::execution_log::RunSummary>> {
+    let conn = state.db.0.lock().unwrap();
+    crate::execution_log::runs(&conn, 200).map_err(err)
+}
+
+/// Every runner line of one run, oldest first.
+#[tauri::command]
+pub fn get_execution_log(
+    state: State<'_, AppState>,
+    run_id: String,
+) -> CmdResult<Vec<crate::execution_log::LogLine>> {
+    let conn = state.db.0.lock().unwrap();
+    crate::execution_log::lines(&conn, &run_id).map_err(err)
+}
+
+/// The latest runner lines regardless of run, for a live tail.
+#[tauri::command]
+pub fn get_recent_execution_log(
+    state: State<'_, AppState>,
+    limit: Option<i64>,
+) -> CmdResult<Vec<crate::execution_log::LogLine>> {
+    let conn = state.db.0.lock().unwrap();
+    crate::execution_log::recent(&conn, limit.unwrap_or(300).clamp(1, 2_000)).map_err(err)
+}
+
 /// Hold the alarm for a fixed number of minutes. It rings again afterwards;
 /// only starting the lesson ends it.
 #[tauri::command]
@@ -422,7 +451,13 @@ fn claim_appointment(
             |r| r.get(0),
         )
         .map_err(err)?;
-    if planned_for.as_deref() != Some(found.id.as_str()) {
+    // A lesson planned for another appointment (a make-up, say) is not this
+    // one's; a lesson planned for none, such as one started by hand before the
+    // appointment came due, is exactly the lesson the appointment opens.
+    if planned_for
+        .as_deref()
+        .is_some_and(|planned| planned != found.id.as_str())
+    {
         return Ok(());
     }
     if found.disposition == "started" {
@@ -701,8 +736,9 @@ pub async fn start_classroom_session(
     revisit: Option<bool>,
     occurrence_id: Option<String>,
 ) -> CmdResult<serde_json::Value> {
-    let _start = state.class_start_gate.try_lock()
-        .map_err(|_| "A class lesson is already being prepared. Wait for it to finish before starting another.".to_string())?;
+    // A lesson may already be preparing ahead of its appointment; a Start
+    // waits for it and then opens the ready lesson at once.
+    let _start = state.class_start_gate.lock().await;
     let revisit = revisit.unwrap_or(false);
     let spec = crate::classroom::subject(subject_id.trim()).map_err(err)?;
     if let Some(holder) = state.focus.holder() {
@@ -784,7 +820,11 @@ pub async fn start_classroom_session(
                         "classroom:state",
                         serde_json::json!({ "planned": planned.id }),
                     );
-                    crate::subjects::language::prepare(&state, &planned.id).await?;
+                    *state.current_run.lock().unwrap() =
+                        Some((planned.id.0.clone(), spec.id.to_string()));
+                    let prepared = crate::subjects::language::prepare(&state, &planned.id).await;
+                    *state.current_run.lock().unwrap() = None;
+                    prepared?;
                     crate::enforcement::activate(&app, &state, &planned.id)?;
                     let conn = state.db.0.lock().unwrap();
                     crate::subjects::language::view(&conn, &planned.id)?
@@ -824,7 +864,11 @@ pub async fn start_classroom_session(
                         "classroom:state",
                         serde_json::json!({ "planned": planned.id }),
                     );
-                    crate::subjects::engineering::prepare(&state, &planned.id).await?;
+                    *state.current_run.lock().unwrap() =
+                        Some((planned.id.0.clone(), spec.id.to_string()));
+                    let prepared = crate::subjects::engineering::prepare(&state, &planned.id).await;
+                    *state.current_run.lock().unwrap() = None;
+                    prepared?;
                     crate::enforcement::activate(&app, &state, &planned.id)?;
                     let conn = state.db.0.lock().unwrap();
                     crate::subjects::engineering::view(&conn, &planned.id)?

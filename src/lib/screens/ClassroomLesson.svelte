@@ -168,6 +168,13 @@
     {#if !retrieval}<CoursePurpose whyNow={lesson.why_now} curriculum={lesson.curriculum} prerequisites={lesson.prerequisites} />{/if}
 
     <article class="reading-pane" style="font-size: var(--reading-font)">
+      {#if lesson.review_notes?.length}
+        <aside class="review-notes" aria-label="Editor's notes on this lesson">
+          <p class="mono">EDITOR'S NOTES · read these claims with care</p>
+          <p class="why">The tutor's editor asked for {lesson.review_notes.length === 1 ? 'one more change' : `${lesson.review_notes.length} more changes`} than the corrections allowed, so the lesson ships with the points listed instead of being thrown away.</p>
+          <ul>{#each lesson.review_notes as note (note)}<li>{note}</li>{/each}</ul>
+        </aside>
+      {/if}
       <Markdown markdown={lesson.markdown} />
 
       {#if lesson.resources.length && !retrieval}
@@ -242,6 +249,10 @@
 {/if}
 
 <style>
+  .review-notes { margin: 0 0 22px; padding: 14px 16px; border: 1px dashed var(--led-warn, var(--accent)); border-radius: var(--radius-panel); background: var(--warn-bg, rgba(255, 200, 100, .06)); color: var(--fg); font-size: 13px; }
+  .review-notes .mono { font-size: 9px; letter-spacing: .7px; color: var(--led-warn, var(--accent)); margin: 0 0 6px; }
+  .review-notes .why { margin: 0 0 8px; font-size: 12px; color: var(--muted); line-height: 1.55; }
+  .review-notes ul { margin: 0; padding-left: 18px; } .review-notes li { margin: 4px 0; line-height: 1.55; font-size: 12px; }
   .quality { display: flex; align-items: center; gap: 5px; color: var(--faint); font-size: 8px; }
   .chat-button {
     min-height: 32px;

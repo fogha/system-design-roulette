@@ -7,6 +7,7 @@ pub mod commands;
 pub mod db;
 pub mod domain;
 pub mod enforcement;
+pub mod execution_log;
 pub mod focus;
 pub mod generator;
 pub mod keychain;
@@ -14,6 +15,7 @@ pub mod kiosk;
 pub mod language;
 pub mod mastery;
 pub mod progress;
+pub mod readiness;
 pub mod research;
 pub mod scheduler;
 pub mod selection;
@@ -114,6 +116,11 @@ pub fn run() {
             }
             scheduler::retire_legacy();
             let conn = db::open(&database)?;
+            match execution_log::prune(&conn, chrono::Utc::now()) {
+                Ok(0) => {}
+                Ok(count) => log::info!("pruned {count} runner log line(s) past retention"),
+                Err(error) => log::warn!("could not prune the runner log: {error}"),
+            }
             match domain::sessions::release_orphaned_preparations(&conn, chrono::Utc::now()) {
                 Ok(0) => {}
                 Ok(count) => log::warn!("released {count} preparation lease(s) orphaned by the last run"),
@@ -162,7 +169,16 @@ pub fn run() {
                 let handle = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
                     while let Ok(line) = log_rx.recv().await {
-                        let _ = handle.emit("gen:log", line);
+                        let _ = handle.emit("gen:log", &line);
+                        let state = handle.state::<AppState>();
+                        let run = state.current_run.lock().unwrap().clone();
+                        let conn = state.db.0.lock().unwrap();
+                        let tagged = run.as_ref().map(|(r, c)| (r.as_str(), c.as_str()));
+                        if let Err(error) =
+                            execution_log::append(&conn, tagged, &line, chrono::Utc::now())
+                        {
+                            log::warn!("could not store a runner line: {error}");
+                        }
                     }
                 });
             }
@@ -184,6 +200,8 @@ pub fn run() {
                 alarm_ringing: AtomicBool::new(false),
                 alarm_for: Mutex::new(None),
                 panel_height: Mutex::new(600.0),
+                preparing_ahead: AtomicBool::new(false),
+                current_run: Mutex::new(None),
                 debug_day,
                 escape_failures: Mutex::new(Vec::new()),
                 prev_muted: Mutex::new(None),
@@ -238,6 +256,7 @@ pub fn run() {
                             let _ = handle.emit("classroom:owed", due);
                         }
                     }
+                    readiness::tick(&handle);
                     alarm::evaluate(&handle);
                 }
             });
@@ -262,6 +281,7 @@ pub fn run() {
                             let _ = handle.emit("classroom:owed", due);
                         }
                     }
+                    readiness::tick(&handle);
                     alarm::evaluate(&handle);
                 });
             }
@@ -362,6 +382,9 @@ pub fn run() {
             commands::skip_appointment,
             commands::snooze_alarm,
             commands::end_block,
+            commands::list_execution_runs,
+            commands::get_execution_log,
+            commands::get_recent_execution_log,
             commands::show_desk,
             commands::start_from_tray,
             commands::quit_desk,

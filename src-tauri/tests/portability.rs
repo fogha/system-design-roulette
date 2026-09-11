@@ -231,3 +231,62 @@ fn a_queued_job_belongs_to_the_machine_that_queued_it() {
     );
     assert!(archive.tables.contains_key("classroom_schedule_slots"));
 }
+
+#[test]
+fn the_execution_log_keeps_lines_per_run_and_prunes_old_ones() {
+    use principia_desk_lib::execution_log;
+    let file = path("log");
+    let conn = db::open(&file).unwrap();
+    principia_desk_lib::classroom::initialize(&conn).unwrap();
+    let now = chrono::Utc::now();
+    execution_log::append(&conn, None, "desk booted", now).unwrap();
+    execution_log::append(
+        &conn,
+        Some(("study-a", "typescript")),
+        "Claude Code · opus · lesson",
+        now,
+    )
+    .unwrap();
+    execution_log::append(
+        &conn,
+        Some(("study-a", "typescript")),
+        "finished in 41.0s",
+        now + chrono::Duration::seconds(41),
+    )
+    .unwrap();
+    execution_log::append(
+        &conn,
+        Some(("study-b", "german")),
+        "Codex · default · lesson",
+        now + chrono::Duration::seconds(60),
+    )
+    .unwrap();
+
+    let runs = execution_log::runs(&conn, 10).unwrap();
+    assert_eq!(runs.len(), 2, "lines with no run are not a run");
+    assert_eq!(runs[0].run_id, "study-b", "newest first");
+    assert_eq!(runs[1].lines, 2);
+    assert_eq!(runs[1].label, "TypeScript", "the class label, not its id");
+    assert_eq!(
+        runs[1].outcome, "unknown",
+        "no preparation job exists for a fixture run"
+    );
+
+    let lines = execution_log::lines(&conn, "study-a").unwrap();
+    assert_eq!(
+        lines.iter().map(|l| l.line.as_str()).collect::<Vec<_>>(),
+        vec!["Claude Code · opus · lesson", "finished in 41.0s"]
+    );
+    assert_eq!(execution_log::recent(&conn, 2).unwrap().len(), 2);
+
+    // Lines past retention go; recent ones stay.
+    execution_log::append(
+        &conn,
+        Some(("study-old", "typescript")),
+        "long ago",
+        now - chrono::Duration::days(40),
+    )
+    .unwrap();
+    assert_eq!(execution_log::prune(&conn, now).unwrap(), 1);
+    assert_eq!(execution_log::runs(&conn, 10).unwrap().len(), 2);
+}

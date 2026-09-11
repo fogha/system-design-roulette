@@ -52,6 +52,8 @@ fn app_state(dir: &std::path::Path, conn: Connection) -> AppState {
         alarm_ringing: AtomicBool::new(false),
         alarm_for: Mutex::new(None),
         panel_height: Mutex::new(600.0),
+        preparing_ahead: AtomicBool::new(false),
+        current_run: Mutex::new(None),
         debug_day: false,
         escape_failures: Mutex::new(vec![]),
         prev_muted: Mutex::new(None),
@@ -201,4 +203,194 @@ fn pausing_the_schedule_and_the_release_token_outrank_the_alarm() {
     let _ = std::fs::remove_file(&token);
     assert_eq!(silenced, None, "a release token silences the alarm");
     let _ = std::fs::remove_dir_all(dir);
+}
+
+/// Publish a fixture lesson for a planned session, the way the tutor would.
+fn publish(conn: &rusqlite::Connection, session: &principia_desk_lib::domain::sessions::Session) {
+    use principia_desk_lib::{
+        classroom::{StoredEngineeringLesson, StoredQuestion},
+        domain::sessions::{self, PreparedLesson},
+        subjects::engineering,
+    };
+    let now = chrono::Utc::now();
+    let lease = sessions::claim_preparation(conn, &session.id, now, 60)
+        .unwrap()
+        .unwrap();
+    let chosen = engineering::selection(session).unwrap();
+    let stored = StoredEngineeringLesson {
+        concept_id: chosen.concept_id,
+        concept_title: chosen.title.clone(),
+        category: chosen.category.clone(),
+        title: format!("{} from first principles", chosen.title),
+        markdown: "## The simple version\n\nA grounded fixture lesson.".into(),
+        resources: vec![],
+        review_notes: vec![],
+        questions: (1..=5)
+            .map(|id| StoredQuestion {
+                id,
+                prompt: format!("Question {id}"),
+                choices: vec!["right".into(), "wrong".into(), "also".into(), "no".into()],
+                correct_index: 0,
+                explanation: format!("Because of mechanism {id}."),
+                section: "Core mechanics".into(),
+                learning_objective: format!("Objective {id}"),
+            })
+            .collect(),
+        exercise: None,
+        source: "fixture".into(),
+        path: None,
+    };
+    sessions::publish_preparation(
+        conn,
+        &lease,
+        &PreparedLesson {
+            title: stored.title.clone(),
+            body: serde_json::to_value(&stored).unwrap(),
+            provenance: serde_json::json!({"kind":"fixture"}),
+        },
+        now,
+    )
+    .unwrap();
+}
+
+#[test]
+fn the_alarm_waits_for_the_lesson_and_rings_once_it_is_ready() {
+    use principia_desk_lib::{readiness, subjects::engineering};
+    let _turn = serial();
+    let (_, state) = desk_with_due_class();
+    let due = alarm::current(&state).unwrap();
+    assert_eq!(
+        due.readiness,
+        readiness::Readiness::Preparing,
+        "nothing is prepared yet"
+    );
+    assert!(
+        !due.ringing(),
+        "a due appointment without a lesson does not ring"
+    );
+
+    // The watcher wants this appointment prepared: it is due and has no lesson.
+    let wanted = readiness::wanting_preparation(&state, chrono::Utc::now());
+    assert_eq!(
+        wanted,
+        vec![(due.occurrence_id.clone(), "typescript".to_string())]
+    );
+
+    // Planning alone is still "preparing"; publishing makes it ready.
+    let planned = {
+        let conn = state.db.0.lock().unwrap();
+        let program = principia_desk_lib::classroom::program_row(&conn, "typescript").unwrap();
+        engineering::plan(
+            &conn,
+            &program,
+            None,
+            Some(due.occurrence_id.clone()),
+            &state.today(),
+            false,
+        )
+        .unwrap()
+    };
+    assert_eq!(
+        alarm::current(&state).unwrap().readiness,
+        readiness::Readiness::Preparing
+    );
+    assert!(
+        readiness::wanting_preparation(&state, chrono::Utc::now()).is_empty(),
+        "a planned lesson is not wanted twice"
+    );
+    {
+        let conn = state.db.0.lock().unwrap();
+        publish(&conn, &planned);
+    }
+    let ready = alarm::current(&state).unwrap();
+    assert_eq!(ready.readiness, readiness::Readiness::Ready);
+    assert!(ready.ringing(), "a ready lesson rings");
+
+    // A failed preparation is reported, not rung, and Start retries it.
+    let planned_again = {
+        let conn = state.db.0.lock().unwrap();
+        let program = principia_desk_lib::classroom::program_row(&conn, "typescript").unwrap();
+        // Skip the ready lesson so a fresh one can be planned and then fail.
+        engineering::skip(&conn, &planned.id).unwrap();
+        // Skipping resolved the appointment; reopen the test with a new day's appointment.
+        conn.execute("UPDATE schedule_occurrences SET disposition='due', session_ref=NULL, resolved_at=NULL WHERE id=?1", [&due.occurrence_id]).unwrap();
+        let session = engineering::plan(
+            &conn,
+            &program,
+            None,
+            Some(due.occurrence_id.clone()),
+            &state.today(),
+            false,
+        )
+        .unwrap();
+        let lease = principia_desk_lib::domain::sessions::claim_preparation(
+            &conn,
+            &session.id,
+            chrono::Utc::now(),
+            60,
+        )
+        .unwrap()
+        .unwrap();
+        principia_desk_lib::domain::sessions::fail_preparation(
+            &conn,
+            &lease,
+            "provider unavailable",
+            chrono::Utc::now(),
+        )
+        .unwrap();
+        session
+    };
+    let failed = alarm::current(&state).unwrap();
+    assert_eq!(failed.readiness, readiness::Readiness::Failed);
+    assert_eq!(failed.error.as_deref(), Some("provider unavailable"));
+    assert!(!failed.ringing());
+    let _ = planned_again;
+}
+
+#[test]
+fn a_lesson_started_by_hand_serves_the_appointment_that_comes_due_after_it() {
+    use principia_desk_lib::{readiness, subjects::engineering};
+    let _turn = serial();
+    let (_, state) = desk_with_due_class();
+    let due = alarm::current(&state).unwrap();
+
+    // The learner opened a lesson by hand before the study time: it has no
+    // appointment on it. Preparing another would be refused, so readiness
+    // reports this one, and once it is open the alarm has nothing to ring for.
+    let planned = {
+        let conn = state.db.0.lock().unwrap();
+        let program = principia_desk_lib::classroom::program_row(&conn, "typescript").unwrap();
+        engineering::plan(&conn, &program, None, None, &state.today(), false).unwrap()
+    };
+    assert_eq!(
+        engineering::selection(&planned).unwrap().occurrence_id,
+        None
+    );
+    {
+        let conn = state.db.0.lock().unwrap();
+        let seen = readiness::for_occurrence(&conn, &due.occurrence_id, "typescript");
+        assert_eq!(seen.session_id.as_deref(), Some(planned.id.0.as_str()));
+        assert_eq!(seen.readiness, readiness::Readiness::Preparing);
+    }
+    assert!(
+        readiness::wanting_preparation(&state, chrono::Utc::now()).is_empty(),
+        "the class's own lesson is the one being prepared; no second one is wanted"
+    );
+    {
+        let conn = state.db.0.lock().unwrap();
+        publish(&conn, &planned);
+    }
+    assert!(
+        alarm::current(&state).unwrap().ringing(),
+        "ready by hand still rings for the due time"
+    );
+    {
+        let conn = state.db.0.lock().unwrap();
+        engineering::activate(&conn, &planned.id).unwrap();
+    }
+    assert_eq!(
+        alarm::current(&state),
+        None,
+        "a lesson that is open is being studied; the appointment is served"
+    );
 }

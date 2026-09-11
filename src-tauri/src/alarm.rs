@@ -35,6 +35,17 @@ pub struct AlarmView {
     pub snoozed_until: Option<String>,
     /// Other appointments due behind this one.
     pub queued: usize,
+    /// Whether the lesson is ready to open. The alarm only rings when it is;
+    /// while the tutor is still writing the desk shows the delay instead.
+    pub readiness: crate::readiness::Readiness,
+    /// Why the last preparation failed, when it did.
+    pub error: Option<String>,
+}
+
+impl AlarmView {
+    pub fn ringing(&self) -> bool {
+        self.snoozed_until.is_none() && self.readiness == crate::readiness::Readiness::Ready
+    }
 }
 
 fn snooze_key(occurrence_id: &str) -> String {
@@ -71,6 +82,11 @@ pub fn current(state: &AppState) -> Option<AlarmView> {
         .into_iter()
         .filter(|slot| slot.owed && !slot.in_progress)
         .filter_map(|slot| slot.occurrence_id.clone().map(|id| (id, slot)))
+        // A class whose lesson is already open, or paused, is being studied:
+        // the appointment is served by it and there is nothing to ring for.
+        .filter(|(id, slot)| {
+            !crate::readiness::for_occurrence(&conn, id, &slot.subject_id).in_progress
+        })
         .collect();
     if due.is_empty() {
         return None;
@@ -84,12 +100,15 @@ pub fn current(state: &AppState) -> Option<AlarmView> {
         .unwrap_or(0);
     let (occurrence_id, slot) = due.swap_remove(position);
     let snoozed = snoozed_until(&conn, &occurrence_id);
+    let lesson = crate::readiness::for_occurrence(&conn, &occurrence_id, &slot.subject_id);
     Some(AlarmView {
         occurrence_id,
         course_id: slot.subject_id,
         label: slot.label,
         snoozed_until: snoozed,
         queued,
+        readiness: lesson.readiness,
+        error: lesson.error,
     })
 }
 
@@ -137,25 +156,39 @@ fn prune_snoozes(state: &AppState, keep: Option<&str>) {
 }
 
 fn notify(app: &AppHandle, view: &AlarmView) {
+    use crate::readiness::Readiness;
     use tauri_plugin_notification::NotificationExt;
-    let body = if view.queued > 0 {
-        format!(
-            "Your {} lesson is due, with {} more waiting. The alarm stops when you start.",
-            view.label, view.queued
-        )
-    } else {
-        format!(
-            "Your {} lesson is due. The alarm stops when you start.",
-            view.label
-        )
+    let (title, body) = match view.readiness {
+        Readiness::Ready => (
+            "Time to study",
+            if view.queued > 0 {
+                format!(
+                    "Your {} lesson is ready, with {} more waiting. The alarm stops when you start.",
+                    view.label, view.queued
+                )
+            } else {
+                format!(
+                    "Your {} lesson is ready. The alarm stops when you start.",
+                    view.label
+                )
+            },
+        ),
+        Readiness::Preparing => (
+            "Your lesson is on its way",
+            format!(
+                "{} is due, and your tutor is still preparing the lesson. The alarm will ring when it is ready.",
+                view.label
+            ),
+        ),
+        Readiness::Failed => (
+            "Lesson preparation failed",
+            format!(
+                "{} is due, but the tutor could not prepare the lesson. Open the desk to retry.",
+                view.label
+            ),
+        ),
     };
-    if let Err(error) = app
-        .notification()
-        .builder()
-        .title("Time to study")
-        .body(body)
-        .show()
-    {
+    if let Err(error) = app.notification().builder().title(title).body(body).show() {
         log::warn!("study notification failed: {error}");
     }
 }
@@ -235,15 +268,25 @@ pub fn evaluate(app: &AppHandle) {
     let state = app.state::<AppState>();
     let view = current(&state);
     prune_snoozes(&state, view.as_ref().map(|v| v.occurrence_id.as_str()));
-    let ringing_now = view.as_ref().is_some_and(|v| v.snoozed_until.is_none());
+    let ringing_now = view.as_ref().is_some_and(AlarmView::ringing);
     let was_ringing = state.alarm_ringing.swap(ringing_now, Ordering::SeqCst);
-    let identity = view.as_ref().map(|v| v.occurrence_id.clone());
+    // The appointment and its readiness together: a lesson becoming ready,
+    // or failing, is a change worth telling the learner about.
+    let identity = view
+        .as_ref()
+        .map(|v| format!("{}:{:?}", v.occurrence_id, v.readiness));
     let changed = {
         let mut last = state.alarm_for.lock().unwrap();
         let changed = *last != identity || (ringing_now && !was_ringing);
         *last = identity;
         changed
     };
+    // A delay or a failure is announced once; a ready lesson starts the ring.
+    if changed && !ringing_now {
+        if let Some(view) = view.as_ref().filter(|v| v.snoozed_until.is_none()) {
+            notify(app, view);
+        }
+    }
     if ringing_now && (!was_ringing || changed) {
         if let Some(view) = &view {
             notify(app, view);
