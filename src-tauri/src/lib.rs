@@ -14,8 +14,8 @@ pub mod language;
 pub mod mastery;
 pub mod progress;
 pub mod research;
-pub mod roulette;
 pub mod scheduler;
+pub mod selection;
 pub mod state;
 pub mod storage;
 pub mod subjects;
@@ -28,7 +28,7 @@ use tauri::{Emitter, Manager};
 const SEED_CONCEPTS: &str = include_str!("../seed/concepts.json");
 
 fn resolve_claude_bin() -> String {
-    if let Ok(p) = std::env::var("SDR_CLAUDE_BIN") {
+    if let Ok(p) = std::env::var("PRINCIPIA_CLAUDE_BIN") {
         return p;
     }
     let home = std::env::var("HOME").unwrap_or_default();
@@ -46,7 +46,7 @@ fn resolve_claude_bin() -> String {
 }
 
 fn resolve_codex_bin(conn: &rusqlite::Connection) -> Option<String> {
-    match std::env::var("SDR_CODEX_BIN").as_deref() {
+    match std::env::var("PRINCIPIA_CODEX_BIN").as_deref() {
         Ok("none") => return Some("none".into()),
         Ok(p) => return Some(p.to_string()),
         _ => {}
@@ -103,7 +103,14 @@ pub fn run() {
             log::info!("initializing local study storage");
             let data_dir = app.path().app_data_dir().expect("app data dir resolvable");
             std::fs::create_dir_all(&data_dir)?;
-            let conn = db::open(&data_dir.join("roulette.db"))?;
+            let database = data_dir.join("principia.db");
+            match storage::adoption::adopt(&data_dir, &database) {
+                Ok(Some(source)) => log::info!("adopted the profile from {}", source.display()),
+                Ok(None) => {}
+                Err(error) => log::error!("could not adopt the earlier profile: {error}"),
+            }
+            scheduler::retire_legacy();
+            let conn = db::open(&database)?;
             db::seed_concepts(&conn, SEED_CONCEPTS)?;
             let startup_today = chrono::Local::now().format("%Y-%m-%d").to_string();
             language::initialize(&conn, &startup_today).map_err(std::io::Error::other)?;
@@ -160,7 +167,7 @@ pub fn run() {
                 custom_bin,
                 Some(log_tx),
             );
-            generator.runner.database = Some(data_dir.join("roulette.db"));
+            generator.runner.database = Some(data_dir.join("principia.db"));
             app.manage(AppState {
                 db: db::Db(Mutex::new(conn)),
                 generator,
@@ -305,6 +312,10 @@ pub fn run() {
             commands::agents::get_agent_policy,
             commands::agents::set_agent_policy,
             commands::complete_setup,
+            commands::portability::export_profile,
+            commands::portability::inspect_archive,
+            commands::portability::import_profile,
+            commands::portability::reveal_export,
             commands::get_curriculum_map,
             commands::configure_classroom_program,
             commands::upsert_classroom_slot,

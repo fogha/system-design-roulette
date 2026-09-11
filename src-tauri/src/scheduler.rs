@@ -8,9 +8,13 @@
 //! - Linux  → systemd user timer (`~/.config/systemd/user/<UNIT>.{service,timer}`)
 //! - Windows→ Task Scheduler entry (`schtasks`, task name = PRODUCT)
 
-pub const LABEL: &str = "com.darkmatter.system-design-roulette";
+pub const LABEL: &str = "com.darkmatter.principia-desk";
+/// The launch identity used before the rename, removed on first launch.
+pub const LEGACY_LABEL: &str = "com.darkmatter.system-design-roulette";
 // Existing Windows task identity: changing the display name must not duplicate schedules.
-pub const PRODUCT: &str = "System Design Roulette";
+pub const PRODUCT: &str = "Principia Desk";
+/// The scheduled-task name used before the rename.
+pub const LEGACY_PRODUCT: &str = "System Design Roulette";
 
 #[cfg(any(target_os = "macos", target_os = "windows", test))]
 fn xml_escape(value: &str) -> String {
@@ -111,6 +115,12 @@ pub fn install(hour: u32, minute: u32) -> Result<(), String> {
 }
 
 /// Write/refresh all enabled daily trigger times. Duplicate times are removed.
+/// Retire the wake-up installed under the identity used before the rename, so
+/// a machine never carries two agents for the same desk.
+pub fn retire_legacy() {
+    imp::retire_legacy();
+}
+
 pub fn install_many(times: &[(u32, u32)]) -> Result<(), String> {
     let times = normalize_times(times)?;
     if times.is_empty() {
@@ -170,7 +180,7 @@ mod imp {
     use std::process::Command;
 
     pub fn default_exe_path() -> String {
-        "/Applications/Principia Desk.app/Contents/MacOS/system-design-roulette".into()
+        "/Applications/Principia Desk.app/Contents/MacOS/principia-desk".into()
     }
 
     fn plist_path() -> Option<PathBuf> {
@@ -214,12 +224,35 @@ mod imp {
   </array>
   <key>RunAtLoad</key><true/>
   <key>ProcessType</key><string>Interactive</string>
-  <key>StandardOutPath</key><string>/tmp/sdroulette.launchd.log</string>
-  <key>StandardErrorPath</key><string>/tmp/sdroulette.launchd.log</string>
+  <key>StandardOutPath</key><string>/tmp/principia-desk.launchd.log</string>
+  <key>StandardErrorPath</key><string>/tmp/principia-desk.launchd.log</string>
 </dict>
 </plist>
 "#
         )
+    }
+
+    /// Unload and delete the agent installed under the pre-rename identity so
+    /// one machine never holds two agents for the same desk.
+    pub fn retire_legacy() {
+        let Some(home) = std::env::var_os("HOME") else {
+            return;
+        };
+        let path = PathBuf::from(home)
+            .join("Library/LaunchAgents")
+            .join(format!("{}.plist", super::LEGACY_LABEL));
+        if !path.exists() {
+            return;
+        }
+        let _ = Command::new("launchctl")
+            .args([
+                "bootout",
+                &format!("gui/{}/{}", get_uid(), super::LEGACY_LABEL),
+            ])
+            .output();
+        if std::fs::remove_file(&path).is_ok() {
+            log::info!("removed the launch agent from before the rename");
+        }
     }
 
     pub fn install_many(times: &[(u32, u32)]) -> Result<(), String> {
@@ -296,10 +329,38 @@ mod imp {
     use std::path::PathBuf;
     use std::process::Command;
 
-    const UNIT: &str = "system-design-roulette";
+    const UNIT: &str = "principia-desk";
+    const LEGACY_UNIT: &str = "system-design-roulette";
+
+    /// Stop and delete the timer installed under the name used before the
+    /// rename, so one account never carries two timers for the same desk.
+    pub fn retire_legacy() {
+        let Some(dir) = unit_dir() else {
+            return;
+        };
+        let service = dir.join(format!("{LEGACY_UNIT}.service"));
+        let timer = dir.join(format!("{LEGACY_UNIT}.timer"));
+        if !service.exists() && !timer.exists() {
+            return;
+        }
+        let _ = Command::new("systemctl")
+            .args([
+                "--user",
+                "disable",
+                "--now",
+                &format!("{LEGACY_UNIT}.timer"),
+            ])
+            .output();
+        let _ = std::fs::remove_file(&service);
+        let _ = std::fs::remove_file(&timer);
+        let _ = Command::new("systemctl")
+            .args(["--user", "daemon-reload"])
+            .output();
+        log::info!("removed the systemd timer from before the rename");
+    }
 
     pub fn default_exe_path() -> String {
-        "/usr/bin/system-design-roulette".into()
+        "/usr/bin/principia-desk".into()
     }
 
     fn unit_dir() -> Option<PathBuf> {
@@ -409,7 +470,24 @@ mod imp {
     use std::process::Command;
 
     pub fn default_exe_path() -> String {
-        "system-design-roulette.exe".into()
+        "principia-desk.exe".into()
+    }
+
+    /// Delete the scheduled task registered under the name used before the
+    /// rename, so one account never carries two tasks for the same desk.
+    pub fn retire_legacy() {
+        let present = Command::new("schtasks")
+            .args(["/Query", "/TN", super::LEGACY_PRODUCT])
+            .output()
+            .map(|out| out.status.success())
+            .unwrap_or(false);
+        if !present {
+            return;
+        }
+        let _ = Command::new("schtasks")
+            .args(["/Delete", "/TN", super::LEGACY_PRODUCT, "/F"])
+            .output();
+        log::info!("removed the scheduled task from before the rename");
     }
 
     pub fn install_many(times: &[(u32, u32)]) -> Result<(), String> {
@@ -504,7 +582,7 @@ mod imp {
 #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
 mod imp {
     pub fn default_exe_path() -> String {
-        "system-design-roulette".into()
+        "principia-desk".into()
     }
     pub fn install_many(_times: &[(u32, u32)]) -> Result<(), String> {
         Err("scheduling is not supported on this platform".into())

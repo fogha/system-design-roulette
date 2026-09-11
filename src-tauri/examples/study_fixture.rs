@@ -2,14 +2,14 @@
 //! bundled reference lesson into a class's planned session (or fail that
 //! preparation on request) without a provider, webview or OS enforcement.
 //! Run against a disposable QA database while the app is closed.
-use std::path::PathBuf;
-use system_design_roulette_lib::{
+use principia_desk_lib::{
     classroom::{self, StoredEngineeringLesson, StoredQuestion},
     db,
     domain::sessions::{self, PreparedLesson, Status},
     generator,
     subjects::engineering,
 };
+use std::path::PathBuf;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<_> = std::env::args().skip(1).collect();
@@ -29,7 +29,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Dispose of the class's resumable session through the real skip path
         // so its projections and appointment resolve exactly as in the app.
         let resumable = if program.kind == "language" {
-            system_design_roulette_lib::subjects::language::resumable(&conn, subject)?
+            principia_desk_lib::subjects::language::resumable(&conn, subject)?
         } else {
             engineering::resumable(&conn, subject)?
         };
@@ -49,7 +49,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     if program.kind == "language" {
         // Language lessons publish their curated seed without a tutor call.
-        use system_design_roulette_lib::subjects::language;
+        use principia_desk_lib::subjects::language;
         let session = match language::resumable(&conn, subject)? {
             Some(session) => session,
             None => language::plan(&conn, &program, None, None, &today, false)?,

@@ -1,6 +1,6 @@
+use principia_desk_lib::{catalog, classroom, db, language, research};
 use rusqlite::{params, Connection};
 use serde_json::Value;
-use system_design_roulette_lib::{catalog, classroom, db, language, research};
 
 const SEED: &str = include_str!("../seed/concepts.json");
 static SERIAL: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);

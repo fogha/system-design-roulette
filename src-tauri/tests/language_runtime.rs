@@ -1,6 +1,5 @@
 //! CEFR language classes on the shared study runtime.
-use rusqlite::Connection;
-use system_design_roulette_lib::{
+use principia_desk_lib::{
     classroom::{self, ConfigureClassroomInput, UpsertClassroomSlotInput},
     db,
     domain::{
@@ -12,6 +11,7 @@ use system_design_roulette_lib::{
     progress::{self, ProgressQuery},
     subjects::language as adapter,
 };
+use rusqlite::Connection;
 
 const TODAY: &str = "2026-07-21";
 

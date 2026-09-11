@@ -1,8 +1,5 @@
 use chrono::{DateTime, Duration, Utc};
-use rusqlite::{params, Connection};
-use serde_json::json;
-use std::sync::{Arc, Barrier};
-use system_design_roulette_lib::{
+use principia_desk_lib::{
     classroom, db,
     domain::{
         classes::{self, AcceptPath},
@@ -15,6 +12,9 @@ use system_design_roulette_lib::{
     },
     language,
 };
+use rusqlite::{params, Connection};
+use serde_json::json;
+use std::sync::{Arc, Barrier};
 
 fn now() -> DateTime<Utc> {
     "2026-09-09T23:59:50Z".parse().unwrap()
@@ -33,7 +33,7 @@ fn fixture() -> (std::path::PathBuf, Connection) {
 fn request(conn: &Connection, course: &str, entry: &str) -> PlanSession {
     if !classroom::has_enabled_schedule(conn, course).unwrap() {
         // Active classes may not overlap, so each course keeps its own hour.
-        let hour = 6 + system_design_roulette_lib::catalog::COURSES
+        let hour = 6 + principia_desk_lib::catalog::COURSES
             .iter()
             .position(|c| c.id == course)
             .unwrap_or(0) as u32;
@@ -545,7 +545,7 @@ fn competing_checkpoint_writes_do_not_silently_replace_each_other() {
 
 #[test]
 fn shared_assessments_commit_with_session_results_and_pending_rounds_block_completion() {
-    use system_design_roulette_lib::domain::assessments::{
+    use principia_desk_lib::domain::assessments::{
         self, Item, Owner, Purpose, Response, ResponseStatus,
     };
     let (_, conn) = fixture();
@@ -644,7 +644,7 @@ fn shared_assessments_commit_with_session_results_and_pending_rounds_block_compl
 
 #[test]
 fn skipping_a_lesson_retains_its_unsubmitted_answers_and_does_not_cancel_class_placement() {
-    use system_design_roulette_lib::domain::assessments::{
+    use principia_desk_lib::domain::assessments::{
         self, Item, Owner, Purpose, Response, ResponseStatus,
     };
     let (_, conn) = fixture();

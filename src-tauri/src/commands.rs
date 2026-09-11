@@ -10,6 +10,7 @@ use tauri::{AppHandle, Emitter, State};
 
 type CmdResult<T> = Result<T, String>;
 pub mod placement;
+pub mod portability;
 
 #[tauri::command]
 pub fn get_enrollment_options(
@@ -60,7 +61,7 @@ pub struct AppStateView {
     pub schedule_minute: u32,
     pub agent_ok: Option<bool>,
     pub debug_day: bool,
-    /// ~/sdr-unlock exists: every lock releases instantly. Surfaced so a
+    /// A release token exists: every lock releases instantly. Surfaced so a
     /// leftover emergency file can't silently neuter enforcement.
     pub enforcement_disarmed: bool,
     /// Scheduler paused: no launchd agent, no owed sessions, until resumed.

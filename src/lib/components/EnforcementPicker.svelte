@@ -58,7 +58,7 @@
   <div class="hard-warn mono">
     <TriangleAlert size={11} /> HARD means it: while locked, this machine does nothing else. If the app ever misbehaves
     mid-lock, recovery needs another machine or Safe Mode (see README → Recovery). The
-    white-screen guard and the ~/sdr-unlock back door remain as last resorts.
+    white-screen guard and the ~/principia-unlock release token remain as last resorts.
   </div>
 {/if}
 

@@ -1,5 +1,4 @@
-use rusqlite::{params, Connection};
-use system_design_roulette_lib::{
+use principia_desk_lib::{
     catalog, classroom, db,
     domain::{
         classes::{self, AcceptPath, PathChange, RevisePath},
@@ -9,6 +8,7 @@ use system_design_roulette_lib::{
     },
     language,
 };
+use rusqlite::{params, Connection};
 
 fn fixture() -> (std::path::PathBuf, Connection) {
     let path = std::env::temp_dir().join(format!(
@@ -329,7 +329,7 @@ fn class_settings_stay_atomic_and_mutable_without_rewriting_the_accepted_path() 
 
 #[test]
 fn diagnostic_acceptance_keeps_its_evidence_and_rejects_changed_setup() {
-    use system_design_roulette_lib::domain::assessments::{Response, ResponseStatus};
+    use principia_desk_lib::domain::assessments::{Response, ResponseStatus};
     let (_, conn) = fixture();
     let options = enrollment::options("linux-bash").unwrap();
     let mut configuration = options.default_configuration;

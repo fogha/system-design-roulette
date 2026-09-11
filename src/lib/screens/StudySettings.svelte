@@ -22,7 +22,7 @@
     <RunnerFallback />
   </section></FlowStage>
   <FlowStage number="02" last><section aria-label="Recovery"><NodeCard Icon={ShieldAlert} name="break-glass" badge={app.state?.enforcement_disarmed ? 'disarmed' : 'standby'} badgeTone="red">
-    <div class="recovery"><span class="recovery-tag mono">RECOVERY</span><div><p>Your emergency phrase and <code>~/sdr-unlock</code> recovery file remain available during enforced study.</p><p class="mono">{app.state?.enforcement_disarmed ? 'Enforcement disarmed · recovery file present' : 'Recovery file absent'}</p></div></div>
+    <div class="recovery"><span class="recovery-tag mono">RECOVERY</span><div><p>Your emergency phrase and <code>principia-unlock</code> release token remain available during enforced study.</p><p class="mono">{app.state?.enforcement_disarmed ? 'Enforcement disarmed · recovery file present' : 'Recovery file absent'}</p></div></div>
   </NodeCard></section></FlowStage>
 </div>
 <style>

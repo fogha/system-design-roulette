@@ -1,6 +1,5 @@
 //! Focus ownership rules for class sessions, independent of any OS lock.
-use rusqlite::Connection;
-use system_design_roulette_lib::{
+use principia_desk_lib::{
     classroom::{
         self, ConfigureClassroomInput, StoredEngineeringLesson, StoredQuestion,
         UpsertClassroomSlotInput,
@@ -17,6 +16,7 @@ use system_design_roulette_lib::{
     language,
     subjects::engineering,
 };
+use rusqlite::Connection;
 
 const TODAY: &str = "2026-09-14";
 

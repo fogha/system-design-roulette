@@ -1,9 +1,7 @@
 //! Exercise the production runner transport against an explicit QA database.
 //! Inventory is read-only; --live sends a bounded connection prompt for saved models.
+use principia_desk_lib::agents::{self, configuration, Route, RunRequest, Runner, RunnerId};
 use std::path::PathBuf;
-use system_design_roulette_lib::agents::{
-    self, configuration, Route, RunRequest, Runner, RunnerId,
-};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

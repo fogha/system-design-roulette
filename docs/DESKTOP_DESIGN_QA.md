@@ -3,8 +3,9 @@
 Tested the packaged macOS Tauri app from `tauri://localhost`, using the real Rust
 commands and SQLite storage. The QA build uses identifier
 `com.darkmatter.principia-desk.qa`, separate from the existing production data.
-The shipping identifier remains `com.darkmatter.system-design-roulette` so the
-display-name change does not move or strand existing study history.
+The shipping identifier was `com.darkmatter.system-design-roulette` when this
+check ran; it is now `com.darkmatter.principia-desk`, and the first launch under
+the new identity adopts the profile written under the old one.
 
 The native display name is **Principia Desk**. The original blueprint grid,
 Fraunces headings, compact mono controls, node panels and app mark remain the

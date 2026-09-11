@@ -306,7 +306,7 @@ impl Researcher {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(20))
             .user_agent(
-                "system-design-roulette/0.1 (personal learning app; +https://developer.mozilla.org)",
+                "principia-desk/0.1 (personal learning app; +https://developer.mozilla.org)",
             )
             .build()
             .unwrap_or_default();

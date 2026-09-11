@@ -1,6 +1,6 @@
-use system_design_roulette_lib::classroom;
-use system_design_roulette_lib::db::{self, Session};
-use system_design_roulette_lib::language::{self, ConfigureProgramInput, SubmitSessionInput};
+use principia_desk_lib::classroom;
+use principia_desk_lib::db::{self, Session};
+use principia_desk_lib::language::{self, ConfigureProgramInput, SubmitSessionInput};
 
 static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 

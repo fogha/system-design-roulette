@@ -4,7 +4,7 @@ The packaged macOS app was tested through its native window at `tauri://localhos
 using Rust IPC and SQLite. The isolated identifier was
 `com.darkmatter.principia-desk.assessment-qa`; production data was not opened or
 modified. A SQLite backup of the prior design QA profile supplied a v2 upgrade
-fixture. Fixed local questions and future `SDR_DATE` values kept the test separate
+fixture. Fixed local questions and future `PRINCIPIA_DATE` values kept the test separate
 from existing study records. `--debug-day` disabled kiosk and scheduler changes.
 Provider executables were unavailable stubs, with no live grading calls.
 
@@ -148,7 +148,7 @@ Used a separate profile, `com.darkmatter.principia-desk.primary-id-qa`, copied w
 SQLite's backup API from the earlier isolated v6 assessment profile. Added only
 synthetic QA rows: a prepared September 19 JavaScript reader and a separate
 September 20 TypeScript pending row. Launch Services started the packaged app
-with `SDR_DATE=2026-09-20`, disabled Claude/Codex executables and `--debug-day`.
+with `PRINCIPIA_DATE=2026-09-20`, disabled Claude/Codex executables and `--debug-day`.
 This is a controlled service-date test, not a timezone/DST test.
 
 The v7 upgrade retained a v6 backup, generated distinct primary IDs, passed SQLite
@@ -180,7 +180,7 @@ six live/external tests ignored, 52 frontend tests passed, no Svelte diagnostics
 and strict Clippy passed.
 
 The final feedback integration was also checked in the packaged desktop app under
-`SDR_DATE=2026-10-03`: it restored the existing three-item review directly from
+`PRINCIPIA_DATE=2026-10-03`: it restored the existing three-item review directly from
 native storage, displayed the saved `let` answers and moved to the second item.
 Cmd-Q exited normally. Screen components now remount on owner changes; a frontend
 regression rejects out-of-order refresh replies and foreign timer events. Reader
@@ -272,7 +272,7 @@ JavaScript & Browser (09:30) and German (10:00) active on weekdays:
 - A normal launch materialized one appointment per rule for the day, all `due`
   with the `+01:00` offset snapshot, and Today's scheduler read "due now" for
   the three classes (screenshot 41).
-- Relaunching under `SDR_DATE=2026-09-11` marked the three unstarted
+- Relaunching under `PRINCIPIA_DATE=2026-09-11` marked the three unstarted
   appointments `missed` and created the new day's three as `scheduled`. Today's
   agenda listed the missed rows with Make up and Skip beneath the new day's
   due rows (screenshot 43).

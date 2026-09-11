@@ -1,9 +1,7 @@
 //! Engineering classes on the shared study runtime: planning on the accepted
 //! path, frozen checks, saved work, transactional completion and the readers
 //! that must switch together with the writer.
-use rusqlite::{params, Connection};
-use serde_json::json;
-use system_design_roulette_lib::{
+use principia_desk_lib::{
     classroom::{
         self, ConfigureClassroomInput, StoredEngineeringLesson, StoredQuestion,
         UpsertClassroomSlotInput,
@@ -18,6 +16,8 @@ use system_design_roulette_lib::{
     progress::{self, ProgressQuery},
     subjects::engineering,
 };
+use rusqlite::{params, Connection};
+use serde_json::json;
 
 const TODAY: &str = "2026-07-21";
 
@@ -98,7 +98,7 @@ fn lesson_for(session: &Session) -> StoredEngineeringLesson {
                 learning_objective: format!("Objective {id}"),
             })
             .collect(),
-        exercise: Some(system_design_roulette_lib::generator::Exercise {
+        exercise: Some(principia_desk_lib::generator::Exercise {
             title: "Build the probe".into(),
             instructions: "Implement it.".into(),
             starter_code: Some("echo start".into()),
@@ -556,8 +556,7 @@ fn a_due_topic_gets_a_retrieval_session_from_fresh_or_repeated_material() {
     // questions repeat and the review says so.
     engineering::prepare_review(&conn, &review.id).unwrap();
     let view = engineering::view(&conn, &review.id).unwrap().unwrap();
-    let bundled =
-        system_design_roulette_lib::generator::fallback_for_slug("typescript", &slug).is_some();
+    let bundled = principia_desk_lib::generator::fallback_for_slug("typescript", &slug).is_some();
     assert_eq!(view.kind, "retrieval");
     assert!(view.exercise.is_none() && !view.questions.is_empty());
     assert_eq!(view.fresh_sample, bundled);

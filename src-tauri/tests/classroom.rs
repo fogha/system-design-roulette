@@ -1,12 +1,12 @@
-use rusqlite::params;
-use system_design_roulette_lib::{
+use principia_desk_lib::{
     classroom::{
         self, AvailabilityWindowInput, ConfigureClassroomInput, PlanClassroomScheduleInput,
         UpsertClassroomSlotInput, SUBJECTS,
     },
     db::{self, Session},
-    language, mastery, roulette,
+    language, mastery, selection,
 };
+use rusqlite::params;
 
 static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
@@ -868,11 +868,11 @@ fn completed_modules_are_never_redrawn_automatically() {
         [],
     )
     .unwrap();
-    assert!(!roulette::drawable_exists(&conn, "javascript").unwrap());
-    assert!(roulette::draw(&conn, "2026-07-22", "javascript")
+    assert!(!selection::drawable_exists(&conn, "javascript").unwrap());
+    assert!(selection::draw(&conn, "2026-07-22", "javascript")
         .unwrap()
         .is_none());
-    let revisited = roulette::draw_completed(&conn, "2026-07-22", "javascript")
+    let revisited = selection::draw_completed(&conn, "2026-07-22", "javascript")
         .unwrap()
         .expect("explicit revisit serves a completed module");
     assert_eq!(revisited.focus, "javascript");
@@ -900,9 +900,9 @@ fn decayed_modules_return_but_mastered_ones_do_not() {
         [decayed_id],
     )
     .unwrap();
-    assert!(roulette::drawable_exists(&conn, "javascript").unwrap());
+    assert!(selection::drawable_exists(&conn, "javascript").unwrap());
     for _ in 0..10 {
-        let drawn = roulette::draw(&conn, "2026-07-22", "javascript")
+        let drawn = selection::draw(&conn, "2026-07-22", "javascript")
             .unwrap()
             .expect("the decayed module is drawable");
         assert_eq!(
@@ -1293,7 +1293,7 @@ fn planner_previews_conflicts_without_writing_and_refuses_to_commit_them() {
 
 #[test]
 fn accepting_a_path_saves_it_without_activating_an_overlapping_class() {
-    use system_design_roulette_lib::domain::{
+    use principia_desk_lib::domain::{
         classes::{self, AcceptPath},
         enrollment::{self, SaveEnrollmentDraft},
         placement,

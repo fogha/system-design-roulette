@@ -1,6 +1,6 @@
+use principia_desk_lib::db;
 use rusqlite::{types::Value, Connection};
 use std::path::PathBuf;
-use system_design_roulette_lib::db;
 
 static SERIAL: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 fn path() -> PathBuf {

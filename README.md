@@ -60,8 +60,8 @@ Strict mode blocks Cmd+Tab, Force Quit and logout, so it must never be the only 
 
 1. **Finish the check.**
 2. **Break glass.** A dim link reveals a long phrase rendered as non-copyable SVG (paste disabled). Typing it pauses the focused class lesson with its work kept and releases the lock; three wrong attempts lock the input for 60 seconds.
-3. **A release token.** Create a file or folder named `sdr-unlock` in any of these places and the lock releases within a second:
-   - your home directory (`touch ~/sdr-unlock`),
+3. **A release token.** Create a file or folder named `principia-unlock` in any of these places and the lock releases within a second:
+   - your home directory (`touch ~/principia-unlock`),
    - the temporary directory (`/tmp` on macOS and Linux),
    - **the root of any mounted volume** — a USB stick, an external disk, a mounted share.
 
@@ -76,12 +76,12 @@ The kiosk refuses to engage until the webview reports ready (white-screen guard)
 
 1. **Plug in the release stick** described above, or create the file from another machine over SSH or Screen Sharing:
    ```bash
-   touch ~/sdr-unlock
-   launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.darkmatter.system-design-roulette.plist
-   rm -f ~/Library/LaunchAgents/com.darkmatter.system-design-roulette.plist
+   touch ~/principia-unlock
+   launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.darkmatter.principia-desk.plist
+   rm -f ~/Library/LaunchAgents/com.darkmatter.principia-desk.plist
    ```
 2. **Safe Mode** (Apple Silicon: hold power → pick disk → hold Shift): third-party LaunchAgents do not load. Run the same commands in Terminal, reboot.
-3. **Recovery Mode Terminal**: `rm "/Volumes/Macintosh HD/Users/<you>/Library/LaunchAgents/com.darkmatter.system-design-roulette.plist"` and `touch "/Volumes/Macintosh HD/Users/<you>/sdr-unlock"`, then reboot.
+3. **Recovery Mode Terminal**: `rm "/Volumes/Macintosh HD/Users/<you>/Library/LaunchAgents/com.darkmatter.principia-desk.plist"` and `touch "/Volumes/Macintosh HD/Users/<you>/principia-unlock"`, then reboot.
 
 Nothing here depends on the app being healthy: the token is checked by the same loop that holds focus, and the dead man's switch fires without any input at all.
 
@@ -103,7 +103,7 @@ Every concept carries a specific curriculum brief: learner outcome, named mechan
 
 ## Scheduling
 
-A launchd LaunchAgent (`~/Library/LaunchAgents/com.darkmatter.system-design-roulette.plist`, a compatibility identifier kept across the rename) fires the app at every enabled study time with one `StartCalendarInterval` array:
+A launchd LaunchAgent (`~/Library/LaunchAgents/com.darkmatter.principia-desk.plist`) fires the app at every enabled study time with one `StartCalendarInterval` array:
 
 - A time missed while **asleep** fires on wake; missed while **powered off** fires at next login, and the app materializes the day's appointments on every launch and every 60 s.
 - Already running: an in-app watcher marks appointments due at the scheduled minute; focused and strict classes engage the kiosk when their session activates.
@@ -117,7 +117,7 @@ A launchd LaunchAgent (`~/Library/LaunchAgents/com.darkmatter.system-design-roul
 - A supported CLI, a provider API key, or Ollama with a downloaded chat model.
 - To build: Rust 1.80+, Node 20+.
 
-For an installed app, choose **My own API key** in Settings and save a key for the provider you want. Keys use the `system-design-roulette` Keychain service (a compatibility identifier) with separate `<provider>_api_key` accounts. On other platforms, supply `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY` (or `GEMINI_API_KEY`), `OPENROUTER_API_KEY`, `GROQ_API_KEY`, `MISTRAL_API_KEY` or `DEEPSEEK_API_KEY` to the process.
+For an installed app, choose **My own API key** in Settings and save a key for the provider you want. Keys use the `principia-desk` Keychain service with separate `<provider>_api_key` accounts; a key saved under the previous service name is still read, so an upgrade never looks like a lost key. On other platforms, supply `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY` (or `GEMINI_API_KEY`), `OPENROUTER_API_KEY`, `GROQ_API_KEY`, `MISTRAL_API_KEY` or `DEEPSEEK_API_KEY` to the process.
 
 ### Build from source
 
@@ -135,7 +135,14 @@ Launch it, complete the setup (escape phrase and tutor check), add a class with 
 
 ### Upgrading from System Design Roulette
 
-The display name changed; the bundle identifier (`com.darkmatter.system-design-roulette`), application-data path, Keychain service, recovery file and scheduler identity did not. An upgrade opens the same database, applies numbered migrations after a pre-upgrade backup, imports finished daily-routine sessions into the shared runtime once, and replaces the existing launch agent rather than installing a second one. See [docs/STORAGE.md](docs/STORAGE.md).
+The product carried its old identifiers for a while so a rename could not strand anyone's history. They have now moved with the name, and the first launch under the new identity brings the old profile across rather than starting you empty:
+
+- The bundle identifier is `com.darkmatter.principia-desk` and the database is `principia.db`. If this build finds no profile of its own, it takes a consolidated copy of the one written under the old identifier, including anything still in its write-ahead log, and leaves the original untouched.
+- The Keychain service is `principia-desk`. Reads fall back to the old service, so saved provider keys keep working.
+- The launch agent is `com.darkmatter.principia-desk`. The agent installed under the old identity is unloaded and deleted on first launch, so a machine never carries two.
+- The release token is `principia-unlock`, and a stick prepared with the old `sdr-unlock` name still frees a locked desk.
+
+Numbered migrations still run after a pre-upgrade backup, and finished daily-routine sessions still import into the shared runtime once. See [docs/STORAGE.md](docs/STORAGE.md).
 
 ## Architecture
 
@@ -179,12 +186,12 @@ Useful flags and env vars:
 |---|---|
 | `--debug-day` | No OS lock (the focus coordinator only records the lock), schedule ignored |
 | `--triggered` | What launchd passes; goes straight to the appointment check |
-| `SDR_DATE=2026-06-12` | Override "today" for multi-day flows |
-| `SDR_CLAUDE_BIN=/path` | Override the Claude binary (`/usr/bin/false` makes preparation fail deliberately) |
-| `SDR_CODEX_BIN=none` | Disable the Codex runner |
+| `PRINCIPIA_DATE=2026-06-12` | Override "today" for multi-day flows |
+| `PRINCIPIA_CLAUDE_BIN=/path` | Override the Claude binary (`/usr/bin/false` makes preparation fail deliberately) |
+| `PRINCIPIA_CODEX_BIN=none` | Disable the Codex runner |
 | `DEEPSEEK_API_KEY=...` | Authenticate DeepSeek for the whole process |
 | `OLLAMA_URL=http://127.0.0.1:11434` | Optional loopback Ollama endpoint; remote endpoints are rejected for the local route |
-| `touch ~/sdr-unlock` | Instantly release the kiosk lock |
+| `touch ~/principia-unlock` | Instantly release the kiosk lock |
 
 The `study_fixture` example publishes a bundled reference lesson into a class's planned session without a provider (`cargo run --example study_fixture -- <db> <subject> [--fail|--skip]`), which is how the desktop checks in `docs/DESKTOP_ASSESSMENT_QA.md` were run against an isolated profile. Demo mode in a plain browser serves canned data from `src/lib/mock.ts` with the same contracts as the native commands.
 

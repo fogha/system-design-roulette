@@ -4,7 +4,7 @@
 //!
 //! Run with: `cargo test --test research_live -- --ignored --nocapture`
 
-use system_design_roulette_lib::{db, generator, research};
+use principia_desk_lib::{db, generator, research};
 
 struct SeedConcept {
     title: String,

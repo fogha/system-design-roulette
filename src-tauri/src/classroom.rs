@@ -1,5 +1,5 @@
 use crate::generator::{Exercise, GeneratedCourse, GenerationProfile, Resource};
-use crate::{db, language, mastery, roulette, state::AppState};
+use crate::{db, language, mastery, selection, state::AppState};
 use chrono::{Datelike, Duration, Local, NaiveDateTime, Timelike, Weekday};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
@@ -1382,7 +1382,7 @@ pub fn curriculum_map(conn: &Connection, focus: &str) -> Result<CurriculumMapVie
         list.iter().any(|t| t.id == slug)
     };
     for concept in &mut concepts {
-        let completed = crate::roulette::is_completed(&concept.mastery_state);
+        let completed = crate::selection::is_completed(&concept.mastery_state);
         let slug = concept.slug.as_str();
         let (status, on_route) = match plan {
             _ if completed => ("completed_here", true),
@@ -1412,7 +1412,7 @@ pub fn curriculum_map(conn: &Connection, focus: &str) -> Result<CurriculumMapVie
         let plan = &path.recommendation;
         let core = concepts.iter().filter(|c| c.core);
         let on_route = |c: &&CurriculumConceptView| {
-            crate::roulette::is_completed(&c.mastery_state)
+            crate::selection::is_completed(&c.mastery_state)
                 || !(listed(&plan.earlier_topics, &c.slug)
                     || listed(&plan.bypassed, &c.slug)
                     || listed(&plan.checked, &c.slug))
@@ -1424,12 +1424,12 @@ pub fn curriculum_map(conn: &Connection, focus: &str) -> Result<CurriculumMapVie
             required_done: core
                 .clone()
                 .filter(on_route)
-                .filter(|c| crate::roulette::is_completed(&c.mastery_state))
+                .filter(|c| crate::selection::is_completed(&c.mastery_state))
                 .count(),
             coverage_total: core.clone().count(),
             coverage_done: core
                 .clone()
-                .filter(|c| crate::roulette::is_completed(&c.mastery_state))
+                .filter(|c| crate::selection::is_completed(&c.mastery_state))
                 .count(),
             bypassed: concepts
                 .iter()
@@ -2046,7 +2046,7 @@ pub async fn start_engineering_session(
         }
         let concept = {
             let drawn = if revisit {
-                roulette::draw_completed(&conn, &state.today(), subject_id)
+                selection::draw_completed(&conn, &state.today(), subject_id)
             } else {
                 crate::domain::classes::next_concept(&conn, subject_id, &state.today())
             }

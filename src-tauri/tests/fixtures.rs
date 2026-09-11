@@ -1,7 +1,7 @@
 //! Offline validation of the bundled reference lessons: schema, concept link,
 //! objective-linked questions, topic specificity and representative kinds.
+use principia_desk_lib::{catalog, db, generator};
 use std::collections::{BTreeMap, BTreeSet};
-use system_design_roulette_lib::{catalog, db, generator};
 
 const KINDS: [&str; 5] = [
     "beginner",

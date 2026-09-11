@@ -1,8 +1,8 @@
 //! Simulates the multi-day data loop without the GUI: focus pools, carryover
 //! isolation, session focus persistence, and focus-aware fallbacks.
 
-use system_design_roulette_lib::db::{self, Attempt, Session};
-use system_design_roulette_lib::focus;
+use principia_desk_lib::db::{self, Attempt, Session};
+use principia_desk_lib::focus;
 
 const SEED: &str = include_str!("../seed/concepts.json");
 
@@ -36,7 +36,7 @@ fn session_with_focus(date: &str, focus: &str) -> Session {
 
 #[test]
 fn reading_does_not_replace_the_previous_assessment_date_or_inflate_retention() {
-    use system_design_roulette_lib::mastery;
+    use principia_desk_lib::mastery;
     let conn = test_db();
     let id = db::all_concepts(&conn, "javascript").unwrap()[0].id;
     mastery::record_quiz_outcome(&conn, id, "2026-07-01", 1.0).unwrap();
@@ -365,35 +365,28 @@ fn streak_counts_consecutive_completed_days() {
 
 #[test]
 fn focus_aware_fallback_selection() {
-    let js = system_design_roulette_lib::generator::pick_fallback(
-        "javascript",
-        "js-event-loop scheduling",
-    );
+    let js = principia_desk_lib::generator::pick_fallback("javascript", "js-event-loop scheduling");
     assert_eq!(js.slug, "js-event-loop");
-    let js_from_catalog_title = system_design_roulette_lib::generator::pick_fallback(
+    let js_from_catalog_title = principia_desk_lib::generator::pick_fallback(
         "javascript",
         "Event loop phases, tasks, microtasks, and rendering opportunities",
     );
     assert_eq!(js_from_catalog_title.slug, "js-event-loop");
-    let ts = system_design_roulette_lib::generator::pick_fallback(
-        "typescript",
-        "ts-structural-typing rules",
-    );
+    let ts =
+        principia_desk_lib::generator::pick_fallback("typescript", "ts-structural-typing rules");
     assert_eq!(ts.slug, "ts-structural-typing");
-    let architecture = system_design_roulette_lib::generator::pick_fallback(
+    let architecture = principia_desk_lib::generator::pick_fallback(
         "frontend-architecture",
         "fa-domain-boundaries",
     );
     assert_eq!(architecture.slug, "fa-domain-boundaries");
-    let dt = system_design_roulette_lib::generator::pick_fallback(
+    let dt = principia_desk_lib::generator::pick_fallback(
         "developer-tooling",
         "dt-ast-parsing pipeline",
     );
     assert_eq!(dt.slug, "dt-ast-parsing");
-    let legacy = system_design_roulette_lib::generator::pick_fallback(
-        "system-design",
-        "Rate limiting algorithms",
-    );
+    let legacy =
+        principia_desk_lib::generator::pick_fallback("system-design", "Rate limiting algorithms");
     assert_eq!(legacy.slug, "rate-limiting");
     assert!(!js.markdown.to_lowercase().contains("cap theorem"));
 }
@@ -406,14 +399,14 @@ fn json_payload_parser_handles_fenced_and_prose() {
     }
     let fenced = "Here you go:\n```json\n{\"x\": 5}\n```\nthanks";
     assert_eq!(
-        system_design_roulette_lib::generator::parse_json_payload::<T>(fenced)
+        principia_desk_lib::generator::parse_json_payload::<T>(fenced)
             .unwrap()
             .x,
         5
     );
     let bare = "prefix {\"x\": 7} suffix";
     assert_eq!(
-        system_design_roulette_lib::generator::parse_json_payload::<T>(bare)
+        principia_desk_lib::generator::parse_json_payload::<T>(bare)
             .unwrap()
             .x,
         7
@@ -427,13 +420,13 @@ fn json_parser_survives_embedded_code_fences_in_markdown() {
         markdown: String,
     }
     let raw = "```json\n{\"markdown\": \"intro\\n```\\ncode here\\n```\\noutro\"}\n```";
-    let c = system_design_roulette_lib::generator::parse_json_payload::<Course>(raw).unwrap();
+    let c = principia_desk_lib::generator::parse_json_payload::<Course>(raw).unwrap();
     assert!(c.markdown.contains("code here"));
 }
 
 #[test]
 fn mastery_lifecycle_transitions() {
-    use system_design_roulette_lib::mastery;
+    use principia_desk_lib::mastery;
     let conn = test_db();
     let concept = db::all_concepts(&conn, "javascript").unwrap()[0].clone();
     let id = concept.id;
@@ -464,7 +457,7 @@ fn mastery_lifecycle_transitions() {
 
 #[test]
 fn dossier_reflects_ledger_and_notes_within_focus() {
-    use system_design_roulette_lib::mastery;
+    use principia_desk_lib::mastery;
     let conn = test_db();
     let track = "developer-tooling";
     let concepts = db::all_concepts(&conn, track).unwrap();
@@ -529,20 +522,20 @@ fn dossier_reflects_ledger_and_notes_within_focus() {
 
 #[test]
 fn teacher_preamble_wraps_dossier() {
-    let n = system_design_roulette_lib::generator::TEACHER_PROMPT
+    let n = principia_desk_lib::generator::TEACHER_PROMPT
         .matches("{{DOSSIER}}")
         .count();
     assert_eq!(n, 1);
-    assert!(system_design_roulette_lib::generator::COURSE_PROMPT.contains("{{FOCUS_LABEL}}"));
-    assert!(system_design_roulette_lib::generator::TEACHER_PROMPT.contains("{{MONTH_OUTCOME}}"));
-    assert!(system_design_roulette_lib::generator::COURSE_PROMPT.contains("{{MONTH_OUTCOME}}"));
-    assert!(system_design_roulette_lib::generator::PLAN_PROMPT.contains("{{MONTH_OUTCOME}}"));
-    assert!(system_design_roulette_lib::generator::AUDIO_PROMPT.contains("{{MONTH_OUTCOME}}"));
+    assert!(principia_desk_lib::generator::COURSE_PROMPT.contains("{{FOCUS_LABEL}}"));
+    assert!(principia_desk_lib::generator::TEACHER_PROMPT.contains("{{MONTH_OUTCOME}}"));
+    assert!(principia_desk_lib::generator::COURSE_PROMPT.contains("{{MONTH_OUTCOME}}"));
+    assert!(principia_desk_lib::generator::PLAN_PROMPT.contains("{{MONTH_OUTCOME}}"));
+    assert!(principia_desk_lib::generator::AUDIO_PROMPT.contains("{{MONTH_OUTCOME}}"));
 }
 
 #[test]
 fn generation_prompts_preserve_the_learning_quality_contract() {
-    use system_design_roulette_lib::generator::{
+    use principia_desk_lib::generator::{
         AUDIO_PROMPT, COURSE_PROMPT, EXIT_PROMPT, FIRST_PRINCIPLES_PROMPT, GRADE_PROMPT,
         QUIZ_PROMPT, TEACHER_PROMPT,
     };
@@ -583,7 +576,7 @@ fn generation_prompts_preserve_the_learning_quality_contract() {
 
 #[test]
 fn pop_quiz_sample_prefers_struggling_within_focus() {
-    use system_design_roulette_lib::mastery;
+    use principia_desk_lib::mastery;
     let conn = test_db();
     let track = "typescript";
     let concepts = db::all_concepts(&conn, track).unwrap();

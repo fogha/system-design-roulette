@@ -182,7 +182,7 @@ fn apply_change(
                 let concept = concept(slug)?;
                 if states
                     .get(&concept.id)
-                    .is_some_and(|state| crate::roulette::is_completed(state))
+                    .is_some_and(|state| crate::selection::is_completed(state))
                 {
                     return Err(DbError::Invalid(format!(
                         "{} is already completed here; there is nothing to bypass.",
@@ -212,7 +212,7 @@ fn apply_change(
                 let concept = concept(slug)?;
                 if states
                     .get(&concept.id)
-                    .is_some_and(|state| crate::roulette::is_completed(state))
+                    .is_some_and(|state| crate::selection::is_completed(state))
                     || listed(&plan.checked, slug)
                 {
                     continue;
@@ -660,7 +660,7 @@ pub fn bridge_proposals(conn: &Connection, course_id: &str) -> Result<Vec<Bridge
                 .iter()
                 .find(|c| c.slug == prerequisite)
                 .and_then(|c| states.get(&c.id))
-                .is_some_and(|state| crate::roulette::is_completed(state));
+                .is_some_and(|state| crate::selection::is_completed(state));
             let decided = listed(&plan.bridges, &prerequisite)
                 || plan
                     .declined_bridges
@@ -738,7 +738,7 @@ pub enum NextReason {
 /// Accepted bridge lessons come first, once each, before regular selection.
 pub fn next_concept(conn: &Connection, course_id: &str, date: &str) -> Result<Option<db::Concept>> {
     if current_path(conn, course_id)?.is_none() {
-        return crate::roulette::draw(conn, date, course_id);
+        return crate::selection::draw(conn, date, course_id);
     }
     let next = peek_next_concept(conn, course_id)?.map(|(concept, _)| concept);
     if let Some(concept) = &next {
@@ -800,7 +800,7 @@ pub fn peek_next_concept(
             !earlier.contains(c.slug.as_str())
                 && !states
                     .get(&c.slug)
-                    .is_some_and(|state| crate::roulette::is_completed(state))
+                    .is_some_and(|state| crate::selection::is_completed(state))
         })
         .filter(|c| {
             prerequisites.get(&c.slug).is_none_or(|reqs| {

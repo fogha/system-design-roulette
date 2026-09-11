@@ -43,7 +43,7 @@
   }
 </script>
 <div class="today">
-  {#if app.state?.enforcement_disarmed}<p class="recovery mono" role="status">ENFORCEMENT DISARMED · ~/sdr-unlock is present.</p>{/if}
+  {#if app.state?.enforcement_disarmed}<p class="recovery mono" role="status">ENFORCEMENT DISARMED · a principia-unlock release token is present.</p>{/if}
   <section class="idle-center" aria-labelledby="today-title">
     <div class="meta-label">TODAY · {now.toLocaleDateString(undefined,{weekday:'long',month:'short',day:'numeric'})}</div>
     <h1 id="today-title">{resumable.length ? 'Your study desk is waiting' : dueSlots.length ? 'Time for your next class' : 'Make room for learning'}</h1>

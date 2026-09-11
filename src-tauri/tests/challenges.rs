@@ -1,6 +1,5 @@
 //! Unit challenges check a learner out of demonstrated topics only.
-use rusqlite::Connection;
-use system_design_roulette_lib::{
+use principia_desk_lib::{
     classroom, db,
     domain::{
         assessments::{Response, ResponseStatus},
@@ -11,6 +10,7 @@ use system_design_roulette_lib::{
     },
     language,
 };
+use rusqlite::Connection;
 
 fn fixture() -> Connection {
     let path = std::env::temp_dir().join(format!(

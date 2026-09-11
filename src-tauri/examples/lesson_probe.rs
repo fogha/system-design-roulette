@@ -1,10 +1,10 @@
 //! Explicit native-backend QA: run the real engineering lesson pipeline in a
 //! disposable database. No webview, scheduler, focus enforcement or seed edits.
+use principia_desk_lib::{classroom, db, generator::Generator, state::AppState};
 use std::{
     path::PathBuf,
     sync::{atomic::AtomicBool, Arc, Mutex},
 };
-use system_design_roulette_lib::{classroom, db, generator::Generator, state::AppState};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

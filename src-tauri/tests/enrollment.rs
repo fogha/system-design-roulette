@@ -1,8 +1,8 @@
-use rusqlite::{params, Connection};
-use system_design_roulette_lib::{
+use principia_desk_lib::{
     catalog, db,
     domain::enrollment::{self, EntryChoice, LearningGoal, SaveEnrollmentDraft},
 };
+use rusqlite::{params, Connection};
 
 fn database() -> (std::path::PathBuf, Connection) {
     let path = std::env::temp_dir().join(format!(

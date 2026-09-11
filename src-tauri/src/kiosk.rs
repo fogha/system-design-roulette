@@ -11,7 +11,9 @@ fn home_dir() -> Option<std::path::PathBuf> {
 
 /// Name of the release token. Creating a file with this name in any of the
 /// places below frees a locked desk within one refocus tick.
-pub const UNLOCK_TOKEN: &str = "sdr-unlock";
+pub const UNLOCK_TOKEN: &str = "principia-unlock";
+/// The token name used before the rename. A stick prepared then still works.
+pub const LEGACY_UNLOCK_TOKEN: &str = "sdr-unlock";
 
 /// Longest a lock may hold before it releases itself. A study session lasts
 /// well under an hour; a lock still standing after this is a stuck app, not a
@@ -21,7 +23,7 @@ pub const MAX_LOCK: std::time::Duration = std::time::Duration::from_secs(3 * 360
 /// Places a release token is accepted. The home directory is the documented
 /// one and needs a shell; the removable volumes exist so a locked machine can
 /// be freed with no terminal at all, by plugging in a stick that carries a
-/// file named `sdr-unlock` at its root.
+/// file named `principia-unlock` at its root.
 fn token_roots() -> Vec<std::path::PathBuf> {
     let mut roots: Vec<std::path::PathBuf> = home_dir().into_iter().collect();
     roots.push(std::env::temp_dir());
@@ -52,7 +54,7 @@ fn token_roots() -> Vec<std::path::PathBuf> {
 fn token_in(roots: &[std::path::PathBuf]) -> Option<std::path::PathBuf> {
     roots
         .iter()
-        .map(|root| root.join(UNLOCK_TOKEN))
+        .flat_map(|root| [root.join(UNLOCK_TOKEN), root.join(LEGACY_UNLOCK_TOKEN)])
         .find(|path| path.exists())
 }
 
@@ -372,7 +374,7 @@ pub fn engage_at(app: &AppHandle, state: &AppState, level: KioskLevel) {
             if !state.locked.load(Ordering::SeqCst) {
                 break;
             }
-            // Release token: a file named sdr-unlock in the home directory, the
+            // Release token: a file named principia-unlock in the home directory, the
             // temporary directory or at the root of any mounted volume.
             if let Some(token) = release_token() {
                 log::warn!("release token at {}, releasing kiosk", token.display());

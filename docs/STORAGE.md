@@ -1,6 +1,6 @@
 # Storage and enrollment contracts
 
-Principia Desk keeps the existing application data location and SQLite database. Display-name changes must not select a new database. `db::open` is the only production connection factory: it enables and verifies foreign keys, applies pending migrations, then enables WAL journaling.
+Principia Desk stores its profile under `com.darkmatter.principia-desk` in a database called `principia.db`. The desk shipped for a while under its former name, so the first launch under this identity adopts the earlier profile: if this build has no database, `storage/adoption.rs` takes a consolidated copy of `roulette.db` from the old identifier's directory through SQLite's backup API, so writes still sitting in a write-ahead log arrive with the rest, and the original is left in place as a fallback. A rename must never select an empty database. `db::open` is the only production connection factory: it enables and verifies foreign keys, applies pending migrations, then enables WAL journaling.
 
 ## Numbered migrations
 
@@ -46,3 +46,9 @@ The retired daily quiz was the first adapter to use this runtime; its screens, c
 Migration v3 preserves `quiz_round:*`, `pending_answers:*` and `quiz_result:*` in `legacy_assessment_config`, including malformed or unrecognized data. Known full question snapshots and matching answers import once, with a namespaced crosswalk. An unknown snapshot format stops automatic reconstruction and retains the original bytes. Unmatched legacy answer IDs remain in the raw archive and are counted in the attempt context; an archive recovery UI is pending. Older results can still be read without manufacturing new grading evidence.
 
 `features/assessments/work-editor.ts` serializes native writes per round, flushes on navigation and keeps unsaved work in local recovery storage. A newer saved revision requires an explicit recovery choice. Malformed recovery records remain untouched until the learner chooses the saved answers. Native persistence still works if browser recovery storage is unavailable. The quiz restores partial text and provides an explicit grading action when every answer was confirmed before a restart.
+
+## Taking a profile off the machine
+
+`domain/portability.rs` exports the whole profile as one JSON document: every learner table with its own column list, so an added column cannot silently drop data, and a SHA-256 checksum over the canonical payload so an edited or truncated file is refused rather than half-applied. The migration ledger and the three job queues are left out: the ledger describes the receiving database, and a queued generation job belongs to a provider, keys and files on one machine.
+
+An import replaces the profile rather than merging. Two histories from two machines would have to reconcile autoincrement identities, and joining the wrong rows silently is worse than refusing. The command publishes a pre-import backup through the same checked, flushed routine the migration runner uses, refuses while a focused session holds the desk, requires the archive's database version to equal this build's, then replaces every table in one transaction with deferred foreign keys, and verifies both the foreign-key check and the integrity check before committing. A failure at any point rolls back and names the backup.

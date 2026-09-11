@@ -1,7 +1,7 @@
 //! Language passes vary their tasks and checks by phase and gate passing on
 //! phase-specific practice evidence, without presenting it as proficiency.
+use principia_desk_lib::{classroom, db, language};
 use rusqlite::Connection;
-use system_design_roulette_lib::{classroom, db, language};
 
 fn fixture() -> Connection {
     let path = std::env::temp_dir().join(format!(

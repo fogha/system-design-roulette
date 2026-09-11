@@ -1,9 +1,9 @@
 //! Developer inspection of an explicit database path. Opens read-only and emits
 //! ownership/recovery counts, never lesson bodies, answers or runner credentials.
+use principia_desk_lib::storage::primary_import;
 use rusqlite::{Connection, OpenFlags};
 use serde_json::json;
 use std::{collections::BTreeMap, path::PathBuf};
-use system_design_roulette_lib::storage::primary_import;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args_os().skip(1);

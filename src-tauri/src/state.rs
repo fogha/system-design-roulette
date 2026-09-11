@@ -41,9 +41,9 @@ impl AppState {
         self.chat_threads.lock().unwrap().clear();
     }
 
-    /// Today's date, overridable for testing via SDR_DATE=YYYY-MM-DD.
+    /// Today's date, overridable for testing via PRINCIPIA_DATE=YYYY-MM-DD.
     pub fn today(&self) -> String {
-        if let Ok(d) = std::env::var("SDR_DATE") {
+        if let Ok(d) = std::env::var("PRINCIPIA_DATE") {
             if chrono::NaiveDate::parse_from_str(&d, "%Y-%m-%d").is_ok() {
                 return d;
             }

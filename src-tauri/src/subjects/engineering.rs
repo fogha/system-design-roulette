@@ -18,7 +18,7 @@ use crate::{
         },
     },
     generator::{CourseRequest, GenerationProfile},
-    mastery, roulette,
+    mastery, selection,
     state::AppState,
 };
 use chrono::Utc;
@@ -126,7 +126,7 @@ pub fn plan(
         return Ok(existing);
     }
     let concept = if revisit {
-        roulette::draw_completed(conn, today, subject_id)
+        selection::draw_completed(conn, today, subject_id)
     } else {
         classes::next_concept(conn, subject_id, today)
     }

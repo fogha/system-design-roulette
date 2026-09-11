@@ -1,10 +1,10 @@
-use serde::Deserialize;
-use std::sync::{Arc, Mutex};
-use std::time::Instant;
-use system_design_roulette_lib::{
+use principia_desk_lib::{
     db,
     generator::{self, CourseRequest},
 };
+use serde::Deserialize;
+use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 const SEED: &str = include_str!("../seed/concepts.json");
 const GOLDEN_CASES: &str = include_str!("../evals/golden-cases.json");
@@ -31,7 +31,7 @@ fn seeded_db() -> rusqlite::Connection {
 fn golden_eval_covers_every_track_with_complete_curriculum_contracts() {
     let conn = seeded_db();
     let cases: Vec<GoldenCase> = serde_json::from_str(GOLDEN_CASES).unwrap();
-    for track in system_design_roulette_lib::focus::SELECTABLE {
+    for track in principia_desk_lib::focus::SELECTABLE {
         let covered = cases
             .iter()
             .filter_map(|case| {
@@ -69,15 +69,15 @@ fn golden_eval_covers_every_track_with_complete_curriculum_contracts() {
 #[ignore = "explicit live-provider quality and telemetry evaluation"]
 async fn live_golden_courses_pass_the_editor_and_deterministic_gate() {
     assert_eq!(
-        std::env::var("SDR_LIVE_EVAL").as_deref(),
+        std::env::var("PRINCIPIA_LIVE_EVAL").as_deref(),
         Ok("1"),
-        "set SDR_LIVE_EVAL=1 to acknowledge provider cost"
+        "set PRINCIPIA_LIVE_EVAL=1 to acknowledge provider cost"
     );
     let conn = seeded_db();
     let cases: Vec<GoldenCase> = serde_json::from_str(GOLDEN_CASES).unwrap();
-    let agent = std::env::var("SDR_EVAL_AGENT").unwrap_or_else(|_| "deepseek".into());
-    let model = std::env::var("SDR_EVAL_MODEL").unwrap_or_else(|_| "deepseek-chat".into());
-    let custom_bin = std::env::var("SDR_EVAL_CUSTOM_BIN").unwrap_or_default();
+    let agent = std::env::var("PRINCIPIA_EVAL_AGENT").unwrap_or_else(|_| "deepseek".into());
+    let model = std::env::var("PRINCIPIA_EVAL_MODEL").unwrap_or_else(|_| "deepseek-chat".into());
+    let custom_bin = std::env::var("PRINCIPIA_EVAL_CUSTOM_BIN").unwrap_or_default();
     let generator = generator::Generator::new(
         "claude".into(),
         Some("codex".into()),

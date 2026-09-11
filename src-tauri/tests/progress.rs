@@ -1,8 +1,8 @@
-use rusqlite::{params, Connection};
-use system_design_roulette_lib::{
+use principia_desk_lib::{
     classroom, db, language,
     progress::{self, ProgressQuery},
 };
+use rusqlite::{params, Connection};
 
 fn fixture() -> Connection {
     let root = std::env::temp_dir().join(format!(

@@ -4,7 +4,11 @@
 //! report in-app storage as unavailable instead of discarding a saved key.
 
 #[cfg(target_os = "macos")]
-const SERVICE: &str = "system-design-roulette";
+const SERVICE: &str = "principia-desk";
+/// Keys saved before the rename live under the old service name. Reads fall
+/// back to it so an upgrade never looks like a lost key.
+#[cfg(target_os = "macos")]
+const LEGACY_SERVICE: &str = "system-design-roulette";
 
 #[cfg(any(target_os = "macos", test))]
 fn account_for(name: &str) -> String {
@@ -13,17 +17,17 @@ fn account_for(name: &str) -> String {
 
 #[cfg(target_os = "macos")]
 mod imp {
-    use super::{account_for, SERVICE};
+    use super::{account_for, LEGACY_SERVICE, SERVICE};
     use std::process::Command;
 
-    pub fn get_secret(name: &str) -> Option<String> {
+    fn read(service: &str, name: &str) -> Option<String> {
         let output = Command::new("security")
             .args([
                 "find-generic-password",
                 "-a",
                 &account_for(name),
                 "-s",
-                SERVICE,
+                service,
                 "-w",
             ])
             .output()
@@ -37,6 +41,11 @@ mod imp {
         } else {
             Some(value)
         }
+    }
+
+    pub fn get_secret(name: &str) -> Option<String> {
+        // A key saved before the rename still belongs to this learner.
+        read(SERVICE, name).or_else(|| read(LEGACY_SERVICE, name))
     }
 
     pub fn set_secret(name: &str, value: &str) -> Result<(), String> {

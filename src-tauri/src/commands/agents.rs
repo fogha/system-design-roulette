@@ -185,7 +185,7 @@ pub fn get_openrouter_free_only(state: State<'_, AppState>) -> bool {
 pub fn get_agent_activity(
     state: State<'_, AppState>,
 ) -> Result<Vec<agents::store::CallSummary>, String> {
-    agents::store::recent(&state.data_dir.join("roulette.db")).map_err(|e| e.to_string())
+    agents::store::recent(&state.data_dir.join("principia.db")).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

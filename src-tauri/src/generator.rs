@@ -1145,18 +1145,18 @@ impl Generator {
         }
     }
 
-    /// The primary CLI agent right now (SDR_AGENT env wins for tests).
+    /// The primary CLI agent right now (PRINCIPIA_AGENT env wins for tests).
     pub fn current_agent(&self) -> String {
-        std::env::var("SDR_AGENT").unwrap_or_else(|_| self.agent.lock().unwrap().clone())
+        std::env::var("PRINCIPIA_AGENT").unwrap_or_else(|_| self.agent.lock().unwrap().clone())
     }
 
     pub fn current_custom_bin(&self) -> String {
         self.custom_bin.lock().unwrap().clone()
     }
 
-    /// The course-generation model right now (SDR_MODEL env wins for tests).
+    /// The course-generation model right now (PRINCIPIA_MODEL env wins for tests).
     pub fn current_model(&self) -> String {
-        std::env::var("SDR_MODEL").unwrap_or_else(|_| self.model.lock().unwrap().clone())
+        std::env::var("PRINCIPIA_MODEL").unwrap_or_else(|_| self.model.lock().unwrap().clone())
     }
 
     fn log(&self, msg: impl Into<String>) {

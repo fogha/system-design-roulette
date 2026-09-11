@@ -1,12 +1,12 @@
 [package]
-name = "system-design-roulette"
+name = "principia-desk"
 version = "0.1.0"
-description = "Daily forced system-design learning sessions"
+description = "A study desk for learning subjects from their foundations"
 authors = ["darkmatter"]
 edition = "2021"
 
 [lib]
-name = "system_design_roulette_lib"
+name = "principia_desk_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

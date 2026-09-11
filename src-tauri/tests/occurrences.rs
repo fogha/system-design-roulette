@@ -1,14 +1,14 @@
 //! Durable appointments: one per rule per local date, due/missed transitions,
 //! consumption exactly once, make-up, pause, rule edits and DST resolution.
 use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
-use rusqlite::Connection;
-use system_design_roulette_lib::{
+use principia_desk_lib::{
     classroom::{self, ConfigureClassroomInput, UpsertClassroomSlotInput},
     db,
     domain::schedule::{self, Clock, LocalInstant, ZoneResolver},
     language,
     subjects::engineering,
 };
+use rusqlite::Connection;
 
 /// A zone two hours ahead of UTC on most days, with a clocks-forward gap
 /// 02:00–03:00 on `gap_day` (winter offset +1 before it) and a clocks-back
@@ -417,7 +417,7 @@ fn a_class_lesson_started_from_an_appointment_resolves_it_on_completion() {
     let skipped = engineering::skip(&conn, &planned.id).unwrap();
     assert_eq!(
         skipped.status,
-        system_design_roulette_lib::domain::sessions::Status::Skipped
+        principia_desk_lib::domain::sessions::Status::Skipped
     );
     assert_eq!(
         schedule::get(&conn, &due.id).unwrap().disposition,

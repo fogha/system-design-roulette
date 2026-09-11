@@ -1,11 +1,11 @@
-use rusqlite::{params, Connection, OpenFlags};
-use serde_json::json;
-use std::path::PathBuf;
-use system_design_roulette_lib::{
+use principia_desk_lib::{
     db,
     domain::assessments::{self, Item, Owner, Purpose, Response, ResponseStatus},
     storage::primary_import::{self, Cell, ContentSelection, RecoveryReason, SubjectResolution},
 };
+use rusqlite::{params, Connection, OpenFlags};
+use serde_json::json;
+use std::path::PathBuf;
 
 fn fixture() -> (PathBuf, Connection) {
     let directory = std::env::temp_dir().join(format!(
@@ -443,7 +443,7 @@ fn original_main_and_pr_upgrade_records_keep_system_design_and_all_archived_docu
 
 #[test]
 fn apply_imports_finished_daily_sessions_and_leaves_open_work_and_recovery_rows_alone() {
-    use system_design_roulette_lib::{
+    use principia_desk_lib::{
         classroom,
         domain::sessions::{self, SessionId, Status},
         language,
@@ -622,7 +622,7 @@ fn apply_imports_finished_daily_sessions_and_leaves_open_work_and_recovery_rows_
 
 #[test]
 fn apply_keeps_the_active_class_session_in_the_foreground() {
-    use system_design_roulette_lib::{
+    use principia_desk_lib::{
         classroom::{
             self, ConfigureClassroomInput, StoredEngineeringLesson, StoredQuestion,
             UpsertClassroomSlotInput,

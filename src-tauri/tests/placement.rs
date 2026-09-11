@@ -1,5 +1,4 @@
-use rusqlite::Connection;
-use system_design_roulette_lib::{
+use principia_desk_lib::{
     catalog, db,
     domain::{
         assessments::{Response, ResponseStatus},
@@ -7,6 +6,7 @@ use system_design_roulette_lib::{
         placement::{self, DiagnosticView, Verdict},
     },
 };
+use rusqlite::Connection;
 fn fixture(course: &str) -> (std::path::PathBuf, Connection, EnrollmentDraft) {
     let path =
         std::env::temp_dir().join(format!("principia-placement-{}.db", rand::random::<u64>()));

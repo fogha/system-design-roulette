@@ -214,6 +214,13 @@ pub(super) fn validate_recorded_schema(conn: &Connection) -> Result<()> {
 /// pages, while no concurrent writer can race between backup and migration.
 /// https://www.sqlite.org/backup.html
 fn backup_before_upgrade(database: &Path, target_version: u32) -> Result<PathBuf> {
+    publish_backup(database, &format!("before-v{target_version}"))
+}
+
+/// Publish a checked copy of the database beside it, labelled with the reason.
+/// The migration runner and the profile import share this: both are about to
+/// rewrite a learner's record and owe them a way back.
+pub fn publish_backup(database: &Path, label: &str) -> Result<PathBuf> {
     let parent = database
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
@@ -223,9 +230,7 @@ fn backup_before_upgrade(database: &Path, target_version: u32) -> Result<PathBuf
     let filename = database.file_name().unwrap_or_default().to_string_lossy();
     let nonce: u64 = rand::random();
     let stamp = chrono::Utc::now().format("%Y%m%dT%H%M%S%.9fZ");
-    let destination = directory.join(format!(
-        "{filename}.before-v{target_version}.{stamp}-{nonce:016x}.db"
-    ));
+    let destination = directory.join(format!("{filename}.{label}.{stamp}-{nonce:016x}.db"));
     let partial = destination.with_extension("partial");
     let mut options = fs::OpenOptions::new();
     options.write(true).create_new(true);
