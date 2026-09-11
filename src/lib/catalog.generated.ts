@@ -7,7 +7,7 @@ export const COURSE_FINGERPRINTS: Record<ClassroomSubjectId, string> = {
   "javascript": "b03b2c7257dab1f884dbad94f58ae6d1873d0f50a77f900a46cc567d7ae973b2",
   "typescript": "da0ca51fc16b8b1006a5cb7e9e7a24fca5bd1495c0c0731c31e3f15efe3840a7",
   "frontend-architecture": "ed16bc2ce97bdc38c22b36bf0883cbdfe82678ca53f662cb75136a040eedcff1",
-  "developer-tooling": "0c746bd8a7c7e42883817f5cfda47ed4508baeeeb21a3dcf8fdbd54f090c51de",
+  "developer-tooling": "035998101226945a7b424a358ad235a21f2ef462dfe574d6cbd1c8c5dd7c7845",
   "linux-bash": "4e0138ebf72d918e3b25d4662dba782e77cca08e72835a09392f35e91cd93d5c",
   "bash-scripting": "48c0d497d24e894b3bdb9ce5d066c565d6cd6e31669046bbf76782083f783c38",
   "german": "197b3015b2eb854de871771ecba6ae1de85581c1f0068767d1ab2dda96e99eea",

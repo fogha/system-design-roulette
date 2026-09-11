@@ -209,3 +209,29 @@ fn every_bundled_lesson_is_a_valid_specific_reference_for_its_topic() {
     );
     assert!(generator::fallback_for_slug("linux-bash", "lb-navigation").is_none());
 }
+
+/// Every engineering brief is specific: no templated placeholders remain.
+#[test]
+fn no_engineering_brief_is_templated() {
+    for concept in concepts() {
+        let brief = &concept.curriculum;
+        assert!(
+            !brief
+                .mechanisms
+                .iter()
+                .any(|m| m.starts_with("The first-principles mechanism behind")),
+            "{} still carries a templated mechanism",
+            concept.slug
+        );
+        assert!(
+            !brief
+                .learner_outcome
+                .starts_with("Diagnose, explain, and apply"),
+            "{} still carries a templated outcome",
+            concept.slug
+        );
+        brief
+            .validate()
+            .unwrap_or_else(|reason| panic!("{}: {reason}", concept.slug));
+    }
+}

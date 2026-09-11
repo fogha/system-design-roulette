@@ -4528,21 +4528,21 @@
     "curriculum": {
       "phase": "foundations",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply CLI UX: argv parsing, exit codes, and stderr contracts when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Write a command-line tool whose argv, exit codes and output streams form a contract callers can rely on.",
       "mechanisms": [
-        "The first-principles mechanism behind CLI UX: argv parsing, exit codes, and stderr contracts",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The cli trade-off and its failure boundary"
+        "argv parsing with end-of-options",
+        "documented exit-code vocabulary",
+        "stdout for results, stderr for diagnostics"
       ],
-      "production_scenario": "Apply CLI UX: argv parsing, exit codes, and stderr contracts inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "A CI job parses the tool's output and breaks when an error message lands on standard output.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "Printing an error and exiting 0 makes the failure invisible to every caller."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "A test asserting status and stream for success, usage error and runtime failure.",
+      "artifact": "A contract table and passing three-way test for one tool.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://nodejs.org/api/process.html#exit-codes",
+        "https://nodejs.org/api/child_process.html"
       ],
       "related_concepts": []
     }
@@ -4557,21 +4557,21 @@
     "curriculum": {
       "phase": "foundations",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply AST parsing pipelines: lexer, parser, and error recovery when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Build a lexer and parser pipeline that recovers from errors and keeps producing a tree.",
       "mechanisms": [
-        "The first-principles mechanism behind AST parsing pipelines: lexer, parser, and error recovery",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The parsing trade-off and its failure boundary"
+        "tokenization",
+        "recursive descent with recovery",
+        "diagnostics with positions"
       ],
-      "production_scenario": "Apply AST parsing pipelines: lexer, parser, and error recovery inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "A formatter stops at the first syntax error instead of formatting the rest of the file.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "A parser that halts on the first error is useless inside an editor."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "A recovered tree for input with two errors and both diagnostics reported.",
+      "artifact": "A small parser with error recovery and position-accurate diagnostics.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://www.typescriptlang.org/docs/handbook/typescript-tooling-in-5-minutes.html",
+        "https://github.com/microsoft/TypeScript/wiki/Architectural-Overview"
       ],
       "related_concepts": []
     }
@@ -4588,21 +4588,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Language Server Protocol: requests, capabilities, sync when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Implement a language server that negotiates capabilities and synchronizes documents correctly.",
       "mechanisms": [
-        "The first-principles mechanism behind Language Server Protocol: requests, capabilities, sync",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The protocols trade-off and its failure boundary"
+        "initialize handshake and capabilities",
+        "incremental document sync",
+        "request cancellation"
       ],
-      "production_scenario": "Apply Language Server Protocol: requests, capabilities, sync inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "An editor shows stale diagnostics because the server assumed full sync while the client sent deltas.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "Capabilities are negotiated; a server must not use features the client did not advertise."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "A trace of initialize, didChange deltas and published diagnostics.",
+      "artifact": "A minimal language server with a capability test.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://github.com/microsoft/language-server-protocol",
+        "https://github.com/microsoft/vscode-languageserver-node"
       ],
       "related_concepts": []
     }
@@ -4619,21 +4619,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Tree-sitter grammars, queries, and incremental reparse when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Write a grammar and queries and explain how incremental reparsing reuses subtrees.",
       "mechanisms": [
-        "The first-principles mechanism behind Tree-sitter grammars, queries, and incremental reparse",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The parsing trade-off and its failure boundary"
+        "GLR parsing with precedence",
+        "query captures",
+        "incremental edits reusing nodes"
       ],
-      "production_scenario": "Apply Tree-sitter grammars, queries, and incremental reparse inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "Syntax highlighting flickers because every keystroke reparses the whole file.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "Incremental parsing reuses unchanged subtrees; an edit far from a change costs little."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "A timing comparison of full parse and incremental reparse after one edit.",
+      "artifact": "A grammar with queries and an incremental reparse test.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://github.com/tree-sitter/tree-sitter",
+        "https://github.com/tree-sitter/tree-sitter/tree/master/docs"
       ],
       "related_concepts": []
     }
@@ -4650,21 +4650,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Watch mode and incremental invalidation graphs when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Design a watch mode with an invalidation graph so only affected work reruns.",
       "mechanisms": [
-        "The first-principles mechanism behind Watch mode and incremental invalidation graphs",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The build trade-off and its failure boundary"
+        "file watching events",
+        "dependency graph invalidation",
+        "debounce and coalescing"
       ],
-      "production_scenario": "Apply Watch mode and incremental invalidation graphs inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "Saving one file rebuilds everything and the loop takes ten seconds.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "Watching files is easy; knowing what depends on them is the work."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "A log showing the invalidated subset for one change.",
+      "artifact": "A watch mode with graph-based invalidation and a test.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://nodejs.org/api/fs.html#fswatchfilename-options-listener",
+        "https://vite.dev/guide/features.html#hot-module-replacement"
       ],
       "related_concepts": []
     }
@@ -4681,21 +4681,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Bundler module graphs, chunking, and treeshaking when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Explain how a bundler builds a module graph, splits chunks and shakes unused exports.",
       "mechanisms": [
-        "The first-principles mechanism behind Bundler module graphs, chunking, and treeshaking",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The bundling trade-off and its failure boundary"
+        "module graph construction",
+        "chunk boundaries from dynamic imports",
+        "side-effect flags and treeshaking"
       ],
-      "production_scenario": "Apply Bundler module graphs, chunking, and treeshaking inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "A tree-shaken bundle still contains a whole library because the package declares side effects.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "Treeshaking removes unused exports only when the module is known to be side-effect free."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "A chunk report showing the removed exports after the flag is fixed.",
+      "artifact": "A bundle analysis with a documented chunking decision.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://esbuild.github.io/api/#tree-shaking",
+        "https://vite.dev/guide/features.html#build-optimizations"
       ],
       "related_concepts": []
     }
@@ -4712,21 +4712,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply esbuild transform pipeline and plugin hooks when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Use esbuild's transform and plugin hooks to move code through a pipeline deterministically.",
       "mechanisms": [
-        "The first-principles mechanism behind esbuild transform pipeline and plugin hooks",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The bundling trade-off and its failure boundary"
+        "transform versus build API",
+        "onResolve and onLoad hooks",
+        "namespace isolation"
       ],
-      "production_scenario": "Apply esbuild transform pipeline and plugin hooks inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "A plugin rewrites imports and breaks source maps for every downstream file.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "A transform that does not preserve maps breaks debugging for everyone after it."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "A plugin test asserting output and map correctness.",
+      "artifact": "A transform plugin with map-preserving tests.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://esbuild.github.io/api/",
+        "https://esbuild.github.io/plugins/"
       ],
       "related_concepts": []
     }
@@ -4743,21 +4743,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Source map v3 mappings, scopes, and debug fidelity when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Read and compose source maps so stack traces and debuggers land on original code.",
       "mechanisms": [
-        "The first-principles mechanism behind Source map v3 mappings, scopes, and debug fidelity",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The debugging trade-off and its failure boundary"
+        "mappings segments and VLQ encoding",
+        "sources and sourcesContent",
+        "composition across transforms"
       ],
-      "production_scenario": "Apply Source map v3 mappings, scopes, and debug fidelity inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "The debugger shows compiled output because the bundler's map ignored the compiler's map.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "Sequential transforms must compose maps or debugging lands in intermediate output."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "A remapped stack trace next to the raw one.",
+      "artifact": "A map composition check in the build with a test.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://github.com/mozilla/source-map",
+        "https://developer.mozilla.org/en-US/docs/Web/API/Console/trace_static"
       ],
       "related_concepts": []
     }
@@ -4775,21 +4775,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Codemods with jscodeshift and recast printers when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Write codemods that transform code precisely and preserve formatting.",
       "mechanisms": [
-        "The first-principles mechanism behind Codemods with jscodeshift and recast printers",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The refactoring trade-off and its failure boundary"
+        "AST search and replace",
+        "recast printing of untouched nodes",
+        "dry runs and diffs"
       ],
-      "production_scenario": "Apply Codemods with jscodeshift and recast printers inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "A codemod reformats every touched file and the review is unreadable.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "Printing the whole file loses formatting; print only what changed."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "A diff showing only the intended changes across a sample repository.",
+      "artifact": "A codemod with fixtures and a dry-run report.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://github.com/facebook/jscodeshift",
+        "https://github.com/benjamn/recast"
       ],
       "related_concepts": []
     }
@@ -4806,21 +4806,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Test runner isolation: workers, VM contexts, snapshots when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Explain how test runners isolate tests with workers, contexts and snapshots.",
       "mechanisms": [
-        "The first-principles mechanism behind Test runner isolation: workers, VM contexts, snapshots",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The testing trade-off and its failure boundary"
+        "worker processes and threads",
+        "module registry per test file",
+        "snapshot serialization"
       ],
-      "production_scenario": "Apply Test runner isolation: workers, VM contexts, snapshots inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "Tests pass alone and fail together because a module-level cache leaks between files.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "Isolation is a runner feature with a cost; know which level you rely on."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "A run showing the leak with isolation off and its absence with isolation on.",
+      "artifact": "A runner configuration with documented isolation level.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://vitest.dev/guide/features.html",
+        "https://vitest.dev/guide/improving-performance.html"
       ],
       "related_concepts": []
     }
@@ -4837,21 +4837,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Mocking boundaries without lying to the typechecker when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Mock only at boundaries and keep mocks type-checked against the real contract.",
       "mechanisms": [
-        "The first-principles mechanism behind Mocking boundaries without lying to the typechecker",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The testing trade-off and its failure boundary"
+        "module mocking scope",
+        "typed mock factories",
+        "contract drift detection"
       ],
-      "production_scenario": "Apply Mocking boundaries without lying to the typechecker inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "A mock returns a shape the real API stopped producing months ago.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "A mock that compiles against a stale type is lying with confidence."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "A type error produced when the mocked contract changes.",
+      "artifact": "A mocking guideline with typed boundary mocks.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://vitest.dev/guide/mocking.html",
+        "https://www.typescriptlang.org/docs/handbook/2/generics.html"
       ],
       "related_concepts": []
     }
@@ -4869,21 +4869,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Debug Adapter Protocol and breakpoint binding when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Bind breakpoints correctly through the Debug Adapter Protocol and source maps.",
       "mechanisms": [
-        "The first-principles mechanism behind Debug Adapter Protocol and breakpoint binding",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The debugging trade-off and its failure boundary"
+        "adapter launch and attach",
+        "breakpoint verification",
+        "source map path resolution"
       ],
-      "production_scenario": "Apply Debug Adapter Protocol and breakpoint binding inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "Breakpoints turn grey because the adapter cannot map the file to the running code.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "A breakpoint in an editor is a request; the adapter must verify it against real code."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "A trace of setBreakpoints responses with verified and unverified locations.",
+      "artifact": "A debug configuration with verified breakpoints for one project.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://github.com/microsoft/debug-adapter-protocol",
+        "https://nodejs.org/api/debugger.html"
       ],
       "related_concepts": []
     }
@@ -4901,21 +4901,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Monorepo task runners: hashing, caching, fan-in/out when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Configure a task runner with input hashing and caching so only affected tasks run.",
       "mechanisms": [
-        "The first-principles mechanism behind Monorepo task runners: hashing, caching, fan-in/out",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The build trade-off and its failure boundary"
+        "task graphs",
+        "input hashing",
+        "remote cache hits"
       ],
-      "production_scenario": "Apply Monorepo task runners: hashing, caching, fan-in/out inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "CI rebuilds every package although one README changed.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "Cache correctness depends on declaring every input; an undeclared input causes stale hits."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "A run log showing cache hits and the one affected task.",
+      "artifact": "A task configuration with declared inputs and measured cache hits.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://github.com/vercel/turborepo",
+        "https://github.com/nrwl/nx"
       ],
       "related_concepts": []
     }
@@ -4933,21 +4933,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Lint rule engines: selectors, autofixers, and severity when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Write a lint rule with selectors, an autofixer and an appropriate severity.",
       "mechanisms": [
-        "The first-principles mechanism behind Lint rule engines: selectors, autofixers, and severity",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The analysis trade-off and its failure boundary"
+        "AST selectors",
+        "fixer ranges",
+        "severity and autofix safety"
       ],
-      "production_scenario": "Apply Lint rule engines: selectors, autofixers, and severity inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "An autofix rewrites code incorrectly and CI applies it automatically.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "An autofixer must be safe on every match, not just the common one."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "A rule test suite with valid, invalid and fixed cases.",
+      "artifact": "A custom rule with tests and a documented severity.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://github.com/eslint/eslint",
+        "https://github.com/typescript-eslint/typescript-eslint"
       ],
       "related_concepts": []
     }
@@ -4965,21 +4965,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Plugin architectures: hooks, ordering, and isolation when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Design a plugin system with ordered hooks and isolation between plugins.",
       "mechanisms": [
-        "The first-principles mechanism behind Plugin architectures: hooks, ordering, and isolation",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The architecture trade-off and its failure boundary"
+        "hook ordering",
+        "plugin isolation",
+        "versioned plugin contracts"
       ],
-      "production_scenario": "Apply Plugin architectures: hooks, ordering, and isolation inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "Two plugins mutate the same option and the result depends on load order.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "Plugin order is part of the contract; make it explicit."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "A test demonstrating deterministic hook ordering.",
+      "artifact": "A plugin API with ordering rules and tests.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://vite.dev/guide/api-plugin.html",
+        "https://esbuild.github.io/plugins/"
       ],
       "related_concepts": []
     }
@@ -4996,21 +4996,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Deterministic CI builds and reproducible artifacts when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Make builds reproducible so the same inputs produce byte-identical artifacts.",
       "mechanisms": [
-        "The first-principles mechanism behind Deterministic CI builds and reproducible artifacts",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The ci trade-off and its failure boundary"
+        "pinned inputs and lockfiles",
+        "timestamp and path normalization",
+        "artifact hashing"
       ],
-      "production_scenario": "Apply Deterministic CI builds and reproducible artifacts inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "Two builds of the same commit differ and the cache never hits.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "A build is not reproducible until you have compared two runs."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "Two build hashes from separate runs of the same commit.",
+      "artifact": "A reproducibility check in CI with normalized inputs.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://nodejs.org/api/packages.html",
+        "https://github.com/nodejs/corepack"
       ],
       "related_concepts": []
     }
@@ -5027,21 +5027,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Devcontainer specs, features, and lifecycle hooks when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Define a devcontainer with features and lifecycle hooks that onboards a machine reproducibly.",
       "mechanisms": [
-        "The first-principles mechanism behind Devcontainer specs, features, and lifecycle hooks",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The environments trade-off and its failure boundary"
+        "container image and features",
+        "lifecycle commands",
+        "forwarded ports and mounts"
       ],
-      "production_scenario": "Apply Devcontainer specs, features, and lifecycle hooks inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "New developers spend a day installing tools and still differ from CI.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "A devcontainer is a spec; if CI does not use it too, two environments drift."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "A fresh container reaching a passing test run with no manual steps.",
+      "artifact": "A devcontainer spec used locally and in CI.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://github.com/devcontainers/spec",
+        "https://github.com/devcontainers/features"
       ],
       "related_concepts": []
     }
@@ -5059,21 +5059,21 @@
     "curriculum": {
       "phase": "synthesis",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Agent tooling interfaces: MCP, permissions, and sandboxes when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Expose tools to agents through MCP with explicit permissions and sandboxes.",
       "mechanisms": [
-        "The first-principles mechanism behind Agent tooling interfaces: MCP, permissions, and sandboxes",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The agents trade-off and its failure boundary"
+        "tool schemas and capabilities",
+        "permission prompts",
+        "sandboxed execution"
       ],
-      "production_scenario": "Apply Agent tooling interfaces: MCP, permissions, and sandboxes inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "An agent tool can read any file because the server exposed the filesystem without limits.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "A tool's power is defined by its sandbox, not its description."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "A denied-permission trace for an out-of-scope request.",
+      "artifact": "An MCP server with scoped tools and permission tests.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://github.com/modelcontextprotocol/modelcontextprotocol",
+        "https://github.com/modelcontextprotocol/typescript-sdk"
       ],
       "related_concepts": []
     }
@@ -5090,21 +5090,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Vite's dev server and module-boundary hot reload when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Explain how Vite serves modules on demand and how HMR boundaries accept updates.",
       "mechanisms": [
-        "The first-principles mechanism behind Vite's dev server and module-boundary hot reload",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The bundling trade-off and its failure boundary"
+        "native ESM dev serving",
+        "dependency pre-bundling",
+        "HMR accept boundaries"
       ],
-      "production_scenario": "Apply Vite's dev server and module-boundary hot reload inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "An edit reloads the whole page because no module in the chain accepts the update.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "HMR propagates up until a boundary accepts; without one it falls back to a reload."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "A log of HMR update propagation and the accepting boundary.",
+      "artifact": "An HMR boundary map for one application.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://vite.dev/guide/why.html",
+        "https://vite.dev/guide/api-hmr.html"
       ],
       "related_concepts": []
     }
@@ -5119,21 +5119,21 @@
     "curriculum": {
       "phase": "foundations",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply CSS transform pipelines: PostCSS, scoping, and CSS Modules when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Run CSS through a transform pipeline with scoping and modules without breaking cascade expectations.",
       "mechanisms": [
-        "The first-principles mechanism behind CSS transform pipelines: PostCSS, scoping, and CSS Modules",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The styling trade-off and its failure boundary"
+        "PostCSS plugin ordering",
+        "CSS Modules hashing",
+        "scoping strategies"
       ],
-      "production_scenario": "Apply CSS transform pipelines: PostCSS, scoping, and CSS Modules inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "Two components share a class name and one silently restyles the other.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "Scoping changes selectors, not specificity; the cascade still applies."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "A build output showing hashed class names and the plugin order.",
+      "artifact": "A CSS pipeline with scoping and an ordering test.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://github.com/postcss/postcss",
+        "https://vite.dev/guide/features.html#css"
       ],
       "related_concepts": []
     }
@@ -5148,21 +5148,21 @@
     "curriculum": {
       "phase": "foundations",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Component workbenches: isolated rendering and story indexing when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Render components in isolation with indexed stories that double as tests and documentation.",
       "mechanisms": [
-        "The first-principles mechanism behind Component workbenches: isolated rendering and story indexing",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The testing trade-off and its failure boundary"
+        "story indexing",
+        "isolated rendering",
+        "args and controls"
       ],
-      "production_scenario": "Apply Component workbenches: isolated rendering and story indexing inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "A component only works inside the app because it depends on global providers.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "A component that cannot render in isolation has hidden dependencies."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "A story index with every component rendering without the app shell.",
+      "artifact": "A workbench with stories used as visual tests.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://github.com/storybookjs/storybook",
+        "https://developer.mozilla.org/en-US/docs/Web/API/Web_components"
       ],
       "related_concepts": []
     }
@@ -5180,21 +5180,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Module federation and micro-frontend runtime composition when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Compose independently built applications at runtime with shared modules.",
       "mechanisms": [
-        "The first-principles mechanism behind Module federation and micro-frontend runtime composition",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The architecture trade-off and its failure boundary"
+        "remote entry manifests",
+        "shared singleton resolution",
+        "version negotiation"
       ],
-      "production_scenario": "Apply Module federation and micro-frontend runtime composition inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "Two remotes load two copies of a framework and state is split.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "Sharing requires a single runtime instance, not merely matching versions."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "A network log with one shared instance loaded.",
+      "artifact": "A federation setup with a single-instance test.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://github.com/module-federation/core",
+        "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/import"
       ],
       "related_concepts": [
         "js-runtime-module-federation",
@@ -5215,21 +5215,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Visual regression pipelines: diffing pixels without flaking when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Build a visual regression pipeline whose diffs are stable across machines.",
       "mechanisms": [
-        "The first-principles mechanism behind Visual regression pipelines: diffing pixels without flaking",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The testing trade-off and its failure boundary"
+        "deterministic rendering",
+        "threshold and masking",
+        "baseline management"
       ],
-      "production_scenario": "Apply Visual regression pipelines: diffing pixels without flaking inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "Every run flags hundreds of one-pixel differences from font rendering.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "Pixel diffs need controlled environments; otherwise noise hides real regressions."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "A stable baseline run with zero false diffs across two machines.",
+      "artifact": "A visual regression pipeline with documented thresholds.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://github.com/microsoft/playwright",
+        "https://developer.mozilla.org/en-US/docs/Web/CSS/font-rendering"
       ],
       "related_concepts": []
     }
@@ -5246,21 +5246,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Bundle size budgets and verifying treeshaking actually happened when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Enforce bundle budgets in CI and verify that treeshaking removed what it should.",
       "mechanisms": [
-        "The first-principles mechanism behind Bundle size budgets and verifying treeshaking actually happened",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The performance trade-off and its failure boundary"
+        "size limits per chunk",
+        "bundle analysis",
+        "side-effect audits"
       ],
-      "production_scenario": "Apply Bundle size budgets and verifying treeshaking actually happened inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "A budget passes while an unused library is still fully included.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "A passing budget does not prove treeshaking worked; inspect the chunk."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "A CI failure on a budget breach with the offending module named.",
+      "artifact": "A budget configuration with a treeshaking verification.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://esbuild.github.io/api/#analyze",
+        "https://vite.dev/guide/build.html"
       ],
       "related_concepts": []
     }
@@ -5277,21 +5277,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Browser automation architecture: Playwright and CDP under the hood when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Automate browsers reliably and explain what the protocol does under the hood.",
       "mechanisms": [
-        "The first-principles mechanism behind Browser automation architecture: Playwright and CDP under the hood",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The testing trade-off and its failure boundary"
+        "protocol sessions",
+        "auto-waiting and actionability",
+        "trace capture"
       ],
-      "production_scenario": "Apply Browser automation architecture: Playwright and CDP under the hood inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "A test clicks a button before it is attached and fails only in CI.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "Waiting a fixed time is not synchronization; wait for actionability."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "A trace showing the actionability checks before a click.",
+      "artifact": "An automation suite with traces retained on failure.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://github.com/microsoft/playwright",
+        "https://github.com/ChromeDevTools/devtools-protocol"
       ],
       "related_concepts": []
     }
@@ -5309,21 +5309,21 @@
     "curriculum": {
       "phase": "synthesis",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Performance budgets enforced in CI with Lighthouse when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Enforce performance budgets in CI with Lighthouse runs that are stable enough to gate merges.",
       "mechanisms": [
-        "The first-principles mechanism behind Performance budgets enforced in CI with Lighthouse",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The ci trade-off and its failure boundary"
+        "lab run variance",
+        "assertion budgets",
+        "multiple runs and medians"
       ],
-      "production_scenario": "Apply Performance budgets enforced in CI with Lighthouse inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "A budget gate fails randomly because single runs vary by ten points.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "A single lab run is noise; gate on medians of repeated runs."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "A CI report with medians over repeated runs and the assertion results.",
+      "artifact": "A Lighthouse CI configuration with stable assertions.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://github.com/GoogleChrome/lighthouse-ci",
+        "https://github.com/GoogleChrome/lighthouse"
       ],
       "related_concepts": [
         "js-core-web-vitals",
@@ -5343,21 +5343,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Design token pipelines: one source, many platforms when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Transform one token source into platform outputs deterministically.",
       "mechanisms": [
-        "The first-principles mechanism behind Design token pipelines: one source, many platforms",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The styling trade-off and its failure boundary"
+        "token source format",
+        "transform pipelines",
+        "platform outputs"
       ],
-      "production_scenario": "Apply Design token pipelines: one source, many platforms inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "iOS and web colors drift because two token files are edited by hand.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "A token pipeline is only a source of truth if every platform consumes its output."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "Generated outputs for two platforms from one source with a diff check.",
+      "artifact": "A token pipeline with generated outputs and CI checks.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://github.com/design-tokens/community-group",
+        "https://github.com/amzn/style-dictionary"
       ],
       "related_concepts": []
     }
@@ -5374,21 +5374,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Automating accessibility checks: axe-core in lint and CI when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Automate accessibility checks in lint and CI and understand what they cannot catch.",
       "mechanisms": [
-        "The first-principles mechanism behind Automating accessibility checks: axe-core in lint and CI",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The accessibility trade-off and its failure boundary"
+        "static rules",
+        "runtime axe checks",
+        "manual audit boundaries"
       ],
-      "production_scenario": "Apply Automating accessibility checks: axe-core in lint and CI inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "CI passes accessibility checks while keyboard navigation is broken.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "Automated checks catch a fraction of issues; they gate regressions, not compliance."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "A CI run with an axe violation reported and fixed.",
+      "artifact": "An accessibility gate with documented coverage limits.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://github.com/dequelabs/axe-core",
+        "https://developer.mozilla.org/en-US/docs/Web/Accessibility"
       ],
       "related_concepts": []
     }
@@ -5405,21 +5405,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Versioning and changelogs for multi-package releases when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Version and release multiple packages with changesets and generated changelogs.",
       "mechanisms": [
-        "The first-principles mechanism behind Versioning and changelogs for multi-package releases",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The release trade-off and its failure boundary"
+        "changeset intents",
+        "version bumping across dependents",
+        "changelog generation"
       ],
-      "production_scenario": "Apply Versioning and changelogs for multi-package releases inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "A breaking change ships as a patch and downstream builds break overnight.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "Versioning is a per-change decision recorded with the change, not at release time."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "A release with correct bumps for dependents and a generated changelog.",
+      "artifact": "A release process with changesets in CI.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://github.com/changesets/changesets",
+        "https://nodejs.org/api/packages.html"
       ],
       "related_concepts": []
     }
@@ -6151,21 +6151,21 @@
     "curriculum": {
       "phase": "foundations",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Baseline, Browserslist, polyfill policy, and support matrices when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Define a support matrix with Baseline and Browserslist and a polyfill policy that follows it.",
       "mechanisms": [
-        "The first-principles mechanism behind Baseline, Browserslist, polyfill policy, and support matrices",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The compatibility trade-off and its failure boundary"
+        "Baseline feature status",
+        "Browserslist queries",
+        "polyfill loading policy"
       ],
-      "production_scenario": "Apply Baseline, Browserslist, polyfill policy, and support matrices inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "A feature ships that fails on a supported browser because nobody checked its status.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "A polyfill policy without a support matrix is guesswork."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "A support matrix with the feature checked against it.",
+      "artifact": "A targets policy with a verified polyfill set.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://developer.mozilla.org/en-US/docs/Glossary/Baseline/Compatibility",
+        "https://github.com/browserslist/browserslist"
       ],
       "related_concepts": []
     }
@@ -6180,21 +6180,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply pnpm workspaces, catalogs, lockfiles, and dependency policy when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Manage workspaces, catalogs and lockfiles with a dependency policy the team can enforce.",
       "mechanisms": [
-        "The first-principles mechanism behind pnpm workspaces, catalogs, lockfiles, and dependency policy",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The packages trade-off and its failure boundary"
+        "workspace protocol",
+        "catalog pinning",
+        "lockfile integrity"
       ],
-      "production_scenario": "Apply pnpm workspaces, catalogs, lockfiles, and dependency policy inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "Two packages depend on different versions of the same library and both ship.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "A lockfile records what was installed; a policy decides what is allowed."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "A dependency audit listing duplicates and the catalog fix.",
+      "artifact": "A workspace policy with enforced catalogs.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://github.com/pnpm/pnpm",
+        "https://nodejs.org/api/packages.html"
       ],
       "related_concepts": []
     }
@@ -6212,21 +6212,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply Rust-native bundler pipelines: Rolldown, Oxc, Rspack, and Turbopack when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Evaluate Rust-native bundler pipelines by parity and measurement rather than benchmarks.",
       "mechanisms": [
-        "The first-principles mechanism behind Rust-native bundler pipelines: Rolldown, Oxc, Rspack, and Turbopack",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The bundling trade-off and its failure boundary"
+        "parser and transformer pipelines",
+        "plugin compatibility",
+        "parity checks"
       ],
-      "production_scenario": "Apply Rust-native bundler pipelines: Rolldown, Oxc, Rspack, and Turbopack inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "A faster bundler drops a plugin the build depends on.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "Speed is not the first question; parity with the current build is."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "A parity checklist output for the candidate bundler.",
+      "artifact": "A bundler evaluation with parity and timing evidence.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://github.com/rolldown/rolldown",
+        "https://github.com/oxc-project/oxc"
       ],
       "related_concepts": []
     }
@@ -6244,21 +6244,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply Biome, ESLint, and typed-analysis pipeline trade-offs when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Choose between fast unified linters and typed analysis pipelines by what each can prove.",
       "mechanisms": [
-        "The first-principles mechanism behind Biome, ESLint, and typed-analysis pipeline trade-offs",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The analysis trade-off and its failure boundary"
+        "syntax-level rules",
+        "type-aware rules",
+        "CI time budgets"
       ],
-      "production_scenario": "Apply Biome, ESLint, and typed-analysis pipeline trade-offs inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "A fast linter replaces a typed one and type-dependent rules silently stop running.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "Rules that need types cannot run in a tool that does not build a program."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "A rule coverage comparison between the two configurations.",
+      "artifact": "A linting architecture with documented coverage.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://github.com/biomejs/biome",
+        "https://github.com/typescript-eslint/typescript-eslint"
       ],
       "related_concepts": []
     }
@@ -6276,21 +6276,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply Real-browser component testing and framework mount adapters when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Test components in a real browser with framework mount adapters.",
       "mechanisms": [
-        "The first-principles mechanism behind Real-browser component testing and framework mount adapters",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The testing trade-off and its failure boundary"
+        "browser mode runners",
+        "mount adapters",
+        "real event dispatch"
       ],
-      "production_scenario": "Apply Real-browser component testing and framework mount adapters inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "A component passes in a simulated DOM and fails on real layout.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "A simulated DOM has no layout; anything measuring geometry needs a browser."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "A test failing in a simulated DOM and passing in a browser with the cause named.",
+      "artifact": "A browser-mode component test setup with mount adapters.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://vitest.dev/guide/browser/",
+        "https://github.com/microsoft/playwright"
       ],
       "related_concepts": []
     }
@@ -6308,21 +6308,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply CI test sharding, retries, quarantine, and flake ownership when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Shard CI tests, retry deliberately and quarantine flakes with owners.",
       "mechanisms": [
-        "The first-principles mechanism behind CI test sharding, retries, quarantine, and flake ownership",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The ci trade-off and its failure boundary"
+        "sharding by timing",
+        "retry policies",
+        "quarantine lists"
       ],
-      "production_scenario": "Apply CI test sharding, retries, quarantine, and flake ownership inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "A flaky test is retried three times and nobody owns fixing it.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "Retries hide flakes; quarantine with ownership surfaces them."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "A flake report with owners and quarantine age.",
+      "artifact": "A CI test policy with sharding and quarantine.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://vitest.dev/guide/cli.html",
+        "https://github.com/microsoft/playwright"
       ],
       "related_concepts": []
     }
@@ -6339,21 +6339,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply Dev-server security: host checks, proxy trust, and source exposure when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Harden a dev server against host, proxy and source exposure risks.",
       "mechanisms": [
-        "The first-principles mechanism behind Dev-server security: host checks, proxy trust, and source exposure",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The security trade-off and its failure boundary"
+        "host checks",
+        "proxy trust",
+        "source file exposure"
       ],
-      "production_scenario": "Apply Dev-server security: host checks, proxy trust, and source exposure inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "A dev server bound to all interfaces exposes source files on the office network.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "A dev server is a server; defaults matter on shared networks."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "A scan showing exposed endpoints before and after hardening.",
+      "artifact": "A hardened dev server configuration with a verification scan.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://vite.dev/guide/features.html#hot-module-replacement",
+        "https://nodejs.org/api/http.html"
       ],
       "related_concepts": []
     }
@@ -6371,21 +6371,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply Production source-map privacy, upload, and error symbolication when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Upload production source maps privately and symbolicate errors without exposing sources.",
       "mechanisms": [
-        "The first-principles mechanism behind Production source-map privacy, upload, and error symbolication",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The observability trade-off and its failure boundary"
+        "hidden map references",
+        "private map upload",
+        "server-side symbolication"
       ],
-      "production_scenario": "Apply Production source-map privacy, upload, and error symbolication inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "Production maps are public and the whole source is one request away.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "Source maps for symbolication do not need to be served to browsers."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "A symbolicated error with maps stored privately.",
+      "artifact": "An error pipeline with private maps.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://github.com/mozilla/source-map",
+        "https://developer.mozilla.org/en-US/docs/Web/API/Console/trace_static"
       ],
       "related_concepts": []
     }
@@ -6403,21 +6403,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply Frontend supply-chain controls: provenance, lockfiles, audits, and policy when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Apply provenance, lockfile and audit controls to the frontend supply chain.",
       "mechanisms": [
-        "The first-principles mechanism behind Frontend supply-chain controls: provenance, lockfiles, audits, and policy",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The security trade-off and its failure boundary"
+        "lockfile integrity",
+        "provenance attestations",
+        "install scripts policy"
       ],
-      "production_scenario": "Apply Frontend supply-chain controls: provenance, lockfiles, audits, and policy inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "A compromised dependency runs a postinstall script on every developer machine.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "An audit warning is not a control; blocking install scripts is."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "A CI check failing on a lockfile mismatch or unapproved script.",
+      "artifact": "A supply-chain policy with enforced checks.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://github.com/pnpm/pnpm",
+        "https://nodejs.org/api/packages.html"
       ],
       "related_concepts": []
     }
@@ -6435,21 +6435,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply Repository generators that encode architecture without hiding it when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Write generators that encode architecture decisions without hiding them.",
       "mechanisms": [
-        "The first-principles mechanism behind Repository generators that encode architecture without hiding it",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The dx trade-off and its failure boundary"
+        "templates with visible structure",
+        "generator versioning",
+        "drift detection"
       ],
-      "production_scenario": "Apply Repository generators that encode architecture without hiding it inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "Generated projects drift from the template within months and nobody notices.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "A generator that hides structure makes the architecture unlearnable."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "A drift report between generated projects and the template.",
+      "artifact": "A generator with visible structure and drift checks.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://github.com/nrwl/nx",
+        "https://github.com/yeoman/yo"
       ],
       "related_concepts": []
     }
@@ -6467,21 +6467,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply Cross-browser compatibility CI with feature detection and targeted suites when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Run cross-browser CI with feature detection and targeted suites.",
       "mechanisms": [
-        "The first-principles mechanism behind Cross-browser compatibility CI with feature detection and targeted suites",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The compatibility trade-off and its failure boundary"
+        "browser matrix",
+        "feature detection tests",
+        "targeted suites per capability"
       ],
-      "production_scenario": "Apply Cross-browser compatibility CI with feature detection and targeted suites inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "The whole suite runs on six browsers and takes an hour for one CSS change.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "Not every test needs every browser; target by capability."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "A CI matrix with suites assigned by capability and the time saved.",
+      "artifact": "A compatibility CI configuration with targeted suites.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://github.com/microsoft/playwright",
+        "https://developer.mozilla.org/en-US/docs/Glossary/Baseline/Compatibility"
       ],
       "related_concepts": []
     }
@@ -6499,21 +6499,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply Evaluating AI-authored code changes with sandboxes, tests, and policy gates when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Evaluate AI-authored changes with sandboxes, tests and policy gates before merge.",
       "mechanisms": [
-        "The first-principles mechanism behind Evaluating AI-authored code changes with sandboxes, tests, and policy gates",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The agents trade-off and its failure boundary"
+        "sandboxed execution",
+        "test-first evaluation",
+        "policy checks"
       ],
-      "production_scenario": "Apply Evaluating AI-authored code changes with sandboxes, tests, and policy gates inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "An AI-authored change passes review because nobody ran it.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "A change is evaluated by running it, not by reading it."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "A gate report with tests, policy checks and sandbox results.",
+      "artifact": "An evaluation pipeline for AI-authored changes.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://github.com/modelcontextprotocol/modelcontextprotocol",
+        "https://vitest.dev/guide/features.html"
       ],
       "related_concepts": []
     }
@@ -8210,21 +8210,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Vitest worker pools, isolation, and deterministic test architecture when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Configure Vitest worker pools and isolation for deterministic, fast runs.",
       "mechanisms": [
-        "The first-principles mechanism behind Vitest worker pools, isolation, and deterministic test architecture",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The testing trade-off and its failure boundary"
+        "pool types",
+        "isolation per file",
+        "deterministic ordering"
       ],
-      "production_scenario": "Apply Vitest worker pools, isolation, and deterministic test architecture inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "Tests are fast but nondeterministic because files share a worker.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "Speed from shared workers costs isolation; choose per suite."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "Two runs with identical results under the chosen pool.",
+      "artifact": "A Vitest configuration with documented pool choices.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://vitest.dev/guide/improving-performance.html",
+        "https://vitest.dev/guide/features.html"
       ],
       "related_concepts": []
     }
@@ -8242,21 +8242,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Oxc, SWC, and Babel transform pipeline trade-offs when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Compare transform pipelines by correctness, plugin needs and speed on your code.",
       "mechanisms": [
-        "The first-principles mechanism behind Oxc, SWC, and Babel transform pipeline trade-offs",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The build trade-off and its failure boundary"
+        "AST compatibility",
+        "plugin ecosystems",
+        "transform parity"
       ],
-      "production_scenario": "Apply Oxc, SWC, and Babel transform pipeline trade-offs inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "A faster transformer mis-handles a decorator syntax the project uses.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "A transformer is correct for your code only when your code is the test."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "A parity run of the project's transforms across pipelines.",
+      "artifact": "A transform pipeline decision with parity evidence.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://github.com/oxc-project/oxc",
+        "https://github.com/swc-project/swc"
       ],
       "related_concepts": []
     }
@@ -8273,21 +8273,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Dependency hygiene and dead-code analysis with Knip-style graphs when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Find unused files, exports and dependencies with graph analysis and keep them out.",
       "mechanisms": [
-        "The first-principles mechanism behind Dependency hygiene and dead-code analysis with Knip-style graphs",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The analysis trade-off and its failure boundary"
+        "module graph reachability",
+        "entry point declaration",
+        "false-positive handling"
       ],
-      "production_scenario": "Apply Dependency hygiene and dead-code analysis with Knip-style graphs inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "A package carries forty unused dependencies and a hundred dead exports.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "Unused code is a graph question; grep cannot answer it."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "A report of unused items with the fixes applied.",
+      "artifact": "A hygiene check in CI with declared entry points.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://github.com/webpro-nl/knip",
+        "https://nodejs.org/api/packages.html"
       ],
       "related_concepts": []
     }
@@ -8305,21 +8305,21 @@
     "curriculum": {
       "phase": "synthesis",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply TypeScript language-service plugin architecture when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Build a language-service plugin that adds diagnostics without slowing the editor.",
       "mechanisms": [
-        "The first-principles mechanism behind TypeScript language-service plugin architecture",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The protocols trade-off and its failure boundary"
+        "plugin registration",
+        "proxying the language service",
+        "performance budgets"
       ],
-      "production_scenario": "Apply TypeScript language-service plugin architecture inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "A plugin adds a check that doubles hover latency in large files.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "A plugin runs on every keystroke; its cost is the editor's cost."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "A latency measurement with the plugin enabled and disabled.",
+      "artifact": "A plugin with tests and a measured latency budget.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://github.com/microsoft/TypeScript/wiki/Writing-a-Language-Service-Plugin",
+        "https://www.typescriptlang.org/tsconfig/plugins.html"
       ],
       "related_concepts": []
     }
@@ -8337,21 +8337,21 @@
     "curriculum": {
       "phase": "synthesis",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Webpack to Vite or Rspack migration with measured rollback when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Migrate a build between bundlers with parity checks, median measurements and a rehearsed rollback.",
       "mechanisms": [
-        "The first-principles mechanism behind Webpack to Vite or Rspack migration with measured rollback",
-        "incremental graphs, deterministic caching, plugin contracts, diagnostics, and maintenance cost",
-        "The migration trade-off and its failure boundary"
+        "parity as observable properties",
+        "repeated measurements",
+        "switch-based rollback"
       ],
-      "production_scenario": "Apply Webpack to Vite or Rspack migration with measured rollback inside a frontend platform team shipping a tool used locally and in CI across a large monorepo with security and compatibility constraints.",
+      "production_scenario": "A migration ships and a dynamic import that used to split is inlined.",
       "misconceptions": [
-        "Optimizing the happy-path command while ignoring invalidation, deterministic output, actionable diagnostics, and adoption cost."
+        "Byte-identical output is impossible; parity is a checklist."
       ],
-      "evidence": "Golden fixtures, cache hit and invalidation tests, failure diagnostics, CI integration, and a measured before/after workflow.",
-      "artifact": "Extend the cumulative toolchain slice with a stable contract, deterministic tests, diagnostics, documentation, and adoption evidence.",
+      "evidence": "A parity script output and a measurement table with medians.",
+      "artifact": "A migration with both lines behind a switch and a rollback note.",
       "primary_sources": [
-        "https://nodejs.org/api/",
-        "https://github.com/analysis-tools-dev/static-analysis"
+        "https://vite.dev/guide/why.html",
+        "https://github.com/web-infra-dev/rspack"
       ],
       "related_concepts": []
     }
