@@ -438,7 +438,7 @@ Say each of these in your own words before opening the check:
 /// Run the teaching pipeline for a planned session and publish one immutable
 /// lesson version. Failures keep the session and its error for an explicit retry.
 pub async fn prepare(state: &AppState, id: &SessionId) -> Result<Session> {
-    let (lease, session, program, concept, dossier, contract, profile, path) = {
+    let (lease, session, program, concept, dossier, contract, profile, path, budget) = {
         let conn = state.db.0.lock().unwrap();
         let session = sessions::get(&conn, id).map_err(e)?;
         if matches!(
@@ -482,8 +482,13 @@ pub async fn prepare(state: &AppState, id: &SessionId) -> Result<Session> {
             custom_bin: tutor.custom_agent_bin.clone().unwrap_or_default(),
             prompt_version: format!("{}.{}", program.prompt_profile, program.prompt_version),
         };
+        let budget = crate::generator::LessonBudget::for_minutes(session_minutes(
+            &conn,
+            id,
+            program.session_minutes,
+        ));
         (
-            lease, session, program, concept, dossier, contract, profile, path,
+            lease, session, program, concept, dossier, contract, profile, path, budget,
         )
     };
     let course_id = session.context.course.course_id.clone();
@@ -496,6 +501,7 @@ pub async fn prepare(state: &AppState, id: &SessionId) -> Result<Session> {
                 dossier: &dossier,
                 focus: &course_id,
                 curriculum: &concept.curriculum,
+                budget,
             },
             &contract,
             &profile,
@@ -631,6 +637,24 @@ fn lifecycle_legacy(status: Status) -> &'static str {
 
 /// Render a prepared shared-runtime lesson. Planned/preparing sessions have no
 /// content yet and return `None`.
+/// The minutes this session was given. A session started from an appointment
+/// inherits that day's length; one started by hand takes the class default.
+pub fn session_minutes(conn: &Connection, id: &SessionId, default: i64) -> i64 {
+    // The appointment is known before the claim through the session's own
+    // context, and after it through the reference the claim records.
+    conn.query_row(
+        "SELECT o.duration_minutes FROM schedule_occurrences o
+         WHERE o.session_ref = ?1
+            OR o.id = (SELECT json_extract(context_json,'$.selection.occurrence_id') FROM study_sessions WHERE id = ?2)
+         LIMIT 1",
+        params![format!("study:{}", id.0), id.0],
+        |r| r.get::<_, i64>(0),
+    )
+    .ok()
+    .filter(|m| *m > 0)
+    .unwrap_or(default)
+}
+
 pub fn view(conn: &Connection, id: &SessionId) -> Result<Option<EngineeringLessonView>> {
     let Some(session) = get(conn, id)? else {
         return Ok(None);
@@ -707,7 +731,7 @@ pub fn view(conn: &Connection, id: &SessionId) -> Result<Option<EngineeringLesso
         agent_used: stored.source,
         prompt_profile: program.prompt_profile,
         prompt_version: program.prompt_version,
-        estimated_minutes: program.session_minutes,
+        estimated_minutes: session_minutes(conn, id, program.session_minutes),
         status: legacy_status(session.status).into(),
     }))
 }

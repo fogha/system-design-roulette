@@ -10,6 +10,13 @@ export interface ScheduleCandidate {
   minute: number;
   weekdays: number[];
   session_minutes: number;
+  /** Minutes for particular weekdays; others use `session_minutes`. */
+  durations?: Record<string, number>;
+}
+
+/** The minutes a study time lasts on a weekday: its own figure, or the class default. */
+export function dayMinutes(durations: Record<string, number> | undefined, weekday: number, fallback: number): number {
+  return durations?.[String(weekday)] ?? fallback;
 }
 
 export interface ConflictScope {
@@ -54,10 +61,11 @@ export function scheduleConflicts(
   const conflicts: ScheduleConflict[] = [];
   for (const candidate of candidates) {
     for (const weekday of candidate.weekdays) {
-      const mine = interval(weekday, candidate.hour, candidate.minute, candidate.session_minutes);
+      const mine = interval(weekday, candidate.hour, candidate.minute, dayMinutes(candidate.durations, weekday, candidate.session_minutes));
       for (const slot of existing) {
-        const minutes = program(slot.subject_id)?.session_minutes ?? 30;
+        const fallback = program(slot.subject_id)?.session_minutes ?? 30;
         for (const theirs of slot.weekdays) {
+          const minutes = dayMinutes(slot.durations, theirs, fallback);
           if (!overlaps(mine, interval(theirs, slot.hour, slot.minute, minutes))) continue;
           conflicts.push({
             weekday, hour: candidate.hour, minute: candidate.minute, subject_id: candidate.subject_id, label,

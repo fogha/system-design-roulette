@@ -254,10 +254,13 @@ pub fn inspect(conn: &Connection) -> Result<PrimaryImport> {
         return Ok(result);
     }
     let version: u32 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
-    // v8 only rebuilt classroom check evidence; the primary tables are the v7 shape.
-    if !(7..=9).contains(&version) {
+    // v8 only rebuilt classroom check evidence, v9 added appointments and v10
+    // per-day study lengths; the primary tables have kept the v7 shape since.
+    const EARLIEST: u32 = 7;
+    const LATEST: u32 = 10;
+    if !(EARLIEST..=LATEST).contains(&version) {
         return Err(invalid(format!(
-            "Primary import requires schema v7 to v9, found v{version}."
+            "Primary import requires schema v{EARLIEST} to v{LATEST}, found v{version}."
         )));
     }
     super::migrations::validate_recorded_schema(conn)?;

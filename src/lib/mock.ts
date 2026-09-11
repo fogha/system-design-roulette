@@ -257,7 +257,7 @@ let mockClassroomSlots: ClassroomSlotView[] = requestedClass
           CLASSROOM_CATALOG.find((item) => item.id === requestedClass)?.kind ?? 'engineering',
         hour: 7,
         minute: 30,
-        weekdays: [1, 2, 3, 4, 5, 6],
+        weekdays: [1, 2, 3, 4, 5, 6], durations: {},
         enabled: true,
         owed: params.has('classDue') || params.has('languageDue'),
         next_fire_at: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString().slice(0, 19),
@@ -803,6 +803,7 @@ export const mockApi = {
     minute: number;
     weekdays: number[];
     enabled: boolean;
+    durations?: Record<string, number>;
   }) => {
     const id = input.id ?? Math.max(800, ...mockClassroomSlots.map((slot) => slot.id)) + 1;
     const catalog = CLASSROOM_CATALOG.find((item) => item.id === input.subject_id)!;
@@ -812,6 +813,7 @@ export const mockApi = {
       label: catalog.label,
       short_code: catalog.short,
       kind: catalog.kind,
+      durations: Object.fromEntries(Object.entries(input.durations ?? {}).filter(([day]) => input.weekdays.includes(Number(day)))),
       hour: input.hour,
       minute: input.minute,
       weekdays: input.weekdays,
@@ -905,6 +907,7 @@ export const mockApi = {
         label: catalog.label,
         short_code: catalog.short,
         kind: catalog.kind,
+        durations: {},
         hour: slot.hour,
         minute: slot.minute,
         weekdays: slot.weekdays,

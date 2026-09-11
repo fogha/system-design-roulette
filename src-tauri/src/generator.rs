@@ -377,6 +377,68 @@ pub fn validate_generated_quiz(questions: &[GeneratedQuestion]) -> std::result::
 /// accepting the half-length lessons that previously felt thin.
 const MIN_COURSE_WORDS: usize = 3_200;
 
+/// How much lesson a session's minutes deserve.
+///
+/// Thirty minutes is the base lesson. Up to an hour the lesson goes deeper: a
+/// larger word budget, so the tutor adds a second worked trace and a fuller
+/// practical rather than compressing. Past an hour more words would only be
+/// padding, so the scale stops at one and a half times the base and the
+/// remaining time is spent on further topics instead.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LessonBudget {
+    /// The session's real length, which the lesson reports as its estimate.
+    pub minutes: i64,
+    /// Percent of the base word figures, 100 to 150.
+    pub scale_percent: usize,
+}
+
+impl LessonBudget {
+    pub const BASE_MINUTES: i64 = 30;
+    pub const DEEPEST_MINUTES: i64 = 60;
+
+    pub fn for_minutes(minutes: i64) -> Self {
+        let depth = minutes.clamp(Self::BASE_MINUTES, Self::DEEPEST_MINUTES);
+        let scale_percent = 100
+            + ((depth - Self::BASE_MINUTES) * 50 / (Self::DEEPEST_MINUTES - Self::BASE_MINUTES))
+                as usize;
+        Self {
+            minutes: minutes.max(1),
+            scale_percent,
+        }
+    }
+    fn scaled(&self, words: usize) -> usize {
+        words * self.scale_percent / 100
+    }
+    pub fn min_words(&self) -> usize {
+        self.scaled(MIN_COURSE_WORDS)
+    }
+    pub fn section_minimum(&self, index: usize) -> usize {
+        self.scaled(MIN_COURSE_SECTION_WORDS[index])
+    }
+    /// The range the prompt asks for, matching the base prompt's 3,500-4,500.
+    pub fn target_words(&self) -> (usize, usize) {
+        (self.scaled(3_500), self.scaled(4_500))
+    }
+    /// Stated last in the prompt, so it overrides the base figures above it.
+    pub fn prompt_line(&self) -> String {
+        let (low, high) = self.target_words();
+        let depth = self
+            .minutes
+            .clamp(Self::BASE_MINUTES, Self::DEEPEST_MINUTES);
+        format!(
+            "LENGTH FOR THIS SESSION (this overrides the general figures above): the learner has {depth} minutes for this lesson. Write {low}-{high} words of markdown; a deterministic gate rejects anything below {} words and scales every section minimum by {}%. Reach the length through substance — a further worked trace, a fuller practical, a production decision with its evidence — never through restatement.",
+            self.min_words(),
+            self.scale_percent
+        )
+    }
+}
+
+impl Default for LessonBudget {
+    fn default() -> Self {
+        Self::for_minutes(Self::BASE_MINUTES)
+    }
+}
+
 const REQUIRED_COURSE_SECTION_TITLES: [&str; 10] = [
     "Why this matters",
     "The simple version",
@@ -695,15 +757,16 @@ fn is_depth_failure(reason: &str) -> bool {
 
 /// A per-section measurement of the draft against the gate it must clear, so a
 /// correction pass knows exactly where to add substance instead of guessing.
-fn course_depth_report(markdown: &str) -> String {
+fn course_depth_report(markdown: &str, budget: LessonBudget) -> String {
     let total = markdown.split_whitespace().count();
     let mut lines = vec![format!(
-        "- whole course: {total} words, needs at least {MIN_COURSE_WORDS}"
+        "- whole course: {total} words, needs at least {}",
+        budget.min_words()
     )];
     match course_section_word_counts(markdown) {
         Ok(counts) => {
             for (index, count) in counts.into_iter().enumerate() {
-                let minimum = MIN_COURSE_SECTION_WORDS[index];
+                let minimum = budget.section_minimum(index);
                 let verdict = match minimum.checked_sub(count) {
                     Some(0) | None => "meets its minimum".to_string(),
                     Some(shortfall) => format!("SHORT by about {shortfall} words"),
@@ -719,21 +782,34 @@ fn course_depth_report(markdown: &str) -> String {
     lines.join("\n")
 }
 
+/// The base gate: a thirty-minute lesson.
 pub fn validate_generated_course(course: &GeneratedCourse) -> std::result::Result<(), String> {
-    validate_course_body(course)?;
+    validate_generated_course_for(course, LessonBudget::default())
+}
+
+pub fn validate_generated_course_for(
+    course: &GeneratedCourse,
+    budget: LessonBudget,
+) -> std::result::Result<(), String> {
+    validate_course_body(course, budget)?;
     validate_course_metadata(course)
 }
 
-fn validate_course_body(course: &GeneratedCourse) -> std::result::Result<(), String> {
+fn validate_course_body(
+    course: &GeneratedCourse,
+    budget: LessonBudget,
+) -> std::result::Result<(), String> {
     let word_count = course.markdown.split_whitespace().count();
-    if word_count < MIN_COURSE_WORDS {
+    let min_words = budget.min_words();
+    if word_count < min_words {
         return Err(format!(
-            "course is too thin: only {word_count} words; at least {MIN_COURSE_WORDS} are required"
+            "course is too thin: only {word_count} words; at least {min_words} are required for a {}-minute lesson",
+            budget.minutes.clamp(LessonBudget::BASE_MINUTES, LessonBudget::DEEPEST_MINUTES)
         ));
     }
     let section_counts = course_section_word_counts(&course.markdown)?;
     for (index, count) in section_counts.into_iter().enumerate() {
-        let minimum = MIN_COURSE_SECTION_WORDS[index];
+        let minimum = budget.section_minimum(index);
         if count < minimum {
             return Err(format!(
                 "course section ## {} is too thin: {count} words; at least {minimum} are required",
@@ -883,6 +959,8 @@ pub struct CourseRequest<'a> {
     pub dossier: &'a str,
     pub focus: &'a str,
     pub curriculum: &'a crate::db::CurriculumBrief,
+    /// How deep the lesson should go for the session's minutes.
+    pub budget: LessonBudget,
 }
 
 struct CourseEditContext<'a> {
@@ -892,6 +970,7 @@ struct CourseEditContext<'a> {
     custom_bin: &'a str,
     model: &'a str,
     label: &'a str,
+    budget: LessonBudget,
 }
 
 pub const COURSE_PROMPT: &str = include_str!("../prompts/course.txt");
@@ -1222,11 +1301,12 @@ impl Generator {
         custom_bin: &str,
         model: &str,
         context: &str,
+        budget: LessonBudget,
     ) -> Result<GeneratedCourse> {
         course.markdown = normalize_course_headings(&course.markdown);
         // Body corrections cannot replace already valid questions or exercises.
         for attempt in 0..=MAX_QUALITY_CORRECTIONS {
-            let Err(reason) = validate_course_body(&course) else {
+            let Err(reason) = validate_course_body(&course, budget) else {
                 break;
             };
             if attempt == MAX_QUALITY_CORRECTIONS {
@@ -1234,12 +1314,12 @@ impl Generator {
             }
             self.log(format!("{agent} is correcting lesson prose: {reason}"));
             let markdown = if is_depth_failure(&reason) {
-                self.expand_course_body(&course, agent, custom_bin, model, context)
+                self.expand_course_body(&course, agent, custom_bin, model, context, budget)
                     .await?
             } else {
                 let prompt = format!(
                     "Correct only this lesson's Markdown. Return plain Markdown, never JSON.\n\nCOURSE_CONTEXT: {context}\nQUALITY_GATE_FAILURE: {reason}\nREQUIRED_SECTION_ORDER (exact headings, no numbering or subtitles):\n{}\nDEPTH REQUIREMENTS:\n{}\n\nPreserve the topic, worked examples, code, citations and section depth. Use the canonical section order. In The simple version include an explicit sentence beginning `Where the analogy breaks:`. Do not add assessment metadata.\n\nLESSON_BODY:\n{}",
-                    REQUIRED_COURSE_SECTION_TITLES.map(|title| format!("## {title}")).join("\n"), course_depth_report(&course.markdown), course.markdown
+                    REQUIRED_COURSE_SECTION_TITLES.map(|title| format!("## {title}")).join("\n"), course_depth_report(&course.markdown, budget), course.markdown
                 );
                 self.run_prose_for(agent, custom_bin, &prompt, Duration::from_secs(720), model)
                     .await?
@@ -1273,17 +1353,21 @@ impl Generator {
         custom_bin: &str,
         model: &str,
         context: &str,
+        budget: LessonBudget,
     ) -> Result<String> {
         let (preamble, mut sections) = split_course_sections(&course.markdown);
         let mut deepened = 0;
         let mut total = course.markdown.split_whitespace().count();
+        let session_minutes = budget
+            .minutes
+            .clamp(LessonBudget::BASE_MINUTES, LessonBudget::DEEPEST_MINUTES);
         for index in 0..sections.len() {
             let words = sections[index].split_whitespace().count();
-            let target = MIN_COURSE_SECTION_WORDS[index];
+            let target = budget.section_minimum(index);
             // Sections at their floor still need the course to clear its total,
             // so ask for a margin rather than the bare minimum.
             let goal = target + target / 4;
-            if words >= target && (total >= MIN_COURSE_WORDS || words >= goal) {
+            if words >= target && (total >= budget.min_words() || words >= goal) {
                 continue;
             }
             // A one-section request tends to overshoot badly, and a course the
@@ -1294,7 +1378,7 @@ impl Generator {
                 "You are deepening one section of a course you already wrote. Rewrite only this \
                  section.\n\nCOURSE_CONTEXT: {context}\nCOURSE_TITLE: {}\nSECTION: ## {title}\n\
                  CURRENT LENGTH: {words} words\nREQUIRED LENGTH: between {goal} and {ceiling} \
-                 words — the whole course is read in one 30-minute session, so staying inside \
+                 words — the whole course is read in one {session_minutes}-minute session, so staying inside \
                  that range matters as much as reaching it.\n\n\
                  Rewrite this section so it reaches the required length through substance a reader \
                  could act on: the next step of the mechanism, a worked trace with the observation \
@@ -1351,7 +1435,7 @@ impl Generator {
                 .map_err(|error| GenError::Parse(format!("could not serialize course: {error}")))?;
             let prompt = format!(
                 "{}\n\nCOURSE_CONTEXT: {}\nCURRICULUM_BRIEF: {brief}\nLEARNER_DOSSIER:\n{}\nDEPTH MEASUREMENT:\n{}\nRETRIEVED SOURCE MATERIAL:\n{}\nDRAFT_COURSE:\n{draft}",
-                include_str!("../prompts/course-audit.txt"), context.label, context.dossier, course_depth_report(&course.markdown),
+                include_str!("../prompts/course-audit.txt"), context.label, context.dossier, course_depth_report(&course.markdown, context.budget),
                 crate::research::format_source_material(sources),
             );
             scoped.log(format!(
@@ -1370,7 +1454,8 @@ impl Generator {
                 .await?;
             let score_result = review.scores.validate();
             if score_result.is_ok() && review.issues.is_empty() {
-                validate_generated_course(&course).map_err(GenError::Quality)?;
+                validate_generated_course_for(&course, context.budget)
+                    .map_err(GenError::Quality)?;
                 return Ok(course);
             }
             let reason = format!(
@@ -1414,7 +1499,7 @@ impl Generator {
                 if issues.is_empty() {
                     continue;
                 }
-                let minimum = MIN_COURSE_SECTION_WORDS[index];
+                let minimum = context.budget.section_minimum(index);
                 let correction = format!(
                     "Correct only the `{title}` section of this lesson. Return that section's Markdown body only, without its heading, any other section, or JSON. Resolve each listed defect while preserving useful mechanisms, code and citations. Keep at least {minimum} substantive words. Do not rewrite or summarize other sections.\n\nEDITOR_FEEDBACK:\n{}\nCURRICULUM_BRIEF: {brief}\nLEARNER_DOSSIER: {}\nRETRIEVED SOURCE MATERIAL:\n{}\nCURRENT_SECTION:\n{}\nFULL_LESSON_FOR_CONTEXT:\n{}",
                     issues.join("\n"), context.dossier, crate::research::format_source_material(sources), sections[index], course.markdown,
@@ -1457,6 +1542,7 @@ impl Generator {
                     context.custom_bin,
                     context.model,
                     context.label,
+                    context.budget,
                 )
                 .await?;
             course = self
@@ -1467,6 +1553,7 @@ impl Generator {
                     context.custom_bin,
                     context.model,
                     context.label,
+                    context.budget,
                 )
                 .await?;
             // The corrected result must pass another audit; a score for an older
@@ -1568,6 +1655,7 @@ impl Generator {
     /// Replace the model's reading list with a verified one and require the
     /// course to actually cite the retrieved documentation. A course that cites
     /// nothing gets one same-provider correction before failing.
+    #[allow(clippy::too_many_arguments)]
     async fn ensure_source_grounding(
         &self,
         mut course: GeneratedCourse,
@@ -1576,6 +1664,7 @@ impl Generator {
         custom_bin: &str,
         model: &str,
         context: &str,
+        budget: LessonBudget,
     ) -> Result<GeneratedCourse> {
         course.resources = self.verified_reading_list(&course.resources, sources).await;
         if sources.len() < MIN_GROUNDED_SOURCES {
@@ -1608,7 +1697,7 @@ impl Generator {
             .run_prose_for(agent, custom_bin, &prompt, Duration::from_secs(720), model)
             .await?;
         let mut corrected = self
-            .ensure_course_quality(course, agent, custom_bin, model, context)
+            .ensure_course_quality(course, agent, custom_bin, model, context, budget)
             .await?;
         let cited = crate::research::cited_source_count(&corrected.markdown, sources);
         if cited < required {
@@ -1650,10 +1739,25 @@ impl Generator {
             .write_course(&prompt, &agent, &custom_bin, &model, &context)
             .await?;
         let course = scoped
-            .ensure_course_quality(course, &agent, &custom_bin, &model, &context)
+            .ensure_course_quality(
+                course,
+                &agent,
+                &custom_bin,
+                &model,
+                &context,
+                request.budget,
+            )
             .await?;
         let course = scoped
-            .ensure_source_grounding(course, &sources, &agent, &custom_bin, &model, &context)
+            .ensure_source_grounding(
+                course,
+                &sources,
+                &agent,
+                &custom_bin,
+                &model,
+                &context,
+                request.budget,
+            )
             .await?;
         let course = scoped
             .edit_course_quality(
@@ -1665,6 +1769,7 @@ impl Generator {
                     custom_bin: &custom_bin,
                     model: &model,
                     label: &context,
+                    budget: request.budget,
                 },
                 &sources,
             )
@@ -1695,6 +1800,7 @@ impl Generator {
                 .replace("{{TITLE}}", request.title)
                 .replace("{{CATEGORY}}", request.category)
         );
+        let task = format!("{task}\n\n{}", request.budget.prompt_line());
         let prompt = with_teacher(request.dossier, &task, request.focus);
         let context = format!("classroom course for {}", profile.subject_id);
         let course = scoped
@@ -1713,6 +1819,7 @@ impl Generator {
                 &profile.custom_bin,
                 &profile.model,
                 &context,
+                request.budget,
             )
             .await?;
         let course = scoped
@@ -1723,6 +1830,7 @@ impl Generator {
                 &profile.custom_bin,
                 &profile.model,
                 &context,
+                request.budget,
             )
             .await?;
         let course = scoped
@@ -1735,6 +1843,7 @@ impl Generator {
                     custom_bin: &profile.custom_bin,
                     model: &profile.model,
                     label: &context,
+                    budget: request.budget,
                 },
                 &sources,
             )
@@ -2661,6 +2770,68 @@ mod quality_gate_tests {
     }
 
     #[test]
+    fn a_lesson_budget_deepens_to_an_hour_and_no_further() {
+        use super::LessonBudget;
+        let base = LessonBudget::for_minutes(30);
+        assert_eq!(base, LessonBudget::default());
+        assert_eq!(base.scale_percent, 100);
+        assert_eq!(base.min_words(), super::MIN_COURSE_WORDS);
+        assert_eq!(base.target_words(), (3_500, 4_500));
+
+        // Less than the base is still a base lesson: a short slot does not
+        // produce a thin one.
+        assert_eq!(LessonBudget::for_minutes(10).scale_percent, 100);
+        assert_eq!(LessonBudget::for_minutes(10).minutes, 10);
+
+        let mid = LessonBudget::for_minutes(45);
+        assert_eq!(mid.scale_percent, 125);
+        assert_eq!(mid.min_words(), 4_000);
+
+        let hour = LessonBudget::for_minutes(60);
+        assert_eq!(hour.scale_percent, 150);
+        assert_eq!(hour.min_words(), 4_800);
+        assert_eq!(
+            hour.section_minimum(2),
+            900,
+            "core mechanics grows with the rest"
+        );
+
+        // Past an hour the words stop growing; the time goes to more topics.
+        let afternoon = LessonBudget::for_minutes(240);
+        assert_eq!(afternoon.scale_percent, 150);
+        assert_eq!(afternoon.minutes, 240, "the real length is still reported");
+        assert!(afternoon.prompt_line().contains("60 minutes"));
+        assert!(hour.prompt_line().contains("4800 words") || hour.prompt_line().contains("4,800"));
+    }
+
+    #[test]
+    fn the_base_lesson_is_too_thin_for_an_hour() {
+        let course = GeneratedCourse {
+            title: "A complete course".into(),
+            markdown: complete_course_markdown(),
+            resources: Vec::new(),
+            key_takeaways: vec!["Use evidence.".into()],
+            exit_questions: (0..5).map(exit_check).collect(),
+            exercise: Some(Exercise {
+                title: "Build the production slice".into(),
+                instructions: "Implement the smallest useful slice, measure its behavior, test the failure path, document the chosen trade-off, and show how another engineer can run it. "
+                    .repeat(6),
+                starter_code: None,
+                deliverable: Some("A tested artifact plus before-and-after evidence.".into()),
+                hints: vec!["Start at the boundary.".into()],
+            }),
+        };
+        assert!(validate_generated_course(&course).is_ok());
+        let error =
+            super::validate_generated_course_for(&course, super::LessonBudget::for_minutes(60))
+                .unwrap_err();
+        assert!(
+            error.contains("too thin") && error.contains("60-minute"),
+            "{error}"
+        );
+    }
+
+    #[test]
     fn course_quality_gate_rejects_padding_around_a_thin_section() {
         let mut course = GeneratedCourse {
             title: "A padded course".into(),
@@ -2785,7 +2956,7 @@ mod quality_gate_tests {
             &"mechanism evidence decision experiment ".repeat(200),
             "one short paragraph. ",
         );
-        let report = super::course_depth_report(&thin);
+        let report = super::course_depth_report(&thin, super::LessonBudget::default());
 
         assert!(report.contains("whole course:"));
         assert!(
@@ -3003,6 +3174,7 @@ print((root/f'response-{index}').read_text(),end='')
                     custom_bin: &provider.command,
                     model: "saved-model",
                     label: "Linux Bash",
+                    budget: super::LessonBudget::default(),
                 },
                 &[],
             )
@@ -3035,6 +3207,7 @@ print((root/f'response-{index}').read_text(),end='')
                 &provider.command,
                 "saved-model",
                 "Linux Bash",
+                super::LessonBudget::default(),
             )
             .await
             .unwrap();
@@ -3061,7 +3234,14 @@ print((root/f'response-{index}').read_text(),end='')
         let provider =
             WritingProvider::new(&["ownership boundary observation rollback ".repeat(130)]);
         let repaired = test_generator()
-            .ensure_course_quality(course, "custom", &provider.command, "saved-model", "Bash")
+            .ensure_course_quality(
+                course,
+                "custom",
+                &provider.command,
+                "saved-model",
+                "Bash",
+                super::LessonBudget::default(),
+            )
             .await
             .unwrap();
         let (_, final_sections) = super::split_course_sections(&repaired.markdown);
@@ -3101,6 +3281,7 @@ print((root/f'response-{index}').read_text(),end='')
                     custom_bin: &provider.command,
                     model: "saved-model",
                     label: "Bash",
+                    budget: super::LessonBudget::default(),
                 },
                 &[],
             )
@@ -3135,6 +3316,7 @@ print((root/f'response-{index}').read_text(),end='')
                     dossier: "",
                     focus: "frontend-architecture",
                     curriculum: &curriculum,
+                    budget: super::LessonBudget::default(),
                 },
                 "Teach the configured subject.",
                 &profile,
@@ -3258,6 +3440,7 @@ else:
                 &custom_bin,
                 "configured-model",
                 "test classroom course",
+                super::LessonBudget::default(),
             )
             .await
             .expect("same-provider quality correction should succeed");
@@ -3311,6 +3494,7 @@ else:
                 "/definitely/not/a/provider",
                 "configured-model",
                 "grounding test",
+                super::LessonBudget::default(),
             )
             .await
             .expect("a course citing its sources needs no correction");
@@ -3336,6 +3520,7 @@ else:
                 "/definitely/not/a/provider",
                 "configured-model",
                 "offline grounding test",
+                super::LessonBudget::default(),
             )
             .await
             .expect("a network failure must not fail the lesson");
@@ -3387,6 +3572,7 @@ else:
                 &custom_bin,
                 "configured-model",
                 "citation gate test",
+                super::LessonBudget::default(),
             )
             .await
             .expect_err("an uncited course must not reach the learner");

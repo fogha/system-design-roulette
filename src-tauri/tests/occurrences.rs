@@ -76,6 +76,7 @@ fn rule(conn: &Connection, subject: &str, hour: u32, minute: u32, weekdays: Vec<
             minute,
             weekdays,
             enabled: true,
+            durations: Default::default(),
         },
     )
     .unwrap()
@@ -315,6 +316,7 @@ fn editing_a_rule_refreshes_unfired_appointments_and_deleting_keeps_history() {
             minute: 15,
             weekdays: vec![1, 2, 3, 4, 5, 6, 7],
             enabled: true,
+            durations: Default::default(),
         },
     )
     .unwrap();
@@ -347,6 +349,7 @@ fn editing_a_rule_refreshes_unfired_appointments_and_deleting_keeps_history() {
             minute: 0,
             weekdays: vec![1, 2, 3, 4, 5, 6, 7],
             enabled: true,
+            durations: Default::default(),
         },
     )
     .unwrap();
@@ -477,4 +480,101 @@ fn an_unfired_appointment_can_move_within_its_day_and_keeps_the_move_until_the_r
     // Skipped appointments cannot move.
     schedule::skip(&conn, &occurrence.id, at(&ZONE, "2026-09-14", "08:10").now).unwrap();
     assert!(schedule::reschedule(&conn, &occurrence.id, "10:00", &ZONE, morning.now).is_err());
+}
+
+#[test]
+fn a_rule_can_last_a_different_time_on_each_day_and_appointments_snapshot_it() {
+    let conn = fixture();
+    // Monday half an hour, Tuesday an hour, Wednesday four hours; the class
+    // default of thirty minutes covers Thursday.
+    let durations = std::collections::BTreeMap::from([(1u8, 30i64), (2, 60), (3, 240)]);
+    let id = classroom::upsert_slot(
+        &conn,
+        &UpsertClassroomSlotInput {
+            id: None,
+            subject_id: "typescript".into(),
+            hour: 9,
+            minute: 0,
+            weekdays: vec![1, 2, 3, 4],
+            enabled: true,
+            durations: durations.clone(),
+        },
+    )
+    .unwrap();
+    activate(&conn, "typescript");
+    let view = classroom::slot_views(&conn, "2026-09-14", false)
+        .unwrap()
+        .into_iter()
+        .find(|s| s.id == id)
+        .unwrap();
+    assert_eq!(
+        view.durations, durations,
+        "the view carries each day's minutes"
+    );
+
+    // 2026-09-14 is a Monday, the 15th a Tuesday, the 16th a Wednesday, the 17th a Thursday.
+    let expect = |date: &str, minutes: i64| {
+        let made = schedule::materialize(&conn, &at(&ZONE, date, "08:00"), false).unwrap();
+        let mine = made
+            .iter()
+            .find(|o| o.rule_id == Some(id) && o.local_date == date)
+            .expect("an appointment for the rule on that date");
+        assert_eq!(
+            mine.duration_minutes, minutes,
+            "{date} lasts {minutes} minutes"
+        );
+    };
+    expect("2026-09-14", 30);
+    expect("2026-09-15", 60);
+    expect("2026-09-16", 240);
+    expect("2026-09-17", 30);
+
+    // Only sensible lengths are accepted, per day.
+    for bad in [5i64, 481] {
+        assert!(classroom::upsert_slot(
+            &conn,
+            &UpsertClassroomSlotInput {
+                id: Some(id),
+                subject_id: "typescript".into(),
+                hour: 9,
+                minute: 0,
+                weekdays: vec![1],
+                enabled: true,
+                durations: std::collections::BTreeMap::from([(1u8, bad)]),
+            },
+        )
+        .is_err());
+    }
+
+    // A four-hour Wednesday occupies the morning: another class at 11:00 on
+    // Wednesday collides, while the same time on Monday does not.
+    let clash = classroom::upsert_slot(
+        &conn,
+        &UpsertClassroomSlotInput {
+            id: None,
+            subject_id: "german".into(),
+            hour: 11,
+            minute: 0,
+            weekdays: vec![3],
+            enabled: true,
+            durations: Default::default(),
+        },
+    );
+    assert!(
+        clash.is_err(),
+        "the four-hour Wednesday is still running at 11:00"
+    );
+    assert!(classroom::upsert_slot(
+        &conn,
+        &UpsertClassroomSlotInput {
+            id: None,
+            subject_id: "german".into(),
+            hour: 11,
+            minute: 0,
+            weekdays: vec![1],
+            enabled: true,
+            durations: Default::default(),
+        },
+    )
+    .is_ok());
 }

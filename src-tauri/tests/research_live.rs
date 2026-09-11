@@ -118,6 +118,7 @@ async fn generated_course_cites_retrieved_sources_with_reachable_links() {
             dossier: "",
             focus: &concept.focus,
             curriculum: &concept.brief,
+            budget: generator::LessonBudget::default(),
         })
         .await
         .expect("grounded course generation should succeed");

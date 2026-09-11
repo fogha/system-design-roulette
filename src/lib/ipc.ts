@@ -286,6 +286,8 @@ export interface ClassroomSlotView {
   hour: number;
   minute: number;
   weekdays: number[];
+  /** Minutes on particular weekdays (1 = Monday); a day not listed uses the class default. */
+  durations: Record<string, number>;
   enabled: boolean;
   owed: boolean;
   next_fire_at: string;
@@ -704,6 +706,8 @@ const realApi = {
     minute: number;
     weekdays: number[];
     enabled: boolean;
+    /** Minutes for particular weekdays; omit a day to keep the class default. */
+    durations?: Record<string, number>;
   }) => invoke<ClassroomSlotView[]>('upsert_classroom_slot', { input }),
   deleteClassroomSlot: (id: number) =>
     invoke<ClassroomSlotView[]>('delete_classroom_slot', { id }),

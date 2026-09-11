@@ -71,6 +71,7 @@ fn planned_time_collision_never_changes_a_manual_slot_or_program() {
             minute: 0,
             weekdays: vec![7],
             enabled: true,
+            durations: Default::default(),
         },
     )
     .unwrap();
@@ -312,6 +313,7 @@ fn only_enabled_class_slots_supply_os_wakeup_times() {
             minute: 30,
             weekdays: vec![1, 2, 3, 4, 5],
             enabled: true,
+            durations: Default::default(),
         },
     )
     .unwrap();
@@ -324,6 +326,7 @@ fn only_enabled_class_slots_supply_os_wakeup_times() {
             minute: 15,
             weekdays: vec![2, 4],
             enabled: true,
+            durations: Default::default(),
         },
     )
     .unwrap();
@@ -347,6 +350,7 @@ fn multiple_subject_slots_can_complete_on_the_same_day_without_touching_primary(
             minute: 0,
             weekdays: vec![2],
             enabled: true,
+            durations: Default::default(),
         },
     )
     .unwrap();
@@ -359,6 +363,7 @@ fn multiple_subject_slots_can_complete_on_the_same_day_without_touching_primary(
             minute: 0,
             weekdays: vec![2],
             enabled: true,
+            durations: Default::default(),
         },
     )
     .unwrap();
@@ -417,6 +422,7 @@ fn generic_language_slot_routes_to_cefr_engine_without_consuming_primary() {
             minute: 0,
             weekdays: vec![2],
             enabled: true,
+            durations: Default::default(),
         },
     )
     .unwrap();
@@ -454,6 +460,7 @@ fn deleting_a_slot_cuts_the_link_on_history_without_losing_it() {
             minute: 0,
             weekdays: vec![3],
             enabled: true,
+            durations: Default::default(),
         },
     )
     .unwrap();
@@ -513,6 +520,7 @@ fn editing_a_class_slot_changes_its_fire_time_in_place() {
             minute: 30,
             weekdays: vec![1, 2, 3, 4, 5],
             enabled: true,
+            durations: Default::default(),
         },
     )
     .unwrap();
@@ -527,6 +535,7 @@ fn editing_a_class_slot_changes_its_fire_time_in_place() {
             minute: 45,
             weekdays: vec![6, 7],
             enabled: true,
+            durations: Default::default(),
         },
     )
     .unwrap();
@@ -552,6 +561,7 @@ fn editing_a_class_slot_onto_another_slots_time_is_rejected_clearly() {
             minute: 0,
             weekdays: vec![1, 2, 3, 4, 5],
             enabled: true,
+            durations: Default::default(),
         },
     )
     .unwrap();
@@ -564,6 +574,7 @@ fn editing_a_class_slot_onto_another_slots_time_is_rejected_clearly() {
             minute: 0,
             weekdays: vec![6],
             enabled: true,
+            durations: Default::default(),
         },
     )
     .unwrap();
@@ -576,6 +587,7 @@ fn editing_a_class_slot_onto_another_slots_time_is_rejected_clearly() {
             minute: 0,
             weekdays: vec![6],
             enabled: true,
+            durations: Default::default(),
         },
     );
     assert_eq!(
@@ -638,6 +650,7 @@ fn committing_a_plan_preserves_manual_slots_and_replaces_only_planned_ones() {
             minute: 0,
             weekdays: vec![7],
             enabled: true,
+            durations: Default::default(),
         },
     )
     .unwrap();
@@ -728,6 +741,7 @@ fn hand_editing_a_planned_slot_claims_it_so_replanning_leaves_it_alone() {
             minute: 15,
             weekdays: vec![1],
             enabled: true,
+            durations: Default::default(),
         },
     )
     .unwrap();
@@ -943,6 +957,7 @@ fn activation_requires_a_saved_enabled_rule_and_keeps_configuration_atomic() {
             minute: 30,
             weekdays: vec![1, 3, 5],
             enabled: false,
+            durations: Default::default(),
         },
     )
     .unwrap();
@@ -956,6 +971,7 @@ fn activation_requires_a_saved_enabled_rule_and_keeps_configuration_atomic() {
             minute: 30,
             weekdays: vec![1, 3, 5],
             enabled: true,
+            durations: Default::default(),
         },
     )
     .unwrap();
@@ -987,6 +1003,7 @@ fn activation_requires_a_saved_enabled_rule_and_keeps_configuration_atomic() {
             minute: 30,
             weekdays: vec![1, 3, 5],
             enabled: true,
+            durations: Default::default(),
         },
     )
     .unwrap();
@@ -1004,6 +1021,7 @@ fn editing_a_schedule_cannot_transfer_it_to_another_class() {
         minute: 30,
         weekdays: vec![1, 3, 5],
         enabled: true,
+        durations: Default::default(),
     };
     let id = classroom::upsert_slot(&conn, &input).unwrap();
     input.id = Some(id);
@@ -1094,6 +1112,7 @@ fn study_time(
             minute,
             weekdays,
             enabled: true,
+            durations: Default::default(),
         },
     )
 }
@@ -1202,6 +1221,7 @@ fn paused_classes_do_not_block_others_but_cannot_activate_into_an_overlap() {
             minute: 0,
             weekdays: vec![1, 3, 5],
             enabled: true,
+            durations: Default::default(),
         },
     )
     .unwrap();

@@ -41,7 +41,7 @@ function classroomSlot(
     kind: 'engineering',
     hour: at.getHours(),
     minute: at.getMinutes(),
-    weekdays: [at.getDay() === 0 ? 7 : at.getDay()],
+    weekdays: [at.getDay() === 0 ? 7 : at.getDay()], durations: {},
     enabled: true,
     owed: false,
     next_fire_at: at.toISOString(),

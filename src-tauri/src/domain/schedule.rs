@@ -190,11 +190,19 @@ struct RuleRow {
     weekdays: Vec<u8>,
     revision: i64,
     session_minutes: i64,
+    /// Minutes for particular weekdays; the class default covers the rest.
+    durations: std::collections::BTreeMap<u8, i64>,
+}
+
+impl RuleRow {
+    fn minutes_on(&self, weekday: u8) -> i64 {
+        crate::classroom::day_minutes(&self.durations, weekday, self.session_minutes)
+    }
 }
 
 fn active_rules(conn: &Connection) -> Result<Vec<RuleRow>> {
     let mut statement = conn.prepare(
-        "SELECT s.id, s.subject_id, s.hour, s.minute, s.weekdays_json, s.revision, p.session_minutes
+        "SELECT s.id, s.subject_id, s.hour, s.minute, s.weekdays_json, s.revision, p.session_minutes, s.durations_json
          FROM classroom_schedule_slots s JOIN classroom_programs p ON p.subject_id = s.subject_id
          WHERE s.enabled = 1 AND p.enabled = 1 ORDER BY s.id",
     )?;
@@ -208,6 +216,10 @@ fn active_rules(conn: &Connection) -> Result<Vec<RuleRow>> {
                 weekdays: serde_json::from_str(&r.get::<_, String>(4)?).unwrap_or_default(),
                 revision: r.get(5)?,
                 session_minutes: r.get(6)?,
+                durations: r
+                    .get::<_, Option<String>>(7)?
+                    .and_then(|json| serde_json::from_str(&json).ok())
+                    .unwrap_or_default(),
             })
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -279,7 +291,7 @@ pub fn materialize(conn: &Connection, clock: &Clock<'_>, paused: bool) -> Result
                     tx.execute(
                         "INSERT INTO schedule_occurrences (id,rule_id,course_id,rule_revision,local_date,local_time,timezone,fires_at,duration_minutes,disposition,created_at,updated_at)
                          VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,'scheduled',?10,?10)",
-                        params![id, rule.id, rule.course_id, rule.revision, today, local_time, clock.zone.name(), stamp(fires_at), rule.session_minutes, now],
+                        params![id, rule.id, rule.course_id, rule.revision, today, local_time, clock.zone.name(), stamp(fires_at), rule.minutes_on(weekday), now],
                     )?;
                     if let Some((session_ref, status)) = legacy_consumption(&tx, rule.id, &today)? {
                         let disposition = match status.as_str() {
@@ -299,7 +311,7 @@ pub fn materialize(conn: &Connection, clock: &Clock<'_>, paused: bool) -> Result
                     // Unfired appointments follow the edited rule; consumed ones keep their snapshot.
                     tx.execute(
                         "UPDATE schedule_occurrences SET rule_revision=?2, local_time=?3, fires_at=?4, duration_minutes=?5, timezone=?6, disposition=CASE WHEN disposition='due' THEN 'scheduled' ELSE disposition END, updated_at=?7 WHERE id=?1",
-                        params![existing.id, rule.revision, local_time, stamp(fires_at), rule.session_minutes, clock.zone.name(), now],
+                        params![existing.id, rule.revision, local_time, stamp(fires_at), rule.minutes_on(weekday), clock.zone.name(), now],
                     )?;
                 }
                 Some(_) => {}

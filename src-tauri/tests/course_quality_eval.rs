@@ -105,6 +105,7 @@ async fn live_golden_courses_pass_the_editor_and_deterministic_gate() {
                 dossier: &case.dossier,
                 focus: &concept.focus,
                 curriculum: &concept.curriculum,
+                budget: generator::LessonBudget::default(),
             })
             .await
             .unwrap_or_else(|error| panic!("{} live generation: {error}", case.slug));

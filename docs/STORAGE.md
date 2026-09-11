@@ -12,6 +12,7 @@ Principia Desk stores its profile under `com.darkmatter.principia-desk` in a dat
 - v4 records runner call metadata; v5 widens class tutor identities; v6 adds the shared study runtime tables; v7 assigns stable primary session identities.
 - v8 rebuilds classroom check evidence so a row belongs to either a legacy classroom session or a shared-runtime study session.
 - v9 adds rule revisions and `schedule_occurrences`: one durable appointment per rule per local service date with its resolved instant and a disposition consumed exactly once.
+- v10 lets a study-time rule last a different number of minutes on each weekday it fires on (`durations_json`, keyed by ISO weekday); a day not listed uses the class default, and appointments snapshot the day's minutes.
 
 Migration SQL and the frozen `legacy_v1.rs` implementation contribute to their checksums. Once committed, do not edit these sources, even for formatting. Add a new migration for later changes. The runner itself may evolve without changing an already-applied migration's meaning.
 

@@ -22,6 +22,26 @@
   }
   let view = $state<'times' | 'plan'>('times');
   let editing = $state(false), slotId = $state<number | null>(null), slotTime = $state('07:30'), slotDays = $state([1,2,3,4,5]);
+  /** Minutes per selected weekday. A day left at the class default is not sent, so it follows the default if that changes. */
+  let slotMinutes = $state<Record<number, number>>({});
+  const DAY_MINUTES = { min: 10, max: 480 };
+  const minutesFor = (day: number) => slotMinutes[day] ?? program.session_minutes;
+  const varied = $derived(slotDays.some(day => minutesFor(day) !== program.session_minutes));
+  function setMinutes(day: number, value: number) {
+    const minutes = Math.round(value);
+    if (!Number.isFinite(minutes)) return;
+    slotMinutes = { ...slotMinutes, [day]: Math.min(DAY_MINUTES.max, Math.max(DAY_MINUTES.min, minutes)) };
+  }
+  function applyToAll(day: number) { const m = minutesFor(day); slotMinutes = Object.fromEntries(slotDays.map(d => [d, m])); }
+  function sentDurations() {
+    return Object.fromEntries(slotDays.filter(day => minutesFor(day) !== program.session_minutes).map(day => [String(day), minutesFor(day)]));
+  }
+  function hours(minutes: number) { return minutes % 60 === 0 ? `${minutes / 60} h` : minutes > 60 ? `${Math.floor(minutes / 60)} h ${minutes % 60} min` : `${minutes} min`; }
+  function dayDurations(slot: { weekdays: number[]; durations: Record<string, number> }) {
+    const values = slot.weekdays.map(day => slot.durations[String(day)] ?? program.session_minutes);
+    const same = values.every(v => v === values[0]);
+    return same ? hours(values[0]) : slot.weekdays.map((day, i) => `${DAYS[day-1]} ${hours(values[i])}`).join(' · ');
+  }
   let busy = $state(false), error = $state(''), message = $state('');
   let goal = $state(untrack(() => program.learning_goal));
   let target = $state(untrack(() => program.target_weekly_minutes || program.language_progress?.weekly_minutes || 150));
@@ -35,20 +55,20 @@
   const editorConflicts = $derived.by(() => {
     if (!editing) return [];
     const [hour, minute] = slotTime.split(':').map(Number);
-    return scheduleConflicts([{ subject_id: program.subject_id, hour, minute, weekdays: [...slotDays], session_minutes: program.session_minutes }], app.state?.classroom_slots ?? [], app.state?.classroom_programs ?? [], { excludedSlotIds: slotId === null ? [] : [slotId] });
+    return scheduleConflicts([{ subject_id: program.subject_id, hour, minute, weekdays: [...slotDays], session_minutes: program.session_minutes, durations: sentDurations() }], app.state?.classroom_slots ?? [], app.state?.classroom_programs ?? [], { excludedSlotIds: slotId === null ? [] : [slotId] });
   });
   const previewConflicts = $derived(preview?.conflicts ?? []);
   function days(values: number[]) { return values.length === 7 ? 'Every day' : values.join(',') === '1,2,3,4,5' ? 'Weekdays' : values.map(day => DAYS[day-1]).join(', '); }
   function flip(values: number[], day: number) { return values.includes(day) ? values.filter(d => d !== day) : [...values,day].sort(); }
   function edit(id?: number) {
     const slot = slots.find(s => s.id === id);
-    slotId = slot?.id ?? null; slotTime = slot ? time(slot.hour,slot.minute) : '07:30'; slotDays = slot ? [...slot.weekdays] : [1,2,3,4,5]; editing = true; error = ''; message = '';
+    slotId = slot?.id ?? null; slotTime = slot ? time(slot.hour,slot.minute) : '07:30'; slotDays = slot ? [...slot.weekdays] : [1,2,3,4,5]; slotMinutes = slot ? Object.fromEntries(Object.entries(slot.durations).map(([d, m]) => [Number(d), m])) : {}; editing = true; error = ''; message = '';
   }
   async function saveSlot() {
     if (busy || !slotDays.length) return;
     busy = true; error = ''; message = '';
     const [hour,minute] = slotTime.split(':').map(Number);
-    try { await api.upsertClassroomSlot({ id: slotId, subject_id: program.subject_id, hour, minute, weekdays: [...slotDays], enabled: true }); await app.refresh(); editing = false; message = 'Study time saved.'; }
+    try { await api.upsertClassroomSlot({ id: slotId, subject_id: program.subject_id, hour, minute, weekdays: [...slotDays], enabled: true, durations: sentDurations() }); await app.refresh(); editing = false; message = 'Study time saved.'; }
     catch (cause) { error = String(cause); } finally { busy = false; }
   }
   async function remove(id: number) {
@@ -83,12 +103,29 @@
     {#if editing}
       <div class="editor">
         <h4>{slotId === null ? 'New study time' : 'Edit study time'}</h4>
-        <fieldset disabled={busy}><legend class="sr-only">Study time and days</legend><div class="editor-grid"><div><span class="label">Start time</span><TimePicker bind:value={slotTime} cron={false} compact label="Study start time" /></div><div><span class="label">Repeat on</span><div class="days" role="group" aria-label="Study days">{#each DAYS as day, index}<button class:active={slotDays.includes(index+1)} aria-pressed={slotDays.includes(index+1)} onclick={() => slotDays = flip(slotDays,index+1)}>{day}</button>{/each}</div>{#if !slotDays.length}<p class="error">Choose at least one day.</p>{/if}</div></div></fieldset>
+        <fieldset disabled={busy}><legend class="sr-only">Study time and days</legend><div class="editor-grid"><div><span class="label">Start time</span><TimePicker bind:value={slotTime} cron={false} compact label="Study start time" /></div><div><span class="label">Repeat on</span><div class="days" role="group" aria-label="Study days">{#each DAYS as day, index}<button class:active={slotDays.includes(index+1)} aria-pressed={slotDays.includes(index+1)} onclick={() => slotDays = flip(slotDays,index+1)}>{day}</button>{/each}</div>{#if !slotDays.length}<p class="error">Choose at least one day.</p>{/if}</div></div>
+        {#if slotDays.length}
+          <div class="day-minutes">
+            <span class="label">Time on each day <small>{varied ? 'varies by day' : `all ${hours(program.session_minutes)}, the class default`}</small></span>
+            <ul>
+              {#each slotDays as day (day)}
+                <li>
+                  <span class="mono day-name">{DAYS[day-1]}</span>
+                  <input type="number" min={DAY_MINUTES.min} max={DAY_MINUTES.max} step="5" value={minutesFor(day)} aria-label={`Minutes on ${WEEKDAY_NAMES[day-1]}`} oninput={(e) => setMinutes(day, Number(e.currentTarget.value))} />
+                  <span class="unit">min <em>{hours(minutesFor(day))}</em></span>
+                  <span class="presets">{#each [30, 60, 120, 240] as preset (preset)}<button type="button" class:on={minutesFor(day) === preset} onclick={() => setMinutes(day, preset)}>{hours(preset)}</button>{/each}</span>
+                  {#if slotDays.length > 1}<button type="button" class="text" onclick={() => applyToAll(day)}>same for all days</button>{/if}
+                </li>
+              {/each}
+            </ul>
+            <p class="day-note">Up to an hour, a lesson goes deeper. Longer days hold several topics from your route with a short break between them, and any time left over goes to retrieval practice on earlier topics.</p>
+          </div>
+        {/if}</fieldset>
         {#if editorConflicts.length}<div class="conflicts" role="alert"><span class="mono"><AlertTriangle size={12} />OVERLAPS ANOTHER STUDY TIME</span><ul>{#each editorConflicts as conflict}<li>{WEEKDAY_NAMES[conflict.weekday-1]} {time(conflict.hour,conflict.minute)} overlaps {describeConflict(conflict)}</li>{/each}</ul><p>Choose another time or shorten a session before saving.</p></div>{/if}
         <div class="actions"><button class="ghost mono-ghost" onclick={() => editing = false} disabled={busy}>Cancel</button><button class="cta mono-cta" onclick={saveSlot} disabled={busy || !slotDays.length || editorConflicts.length > 0}>{busy ? 'Saving…' : 'Save study time'}</button></div>
       </div>
     {/if}
-    <ul class="slot-list">{#each slots as slot (slot.id)}<li><div class="slot-time mono">{time(slot.hour,slot.minute)}</div><div class="slot-copy"><strong>{days(slot.weekdays)}</strong><small>{slot.in_progress ? 'Session in progress' : slot.owed ? 'Due now' : !program.enabled || !slot.enabled ? 'Paused' : `Next: ${slot.next_fire_at}`}<span class="source">{slot.source === 'manual' ? 'Manual' : 'Planned'}</span></small></div><div class="slot-actions">{#if slot.owed}<button class="ghost mono-ghost" disabled={opening || busy || !program.enabled} onclick={() => onstart(slot.id)}>Start<ArrowRight size={12} /></button>{/if}<button class="icon" aria-label={`Edit ${days(slot.weekdays)} at ${time(slot.hour,slot.minute)}`} disabled={busy || editing} onclick={() => edit(slot.id)}><Pencil size={14} /></button><button class="icon" aria-label={`Delete ${days(slot.weekdays)} at ${time(slot.hour,slot.minute)}`} disabled={busy} onclick={() => remove(slot.id)}><Trash2 size={14} /></button></div></li>{:else}{#if !editing}<li class="empty"><CalendarClock size={28} /><h4>Your week starts here</h4><p>Add a recurring time or let the planner fit sessions into your availability.</p><button class="cta mono-cta" onclick={() => edit()}><Plus size={13} />Add your first study time</button></li>{/if}{/each}</ul>
+    <ul class="slot-list">{#each slots as slot (slot.id)}<li><div class="slot-time mono">{time(slot.hour,slot.minute)}</div><div class="slot-copy"><strong>{days(slot.weekdays)} <span class="durations">· {dayDurations(slot)}</span></strong><small>{slot.in_progress ? 'Session in progress' : slot.owed ? 'Due now' : !program.enabled || !slot.enabled ? 'Paused' : `Next: ${slot.next_fire_at}`}<span class="source">{slot.source === 'manual' ? 'Manual' : 'Planned'}</span></small></div><div class="slot-actions">{#if slot.owed}<button class="ghost mono-ghost" disabled={opening || busy || !program.enabled} onclick={() => onstart(slot.id)}>Start<ArrowRight size={12} /></button>{/if}<button class="icon" aria-label={`Edit ${days(slot.weekdays)} at ${time(slot.hour,slot.minute)}`} disabled={busy || editing} onclick={() => edit(slot.id)}><Pencil size={14} /></button><button class="icon" aria-label={`Delete ${days(slot.weekdays)} at ${time(slot.hour,slot.minute)}`} disabled={busy} onclick={() => remove(slot.id)}><Trash2 size={14} /></button></div></li>{:else}{#if !editing}<li class="empty"><CalendarClock size={28} /><h4>Your week starts here</h4><p>Add a recurring time or let the planner fit sessions into your availability.</p><button class="cta mono-cta" onclick={() => edit()}><Plus size={13} />Add your first study time</button></li>{/if}{/each}</ul>
     {#if appointments.length}<div class="list-heading"><span class="mono">APPOINTMENTS · TODAY AND MISSED</span></div><ul class="appointment-list">{#each appointments as appointment (appointment.id)}<li><span class="mono">{appointment.local_date} {appointment.local_time}</span><span class="disposition" class:missed={appointment.disposition === 'missed'} class:done={appointment.disposition === 'completed'}>{appointment.disposition}</span>{#if appointment.disposition === 'scheduled' || appointment.disposition === 'due'}<span class="appointment-actions"><input type="time" aria-label="New time for this appointment" value={appointment.local_time} onchange={(event) => (moveTimes[appointment.id] = (event.currentTarget as HTMLInputElement).value)} disabled={busy} /><button class="ghost mono-ghost" disabled={busy} onclick={() => moveAppointment(appointment.id, appointment.local_time)}>Move</button></span>{/if}{#if appointment.make_up}<span class="appointment-actions"><button class="ghost mono-ghost" disabled={opening || busy || !program.enabled} onclick={() => onmakeup?.(appointment.id)}>Make up</button><button class="ghost mono-ghost" disabled={busy} onclick={() => skipAppointment(appointment.id)}>Skip</button></span>{/if}</li>{/each}</ul>{/if}
   </div>
   <div id={`${uid}-plan-panel`} role="tabpanel" aria-labelledby={`${uid}-plan`} hidden={view !== 'plan'} tabindex="0">
@@ -115,6 +152,15 @@
   .icon { display: inline-grid; place-items: center; width: 32px; height: 32px; border: 1px solid var(--node-border); border-radius: var(--radius-control); background: var(--node-bg); color: var(--muted); cursor: pointer; }
   .slot-list li.empty { display: flex; flex-direction: column; text-align: center; gap: 12px; padding: 42px 24px; border-style: dashed; } .empty :global(svg) { color: var(--accent); } .empty h4 { font: 22px var(--font-display); margin: 0; } .empty p { max-width: 350px; } .empty button { margin-top: 8px; }
   .editor { background: var(--surface); border: 1px solid var(--violet); border-radius: var(--radius-panel); padding: 20px; margin-bottom: 18px; } h4 { margin: 0 0 18px; font: 19px var(--font-display); } fieldset { padding: 0; margin: 0; border: 0; min-width: 0; } .editor-grid { display: flex; flex-wrap: wrap; gap: 24px; align-items: center; } .label, label > span { display: block; color: var(--muted); font-size: 12px; margin-bottom: 10px; }
+  .day-minutes { margin-top: 14px; display: grid; gap: 8px; } .day-minutes .label small { margin-left: 8px; color: var(--muted); font-weight: 400; }
+  .day-minutes ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+  .day-minutes li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 7px 10px; border: 1px solid var(--node-border); border-radius: var(--radius-control); background: var(--bg); }
+  .day-name { width: 34px; font-size: 10px; color: var(--violet-fg); } .day-minutes input { width: 72px; padding: 6px 8px; font-size: 12px; }
+  .unit { font-size: 10px; color: var(--muted); } .unit em { font-style: normal; color: var(--fg); margin-left: 4px; }
+  .presets { display: flex; gap: 4px; margin-left: auto; } .presets button { padding: 4px 7px; border: 1px solid var(--node-border); border-radius: var(--radius-detail); background: transparent; color: var(--muted); font: 9px var(--font-mono); cursor: pointer; } .presets button.on { color: var(--accent); border-color: var(--accent); }
+  .day-minutes .text { border: 0; background: none; color: var(--violet-fg); font-size: 10px; cursor: pointer; padding: 0; }
+  .day-note { margin: 0; font-size: 10px; line-height: 1.6; color: var(--muted); }
+  .durations { color: var(--muted); font-weight: 400; font-size: 11px; }
   .days { display: flex; flex-wrap: wrap; gap: 5px; } .days button { padding: 9px 8px; border: 1px solid var(--node-border); background: var(--bg); color: var(--muted); border-radius: var(--radius-control); font: 10px var(--font-mono); cursor: pointer; } .days button.active { border-color: var(--violet); background: var(--violet-bg); color: var(--violet-fg); }
   .actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; margin-top: 20px; } .actions button { font-size: 11px; }
   .planner-intro { max-width: 740px; margin-bottom: 20px; } .plan-fields { display: grid; grid-template-columns: minmax(0, 1fr) 170px; gap: 18px; } label { min-width: 0; } label small { color: var(--muted); font-size: 10px; } label > small { display: block; margin-top: 8px; } textarea, input { width: 100%; padding: 12px; border: 1px solid var(--node-border); border-radius: var(--radius-control); background: var(--bg); color: var(--fg); font: 13px/1.5 var(--font-body); } textarea { resize: vertical; min-height: 70px; }
