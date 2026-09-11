@@ -121,8 +121,11 @@
 </section>
 
 <style>
-  .pulse { display: flex; flex-direction: column; gap: 12px; }
-  .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  /* One row: the figures fill the width the heat map leaves, and both
+     columns stand the same height. They stack on a narrow window. */
+  .pulse { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-items: stretch; }
+  @media (min-width: 1100px) { .pulse { grid-template-columns: minmax(0, 1fr) auto; } }
+  .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: 1fr; gap: 8px; min-width: 0; }
   .this-week { grid-column: span 2; }
   .stat { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--node-border); border-radius: var(--radius-panel); background: var(--node-bg); min-width: 0; animation: rise 500ms cubic-bezier(0.22, 1, 0.36, 1) backwards; }
   .stat:nth-child(2) { animation-delay: 60ms; } .stat:nth-child(3) { animation-delay: 120ms; } .stat:nth-child(4) { animation-delay: 180ms; } .stat:nth-child(5) { animation-delay: 240ms; }
@@ -141,7 +144,7 @@
 
   /* Squares stay square and small, the size a contribution graph is read at;
      the card is as wide as the half year, no wider. */
-  .map { position: relative; padding: 12px 16px 10px; border: 1px solid var(--node-border); border-radius: var(--radius-panel); background: var(--node-bg); width: fit-content; max-width: 100%; overflow-x: auto; }
+  .map { position: relative; display: flex; flex-direction: column; justify-content: center; padding: 12px 16px 10px; border: 1px solid var(--node-border); border-radius: var(--radius-panel); background: var(--node-bg); width: fit-content; max-width: 100%; overflow-x: auto; }
   .months { display: grid; grid-template-columns: 26px repeat(26, 14px); gap: 0 3px; margin-bottom: 6px; font-size: 8.5px; color: var(--faint); height: 12px; }
   .months span { white-space: nowrap; }
   .grid { display: grid; grid-template-columns: 26px repeat(26, 14px); gap: 3px; }

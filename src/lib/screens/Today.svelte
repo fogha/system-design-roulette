@@ -184,7 +184,13 @@
     </div>
   </section>
 
-  <div class="desk" class:with-pulse={!!pulse}>
+  <div class="desk">
+  {#if pulse}
+    <section class="pulse-section" aria-label="Study habit">
+      <div class="section-head"><span class="eyebrow mono"><Activity size={11} /> STUDY PULSE · 26 WEEKS</span><span class="mono muted">{pulse.week_sessions} {pulse.week_sessions === 1 ? 'lesson' : 'lessons'} this week</span></div>
+      <StudyPulse {pulse} />
+    </section>
+  {/if}
   <div class="desk-main">
   {#if resumable.length}
     <section class="saved" aria-label="Saved sessions"><NodeCard Icon={Play} name="saved-sessions" badge="resumable" badgeTone="teal">
@@ -206,12 +212,6 @@
     </NodeCard></section>
   </div>
   </div>
-  {#if pulse}
-    <aside class="pulse-section" aria-label="Study habit">
-      <div class="section-head"><span class="eyebrow mono"><Activity size={11} /> STUDY PULSE · 26 WEEKS</span><span class="mono muted">{pulse.week_sessions} {pulse.week_sessions === 1 ? 'lesson' : 'lessons'} this week</span></div>
-      <StudyPulse {pulse} />
-    </aside>
-  {/if}
   </div>
 </div>
 <style>
@@ -236,12 +236,11 @@
   .ring-when { font-size: 9px; color: var(--muted); margin-top: 2px; }
   /* `backwards`, not `both`: a finished transform, even an identity one,
      would trap the heat map's fixed-position tip inside this section. */
-  /* Below the hero the desk splits: what to do on the left, the habit on the
-     right at the heat map's natural width. One column on a narrow window. */
-  .desk { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; align-items: start; }
+  /* Below the hero: the habit first, one row across the whole desk (the
+     figures beside the heat map), then what there is to do. */
+  .desk { display: grid; grid-template-columns: minmax(0, 1fr); gap: 26px; align-items: start; }
   .desk-main { min-width: 0; }
   .pulse-section { min-width: 0; animation: rise 520ms cubic-bezier(0.22, 1, 0.36, 1) 120ms backwards; }
-  @media (min-width: 1100px) { .desk.with-pulse { grid-template-columns: minmax(0, 1fr) 524px; } }
   .section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; } .eyebrow { display: inline-flex; align-items: center; gap: 6px; color: var(--accent); font-size: 9px; letter-spacing: 1.4px; } .muted { font-size: 9.5px; color: var(--muted); }
   .ring-code { font-size: 9px; color: var(--accent); }
   .next-topic { display: flex; align-items: center; gap: 5px; color: var(--accent); }
