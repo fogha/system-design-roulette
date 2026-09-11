@@ -221,6 +221,8 @@ pub struct RouteSummary {
     /// Refreshers, accepted bridges and topics whose mastery decayed or struggles.
     pub needs_review: usize,
     pub next: Option<NextTopic>,
+    /// The curriculum changed since this path was accepted: review it before the next lesson.
+    pub stale: bool,
 }
 
 /// The five answers a class overview owes: goal, completed, demonstrated,
@@ -239,23 +241,30 @@ fn route_summary(conn: &Connection, subject_id: &str, kind: &str) -> Result<Opti
         return Ok(None);
     };
     let plan = &path.recommendation;
-    let next = crate::domain::classes::peek_next_concept(conn, subject_id)
-        .map_err(|e| e.to_string())?
-        .map(|(concept, reason)| NextTopic {
-            reason: match reason {
-                crate::domain::classes::NextReason::Bridge => plan
-                    .bridges
-                    .iter()
-                    .find(|t| t.id == concept.slug)
-                    .map(|t| format!("Bridge lesson: {}", t.reason))
-                    .unwrap_or_else(|| "Bridge lesson before dependent work.".into()),
-                crate::domain::classes::NextReason::Route => {
-                    "Next required topic on your accepted route.".into()
-                }
-            },
-            slug: concept.slug,
-            title: concept.title,
-        });
+    // A changed curriculum must not take the whole app state down: the route
+    // reports itself stale and the overview points at the starting-point review.
+    let (peeked, stale) = match crate::domain::classes::peek_next_concept(conn, subject_id) {
+        Ok(next) => (next, false),
+        Err(crate::db::DbError::Invalid(message)) if message.contains("curriculum changed") => {
+            (None, true)
+        }
+        Err(error) => return Err(error.to_string()),
+    };
+    let next = peeked.map(|(concept, reason)| NextTopic {
+        reason: match reason {
+            crate::domain::classes::NextReason::Bridge => plan
+                .bridges
+                .iter()
+                .find(|t| t.id == concept.slug)
+                .map(|t| format!("Bridge lesson: {}", t.reason))
+                .unwrap_or_else(|| "Bridge lesson before dependent work.".into()),
+            crate::domain::classes::NextReason::Route => {
+                "Next required topic on your accepted route.".into()
+            }
+        },
+        slug: concept.slug,
+        title: concept.title,
+    });
     Ok(Some(RouteSummary {
         revision: coverage.revision,
         entry_label: coverage.entry_label,
@@ -277,6 +286,7 @@ fn route_summary(conn: &Connection, subject_id: &str, kind: &str) -> Result<Opti
                 .filter(|c| matches!(c.mastery_state.as_str(), "decayed" | "struggling"))
                 .count(),
         next,
+        stale,
     }))
 }
 

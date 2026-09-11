@@ -929,3 +929,38 @@ fn the_overview_route_answers_completed_demonstrated_review_and_next_without_pic
         .route
         .is_none());
 }
+
+#[test]
+fn a_changed_curriculum_marks_the_route_stale_instead_of_failing_the_program_view() {
+    let (_, conn) = fixture();
+    let input = setup(&conn, "typescript", "foundations");
+    let accepted = classes::accept(&conn, &input, "2026-09-09").unwrap();
+    // Simulate a curriculum update: a later revision (rows are immutable) carries
+    // an older snapshot fingerprint than the bundled curriculum now has.
+    conn.execute(
+        "INSERT INTO course_snapshots(fingerprint, course_id, version, body_json, created_at) VALUES ('0000000000000000000000000000000000000000000000000000000000000000', 'typescript', 'v0', '{}', '2026-09-01T00:00:00Z')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO path_revisions(id, class_id, revision, course_snapshot_fingerprint, entry_profile_json, plan_json, accepted_at) SELECT 'path-stale', class_id, revision + 1, '0000000000000000000000000000000000000000000000000000000000000000', entry_profile_json, plan_json, accepted_at FROM path_revisions WHERE id = ?1",
+        [&accepted.reference.path_revision_id],
+    )
+    .unwrap();
+    conn.execute(
+        "UPDATE classes SET active_path_revision_id = 'path-stale' WHERE id = ?1",
+        [&accepted.reference.class_id],
+    )
+    .unwrap();
+    assert!(classes::next_concept(&conn, "typescript", "2026-09-10")
+        .unwrap_err()
+        .to_string()
+        .contains("curriculum changed"));
+    let view = classroom::program_view(&conn, "typescript", "2026-09-10").unwrap();
+    let route = view
+        .route
+        .expect("route summary survives a changed curriculum");
+    assert!(route.stale);
+    assert!(route.next.is_none());
+    assert!(classroom::program_views(&conn, "2026-09-10").is_ok());
+}

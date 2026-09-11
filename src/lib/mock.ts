@@ -651,6 +651,7 @@ function previewRoute(subjectId: ClassroomSubjectId, acceptedPath: AcceptedPath 
     demonstrated: (plan.checked?.length ?? 0) + plan.criteria.filter((row) => row.verdict === 'passed').length,
     needs_review: plan.refreshers.length + (plan.bridges?.length ?? 0),
     next: candidate ? { slug: candidate.slug, title: candidate.title, reason: bridge ? `Bridge lesson before ${bridge.reason.replace(/^Bridge before /, '').replace(/\.$/, '')}.` : 'Next required topic on your accepted route.' } : null,
+    stale: false,
   };
 }
 

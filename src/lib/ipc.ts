@@ -196,6 +196,8 @@ export interface RouteSummary {
   needs_review: number;
   /** The topic selection would serve next, and why. */
   next: { slug: string; title: string; reason: string } | null;
+  /** The curriculum changed since acceptance; review the path before the next lesson. */
+  stale: boolean;
 }
 
 export type CurriculumPhase =
