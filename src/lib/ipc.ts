@@ -431,6 +431,8 @@ export interface EngineeringLessonView {
   review_notes: string[];
   /** Set when no documentation could be retrieved while writing: the claims were not checked against the sources. */
   research_note: string | null;
+  /** `beginner` for a learner starting from scratch on a foundations topic, else `standard`; sections are named for it. */
+  level: 'beginner' | 'standard';
   questions: ClassroomQuestionView[];
   exercise: ClassroomExercise | null;
   /** `lesson`, or `retrieval` for a delayed review without a new lesson. */
@@ -719,6 +721,7 @@ export interface LessonDocument {
   answer_key: boolean;
   research_note: string | null;
   review_notes: string[];
+  level: 'beginner' | 'standard';
   markdown: string;
   resources: Resource[];
   exercise: ExerciseDocument | null;

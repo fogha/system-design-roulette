@@ -10,7 +10,7 @@
  */
 import { marked, type Token, type Tokens } from 'marked';
 import type { LessonDocument, QuestionDocument } from '$lib/ipc';
-import { CALLOUTS, LESSON_SECTIONS, identify, parseHint } from './sections';
+import { CALLOUTS, LESSON_SECTIONS, displayTitle, identify, parseHint, type LessonLevel } from './sections';
 import { renderDiagramImage } from './diagram';
 
 type Content = Record<string, unknown> | string;
@@ -93,7 +93,7 @@ function base64(buffer: ArrayBuffer): string {
 export async function renderLessonPdf(document: LessonDocument): Promise<Uint8Array> {
   const pdfmake = await loadEngine();
   const content: Content[] = [...cover(document)];
-  content.push(...(await markdownBlocks(document.markdown, { lesson: true })));
+  content.push(...(await markdownBlocks(document.markdown, { lesson: true, level: document.level })));
   if (document.language) content.push(...languageBlocks(document));
   if (document.exercise) content.push(...(await exerciseBlocks(document)));
   if (document.questions.length) content.push(...questionBlocks(document));
@@ -129,6 +129,7 @@ function cover(document: LessonDocument): Content[] {
   const meta = [document.class_label, document.topic, document.category].filter(Boolean).join('  ·  ');
   const status = [
     document.date,
+    document.level === 'beginner' ? 'written for a beginner' : '',
     document.status,
     document.score == null ? '' : `score ${Math.round(document.score * 100)}%`,
     document.tutor ? `tutor ${document.tutor}` : '',
@@ -175,6 +176,8 @@ function rule(): Content {
 interface BlockOptions {
   /** Decorate the ten lesson sections: numbers, hints, callouts. */
   lesson: boolean;
+  /** Names the sections for the learner's level. */
+  level?: LessonLevel;
 }
 
 async function markdownBlocks(markdown: string, options: BlockOptions): Promise<Content[]> {
@@ -192,7 +195,7 @@ async function markdownBlocks(markdown: string, options: BlockOptions): Promise<
         blocks.push({
           columns: [
             { text: String(sectionIndex).padStart(2, '0'), font: 'Mono', fontSize: 8, color: COLORS.accent, width: 22, margin: [0, 6, 0, 0] },
-            { text: displayRuns(heading.text), font: 'Display', fontSize: 16, width: '*' },
+            { text: displayRuns(displayTitle(heading.text, options.level ?? 'standard')), font: 'Display', fontSize: 16, width: '*' },
           ],
           margin: [0, 18, 0, 4],
           ...(known ? { id: `section-${sectionIndex}` } : {}),

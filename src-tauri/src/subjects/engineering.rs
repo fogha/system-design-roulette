@@ -429,6 +429,7 @@ Say each of these in your own words before opening the check:
         resources: vec![],
         review_notes: vec![],
         research_note: None,
+        level: classroom::standard_level(),
         questions: pool,
         exercise: None,
         source: if fresh {
@@ -449,10 +450,56 @@ Say each of these in your own words before opening the check:
     Ok(session)
 }
 
+/// Whether a lesson is written for someone starting from scratch: the
+/// learner chose to begin at the foundations (or the first stage with nothing
+/// familiar) and the topic belongs to the foundations phase. Later phases are
+/// taught at the standard level even on that path, because by then the
+/// foundations lessons have been read.
+pub fn lesson_level(
+    path: &crate::domain::classes::AcceptedPath,
+    phase: &str,
+    first_entry_point: &str,
+) -> &'static str {
+    use crate::domain::enrollment::EntryChoice;
+    let from_scratch = match &path.configuration.entry {
+        EntryChoice::Foundations => true,
+        EntryChoice::Manual {
+            entry_point,
+            familiar_competencies,
+        } => entry_point == first_entry_point && familiar_competencies.is_empty(),
+        EntryChoice::Diagnostic => {
+            path.recommendation.route == "foundations"
+                || (path.recommendation.entry_point == first_entry_point
+                    && path.recommendation.criteria.is_empty())
+        }
+    };
+    if from_scratch && phase == "foundations" {
+        "beginner"
+    } else {
+        "standard"
+    }
+}
+
+/// What the tutor is told when the learner is an absolute beginner. The
+/// section headings stay fixed for the gate; their meaning is restated for
+/// someone who has never done any of this.
+pub fn beginner_contract(practice_minutes: i64) -> String {
+    format!(
+        "\nLEARNER LEVEL: ABSOLUTE BEGINNER. This learner chose to start from scratch and this is a foundations topic. Assume they have never done any of this before and know none of the words. Write the whole lesson for them:\n\
+- Explain every term the first time it appears, in one plain sentence, before using it. No jargon left undefined, no acronym without its expansion, no \"as you know\".\n\
+- One new idea at a time. Every step is something they can do right now on their own machine: the exact thing to type or click, what they will see, and what it means. Show the expected output.\n\
+- Use everyday analogies and keep them; skip internals (processes, system calls, memory, source code, standards) unless the brief's own mechanism needs one, and then give it as a one-line picture.\n\
+- The section headings are fixed, but write each for a beginner: `Core mechanics` is how it works, one small step at a time; `Mental model` is the picture to keep in their head; `Runnable experiment` is the first thing to try, guaranteed to work on a fresh machine; `Production architecture lens` is where they will meet this in real work, told as one concrete everyday situation, not a system design; `Trade-offs and failure modes` is the mistakes beginners make and how to notice them; `Migration and observability` is how to check what happened and how to undo it safely; `Key takeaways` is what to remember.\n\
+- The practical exercise is a first success inside {practice_minutes} minutes: three to five tiny steps with the exact command and the result to expect. Nothing to install, nothing to configure, no design documents.\n\
+- The check asks only about things the lesson showed, in the lesson's own words, with choices a beginner can tell apart.\n\
+- Reading hints say plainly what to do in each section (read, try, remember); never tell a beginner to skim.\n"
+    )
+}
+
 /// Run the teaching pipeline for a planned session and publish one immutable
 /// lesson version. Failures keep the session and its error for an explicit retry.
 pub async fn prepare(state: &AppState, id: &SessionId) -> Result<Session> {
-    let (lease, session, program, concept, dossier, contract, profile, path, budget) = {
+    let (lease, session, program, concept, dossier, contract, profile, path, budget, level) = {
         let conn = state.db.0.lock().unwrap();
         let session = sessions::get(&conn, id).map_err(e)?;
         if matches!(
@@ -488,6 +535,21 @@ pub async fn prepare(state: &AppState, id: &SessionId) -> Result<Session> {
         contract.push_str(&format!("\nACCEPTED PERSONAL PATH: {} ({}) · revision {}. {}\nEarlier material is optional, with no completion or mastery credit. Check relevant prerequisites inside this lesson and offer concise refreshers instead of restarting the course. The required outcome remains: {}.\nPrerequisite advice: {}",
             path.recommendation.entry_label, path.recommendation.route, path.revision, path.recommendation.explanation, path.recommendation.required_outcome,
             serde_json::to_string(&path.recommendation.refreshers).map_err(e)?));
+        let first_entry = crate::domain::enrollment::options(&course_id)
+            .map_err(e)?
+            .entry_points
+            .first()
+            .map(|entry| entry.id.clone())
+            .unwrap_or_default();
+        let level = lesson_level(&path, &concept.curriculum.phase, &first_entry);
+        let minutes = session_minutes(&conn, id, program.session_minutes);
+        if level == "beginner" {
+            contract.push_str(&beginner_contract(
+                crate::generator::LessonBudget::for_minutes(minutes)
+                    .plan()
+                    .practice_minutes,
+            ));
+        }
         let tutor = &session.context.tutor;
         let profile = GenerationProfile {
             subject_id: course_id.clone(),
@@ -496,13 +558,9 @@ pub async fn prepare(state: &AppState, id: &SessionId) -> Result<Session> {
             custom_bin: tutor.custom_agent_bin.clone().unwrap_or_default(),
             prompt_version: format!("{}.{}", program.prompt_profile, program.prompt_version),
         };
-        let budget = crate::generator::LessonBudget::for_minutes(session_minutes(
-            &conn,
-            id,
-            program.session_minutes,
-        ));
+        let budget = crate::generator::LessonBudget::for_minutes(minutes);
         (
-            lease, session, program, concept, dossier, contract, profile, path, budget,
+            lease, session, program, concept, dossier, contract, profile, path, budget, level,
         )
     };
     let course_id = session.context.course.course_id.clone();
@@ -533,6 +591,7 @@ pub async fn prepare(state: &AppState, id: &SessionId) -> Result<Session> {
             resources: course.resources,
             review_notes: course.review_notes,
             research_note: course.research_note,
+            level: level.to_string(),
             questions,
             exercise: course.exercise,
             source: source.clone(),
@@ -739,6 +798,7 @@ pub fn view(conn: &Connection, id: &SessionId) -> Result<Option<EngineeringLesso
         resources: stored.resources,
         review_notes: stored.review_notes,
         research_note: stored.research_note,
+        level: stored.level,
         questions: stored
             .questions
             .into_iter()

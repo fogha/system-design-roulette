@@ -600,6 +600,7 @@ function mockEngineeringLesson(subjectId: FocusArea): EngineeringLessonView {
     markdown: shaped ?? reference.markdown,
     resources: reference.resources,
     review_notes: [],
+    level: params.has('beginner') ? 'beginner' : 'standard',
     research_note: params.has('unverified') ? 'No primary documentation could be retrieved when this lesson was written: www.gnu.org could not be reached. Its claims were not checked against the sources. Read it with care and verify anything you will rely on.' : null,
     questions: reference.questions.filter((question) => question.kind === 'mcq').map((question, index) => ({
       id: index + 1, prompt: question.prompt, choices: question.choices!,
@@ -1270,6 +1271,7 @@ export const mockApi = {
       answer_key: false,
       research_note: lesson.research_note,
       review_notes: lesson.review_notes,
+      level: lesson.level,
       markdown: lesson.markdown,
       resources: lesson.resources,
       exercise: lesson.exercise ? { title: lesson.exercise.title, instructions: lesson.exercise.instructions, deliverable: lesson.exercise.deliverable ?? null, starter_code: lesson.exercise.starter_code ?? null, hints: lesson.exercise.hints, draft: null, reflection: null, completed: false } : null,

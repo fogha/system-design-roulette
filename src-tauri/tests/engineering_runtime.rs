@@ -85,6 +85,7 @@ fn lesson_for(session: &Session) -> StoredEngineeringLesson {
         resources: vec![],
         review_notes: vec![],
         research_note: None,
+        level: "standard".into(),
         questions: (1..=5)
             .map(|id| StoredQuestion {
                 id,
@@ -749,4 +750,26 @@ fn a_lesson_exports_as_csv_and_keeps_its_key_until_the_check_is_submitted() {
         "{}",
         questions[1]
     );
+}
+
+#[test]
+fn a_foundations_path_makes_foundations_topics_beginner_lessons_and_later_ones_standard() {
+    let (_, conn) = fixture();
+    activate(&conn, "linux-bash", 9);
+    let _ = plan(&conn, "linux-bash", None);
+    let path = classes::current_path(&conn, "linux-bash").unwrap().unwrap();
+    let first = principia_desk_lib::domain::enrollment::options("linux-bash")
+        .unwrap()
+        .entry_points[0]
+        .id
+        .clone();
+    assert_eq!(
+        engineering::lesson_level(&path, "foundations", &first),
+        "beginner"
+    );
+    assert_eq!(engineering::lesson_level(&path, "core", &first), "standard");
+    let contract = engineering::beginner_contract(10);
+    assert!(contract.contains("ABSOLUTE BEGINNER"));
+    assert!(contract.contains("inside 10 minutes"));
+    assert!(contract.contains("Explain every term the first time it appears"));
 }

@@ -88,6 +88,18 @@ reached, shown above the lesson in the reader, and a link the curriculum
 itself names stays in the reading list even when it cannot be reached at
 the time, marked as such.
 
+A class activates only once its learner has chosen a starting point: start
+from scratch, find their level with the placement check, or pick a stage.
+The desk no longer accepts a default path on their behalf, because a lesson
+pitched at the wrong level was the result. A learner starting from scratch
+gets beginner lessons for every foundations topic: the tutor's contract
+declares an absolute beginner (every term defined before use, one doable step
+at a time, an exercise that is a first success, no internals), the editorial
+audit judges the draft as a beginner would meet it, and the reader and the
+PDF name the fixed sections for that level (`How it works`, `Try it
+yourself`, `Common mistakes and how to spot them`). Later phases on the same
+path are taught at the standard level.
+
 Tutors without web access (Ollama, OpenRouter, any bare chat API) can be
 given a search engine in Settings → Web search: a SearXNG instance (a URL
 and no key; Remote Ledger's local instance on port 8899 is the default),

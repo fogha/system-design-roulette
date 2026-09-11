@@ -11,7 +11,7 @@
   import CoursePurpose from '../components/CoursePurpose.svelte';
   import ExerciseWorkspace from '../components/ExerciseWorkspace.svelte';
   import Markdown from '../components/Markdown.svelte';
-  import LessonMap from '../features/lessons/LessonMap.svelte';
+  import LessonMap, { type MapStage } from '../features/lessons/LessonMap.svelte';
   import DownloadMenu from '../features/lessons/DownloadMenu.svelte';
   import type { LessonSection } from '../features/lessons/sections';
   import { ExternalLink, MessageCircle, Sparkles } from 'lucide-svelte';
@@ -29,6 +29,8 @@
   /** The lesson's sections as rendered, for the map and the reading position. */
   let sections = $state<LessonSection[]>([]);
   let currentSection = $state(0);
+  /** Set once the reader has scrolled past the lesson into practice or the check. */
+  let currentStage = $state<MapStage | null>(null);
 
   const anchors = () => ({ practice: exerciseSection, check: checkSection });
 
@@ -87,7 +89,8 @@
     placeInSections();
   }
 
-  /** The section whose heading last passed the top of the reading pane. */
+  /** The section whose heading last passed the top of the reading pane, or
+   *  the practice or check once the reading is behind. */
   function placeInSections() {
     if (!scroller || sections.length === 0) return;
     const top = scroller.getBoundingClientRect().top + 140;
@@ -97,6 +100,8 @@
       else break;
     }
     currentSection = at;
+    const past = (element: HTMLElement | undefined) => !!element && element.getBoundingClientRect().top <= top;
+    currentStage = past(checkSection) ? 'check' : past(exerciseSection) ? 'practice' : null;
   }
 
   function jump(section: LessonSection) {
@@ -192,9 +197,15 @@
 
     {#if !retrieval}<CoursePurpose whyNow={lesson.why_now} curriculum={lesson.curriculum} prerequisites={lesson.prerequisites} />{/if}
 
+    <div class="reading-grid" class:with-rail={!retrieval && sections.length > 0}>
+    {#if !retrieval && sections.length > 0}
+      <aside class="map-rail">
+        <LessonMap variant="rail" {sections} current={currentSection} stage={currentStage} plan={lesson.plan} onjump={jump} onstage={goto} />
+      </aside>
+    {/if}
     <article class="reading-pane" style="font-size: var(--reading-font)">
-      {#if !retrieval}
-        <LessonMap {sections} current={currentSection} plan={lesson.plan} onjump={jump} />
+      {#if !retrieval && sections.length > 0}
+        <LessonMap variant="strip" {sections} current={currentSection} stage={currentStage} plan={lesson.plan} onjump={jump} onstage={goto} />
       {/if}
       {#if lesson.research_note}
         <aside class="review-notes unverified" aria-label="Sources could not be retrieved for this lesson">
@@ -209,7 +220,7 @@
           <ul>{#each lesson.review_notes as note (note)}<li>{note}</li>{/each}</ul>
         </aside>
       {/if}
-      <Markdown markdown={lesson.markdown} lesson={!retrieval} onsections={(found) => { sections = found; placeInSections(); }} />
+      <Markdown markdown={lesson.markdown} lesson={!retrieval} level={lesson.level} onsections={(found) => { sections = found; placeInSections(); }} />
 
       {#if lesson.resources.length && !retrieval}
         <section class="sources" aria-labelledby="class-sources-title">
@@ -272,6 +283,7 @@
         />
       </aside>
     </article>
+    </div>
 
     {#if !retrieval}<CourseChat classroomSessionId={session.study ? undefined : Number(lesson.session_id)} studySessionId={session.study ? lesson.session_id : undefined} bind:open={chatOpen} />{/if}
   </LessonShell>
@@ -305,7 +317,16 @@
     font-size: 9px;
   }
   .chat-button.active { border-color: var(--accent); color: var(--accent); }
-  .reading-pane { width: min(100%, 920px); margin: 0 auto; padding: 28px clamp(24px, 5vw, 72px) 64px; }
+  .reading-pane { width: min(100%, 920px); margin: 0 auto; padding: 28px clamp(24px, 5vw, 72px) 64px; min-width: 0; }
+  /* The section map keeps the reader company: a rail beside the reading on a
+     wide window, a sticky strip above it on a narrow one (see LessonMap). */
+  .reading-grid { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .map-rail { display: none; }
+  @media (min-width: 1180px) {
+    .reading-grid.with-rail { grid-template-columns: 236px minmax(0, 1fr); gap: 8px; padding-left: 20px; }
+    .reading-grid.with-rail .map-rail { display: block; position: sticky; top: 14px; align-self: start; max-height: calc(100vh - 210px); overflow-y: auto; padding-top: 28px; scrollbar-width: thin; }
+    .reading-grid.with-rail .reading-pane { margin: 0; }
+  }
   .exercise-end { margin-top: 40px; border-top: 1px solid var(--node-border); }
   .practice-pane { margin-top: 12px; border-top: 1px solid var(--node-border); border-radius: var(--radius-panel); padding: 24px; background: var(--surface); font-size: 15px; }
   .practice-pane h2, .sources h2 { font-size: 16px; margin: 6px 0; }

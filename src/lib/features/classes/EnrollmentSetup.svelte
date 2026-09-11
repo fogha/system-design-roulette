@@ -29,7 +29,7 @@
   let operationError = $state('');
   let accepting = $state(false);
   const routes = [
-    { id: 'foundations', title: 'Start from the foundations', description: 'Build up from the introductory topics at your own pace.', icon: Layers },
+    { id: 'foundations', title: 'Start from scratch', description: 'Assume nothing. The first lessons are written for someone who has never done this before: every term explained, one small step at a time.', icon: Layers },
     { id: 'diagnostic', title: 'Help me find my level', description: 'Use a short, optional check to help identify a starting point and gaps.', icon: Compass },
     { id: 'manual', title: 'Choose my starting point', description: 'Pick a course stage and tell us which topics already feel familiar.', icon: ListStart },
   ] as const;

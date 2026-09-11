@@ -44,7 +44,7 @@
 <script lang="ts">
   import DOMPurify from 'dompurify';
   import { tick } from 'svelte';
-  import { decorateLesson, type LessonSection } from '../features/lessons/sections';
+  import { decorateLesson, type LessonLevel, type LessonSection } from '../features/lessons/sections';
 
   let {
     markdown = '',
@@ -52,6 +52,7 @@
     inline = false,
     compact = false,
     lesson = false,
+    level = 'standard',
     onsections,
   }: {
     markdown: string;
@@ -60,6 +61,8 @@
     compact?: boolean;
     /** Decorate the ten lesson sections: icons, reading hints, callouts. */
     lesson?: boolean;
+    /** Names the sections for the learner's level. */
+    level?: LessonLevel;
     /** Told the sections found each time a lesson renders, for a section map. */
     onsections?: (sections: LessonSection[]) => void;
   } = $props();
@@ -86,7 +89,7 @@
     await tick();
     const root = container;
     if (!root) return;
-    if (lesson) onsections?.(decorateLesson(root));
+    if (lesson) onsections?.(decorateLesson(root, level));
     await renderDiagrams(root);
   }
 

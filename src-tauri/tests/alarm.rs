@@ -225,6 +225,7 @@ fn publish(conn: &rusqlite::Connection, session: &principia_desk_lib::domain::se
         resources: vec![],
         review_notes: vec![],
         research_note: None,
+        level: "standard".into(),
         questions: (1..=5)
             .map(|id| StoredQuestion {
                 id,

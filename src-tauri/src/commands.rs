@@ -298,6 +298,12 @@ pub fn set_class_focus_policy(
 ) -> CmdResult<crate::classroom::ClassroomProgramView> {
     let view = {
         let conn = state.db.0.lock().unwrap();
+        if crate::domain::classes::current_path(&conn, subject_id.trim())
+            .map_err(err)?
+            .is_none()
+        {
+            return Err(NO_STARTING_POINT.into());
+        }
         crate::domain::classes::set_focus_policy(&conn, subject_id.trim(), policy, &state.today())
             .map_err(err)?;
         crate::classroom::program_view(&conn, subject_id.trim(), &state.today()).map_err(err)?
@@ -654,6 +660,20 @@ pub fn configure_classroom_program(
 ) -> CmdResult<crate::classroom::ClassroomProgramView> {
     {
         let conn = state.db.0.lock().unwrap();
+        // A class activates only once the learner has said where it starts.
+        // A default path would decide that for them, and a lesson pitched at
+        // the wrong level is the result.
+        let turning_on = input.enabled
+            && !crate::classroom::program_row(&conn, &input.subject_id)
+                .map_err(err)?
+                .enabled;
+        if turning_on
+            && crate::domain::classes::current_path(&conn, &input.subject_id)
+                .map_err(err)?
+                .is_none()
+        {
+            return Err(NO_STARTING_POINT.into());
+        }
         crate::classroom::configure_program(&conn, &input, &state.today()).map_err(err)?;
     }
     refresh_os_schedule(&state)?;
@@ -664,6 +684,9 @@ pub fn configure_classroom_program(
     let _ = app.emit("classroom:state", &view);
     Ok(view)
 }
+
+/// The refusal every path into an unenrolled class shares.
+pub const NO_STARTING_POINT: &str = "Choose this class's starting point first: start from scratch, find your level, or pick a stage. Then activate it.";
 
 #[tauri::command]
 pub fn upsert_classroom_slot(

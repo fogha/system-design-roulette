@@ -2133,7 +2133,16 @@ impl Generator {
         );
         let task = format!("{task}\n\n{}", request.budget.prompt_line());
         let prompt = with_teacher(request.dossier, &task, request.focus);
-        let context = format!("classroom course for {}", profile.subject_id);
+        // The editor reads the context, not the contract, so the level rides
+        // along in it: a beginner lesson must not be corrected back into depth.
+        let context = if subject_contract.contains("LEARNER LEVEL: ABSOLUTE BEGINNER") {
+            format!(
+                "classroom course for {} for an absolute beginner",
+                profile.subject_id
+            )
+        } else {
+            format!("classroom course for {}", profile.subject_id)
+        };
         let course = scoped
             .write_course(
                 &prompt,

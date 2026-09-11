@@ -7,6 +7,7 @@ Category: {{CATEGORY}}
 {{MONTH_OUTCOME}}
 
 Pedagogy requirements:
+- If the contract above declares LEARNER LEVEL: ABSOLUTE BEGINNER, that declaration wins over the depth and tone rules below: no internals, no jargon left undefined, plain words, one small doable step at a time, and an exercise that is a first success. Everything else in this prompt still applies.
 - Explain simply first: open every major idea in plain language a smart newcomer could follow, using a concrete analogy to something outside software (traffic, plumbing, a kitchen, a library, mail routing, etc). Then explicitly say where the analogy breaks down before going deeper — this stops the analogy from misleading later.
 - First-principles mechanisms: assume no prior mental model for today's mechanism. Start with its irreducible building blocks and constraints, derive how they compose, and only then introduce APIs, syntax sugar, framework conventions, or architecture patterns. Never use a higher-level term to explain itself.
 - Explicit mental models: name the model, show where it breaks, and how to verify it.

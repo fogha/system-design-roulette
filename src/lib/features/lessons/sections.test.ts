@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CALLOUTS, LESSON_SECTIONS, identify, parseHint } from './sections';
+import { BEGINNER_TITLES, CALLOUTS, LESSON_SECTIONS, displayTitle, identify, parseHint } from './sections';
 import { iconSvg } from './icons';
 
 describe('lesson sections', () => {
@@ -22,6 +22,15 @@ describe('lesson sections', () => {
       expect(identify(section.title.toUpperCase())?.icon).toBe(section.icon);
     }
     expect(identify('Interview framing')).toBeNull();
+  });
+
+  it('names every section for a beginner and leaves standard lessons alone', () => {
+    for (const section of LESSON_SECTIONS) {
+      expect(BEGINNER_TITLES[section.title], section.title).toBeTruthy();
+      expect(displayTitle(section.title, 'standard')).toBe(section.title);
+    }
+    expect(displayTitle('CORE MECHANICS', 'beginner')).toBe('How it works');
+    expect(displayTitle('Interview framing', 'beginner')).toBe('Interview framing');
   });
 
   it('has icon data for every section and callout it draws', () => {

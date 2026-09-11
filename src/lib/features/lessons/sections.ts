@@ -30,6 +30,33 @@ export const LESSON_SECTIONS: SectionIdentity[] = [
   { title: 'Key takeaways', icon: 'bookmark-check', purpose: 'what to remember' },
 ];
 
+/**
+ * How the fixed sections read for someone starting from scratch. The
+ * Markdown keeps the canonical headings so the gate and the exports agree;
+ * the reader and the PDF show these instead when a lesson is beginner-level.
+ */
+export const BEGINNER_TITLES: Record<string, string> = {
+  'Why this matters': 'Why this matters',
+  'The simple version': 'The simple version',
+  'Core mechanics': 'How it works',
+  'Mental model': 'The picture to keep in your head',
+  'Runnable experiment': 'Try it yourself',
+  'Production architecture lens': 'Where you will meet this in real work',
+  'Trade-offs and failure modes': 'Common mistakes and how to spot them',
+  'Migration and observability': 'Checking what happened, and undoing it',
+  'Practical exercise': 'What you will build',
+  'Key takeaways': 'Remember',
+};
+
+export type LessonLevel = 'beginner' | 'standard';
+
+/** The heading to show for a canonical section title at a level. */
+export function displayTitle(title: string, level: LessonLevel): string {
+  if (level !== 'beginner') return title;
+  const canonical = identify(title)?.title;
+  return (canonical && BEGINNER_TITLES[canonical]) || title;
+}
+
 export const CALLOUTS: Record<string, { icon: string; kind: string }> = {
   'key idea': { icon: 'key-round', kind: 'key' },
   'watch out': { icon: 'triangle-alert', kind: 'warn' },
@@ -48,7 +75,10 @@ export interface LessonSection {
   /** Index within the lesson's headings, 0-based. */
   index: number;
   id: string;
+  /** The canonical heading, as written in the Markdown. */
   title: string;
+  /** The heading as shown for the lesson's level. */
+  display: string;
   icon: string;
   purpose: string;
   hint: SectionHint | null;
@@ -81,18 +111,19 @@ function slug(text: string): string {
  * again whenever the Markdown changes; the host replaces the HTML each time,
  * so nothing here needs to be undone.
  */
-export function decorateLesson(root: HTMLElement): LessonSection[] {
+export function decorateLesson(root: HTMLElement, level: LessonLevel = 'standard'): LessonSection[] {
   const sections: LessonSection[] = [];
   const headings = Array.from(root.querySelectorAll<HTMLHeadingElement>('h2'));
   headings.forEach((heading, index) => {
     const title = heading.textContent?.trim() ?? '';
     const identity = identify(title);
+    const display = displayTitle(title, level);
     const id = `lesson-section-${slug(title) || index}`;
     heading.id = id;
     heading.classList.add('lesson-heading');
     if (identity) {
       heading.classList.add('lesson-heading-known');
-      heading.innerHTML = `<span class="lesson-heading-mark">${iconSvg(identity.icon, 18)}<span class="lesson-heading-index mono">${String(index + 1).padStart(2, '0')}</span></span><span class="lesson-heading-title">${escape(title)}</span>`;
+      heading.innerHTML = `<span class="lesson-heading-mark">${iconSvg(identity.icon, 18)}<span class="lesson-heading-index mono">${String(index + 1).padStart(2, '0')}</span></span><span class="lesson-heading-title">${escape(display)}</span>`;
     }
 
     // The hint: an italic-only paragraph right under the heading.
@@ -115,6 +146,7 @@ export function decorateLesson(root: HTMLElement): LessonSection[] {
       index,
       id,
       title,
+      display,
       icon: identity?.icon ?? 'book-open',
       purpose: identity?.purpose ?? '',
       hint,

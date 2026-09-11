@@ -80,6 +80,7 @@ fn published(conn: &Connection, subject: &str) -> sessions::Session {
         resources: vec![],
         review_notes: vec![],
         research_note: None,
+        level: "standard".into(),
         questions: vec![StoredQuestion {
             id: 1,
             prompt: "Q".into(),

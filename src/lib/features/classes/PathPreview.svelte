@@ -13,7 +13,7 @@
 
   const passed = $derived(path.criteria.filter((c) => c.verdict === 'passed').length);
   const sampled = $derived(path.criteria.length);
-  const SOURCE: Record<string, string> = { diagnostic: 'a short check', manual: 'the stage you chose', foundations: 'starting at the foundations' };
+  const SOURCE: Record<string, string> = { diagnostic: 'a short check', manual: 'the stage you chose', foundations: 'starting from scratch' };
 
   /** Reasons written per topic are usually one sentence repeated down the
    *  list. Say it once above the group, and only annotate the exceptions. */

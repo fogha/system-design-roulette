@@ -1735,6 +1735,10 @@ pub struct StoredQuestion {
     pub learning_objective: String,
 }
 
+pub fn standard_level() -> String {
+    "standard".into()
+}
+
 /// Immutable lesson payload shared by legacy classroom rows and lesson versions.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StoredEngineeringLesson {
@@ -1751,6 +1755,11 @@ pub struct StoredEngineeringLesson {
     /// lesson's claims were not checked against the sources.
     #[serde(default)]
     pub research_note: Option<String>,
+    /// `beginner` when written for a learner starting from scratch on a
+    /// foundations topic, else `standard`. The reader labels sections for
+    /// the level; the Markdown keeps the canonical headings.
+    #[serde(default = "standard_level")]
+    pub level: String,
     pub questions: Vec<StoredQuestion>,
     pub exercise: Option<Exercise>,
     pub source: String,
@@ -1808,6 +1817,9 @@ pub struct EngineeringLessonView {
     /// they were not.
     #[serde(default)]
     pub research_note: Option<String>,
+    /// `beginner` or `standard`; the reader names sections for the level.
+    #[serde(default = "standard_level")]
+    pub level: String,
     pub questions: Vec<ClassroomQuestionView>,
     pub exercise: Option<Exercise>,
     /// `lesson` or `retrieval` (delayed review without a new lesson).
@@ -1903,6 +1915,7 @@ fn engineering_view(conn: &Connection, session_id: i64) -> Result<Option<Enginee
                 resources: stored.resources,
                 review_notes: stored.review_notes,
                 research_note: stored.research_note,
+                level: stored.level,
                 questions: stored
                     .questions
                     .into_iter()
@@ -2314,6 +2327,7 @@ fn insert_engineering_session(
         resources: course.resources,
         review_notes: course.review_notes,
         research_note: course.research_note,
+        level: standard_level(),
         questions,
         exercise: course.exercise,
         source: source.clone(),
