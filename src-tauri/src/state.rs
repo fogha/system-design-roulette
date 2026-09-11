@@ -11,6 +11,10 @@ pub struct AppState {
     pub data_dir: PathBuf,
     /// Kiosk lock currently engaged.
     pub locked: AtomicBool,
+    /// The study alarm is sounding. Cleared only when nothing is due.
+    pub alarm_ringing: AtomicBool,
+    /// The appointment the alarm last stood for, so a change re-notifies.
+    pub alarm_for: Mutex<Option<String>>,
     /// --debug-day: shortened timer, no kiosk, ignore schedule.
     pub debug_day: bool,
     /// Failed escape attempts (rate limiting the hatch).

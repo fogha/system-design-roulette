@@ -1,4 +1,5 @@
 pub mod agents;
+pub mod alarm;
 pub mod audio;
 pub mod catalog;
 pub mod classroom;
@@ -19,6 +20,7 @@ pub mod selection;
 pub mod state;
 pub mod storage;
 pub mod subjects;
+pub mod tray;
 
 use state::AppState;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -99,6 +101,7 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
         .setup(move |app| {
             log::info!("initializing local study storage");
             let data_dir = app.path().app_data_dir().expect("app data dir resolvable");
@@ -173,6 +176,8 @@ pub fn run() {
                 generator,
                 data_dir,
                 locked: AtomicBool::new(false),
+                alarm_ringing: AtomicBool::new(false),
+                alarm_for: Mutex::new(None),
                 debug_day,
                 escape_failures: Mutex::new(Vec::new()),
                 prev_muted: Mutex::new(None),
@@ -209,7 +214,7 @@ pub fn run() {
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 loop {
-                    tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+                    tokio::time::sleep(std::time::Duration::from_secs(30)).await;
                     let state = handle.state::<AppState>();
                     let classroom_slots = {
                         let conn = state.db.0.lock().unwrap();
@@ -227,6 +232,7 @@ pub fn run() {
                             let _ = handle.emit("classroom:owed", due);
                         }
                     }
+                    alarm::evaluate(&handle);
                 }
             });
 
@@ -250,16 +256,24 @@ pub fn run() {
                             let _ = handle.emit("classroom:owed", due);
                         }
                     }
+                    alarm::evaluate(&handle);
                 });
             }
+            if let Err(error) = tray::install(app.handle()) {
+                log::error!("menu bar icon unavailable: {error}");
+            }
+            alarm::evaluate(app.handle());
             log::info!("local study runtime ready");
             Ok(())
         })
         .on_window_event(|window, event| match event {
             tauri::WindowEvent::CloseRequested { api, .. } => {
+                // The desk stays resident: closing the window hides it behind
+                // the menu bar icon, and a lock keeps it in front.
+                api.prevent_close();
                 let state = window.app_handle().state::<AppState>();
-                if !state.debug_day && state.locked.load(Ordering::SeqCst) {
-                    api.prevent_close();
+                if state.debug_day || !state.locked.load(Ordering::SeqCst) {
+                    let _ = window.hide();
                 }
             }
             tauri::WindowEvent::Focused(false) => {
@@ -332,6 +346,7 @@ pub fn run() {
             commands::pause_class_lesson,
             commands::skip_class_lesson,
             commands::skip_appointment,
+            commands::snooze_alarm,
             commands::reschedule_appointment,
             commands::set_class_focus_policy,
             commands::get_class_appointments,
@@ -364,9 +379,29 @@ pub fn run() {
                     );
                 }
             }
-            if let tauri::RunEvent::ExitRequested { api, .. } = event {
+            // Clicking the Dock icon while the window is hidden brings the desk back.
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen {
+                has_visible_windows: false,
+                ..
+            } = event
+            {
+                tray::show_window(app);
+            }
+            if let tauri::RunEvent::ExitRequested { api, code, .. } = event {
                 let state = app.state::<AppState>();
-                if !state.debug_day && state.locked.load(Ordering::SeqCst) {
+                // Cmd+Q and the last window closing arrive without a code: the
+                // runner stays up and the window hides. The menu bar's Quit
+                // exits with a code, and it already refuses while an alarm
+                // rings or a session holds the desk.
+                if code.is_none() {
+                    api.prevent_exit();
+                    if let Some(window) = app.get_webview_window("main") {
+                        if state.debug_day || !state.locked.load(Ordering::SeqCst) {
+                            let _ = window.hide();
+                        }
+                    }
+                } else if !state.debug_day && state.locked.load(Ordering::SeqCst) {
                     api.prevent_exit();
                 }
             }

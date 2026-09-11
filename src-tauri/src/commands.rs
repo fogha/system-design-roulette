@@ -87,6 +87,9 @@ pub struct AppStateView {
     /// Whether a DeepSeek API key is available (env var or Keychain) — the
     /// key itself never leaves the Rust process.
     pub deepseek_key_configured: bool,
+    /// The study alarm standing right now, if any. Only starting the lesson
+    /// clears it; a snooze is reported with its end time.
+    pub alarm: Option<crate::alarm::AlarmView>,
     /// Generic advisory classroom. Every subject owns its schedule, prompt
     /// profile, generation provider, progress, and same-day sessions.
     /// Languages are classroom subjects too; their CEFR engine lives behind
@@ -266,6 +269,7 @@ pub fn get_app_state(state: State<'_, AppState>) -> CmdResult<AppStateView> {
         custom_agent_bin: state.generator.current_custom_bin(),
         selected_focus,
         deepseek_key_configured: deepseek_key_configured(),
+        alarm: crate::alarm::current(&state),
         classroom_programs,
         classroom_slots,
         classroom_due_count,
@@ -291,6 +295,7 @@ pub fn set_class_focus_policy(
         crate::classroom::program_view(&conn, subject_id.trim(), &state.today()).map_err(err)?
     };
     let _ = app.emit("classroom:state", &view);
+    crate::alarm::evaluate(&app);
     Ok(view)
 }
 
@@ -319,6 +324,20 @@ pub fn reschedule_appointment(
     refresh_os_schedule(&state)?;
     let _ = app.emit("classroom:state", &view);
     Ok(view)
+}
+
+/// Hold the alarm for a fixed number of minutes. It rings again afterwards;
+/// only starting the lesson ends it.
+#[tauri::command]
+pub fn snooze_alarm(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    occurrence_id: String,
+    minutes: u32,
+) -> CmdResult<String> {
+    let until = crate::alarm::snooze(&state, &occurrence_id, minutes)?;
+    crate::alarm::evaluate(&app);
+    Ok(until)
 }
 
 #[tauri::command]
@@ -430,6 +449,7 @@ pub fn pause_schedule(app: AppHandle, state: State<'_, AppState>) -> CmdResult<(
         crate::scheduler::uninstall()?;
     }
     let _ = app.emit("classroom:state", serde_json::json!({ "refresh": true }));
+    crate::alarm::evaluate(&app);
     Ok(())
 }
 
@@ -441,6 +461,7 @@ pub fn resume_schedule(app: AppHandle, state: State<'_, AppState>) -> CmdResult<
     }
     refresh_os_schedule(&state)?;
     let _ = app.emit("classroom:state", serde_json::json!({ "refresh": true }));
+    crate::alarm::evaluate(&app);
     Ok(())
 }
 
@@ -734,6 +755,7 @@ pub async fn start_classroom_session(
         }
     };
     let _ = app.emit("classroom:state", &value);
+    crate::alarm::evaluate(&app);
     Ok(value)
 }
 

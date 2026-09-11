@@ -454,6 +454,13 @@ export interface EngineeringSessionResult {
   fresh_sample: boolean;
 }
 
+export interface AlarmView {
+  occurrence_id: string;
+  course_id: ClassroomSubjectId;
+  label: string;
+  snoozed_until: string | null;
+  queued: number;
+}
 export interface AppStateView {
   onboarded: boolean;
   selected_focus: FocusArea;
@@ -467,6 +474,8 @@ export interface AppStateView {
   agent: AgentId;
   custom_agent_bin: string;
   deepseek_key_configured: boolean;
+  /** The study alarm standing right now. Only starting the lesson clears it; a snooze reports its end. */
+  alarm: AlarmView | null;
   classroom_programs: ClassroomProgramView[];
   classroom_slots: ClassroomSlotView[];
   classroom_due_count: number;
@@ -718,6 +727,7 @@ const realApi = {
       occurrenceId: occurrenceId ?? null,
     }),
   skipAppointment: (occurrenceId: string) => invoke<AppointmentView>('skip_appointment', { occurrenceId }),
+  snoozeAlarm: (occurrenceId: string, minutes: number) => invoke<string>('snooze_alarm', { occurrenceId, minutes }),
   rescheduleAppointment: (occurrenceId: string, localTime: string) => invoke<AppointmentView>('reschedule_appointment', { occurrenceId, localTime }),
   getClassAppointments: (subjectId: ClassroomSubjectId) => invoke<AppointmentView[]>('get_class_appointments', { subjectId }),
   resumeClassroomSession: (subjectId: ClassroomSubjectId) =>

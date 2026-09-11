@@ -101,6 +101,14 @@ Lessons are taught from documentation the app fetches itself. Before each genera
 
 Every concept carries a specific curriculum brief: learner outcome, named mechanisms, production scenario, misconceptions, observable evidence, cumulative artifact and in-policy primary sources, validated offline.
 
+## Always on: the menu bar desk and the study alarm
+
+The desk stays resident. Closing the window or pressing Cmd+Q hides it behind a menu bar icon; the launch agent starts it at login and at every study time, and Quit lives in the icon's menu. That menu says what is due, what comes next and when, and lists today's appointments with their state.
+
+When an appointment comes due the desk sends a system notification and starts an alarm that repeats until the lesson starts. The menu bar shows the class as due, Today shows the same banner, and both offer exactly two things: **Start**, and a **snooze** of 5, 10 or 15 minutes that rings again when it passes. There is no dismiss. The break-glass phrase lives inside the started lesson, so the way out of a session still exists, but only after it has begun. Quit is withheld while an alarm rings or a focused session holds the desk.
+
+Two things outrank the alarm, because nothing here may hold a machine hostage: pausing appointments, which owes nothing and so rings for nothing, and the release token described above, which silences it along with every lock. `--debug-day` builds never ring unless `PRINCIPIA_ALARM_IN_DEBUG` is set, so QA profiles stay quiet.
+
 ## Scheduling
 
 A launchd LaunchAgent (`~/Library/LaunchAgents/com.darkmatter.principia-desk.plist`) fires the app at every enabled study time with one `StartCalendarInterval` array:

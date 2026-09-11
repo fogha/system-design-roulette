@@ -45,6 +45,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         generator,
         data_dir,
         locked: AtomicBool::new(false),
+        alarm_ringing: AtomicBool::new(false),
+        alarm_for: Mutex::new(None),
         debug_day: true,
         escape_failures: Mutex::new(vec![]),
         prev_muted: Mutex::new(None),

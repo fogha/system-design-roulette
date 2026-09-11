@@ -600,6 +600,7 @@ function appState(): AppStateView {
     agent: mockAgent,
     custom_agent_bin: mockCustomBin,
     deepseek_key_configured: mockDeepseekKeyConfigured,
+    alarm: null,
     classroom_programs: CLASSROOM_CATALOG.map((item) => mockClassroomProgram(item.id)),
     classroom_slots: mockClassroomSlots,
     classroom_due_count: mockClassroomSlots.filter((slot) => slot.owed).length,
@@ -1164,6 +1165,7 @@ export const mockApi = {
   setDeepseekApiKey: async (key: string) => {
     mockDeepseekKeyConfigured = key.trim().length > 0;
   },
+  snoozeAlarm: async (_occurrenceId: string, minutes: number) => new Date(Date.now() + minutes * 60_000).toISOString(),
   pauseSchedule: async () => {
     mockPaused = true;
   },

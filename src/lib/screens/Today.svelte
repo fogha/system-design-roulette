@@ -7,11 +7,18 @@
   import StatusLED from '../components/StatusLED.svelte';
   import { ArrowRight, BookOpen, Clock, Play, Pause } from 'lucide-svelte';
   let now = $state(new Date()), busy = $state(false);
+  async function snooze(minutes: number) {
+    if (!alarm || busy) return; busy = true;
+    try { await api.snoozeAlarm(alarm.occurrence_id, minutes); await app.refresh(); } catch (e) { app.error = String(e); } finally { busy = false; }
+  }
+  function untilClock(value: string) { const d = new Date(value); return Number.isNaN(d.getTime()) ? '' : d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }); }
   const next = $derived(nextScheduledClass(app.state, now));
   const resumable = $derived(app.state?.active_classroom_sessions ?? []);
   const activeClasses = $derived((app.state?.classroom_programs ?? []).filter(p => p.enabled));
   const slots = $derived((app.state?.classroom_slots ?? []).filter(s => s.enabled && activeClasses.some(p => p.subject_id === s.subject_id)));
   const dueSlots = $derived(slots.filter(s => s.owed));
+  const alarm = $derived(app.state?.alarm ?? null);
+  const alarmSlot = $derived(alarm ? slots.find(s => s.occurrence_id === alarm.occurrence_id) ?? null : null);
   const missed = $derived((app.state?.appointments ?? []).filter(a => a.disposition === 'missed'));
   /** Engineering classes with spaced review due and no saved session in the way. */
   const reviews = $derived(activeClasses.filter(p => p.kind === 'engineering' && p.review_due > 0 && !resumable.some(s => s.subject_id === p.subject_id)));
@@ -44,6 +51,19 @@
 </script>
 <div class="today">
   {#if app.state?.enforcement_disarmed}<p class="recovery mono" role="status">ENFORCEMENT DISARMED · a principia-unlock release token is present.</p>{/if}
+  {#if alarm}
+    <section class="alarm" class:snoozed={!!alarm.snoozed_until} role="alert" aria-live="assertive" aria-label="Study alarm">
+      <div class="alarm-copy">
+        <span class="mono">{alarm.snoozed_until ? `SNOOZED · RINGS AGAIN AT ${untilClock(alarm.snoozed_until)}` : 'STUDY ALARM · RINGING'}</span>
+        <strong>{alarm.label} is due{alarm.queued ? `, and ${alarm.queued} more ${alarm.queued === 1 ? 'is' : 'are'} waiting` : ''}.</strong>
+        <p>The alarm stops when you start the lesson. You can break the glass once you are in it, but not before.</p>
+      </div>
+      <div class="alarm-actions">
+        {#if alarmSlot}<button class="cta mono-cta" disabled={busy || !!app.preparingClass} onclick={() => start(alarmSlot)}><Play size={13} /> Start {alarm.label}</button>{/if}
+        {#if !alarm.snoozed_until}{#each [5, 10, 15] as minutes (minutes)}<button class="ghost mono-ghost" disabled={busy} onclick={() => snooze(minutes)}>Snooze {minutes} min</button>{/each}{/if}
+      </div>
+    </section>
+  {/if}
   <section class="idle-center" aria-labelledby="today-title">
     <div class="meta-label">TODAY · {now.toLocaleDateString(undefined,{weekday:'long',month:'short',day:'numeric'})}</div>
     <h1 id="today-title">{resumable.length ? 'Your study desk is waiting' : dueSlots.length ? 'Time for your next class' : 'Make room for learning'}</h1>
@@ -83,6 +103,11 @@
   .overview { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding-top: 22px; border-top: 1px dashed var(--node-border); } .saved { margin: 0 0 22px; } .study-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 10px 0; border-bottom: 1px dashed var(--node-divider); margin-bottom: 12px; } .study-row strong { font-size: 13px; font-weight: 500; } .study-row p,.hint { font-size: 12px; color: var(--muted); margin: 5px 0 12px; } .queue-state { display: flex; gap: 9px; align-items: center; font-size: 12px; color: var(--muted); }
   .class-link,.agenda-link { display: flex; align-items: center; gap: 12px; text-align: left; width: 100%; background: none; border: 0; border-bottom: 1px dashed var(--node-divider); padding: 12px 0; margin-bottom: 8px; color: var(--fg); font: 13px var(--font-body); cursor: pointer; } .class-link > span:first-child { color: var(--accent); font-size: 11px; } .class-link > span:nth-child(2),.agenda-link > span { flex: 1; } small { color: var(--muted); display: block; font-size: 11px; margin-top: 5px; } .agenda-link strong { font-weight: 500; }
   .row-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .alarm { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 14px 16px; border: 1px solid var(--accent); border-radius: var(--radius-panel); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+  .alarm.snoozed { border-style: dashed; background: var(--surface); }
+  .alarm-copy { display: grid; gap: 4px; min-width: 0; } .alarm-copy .mono { font-size: 9px; letter-spacing: .7px; color: var(--accent); } .alarm.snoozed .alarm-copy .mono { color: var(--muted); }
+  .alarm-copy strong { font-size: 14px; } .alarm-copy p { margin: 0; font-size: 11px; color: var(--muted); line-height: 1.55; }
+  .alarm-actions { display: flex; gap: 8px; flex-wrap: wrap; }
   .recovery { color: var(--bad-fg); border: 1px dashed var(--led-err); background: var(--bad-bg); padding: 9px 12px; border-radius: var(--radius-control); font-size: 11px; }
   @media(max-width:620px) { .today { padding: 22px 18px; } .overview { grid-template-columns: 1fr; } h1 { font-size: 28px; } .study-row { flex-wrap: wrap; } }
 </style>

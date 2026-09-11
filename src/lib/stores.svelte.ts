@@ -200,6 +200,11 @@ class AppStore {
     await api.markFrontendReady().catch(() => {});
     await this.refresh();
     await onEvent('classroom:owed', () => this.refresh());
+    await onEvent('alarm:state', () => this.refresh());
+    await onEvent<{ course_id: ClassroomSubjectId; occurrence_id: string }>('tray:start', (start) => {
+      this.navigate('today');
+      void this.startClass(start.course_id, null, false, start.occurrence_id);
+    });
     await onEvent('classroom:state', () => this.refresh());
     await onEvent<string>('gen:status', (msg) => {
       this.genStatus = msg;
