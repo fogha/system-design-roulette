@@ -58,3 +58,39 @@ jobs:
         run: npm test
       - name: Production frontend build
         run: npm run build
+
+  platform-gates:
+    name: Gates on ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-14]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - run: npm ci
+      - name: Strict Rust lint
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
+      - name: Rust tests (platform scheduler, kiosk and key storage compile paths)
+        run: cargo test --manifest-path src-tauri/Cargo.toml --all-targets
+      - name: Frontend type and accessibility checks
+        run: npm run check
+      - name: Frontend unit tests
+        run: npm test
