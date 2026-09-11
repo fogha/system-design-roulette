@@ -19,6 +19,72 @@ const MAX_EXCERPT_WORDS: usize = 700;
 /// How long a fetched document stays reusable across generation passes.
 const CACHE_TTL: Duration = Duration::from_secs(6 * 60 * 60);
 
+/// Where to read a page when its host is unreachable. The GNU manuals are
+/// the whole reading list of the shell classes and gnu.org goes dark from
+/// some networks, so its Bash and coreutils pages fall back to the same
+/// material on man7.org. The hint names the section to quote, since a man
+/// page holds the whole program where the manual page held one topic.
+pub fn fallback_source(url: &str) -> Option<(String, String)> {
+    let path = url
+        .strip_prefix("https://www.gnu.org/software/")
+        .or_else(|| url.strip_prefix("https://gnu.org/software/"))?;
+    let (tool, rest) = path.split_once('/')?;
+    let page = rest
+        .rsplit('/')
+        .next()
+        .unwrap_or_default()
+        .trim_end_matches(".html");
+    let words = |page: &str| {
+        page.replace("_003f", "")
+            .replace(['-', '_'], " ")
+            .trim()
+            .to_string()
+    };
+    let man = |name: &str| format!("https://man7.org/linux/man-pages/man1/{name}.1.html");
+    match tool {
+        "bash" => Some((man("bash"), words(page))),
+        "coreutils" => {
+            let command = page.strip_suffix("-invocation")?;
+            Some((man(command), command.to_string()))
+        }
+        "grep" | "sed" | "gawk" | "make" | "tar" | "wget" | "bc" => Some((man(tool), words(page))),
+        "findutils" => Some((man("find"), words(page))),
+        "diffutils" => Some((man("diff"), words(page))),
+        _ => None,
+    }
+}
+
+/// The part of a long document that is about `hint`: a window starting a
+/// little before the first line that mentions it, or the opening when nothing
+/// does. A man page holds the whole program; the lesson wants one section.
+pub fn focused_excerpt(prose: &str, hint: &str, limit: usize) -> String {
+    // Match on stems, so "Redirections" finds the REDIRECTION section.
+    let terms: Vec<String> = hint
+        .split_whitespace()
+        .map(|term| {
+            term.trim_matches(|c: char| !c.is_alphanumeric())
+                .to_ascii_lowercase()
+        })
+        .filter(|term| term.len() >= 4)
+        .map(|term| {
+            let keep = term.len().saturating_sub(2).max(4);
+            term.chars().take(keep).collect()
+        })
+        .collect();
+    if terms.is_empty() {
+        return first_words(prose, limit);
+    }
+    let lines: Vec<&str> = prose.lines().collect();
+    let Some(index) = lines.iter().position(|line| {
+        let lower = line.to_ascii_lowercase();
+        terms.iter().any(|term| lower.contains(term.as_str()))
+    }) else {
+        return first_words(prose, limit);
+    };
+    let start = index.saturating_sub(3);
+    first_words(&lines[start..].join("\n"), limit)
+}
+
 pub fn host_of(url: &str) -> Option<String> {
     let rest = url
         .strip_prefix("https://")
@@ -284,8 +350,33 @@ pub struct ResearchSource {
 
 #[derive(Clone)]
 struct CachedDocument {
-    source: ResearchSource,
+    title: Option<String>,
+    prose: String,
     stored_at: Instant,
+}
+
+/// What one retrieval produced: the sources to teach from, every candidate
+/// that was passed over with its reason, and the seeds a mirror stood in
+/// for. A lesson with no reading list can then say why, not only that.
+#[derive(Debug, Default, Clone)]
+pub struct Gathered {
+    pub sources: Vec<ResearchSource>,
+    pub skipped: Vec<(String, String)>,
+    pub substituted: Vec<(String, String)>,
+}
+
+impl Gathered {
+    /// The hosts that could not be reached, for a note the learner can read.
+    pub fn unreachable_hosts(&self) -> Vec<String> {
+        let mut hosts: Vec<String> = self
+            .skipped
+            .iter()
+            .filter_map(|(url, _)| host_of(url))
+            .collect();
+        hosts.sort();
+        hosts.dedup();
+        hosts
+    }
 }
 
 /// Fetches and caches primary documentation for course generation.
@@ -316,18 +407,19 @@ impl Researcher {
         }
     }
 
-    fn cached(&self, url: &str) -> Option<ResearchSource> {
+    fn cached(&self, url: &str) -> Option<(Option<String>, String)> {
         let cache = self.cache.lock().ok()?;
         let entry = cache.get(url)?;
-        (entry.stored_at.elapsed() < CACHE_TTL).then(|| entry.source.clone())
+        (entry.stored_at.elapsed() < CACHE_TTL).then(|| (entry.title.clone(), entry.prose.clone()))
     }
 
-    fn store(&self, url: &str, source: &ResearchSource) {
+    fn store(&self, url: &str, title: Option<&str>, prose: &str) {
         if let Ok(mut cache) = self.cache.lock() {
             cache.insert(
                 url.to_string(),
                 CachedDocument {
-                    source: source.clone(),
+                    title: title.map(str::to_string),
+                    prose: prose.to_string(),
                     stored_at: Instant::now(),
                 },
             );
@@ -337,14 +429,50 @@ impl Researcher {
     /// Seed the cache so grounding logic can be exercised without network I/O.
     #[cfg(test)]
     pub fn prime(&self, source: ResearchSource) {
-        self.store(&source.url.clone(), &source);
+        self.store(&source.url, Some(&source.title), &source.excerpt);
     }
 
     /// Fetch one document and reduce it to citable teaching material.
     pub async fn fetch_source(&self, url: &str) -> std::result::Result<ResearchSource, String> {
-        if let Some(hit) = self.cached(url) {
-            return Ok(hit);
-        }
+        self.fetch_source_about(url, None).await
+    }
+
+    /// The same, quoting the part of the document about `hint` when one is
+    /// given: what a mirror page needs, since it holds more than the topic.
+    pub async fn fetch_source_about(
+        &self,
+        url: &str,
+        hint: Option<&str>,
+    ) -> std::result::Result<ResearchSource, String> {
+        let (title, prose) = match self.cached(url) {
+            Some(hit) => hit,
+            None => {
+                let (title, prose) = self.fetch_document(url).await?;
+                self.store(url, title.as_deref(), &prose);
+                (title, prose)
+            }
+        };
+        let words = prose.split_whitespace().count();
+        let host = host_of(url).unwrap_or_default();
+        let excerpt = match hint {
+            Some(hint) => focused_excerpt(&prose, hint, MAX_EXCERPT_WORDS),
+            None => first_words(&prose, MAX_EXCERPT_WORDS),
+        };
+        Ok(ResearchSource {
+            url: url.trim().to_string(),
+            title: title.unwrap_or_else(|| host.clone()),
+            host,
+            excerpt,
+            words,
+            primary: true,
+        })
+    }
+
+    /// Fetch one document and reduce it to its title and readable prose.
+    async fn fetch_document(
+        &self,
+        url: &str,
+    ) -> std::result::Result<(Option<String>, String), String> {
         if !is_credible_source(url) {
             return Err(format!("{url} is not on the credible-source allowlist"));
         }
@@ -405,17 +533,7 @@ impl Researcher {
         if words < 120 {
             return Err(format!("{url} yielded only {words} readable words"));
         }
-        let host = host_of(url).unwrap_or_default();
-        let source = ResearchSource {
-            url: url.trim().to_string(),
-            title: title.unwrap_or_else(|| host.clone()),
-            host,
-            excerpt: first_words(&prose, MAX_EXCERPT_WORDS),
-            words,
-            primary: true,
-        };
-        self.store(url, &source);
-        Ok(source)
+        Ok((title, prose))
     }
 
     /// One MDN search. Best effort: a change to MDN's response shape must never
@@ -460,7 +578,7 @@ impl Researcher {
         topic: &str,
         seeds: &[String],
         limit: usize,
-    ) -> Vec<ResearchSource> {
+    ) -> Gathered {
         let mut candidates: Vec<String> = seeds
             .iter()
             .map(|seed| seed.trim().to_string())
@@ -491,26 +609,87 @@ impl Researcher {
         // the vague pages we just deprioritized.
         candidates.truncate(limit.saturating_add(2));
 
-        let mut handles = Vec::new();
-        for url in candidates {
-            let researcher = self.clone();
-            handles.push(tokio::spawn(
-                async move { researcher.fetch_source(&url).await },
-            ));
+        let mut gathered = Gathered::default();
+        let mut failed: Vec<String> = Vec::new();
+        for (url, outcome) in self.fetch_all(&candidates, None).await {
+            match outcome {
+                Ok(source) if gathered.sources.len() < limit => gathered.sources.push(source),
+                Ok(_) => {}
+                Err(reason) => {
+                    gathered.skipped.push((url.clone(), reason));
+                    failed.push(url);
+                }
+            }
         }
+        // Whatever could not be reached may exist elsewhere; one mirror per
+        // page, quoting the part of it about the page's own topic.
+        if gathered.sources.len() < limit {
+            let mut mirrors: Vec<(String, String, String)> = Vec::new();
+            for url in &failed {
+                let Some((mirror, hint)) = fallback_source(url) else {
+                    continue;
+                };
+                if candidates.contains(&mirror) || mirrors.iter().any(|(_, m, _)| *m == mirror) {
+                    continue;
+                }
+                mirrors.push((url.clone(), mirror, hint));
+            }
+            let targets: Vec<(String, Option<String>)> = mirrors
+                .iter()
+                .map(|(_, mirror, hint)| (mirror.clone(), Some(hint.clone())))
+                .collect();
+            for ((seed, mirror, _), (_, outcome)) in
+                mirrors.iter().zip(self.fetch_hinted(&targets).await)
+            {
+                match outcome {
+                    Ok(source) if gathered.sources.len() < limit => {
+                        gathered.substituted.push((seed.clone(), mirror.clone()));
+                        gathered.sources.push(source);
+                    }
+                    Ok(_) => {}
+                    Err(reason) => gathered.skipped.push((mirror.clone(), reason)),
+                }
+            }
+        }
+        gathered
+    }
 
-        let mut sources = Vec::new();
+    async fn fetch_all(
+        &self,
+        urls: &[String],
+        hint: Option<&str>,
+    ) -> Vec<(String, std::result::Result<ResearchSource, String>)> {
+        let targets: Vec<(String, Option<String>)> = urls
+            .iter()
+            .map(|url| (url.clone(), hint.map(str::to_string)))
+            .collect();
+        self.fetch_hinted(&targets).await
+    }
+
+    /// Fetch several documents at once, each with its own excerpt hint. The
+    /// order of the input is the order of the output.
+    async fn fetch_hinted(
+        &self,
+        targets: &[(String, Option<String>)],
+    ) -> Vec<(String, std::result::Result<ResearchSource, String>)> {
+        let mut handles = Vec::new();
+        for (url, hint) in targets {
+            let researcher = self.clone();
+            let url = url.clone();
+            let hint = hint.clone();
+            handles.push(tokio::spawn(async move {
+                let outcome = researcher.fetch_source_about(&url, hint.as_deref()).await;
+                (url, outcome)
+            }));
+        }
+        let mut outcomes = Vec::new();
         for handle in handles {
             match handle.await {
-                Ok(Ok(source)) => sources.push(source),
-                Ok(Err(reason)) => log::warn!("research skipped a source: {reason}"),
+                Ok(outcome) => outcomes.push(outcome),
                 Err(error) => log::warn!("research task failed: {error}"),
             }
-            if sources.len() >= limit {
-                break;
-            }
         }
-        sources
+        outcomes
     }
 
     /// Confirm a URL the model produced actually resolves, so the reading list
@@ -931,5 +1110,88 @@ mod tests {
 
         assert!(source.words > 200);
         assert!(source.excerpt.to_lowercase().contains("navigation"));
+    }
+
+    #[test]
+    fn gnu_manual_pages_fall_back_to_the_same_material_on_man7() {
+        assert_eq!(
+            fallback_source("https://www.gnu.org/software/bash/manual/html_node/Redirections.html"),
+            Some((
+                "https://man7.org/linux/man-pages/man1/bash.1.html".to_string(),
+                "Redirections".to_string()
+            ))
+        );
+        assert_eq!(
+            fallback_source(
+                "https://www.gnu.org/software/bash/manual/html_node/What-is-a-shell_003f.html"
+            )
+            .map(|(_, hint)| hint),
+            Some("What is a shell".to_string())
+        );
+        assert_eq!(
+            fallback_source(
+                "https://www.gnu.org/software/coreutils/manual/html_node/ls-invocation.html"
+            ),
+            Some((
+                "https://man7.org/linux/man-pages/man1/ls.1.html".to_string(),
+                "ls".to_string()
+            ))
+        );
+        assert_eq!(
+            fallback_source(
+                "https://www.gnu.org/software/findutils/manual/html_node/find_html/Name.html"
+            )
+            .map(|(url, _)| url),
+            Some("https://man7.org/linux/man-pages/man1/find.1.html".to_string())
+        );
+        assert_eq!(
+            fallback_source("https://man7.org/linux/man-pages/man1/ls.1.html"),
+            None
+        );
+        assert_eq!(
+            fallback_source("https://www.gnu.org/software/emacs/manual/x.html"),
+            None
+        );
+    }
+
+    #[test]
+    fn a_focused_excerpt_starts_just_before_the_topic_and_falls_back_to_the_opening() {
+        let prose = (1..=40)
+            .map(|n| format!("line {n} about the program"))
+            .chain([
+                "REDIRECTION".to_string(),
+                "Before a command is executed, its input and output may be redirected.".to_string(),
+            ])
+            .chain((41..=60).map(|n| format!("line {n} about the program")))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let excerpt = focused_excerpt(&prose, "Redirections", 30);
+        assert!(
+            excerpt.starts_with("line 38 about the program"),
+            "{excerpt}"
+        );
+        assert!(excerpt.contains("REDIRECTION"));
+        assert!(focused_excerpt(&prose, "Nothing here", 30).starts_with("line 1 about"));
+        assert!(
+            focused_excerpt(&prose, "ls", 30).starts_with("line 1 about"),
+            "short hints do not match"
+        );
+    }
+
+    #[test]
+    fn a_gathering_names_the_hosts_it_could_not_reach() {
+        let gathered = Gathered {
+            sources: Vec::new(),
+            skipped: vec![
+                ("https://www.gnu.org/a".into(), "timed out".into()),
+                ("https://www.gnu.org/b".into(), "timed out".into()),
+                ("https://man7.org/x".into(), "404".into()),
+            ],
+            substituted: Vec::new(),
+        };
+        assert_eq!(
+            gathered.unreachable_hosts(),
+            vec!["man7.org", "www.gnu.org"]
+        );
     }
 }

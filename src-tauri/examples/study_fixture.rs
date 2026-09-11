@@ -135,6 +135,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         markdown: bundled.markdown,
         resources: bundled.resources,
         review_notes: vec![],
+        research_note: None,
         questions,
         exercise: bundled.exercise,
         source: "qa-fixture".into(),

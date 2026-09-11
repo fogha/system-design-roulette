@@ -428,6 +428,7 @@ Say each of these in your own words before opening the check:
         markdown,
         resources: vec![],
         review_notes: vec![],
+        research_note: None,
         questions: pool,
         exercise: None,
         source: if fresh {
@@ -531,6 +532,7 @@ pub async fn prepare(state: &AppState, id: &SessionId) -> Result<Session> {
             markdown: course.markdown,
             resources: course.resources,
             review_notes: course.review_notes,
+            research_note: course.research_note,
             questions,
             exercise: course.exercise,
             source: source.clone(),
@@ -736,6 +738,7 @@ pub fn view(conn: &Connection, id: &SessionId) -> Result<Option<EngineeringLesso
         markdown: stored.markdown,
         resources: stored.resources,
         review_notes: stored.review_notes,
+        research_note: stored.research_note,
         questions: stored
             .questions
             .into_iter()

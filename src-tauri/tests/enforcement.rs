@@ -79,6 +79,7 @@ fn published(conn: &Connection, subject: &str) -> sessions::Session {
         markdown: "## Body".into(),
         resources: vec![],
         review_notes: vec![],
+        research_note: None,
         questions: vec![StoredQuestion {
             id: 1,
             prompt: "Q".into(),

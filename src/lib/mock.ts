@@ -584,6 +584,7 @@ function mockEngineeringLesson(subjectId: FocusArea): EngineeringLessonView {
     markdown: shaped ?? reference.markdown,
     resources: reference.resources,
     review_notes: [],
+    research_note: params.has('unverified') ? 'No primary documentation could be retrieved when this lesson was written: www.gnu.org could not be reached. Its claims were not checked against the sources. Read it with care and verify anything you will rely on.' : null,
     questions: reference.questions.filter((question) => question.kind === 'mcq').map((question, index) => ({
       id: index + 1, prompt: question.prompt, choices: question.choices!,
       section: question.section, learning_objective: question.learning_objective,

@@ -224,6 +224,7 @@ fn publish(conn: &rusqlite::Connection, session: &principia_desk_lib::domain::se
         markdown: "## The simple version\n\nA grounded fixture lesson.".into(),
         resources: vec![],
         review_notes: vec![],
+        research_note: None,
         questions: (1..=5)
             .map(|id| StoredQuestion {
                 id,

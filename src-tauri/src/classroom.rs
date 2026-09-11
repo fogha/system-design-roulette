@@ -1747,6 +1747,10 @@ pub struct StoredEngineeringLesson {
     /// Points the editorial audit still wanted changed, shown to the learner.
     #[serde(default)]
     pub review_notes: Vec<String>,
+    /// Set when no documentation could be retrieved while writing: the
+    /// lesson's claims were not checked against the sources.
+    #[serde(default)]
+    pub research_note: Option<String>,
     pub questions: Vec<StoredQuestion>,
     pub exercise: Option<Exercise>,
     pub source: String,
@@ -1800,6 +1804,10 @@ pub struct EngineeringLessonView {
     /// Points the editorial audit still wanted changed, shown to the learner.
     #[serde(default)]
     pub review_notes: Vec<String>,
+    /// Why the lesson's claims were not checked against documentation, when
+    /// they were not.
+    #[serde(default)]
+    pub research_note: Option<String>,
     pub questions: Vec<ClassroomQuestionView>,
     pub exercise: Option<Exercise>,
     /// `lesson` or `retrieval` (delayed review without a new lesson).
@@ -1894,6 +1902,7 @@ fn engineering_view(conn: &Connection, session_id: i64) -> Result<Option<Enginee
                 markdown: stored.markdown,
                 resources: stored.resources,
                 review_notes: stored.review_notes,
+                research_note: stored.research_note,
                 questions: stored
                     .questions
                     .into_iter()
@@ -2304,6 +2313,7 @@ fn insert_engineering_session(
         markdown: course.markdown,
         resources: course.resources,
         review_notes: course.review_notes,
+        research_note: course.research_note,
         questions,
         exercise: course.exercise,
         source: source.clone(),
@@ -2575,6 +2585,7 @@ mod tests {
             exit_questions: questions,
             exercise: None,
             review_notes: Vec::new(),
+            research_note: None,
         }
     }
 

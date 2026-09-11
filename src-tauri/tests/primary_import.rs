@@ -683,6 +683,7 @@ fn apply_keeps_the_active_class_session_in_the_foreground() {
         markdown: "## Body".into(),
         resources: vec![],
         review_notes: vec![],
+        research_note: None,
         questions: vec![StoredQuestion {
             id: 1,
             prompt: "Q".into(),

@@ -50,7 +50,8 @@ async fn curated_primary_sources_are_reachable_and_readable() {
     let researcher = research::Researcher::new();
     let sources = researcher
         .gather(&concept.focus, &topic, &concept.brief.primary_sources, 5)
-        .await;
+        .await
+        .sources;
 
     println!("retrieved {} source(s) for {topic}", sources.len());
     for source in &sources {
@@ -76,7 +77,8 @@ async fn systems_and_shell_courses_retrieve_subject_specific_readable_sources() 
         let topic = research::course_topic(&concept.title, &concept.category);
         let sources = researcher
             .gather(&concept.focus, &topic, &concept.brief.primary_sources, 3)
-            .await;
+            .await
+            .sources;
         println!(
             "{}: {} readable primary sources",
             concept.focus,

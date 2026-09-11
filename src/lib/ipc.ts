@@ -429,6 +429,8 @@ export interface EngineeringLessonView {
   resources: Resource[];
   /** Points the tutor's editor still wanted changed when its corrections ran out; the lesson ships with them shown. */
   review_notes: string[];
+  /** Set when no documentation could be retrieved while writing: the claims were not checked against the sources. */
+  research_note: string | null;
   questions: ClassroomQuestionView[];
   exercise: ClassroomExercise | null;
   /** `lesson`, or `retrieval` for a delayed review without a new lesson. */

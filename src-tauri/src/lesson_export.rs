@@ -482,6 +482,9 @@ fn study(conn: &Connection, owner_id: &str) -> Result<LessonExport, String> {
                 serde_json::from_value(lesson.content.body.clone()).map_err(|e| e.to_string())?;
             rows.insert(1, Row::meta("topic", stored.concept_title.clone()));
             rows.insert(2, Row::meta("category", stored.category.clone()));
+            if let Some(note) = &stored.research_note {
+                rows.push(Row::meta("sources", note.clone()));
+            }
             rows.extend(section_rows(&stored.markdown));
             rows.extend(resource_rows(&stored.resources));
             if let Some(exercise) = &stored.exercise {
@@ -659,6 +662,9 @@ fn legacy_classroom(conn: &Connection, session_id: i64) -> Result<LessonExport, 
     }
     rows.push(Row::meta("tutor", stored.source.clone()));
     rows.push(key_note(key));
+    if let Some(note) = &stored.research_note {
+        rows.push(Row::meta("sources", note.clone()));
+    }
     rows.extend(section_rows(&stored.markdown));
     rows.extend(resource_rows(&stored.resources));
     if let Some(exercise) = &stored.exercise {

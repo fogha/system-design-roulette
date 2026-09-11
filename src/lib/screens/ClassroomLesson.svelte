@@ -214,6 +214,12 @@
       {#if !retrieval}
         <LessonMap {sections} current={currentSection} plan={lesson.plan} onjump={jump} />
       {/if}
+      {#if lesson.research_note}
+        <aside class="review-notes unverified" aria-label="Sources could not be retrieved for this lesson">
+          <p class="mono">UNVERIFIED · no documentation was retrieved</p>
+          <p class="why">{lesson.research_note}</p>
+        </aside>
+      {/if}
       {#if lesson.review_notes?.length}
         <aside class="review-notes" aria-label="Editor's notes on this lesson">
           <p class="mono">EDITOR'S NOTES · read these claims with care</p>
@@ -297,6 +303,9 @@
 <style>
   .review-notes { margin: 0 0 22px; padding: 14px 16px; border: 1px dashed var(--led-warn, var(--accent)); border-radius: var(--radius-panel); background: var(--warn-bg, rgba(255, 200, 100, .06)); color: var(--fg); font-size: 13px; }
   .review-notes .mono { font-size: 9px; letter-spacing: .7px; color: var(--led-warn, var(--accent)); margin: 0 0 6px; }
+  .review-notes.unverified { border-color: var(--bad-fg); background: var(--bad-bg); }
+  .review-notes.unverified .mono { color: var(--bad-fg); }
+  .review-notes.unverified .why { color: var(--fg); margin: 0; }
   .review-notes .why { margin: 0 0 8px; font-size: 12px; color: var(--muted); line-height: 1.55; }
   .review-notes ul { margin: 0; padding-left: 18px; } .review-notes li { margin: 4px 0; line-height: 1.55; font-size: 12px; }
   .quality { display: flex; align-items: center; gap: 5px; color: var(--faint); font-size: 8px; }

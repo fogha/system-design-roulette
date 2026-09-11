@@ -59,6 +59,11 @@ pub struct GeneratedCourse {
     /// writer never emits this field, so it stays out of the metadata contract.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub review_notes: Vec<String>,
+    /// Set when the lesson was written without retrieved documentation, so
+    /// the reader is told its claims were not checked against the sources.
+    /// The writer never emits this field either.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub research_note: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -153,6 +158,7 @@ impl CourseMetadata {
             exit_questions: self.exit_questions,
             exercise: Some(self.exercise),
             review_notes: Vec::new(),
+            research_note: None,
         }
     }
 }
@@ -1815,6 +1821,7 @@ impl Generator {
                 .ensure_source_grounding(
                     course,
                     sources,
+                    &context.curriculum.primary_sources,
                     context.agent,
                     context.custom_bin,
                     context.model,
@@ -1828,13 +1835,11 @@ impl Generator {
         unreachable!("bounded editorial audit returns a course or an error")
     }
 
-    /// Fetch the primary documentation for one lesson before any provider call.
-    async fn research_for(
-        &self,
-        request: &CourseRequest<'_>,
-    ) -> Vec<crate::research::ResearchSource> {
+    /// Fetch the primary documentation for one lesson before any provider
+    /// call, saying in the log what was skipped and why.
+    async fn research_for(&self, request: &CourseRequest<'_>) -> crate::research::Gathered {
         let topic = crate::research::course_topic(request.title, request.category);
-        let sources = self
+        let gathered = self
             .researcher
             .gather(
                 request.focus,
@@ -1843,24 +1848,47 @@ impl Generator {
                 RESEARCH_SOURCE_TARGET,
             )
             .await;
-        if sources.is_empty() {
+        for (url, reason) in &gathered.skipped {
+            self.log(format!("research: skipped {url} — {reason}"));
+        }
+        for (seed, mirror) in &gathered.substituted {
+            self.log(format!(
+                "research: {seed} could not be reached; reading the same material at {mirror}"
+            ));
+        }
+        if gathered.sources.is_empty() {
             self.log(
                 "research: no primary sources could be retrieved; teaching without a verified \
-                 reading list"
+                 reading list — the lesson will carry a note saying so"
                     .to_string(),
             );
         } else {
             self.log(format!(
                 "research: retrieved {} primary source(s) — {}",
-                sources.len(),
-                sources
+                gathered.sources.len(),
+                gathered
+                    .sources
                     .iter()
                     .map(|source| source.host.as_str())
                     .collect::<Vec<_>>()
                     .join(", ")
             ));
         }
-        sources
+        gathered
+    }
+
+    /// What the reader is told when a lesson was written without retrieved
+    /// documentation: which hosts could not be reached, and what that means.
+    fn research_note(gathered: &crate::research::Gathered) -> String {
+        let hosts = gathered.unreachable_hosts();
+        if hosts.is_empty() {
+            "No primary documentation was available for this topic when the lesson was written, so its claims were not checked against the sources. Read it with care and verify anything you will rely on.".to_string()
+        } else {
+            format!(
+                "No primary documentation could be retrieved when this lesson was written: {} could not be reached. Its claims were not checked against the sources. Read it with care and verify anything you will rely on.",
+                hosts.join(", ")
+            )
+        }
     }
 
     /// Drop every unreachable URL and add the retrieved documents, so the
@@ -1869,6 +1897,7 @@ impl Generator {
         &self,
         course_resources: &[Resource],
         sources: &[crate::research::ResearchSource],
+        seeds: &[String],
     ) -> Vec<Resource> {
         let mut reading_list: Vec<Resource> = Vec::new();
         let mut seen = std::collections::HashSet::new();
@@ -1895,6 +1924,23 @@ impl Generator {
                         url: url.to_owned(),
                         kind: resource.kind.clone(),
                         why: resource.why.clone(),
+                    });
+                } else if seeds.iter().any(|seed| seed.trim() == url) {
+                    // The curriculum itself names this page. An outage does
+                    // not make it wrong; it makes it unreachable today.
+                    self.log(format!(
+                        "research: kept curriculum link {url} although it could not be reached"
+                    ));
+                    reading_list.push(Resource {
+                        title: resource.title.clone(),
+                        url: url.to_owned(),
+                        kind: resource.kind.clone(),
+                        why: format!(
+                            "{} (Named by the curriculum; it could not be reached when this lesson was written.)",
+                            resource.why.trim()
+                        )
+                        .trim()
+                        .to_string(),
                     });
                 } else {
                     self.log(format!("research: dropped unverifiable link {url}"));
@@ -1926,13 +1972,16 @@ impl Generator {
         &self,
         mut course: GeneratedCourse,
         sources: &[crate::research::ResearchSource],
+        seeds: &[String],
         agent: &str,
         custom_bin: &str,
         model: &str,
         context: &str,
         budget: LessonBudget,
     ) -> Result<GeneratedCourse> {
-        course.resources = self.verified_reading_list(&course.resources, sources).await;
+        course.resources = self
+            .verified_reading_list(&course.resources, sources, seeds)
+            .await;
         if sources.len() < MIN_GROUNDED_SOURCES {
             // Retrieval itself failed (offline, host down). Unverifiable links
             // are already gone; failing the lesson too would punish the learner
@@ -1973,7 +2022,7 @@ impl Generator {
             )));
         }
         corrected.resources = self
-            .verified_reading_list(&corrected.resources, sources)
+            .verified_reading_list(&corrected.resources, sources, seeds)
             .await;
         Ok(corrected)
     }
@@ -1985,7 +2034,8 @@ impl Generator {
         let scoped = self.scoped("lesson");
         let curriculum_json = serde_json::to_string_pretty(request.curriculum)
             .map_err(|error| GenError::Parse(format!("could not serialize curriculum: {error}")))?;
-        let sources = scoped.research_for(&request).await;
+        let gathered = scoped.research_for(&request).await;
+        let sources = gathered.sources.clone();
         let prompt = with_teacher(
             request.dossier,
             &format!(
@@ -2018,6 +2068,7 @@ impl Generator {
             .ensure_source_grounding(
                 course,
                 &sources,
+                &request.curriculum.primary_sources,
                 &agent,
                 &custom_bin,
                 &model,
@@ -2040,6 +2091,10 @@ impl Generator {
                 &sources,
             )
             .await?;
+        let mut course = course;
+        if sources.is_empty() {
+            course.research_note = Some(Self::research_note(&gathered));
+        }
         Ok((course, agent))
     }
 
@@ -2056,7 +2111,8 @@ impl Generator {
         scoped.owner = Some(format!("catalog:{}", profile.subject_id));
         let curriculum_json = serde_json::to_string_pretty(request.curriculum)
             .map_err(|error| GenError::Parse(format!("could not serialize curriculum: {error}")))?;
-        let sources = scoped.research_for(&request).await;
+        let gathered = scoped.research_for(&request).await;
+        let sources = gathered.sources.clone();
         let task = format!(
             "{subject_contract}\n\nPROMPT_PROFILE_VERSION: {}\n\n\
              AUTHORITATIVE CURRICULUM BRIEF:\n{curriculum_json}\n\n{}\n\n{}",
@@ -2092,6 +2148,7 @@ impl Generator {
             .ensure_source_grounding(
                 course,
                 &sources,
+                &request.curriculum.primary_sources,
                 &profile.agent,
                 &profile.custom_bin,
                 &profile.model,
@@ -2114,6 +2171,10 @@ impl Generator {
                 &sources,
             )
             .await?;
+        let mut course = course;
+        if sources.is_empty() {
+            course.research_note = Some(Self::research_note(&gathered));
+        }
         Ok((course, profile.agent.clone()))
     }
 
@@ -3009,6 +3070,7 @@ mod quality_gate_tests {
                 hints: vec!["Start at the boundary.".into()],
             }),
             review_notes: Vec::new(),
+            research_note: None,
         };
         assert!(validate_generated_course(&course).is_ok());
 
@@ -3086,6 +3148,7 @@ mod quality_gate_tests {
                 hints: vec!["Start from the request that crosses the link.".into()],
             }),
             review_notes: Vec::new(),
+            research_note: None,
         };
         validate_generated_course(&course).unwrap();
         let (_, sections) = super::split_course_sections(markdown);
@@ -3113,6 +3176,7 @@ mod quality_gate_tests {
                 hints: vec!["Start at the boundary.".into()],
             }),
             review_notes: Vec::new(),
+            research_note: None,
         }
         };
         assert!(validate_generated_course(&base(complete_course_markdown())).is_ok());
@@ -3161,6 +3225,7 @@ mod quality_gate_tests {
                 hints: vec!["Start at the boundary.".into()],
             }),
             review_notes: Vec::new(),
+            research_note: None,
         };
         assert!(validate_generated_course(&course).is_ok());
         let error =
@@ -3189,6 +3254,7 @@ mod quality_gate_tests {
                 hints: vec!["Start at the boundary.".into()],
             }),
             review_notes: Vec::new(),
+            research_note: None,
         };
         let practical_start = course.markdown.find("## Practical exercise").unwrap();
         let takeaways_start = course.markdown.find("## Key takeaways").unwrap();
@@ -3359,6 +3425,7 @@ mod generation_policy_tests {
                 hints: vec!["Start at the boundary.".into()],
             }),
             review_notes: Vec::new(),
+            research_note: None,
         }
     }
 
@@ -3823,6 +3890,7 @@ else:
             .ensure_source_grounding(
                 course,
                 &sources,
+                &[],
                 "custom",
                 "/definitely/not/a/provider",
                 "configured-model",
@@ -3848,6 +3916,7 @@ else:
         let grounded = test_generator()
             .ensure_source_grounding(
                 course,
+                &[],
                 &[],
                 "custom",
                 "/definitely/not/a/provider",
@@ -3901,6 +3970,7 @@ else:
             .ensure_source_grounding(
                 course,
                 &sources,
+                &[],
                 "custom",
                 &custom_bin,
                 "configured-model",
