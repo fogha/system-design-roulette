@@ -214,7 +214,7 @@
   .held { margin: 10px 0 0; font-size: 11px; color: var(--led-warn); }
   .today { width: min(1080px,100%); padding: 26px 30px 40px; margin: 0 auto; }
   /* The hero: what to do next on the left, the time until it on the right. */
-  .hero { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px 40px; align-items: center; padding: 18px 8px 30px; animation: rise 520ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .hero { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px 40px; align-items: center; padding: 18px 8px 30px; animation: rise 520ms cubic-bezier(0.22, 1, 0.36, 1) backwards; }
   .hero-copy { min-width: 0; }
   h1 { font-size: 38px; line-height: 1.08; margin: 10px 0 8px; letter-spacing: -0.01em; }
   .sub { color: var(--muted); font-size: 14px; margin: 0 0 20px; max-width: 560px; }
@@ -230,7 +230,9 @@
   .ring-count { font-size: 30px; line-height: 1; color: var(--fg); font-variant-numeric: tabular-nums; margin: 4px 0 2px; } .ring-count.idle { color: var(--faint); }
   .ring-label { font-size: 13px; font-weight: 500; color: var(--fg); max-width: 140px; line-height: 1.25; }
   .ring-when { font-size: 9px; color: var(--muted); margin-top: 2px; }
-  .pulse-section { margin: 4px 0 26px; animation: rise 520ms cubic-bezier(0.22, 1, 0.36, 1) 120ms both; }
+  /* `backwards`, not `both`: a finished transform, even an identity one,
+     would trap the heat map's fixed-position tip inside this section. */
+  .pulse-section { margin: 4px 0 26px; animation: rise 520ms cubic-bezier(0.22, 1, 0.36, 1) 120ms backwards; }
   .section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; } .eyebrow { display: inline-flex; align-items: center; gap: 6px; color: var(--accent); font-size: 9px; letter-spacing: 1.4px; } .muted { font-size: 9.5px; color: var(--muted); }
   .ring-code { font-size: 9px; color: var(--accent); }
   .next-topic { display: flex; align-items: center; gap: 5px; color: var(--accent); }

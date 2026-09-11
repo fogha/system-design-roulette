@@ -162,11 +162,11 @@
   .strip {
     display: flex;
     position: sticky;
-    top: 0;
+    top: 12px;
     z-index: 5;
     align-items: center;
     gap: 12px;
-    margin: 0 0 18px;
+    margin: 12px 0 22px;
     padding: 6px 10px;
     border: 1px solid var(--node-border);
     border-radius: var(--radius-panel);

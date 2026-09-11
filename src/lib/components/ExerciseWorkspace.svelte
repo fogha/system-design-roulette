@@ -2,6 +2,7 @@
   import { api, type ExerciseOwner, type ExerciseView } from '../ipc';
   import { createDraftSaver, type SaveStatus } from '../draft-save';
   import Markdown from './Markdown.svelte';
+  import { parseExercisePlan } from '../features/lessons/exercise-plan';
   import { Lightbulb, Copy, Check, RotateCcw, CircleCheck, Timer } from 'lucide-svelte';
 
   let {
@@ -34,6 +35,34 @@
         : { course_id: courseId },
   );
   const draftWords = $derived(draft.trim() ? draft.trim().split(/\s+/).length : 0);
+
+  /** The steps and criteria inside the instructions, when they are shaped that way. */
+  const plan = $derived(exercise ? parseExercisePlan(exercise.instructions) : null);
+  /**
+   * Which steps and criteria are ticked. Kept on this machine per owner, like
+   * the draft's recovery copy: a tick is a bookmark, not evidence.
+   */
+  let ticks = $state<{ steps: boolean[]; done: boolean[] }>({ steps: [], done: [] });
+  const ticksKey = $derived(`principia-exercise-ticks:${studySessionId ?? (classroomSessionId !== undefined ? `classroom:${classroomSessionId}` : `course:${courseId}`)}`);
+  $effect(() => {
+    const key = ticksKey;
+    const current = plan;
+    if (!current) return;
+    let saved: { steps?: boolean[]; done?: boolean[] } = {};
+    try { saved = JSON.parse(localStorage.getItem(key) ?? '{}'); } catch { saved = {}; }
+    ticks = {
+      steps: current.steps.map((_, index) => !!saved.steps?.[index]),
+      done: current.doneWhen.map((_, index) => !!saved.done?.[index]),
+    };
+  });
+  function tick(kind: 'steps' | 'done', index: number) {
+    const next = { steps: [...ticks.steps], done: [...ticks.done] };
+    next[kind][index] = !next[kind][index];
+    ticks = next;
+    try { localStorage.setItem(ticksKey, JSON.stringify(next)); } catch { /* a tick is a convenience */ }
+  }
+  const stepsDone = $derived(ticks.steps.filter(Boolean).length);
+  const currentStep = $derived(ticks.steps.findIndex((done) => !done));
 
   /**
    * The reflection is stored as one text with three labelled lines, so the
@@ -174,13 +203,47 @@
       <span class="eyebrow mono"><span>PRACTICE</span>{#if minutes}<span class="eyebrow-sep">·</span><Timer size={10} /><span>ABOUT {minutes} MIN</span>{/if}</span>
       <h3>{exercise.title}</h3>
       {#if exercise.deliverable}
-        <p class="deliverable"><span class="deliverable-label"><CircleCheck size={13} /> Done looks like</span> {exercise.deliverable}</p>
+        <p class="deliverable"><span class="deliverable-label"><CircleCheck size={13} /> Done looks like</span> <Markdown markdown={exercise.deliverable} inline /></p>
       {/if}
     </header>
 
-    <div class="ex-instructions">
-      <Markdown markdown={exercise.instructions} />
-    </div>
+    {#if plan}
+      {#if plan.produce}<p class="produce"><strong>You will produce</strong> <Markdown markdown={plan.produce} inline /></p>{/if}
+      {#if plan.rest}<div class="ex-instructions"><Markdown markdown={plan.rest} /></div>{/if}
+      <section class="stepper" aria-label="Steps">
+        <div class="stepper-head">
+          <span class="mono">STEPS · {stepsDone} of {plan.steps.length} done</span>
+          <div class="stepper-track" role="progressbar" aria-valuemin="0" aria-valuemax={plan.steps.length} aria-valuenow={stepsDone} aria-label="Steps done"><i style:width={`${plan.steps.length ? (stepsDone / plan.steps.length) * 100 : 0}%`}></i></div>
+        </div>
+        <ol class="steps">
+          {#each plan.steps as step, index (index)}
+            <li class:done={ticks.steps[index]} class:current={index === currentStep}>
+              <button type="button" class="step-tick" role="checkbox" aria-checked={!!ticks.steps[index]} aria-label={`Step ${index + 1} done`} onclick={() => tick('steps', index)}>
+                {#if ticks.steps[index]}<Check size={13} />{:else}<span class="mono">{index + 1}</span>{/if}
+              </button>
+              <div class="step-body"><Markdown markdown={step} compact /></div>
+            </li>
+          {/each}
+        </ol>
+      </section>
+      {#if plan.doneWhen.length}
+        <section class="done-when" aria-label="Done when">
+          <span class="mono">DONE WHEN</span>
+          <ul>
+            {#each plan.doneWhen as item, index (index)}
+              <li class:done={ticks.done[index]}>
+                <button type="button" class="done-tick" role="checkbox" aria-checked={!!ticks.done[index]} aria-label={`Criterion ${index + 1} met`} onclick={() => tick('done', index)}>{#if ticks.done[index]}<Check size={11} />{/if}</button>
+                <div class="done-body"><Markdown markdown={item} compact /></div>
+              </li>
+            {/each}
+          </ul>
+        </section>
+      {/if}
+    {:else}
+      <div class="ex-instructions">
+        <Markdown markdown={exercise.instructions} />
+      </div>
+    {/if}
 
     {#if exercise.starter_code}
       <div class="starter-block">
@@ -282,7 +345,7 @@
       <div class="hints-block">
         <div class="hints-head mono"><Lightbulb size={12} /> hints · {revealedHints} of {exercise.hints.length} shown</div>
         {#each exercise.hints.slice(0, revealedHints) as hint, i}
-          <p class="hint"><span class="hint-num mono">{i + 1}</span> {hint}</p>
+          <p class="hint"><span class="hint-num mono">{i + 1}</span> <span><Markdown markdown={hint} inline /></span></p>
         {/each}
         {#if revealedHints < exercise.hints.length}
           <button class="ghost mono-ghost small" onclick={revealNextHint}>
@@ -296,9 +359,10 @@
 
 <style>
   .exercise-workspace {
-    max-width: 72ch;
-    margin: 0 auto;
-    padding: 28px 24px 80px;
+    /* The same width as the reading above it, so the pane does not narrow. */
+    width: 100%;
+    margin: 0;
+    padding: 28px 0 80px;
   }
   .dim {
     color: var(--faint);
@@ -350,9 +414,7 @@
     white-space: nowrap;
   }
 
-  /* The instructions arrive as `**You will produce:**`, `### Steps` (an
-     ordered list) and `### Done when` (a bulleted list). Older exercises are
-     a paragraph and get plain paragraph styling. */
+  /* Prose instructions (older exercises, or anything beside the plan). */
   .ex-instructions {
     margin: 18px 0 6px;
     font-size: 14px;
@@ -360,75 +422,66 @@
   .ex-instructions :global(.md p) {
     line-height: 1.6;
   }
-  .ex-instructions :global(.md h3) {
-    margin: 18px 0 8px;
+  .produce {
+    margin: 18px 0 14px;
+    font-size: 14.5px;
+    line-height: 1.6;
+  }
+  .produce strong {
+    display: inline-block;
+    margin-right: 6px;
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: 9.5px;
     font-weight: 500;
-    letter-spacing: 1.2px;
+    letter-spacing: 1px;
     text-transform: uppercase;
-    color: var(--muted);
+    color: var(--accent);
   }
-  .ex-instructions :global(.md ol) {
-    list-style: none;
-    counter-reset: step;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-  .ex-instructions :global(.md ol > li) {
-    counter-increment: step;
-    display: flex;
+
+  /* The stepper: numbered, tickable, the next step lit. Text stays inline
+     inside each step, so code spans and sentences flow together. */
+  .stepper { margin: 10px 0 18px; }
+  .stepper-head { display: flex; align-items: center; gap: 14px; margin-bottom: 10px; }
+  .stepper-head > span { font-size: 10px; letter-spacing: 1.2px; color: var(--muted); white-space: nowrap; }
+  .stepper-track { flex: 1; height: 4px; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
+  .stepper-track i { display: block; height: 100%; border-radius: 2px; background: linear-gradient(90deg, var(--accent), var(--ok-fg)); transition: width 400ms cubic-bezier(0.22, 1, 0.36, 1); }
+  .steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .steps li {
+    position: relative;
+    display: grid;
+    grid-template-columns: 26px minmax(0, 1fr);
     gap: 12px;
-    align-items: flex-start;
-    margin: 0;
-    padding: 10px 12px;
+    align-items: start;
+    padding: 11px 14px;
     border: 1px solid var(--node-border);
     border-radius: var(--radius-control);
     background: color-mix(in srgb, var(--surface) 70%, transparent);
-    line-height: 1.5;
+    font-size: 14px;
+    line-height: 1.55;
+    transition: border-color 160ms ease, background 160ms ease, opacity 160ms ease;
   }
-  .ex-instructions :global(.md ol > li::before) {
-    content: counter(step);
-    flex: none;
-    display: grid;
-    place-items: center;
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    background: var(--accent);
-    color: var(--accent-fg);
-    font-family: var(--font-mono);
-    font-size: 11px;
-    font-weight: 600;
+  .steps li.current { border-color: color-mix(in srgb, var(--accent) 55%, var(--node-border)); background: color-mix(in srgb, var(--accent) 7%, var(--surface)); }
+  .steps li.done { opacity: 0.62; }
+  .steps li.done .step-body { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--muted) 60%, transparent); }
+  .step-tick {
+    width: 26px; height: 26px; margin-top: 1px; padding: 0;
+    display: grid; place-items: center;
+    border: 1.5px solid var(--node-border); border-radius: 50%;
+    background: var(--surface-2); color: var(--muted); cursor: pointer;
+    font-size: 11px; transition: background 160ms ease, border-color 160ms ease, transform 120ms ease;
   }
-  .ex-instructions :global(.md ul) {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-  .ex-instructions :global(.md ul > li) {
-    position: relative;
-    margin: 0;
-    padding: 4px 0 4px 24px;
-    line-height: 1.5;
-  }
-  .ex-instructions :global(.md ul > li::before) {
-    content: '';
-    position: absolute;
-    left: 2px;
-    top: 9px;
-    width: 12px;
-    height: 12px;
-    border: 1.5px solid var(--ok-fg);
-    border-radius: 3px;
-    opacity: 0.85;
-  }
+  .step-tick:hover { transform: scale(1.08); border-color: var(--accent); color: var(--accent); }
+  .steps li.current .step-tick { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--surface-2)); }
+  .steps li.done .step-tick { background: var(--ok-fg); border-color: var(--ok-fg); color: var(--ok-bg); }
+  .step-body { min-width: 0; }
+  .done-when { margin: 0 0 6px; }
+  .done-when > span { display: block; margin-bottom: 8px; font-size: 10px; letter-spacing: 1.2px; color: var(--muted); }
+  .done-when ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+  .done-when li { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 10px; align-items: start; padding: 5px 0; font-size: 14px; line-height: 1.5; }
+  .done-when li.done .done-body { color: var(--muted); }
+  .done-tick { width: 16px; height: 16px; margin-top: 3px; padding: 0; display: grid; place-items: center; border: 1.5px solid var(--ok-fg); border-radius: 4px; background: transparent; color: var(--ok-bg); cursor: pointer; transition: background 140ms ease; }
+  .done-when li.done .done-tick { background: var(--ok-fg); }
+  .step-tick:focus-visible, .done-tick:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .starter-block {
     margin: 20px 0;
   }

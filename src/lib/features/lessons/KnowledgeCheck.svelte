@@ -4,6 +4,7 @@
   import type { Snippet } from 'svelte';
 
   import type { CheckCorrection, CheckQuestion } from './types';
+  import Markdown from '../../components/Markdown.svelte';
 
   let {
     name,
@@ -30,9 +31,9 @@
     <fieldset class:incorrect={correction && !correction.correct} class:correct={correction?.correct}>
       <legend>
         <span class="question-number mono">{String(index + 1).padStart(2, '0')}</span>
-        {question.prompt}
+        <Markdown markdown={question.prompt} inline />
       </legend>
-      {#if question.meta}<p class="meta mono">{question.meta}</p>{/if}
+      {#if question.meta}<p class="meta mono"><Markdown markdown={question.meta} inline /></p>{/if}
       <div class="choice-list">
         {#each question.choices as choice, choiceIndex}
           <label
@@ -49,14 +50,14 @@
               onchange={() => onchoose(index, choiceIndex)}
             />
             <span class="choice-key mono">{String.fromCharCode(65 + choiceIndex)}</span>
-            <span>{choice}</span>
+            <span><Markdown markdown={choice} inline /></span>
           </label>
         {/each}
       </div>
       {#if correction}
         <div class="correction" class:good={correction.correct} role="status">
-          <strong>{correction.correct ? 'Correct' : `Correct answer: ${correction.correct_answer}`}</strong>
-          <p>{correction.explanation}</p>
+          <strong>{#if correction.correct}Correct{:else}Correct answer: <Markdown markdown={correction.correct_answer} inline />{/if}</strong>
+          <p><Markdown markdown={correction.explanation} inline /></p>
         </div>
       {/if}
     </fieldset>

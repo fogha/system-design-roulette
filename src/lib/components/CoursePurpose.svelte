@@ -42,13 +42,20 @@
   .course-purpose {
     margin: 0 18px 12px;
     border: 1px solid rgba(62, 207, 142, 0.24);
+    border-radius: var(--radius-panel);
     background: rgba(8, 18, 31, 0.9);
     display: grid;
-    grid-template-columns: minmax(220px, 1.3fr) repeat(3, minmax(170px, 1fr));
+    grid-template-columns: minmax(240px, 1.35fr) repeat(3, minmax(170px, 1fr));
+    align-items: stretch;
   }
+  /* Every cell shares one rhythm: eyebrow on the same line across the strip,
+     then the text, with the same padding on every side. */
   .purpose-main,
   .purpose-cell {
-    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 16px 18px 18px;
     min-width: 0;
   }
   .purpose-cell {
@@ -58,32 +65,36 @@
   .cell-title,
   .advance {
     font-size: 8px;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.12em;
     text-transform: uppercase;
+    line-height: 14px;
   }
   .eyebrow,
   .cell-title {
     color: #3ecf8e;
   }
+  .eyebrow,
   .cell-title,
   .advance {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 5px;
   }
   h2 {
-    margin: 4px 0;
+    margin: 0;
     color: #e7eff8;
-    font-size: 14px;
+    font-size: 15px;
+    line-height: 1.25;
   }
   p {
-    margin: 3px 0 0;
+    margin: 0;
     color: #94a6ba;
-    font-size: 10px;
-    line-height: 1.5;
+    font-size: 10.5px;
+    line-height: 1.55;
   }
   .advance {
-    margin-top: 7px;
+    margin-top: auto;
+    padding-top: 8px;
     color: #6f849b;
   }
   @media (max-width: 980px) {

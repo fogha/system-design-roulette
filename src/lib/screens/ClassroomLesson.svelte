@@ -13,7 +13,7 @@
   import Markdown from '../components/Markdown.svelte';
   import LessonMap, { type MapStage } from '../features/lessons/LessonMap.svelte';
   import DownloadMenu from '../features/lessons/DownloadMenu.svelte';
-  import type { LessonSection } from '../features/lessons/sections';
+  import { readingMinutes, type LessonSection } from '../features/lessons/sections';
   import { ExternalLink, MessageCircle, Sparkles } from 'lucide-svelte';
 
   const lesson = $derived(app.engineeringLesson);
@@ -166,9 +166,14 @@
     status={`${lesson.prompt_version} · ${lesson.agent_used}`}
     code={lesson.short_code}
     eyebrow={retrieval ? `${lesson.label} · REVIEW · ${lesson.fresh_sample ? 'fresh sample' : 'repeated sample'}` : `${lesson.label} · ${lesson.estimated_minutes} MIN`}
+    chips={[
+      ...(lesson.level === 'beginner' ? [{ label: 'beginner', tone: 'good' as const }] : []),
+      ...(lesson.research_note ? [{ label: 'unverified sources', tone: 'accent' as const }] : []),
+    ]}
     title={lesson.title}
     subtitle={`${lesson.concept_title} · ${lesson.category}`}
     {stages}
+    stageMinutes={retrieval ? {} : { learn: readingMinutes(sections) || lesson.plan.learn_minutes, practice: lesson.plan.practice_minutes, check: lesson.plan.check_minutes }}
     stage={result ? 'feedback' : retrieval && session.stage === 'learn' ? 'recall' : session.stage}
     saveMessage={session.saveMessage}
     saveError={session.answerStatus === 'error'}
@@ -303,20 +308,7 @@
   .review-notes .why { margin: 0 0 8px; font-size: 12px; color: var(--muted); line-height: 1.55; }
   .review-notes ul { margin: 0; padding-left: 18px; } .review-notes li { margin: 4px 0; line-height: 1.55; font-size: 12px; }
   .quality { display: flex; align-items: center; gap: 5px; color: var(--faint); font-size: 8px; }
-  .chat-button {
-    min-height: 32px;
-    padding: 6px 9px;
-    border: 1px solid var(--node-border);
-    border-radius: var(--radius-control);
-    background: transparent;
-    color: var(--muted);
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    cursor: pointer;
-    font-size: 9px;
-  }
-  .chat-button.active { border-color: var(--accent); color: var(--accent); }
+  .chat-button { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-family: var(--font-mono); white-space: nowrap; }
   .reading-pane { width: min(100%, 920px); margin: 0 auto; padding: 28px clamp(24px, 5vw, 72px) 64px; min-width: 0; }
   /* The section map keeps the reader company: a rail beside the reading on a
      wide window, a sticky strip above it on a narrow one (see LessonMap). */

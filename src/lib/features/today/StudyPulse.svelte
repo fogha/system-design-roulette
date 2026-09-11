@@ -46,16 +46,16 @@
     return set;
   });
   const weekShare = $derived(pulse.week_target_minutes > 0 ? Math.min(1, pulse.week_minutes / pulse.week_target_minutes) : 0);
-  let tip = $state<{ day: StudyPulse['days'][number]; x: number; y: number } | null>(null);
-  let grid = $state<HTMLElement | undefined>(undefined);
+  let tip = $state<{ day: StudyPulse['days'][number]; x: number; y: number; below: boolean } | null>(null);
   function show(day: StudyPulse['days'][number], event: MouseEvent | FocusEvent) {
-    const cell = event.currentTarget as HTMLElement;
-    const rect = cell.getBoundingClientRect();
-    const host = grid?.getBoundingClientRect();
-    // Keep the tip inside the card, which clips what overflows it.
-    const width = host?.width ?? 0;
-    const x = rect.left + rect.width / 2 - (host?.left ?? 0);
-    tip = { day, x: width ? Math.min(Math.max(x, 110), width - 110) : x, y: rect.top - (host?.top ?? 0) };
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    const below = rect.top < 72;
+    tip = {
+      day,
+      x: Math.min(Math.max(rect.left + rect.width / 2, 120), window.innerWidth - 120),
+      y: below ? rect.bottom + 8 : rect.top - 8,
+      below,
+    };
   }
   function dayLabel(date: string) {
     return new Date(`${date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
@@ -85,7 +85,7 @@
     </div>
   </div>
 
-  <div class="map" bind:this={grid}>
+  <div class="map">
     <div class="months mono" aria-hidden="true">
       {#each months as month (month.column)}<span style:grid-column={month.column + 2}>{month.label}</span>{/each}
     </div>
@@ -111,7 +111,7 @@
       {/each}
     </div>
     {#if tip}
-      <div class="tip" style:left={`${tip.x}px`} style:top={`${tip.y}px`} role="tooltip">
+      <div class="tip" class:below={tip.below} style:left={`${tip.x}px`} style:top={`${tip.y}px`} role="tooltip">
         <strong>{dayLabel(tip.day.date)}</strong>
         <span>{tip.day.completed ? `${tip.day.completed} lesson${tip.day.completed === 1 ? '' : 's'} · ${hours(tip.day.minutes)}${tip.day.classes.length ? ` · ${tip.day.classes.join(' ')}` : ''}` : 'No study'}</span>
       </div>
@@ -124,7 +124,7 @@
   .pulse { display: flex; flex-direction: column; gap: 18px; }
   .stats { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
   @media (max-width: 900px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .this-week { grid-column: span 2; } }
-  .stat { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--node-border); border-radius: var(--radius-panel); background: var(--node-bg); min-width: 0; animation: rise 500ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .stat { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--node-border); border-radius: var(--radius-panel); background: var(--node-bg); min-width: 0; animation: rise 500ms cubic-bezier(0.22, 1, 0.36, 1) backwards; }
   .stat:nth-child(2) { animation-delay: 60ms; } .stat:nth-child(3) { animation-delay: 120ms; } .stat:nth-child(4) { animation-delay: 180ms; } .stat:nth-child(5) { animation-delay: 240ms; }
   .stat strong { display: block; font-size: 22px; line-height: 1.1; color: var(--fg); font-weight: 500; }
   .stat strong em { font-style: normal; font-size: 11px; color: var(--muted); }
@@ -139,21 +139,28 @@
   .week-track { position: relative; height: 6px; margin-top: 10px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
   .week-track i { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: linear-gradient(90deg, var(--accent), var(--ok-fg)); transition: width 900ms cubic-bezier(0.22, 1, 0.36, 1); }
 
-  .map { position: relative; padding: 14px 18px 12px; border: 1px solid var(--node-border); border-radius: var(--radius-panel); background: var(--node-bg); overflow-x: auto; }
+  .map { position: relative; padding: 14px 18px 12px; border: 1px solid var(--node-border); border-radius: var(--radius-panel); background: var(--node-bg); }
   .months { display: grid; grid-template-columns: 30px repeat(26, minmax(12px, 1fr)); gap: 0 4px; margin-bottom: 8px; font-size: 8.5px; color: var(--faint); height: 12px; }
   .months span { white-space: nowrap; }
   .grid { display: grid; grid-template-columns: 30px repeat(26, minmax(12px, 1fr)); gap: 4px; }
   .weekdays { display: grid; grid-template-rows: repeat(7, 1fr); gap: 4px; font-size: 8px; color: var(--faint); align-items: center; }
   .week { display: grid; grid-template-rows: repeat(7, 1fr); gap: 4px; }
-  .cell { width: 100%; aspect-ratio: 1; padding: 0; border: 0; border-radius: 4px; background: var(--surface-2); cursor: default; animation: pop 420ms cubic-bezier(0.22, 1, 0.36, 1) both; }
-  button.cell:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .cell { width: 100%; aspect-ratio: 1; padding: 0; border: 0; border-radius: 4px; background: var(--surface-2); cursor: default; animation: pop 420ms cubic-bezier(0.22, 1, 0.36, 1) both; transition: transform 140ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 140ms ease, filter 140ms ease; }
+  /* A square lifts under the pointer so the day you are reading about stands out. */
+  button.cell:hover, button.cell:focus-visible { transform: scale(1.35); z-index: 3; filter: brightness(1.25); box-shadow: 0 0 0 2px var(--node-bg), 0 0 0 3.5px color-mix(in srgb, var(--accent) 70%, transparent), 0 6px 16px rgba(0, 0, 0, 0.45); }
+  button.cell.level-0:hover, button.cell.level-0:focus-visible { background: color-mix(in srgb, var(--accent) 18%, var(--surface-2)); }
+  button.cell:focus-visible { outline: none; }
   .cell.level-1 { background: color-mix(in srgb, var(--accent) 28%, var(--surface-2)); }
   .cell.level-2 { background: color-mix(in srgb, var(--accent) 50%, var(--surface-2)); }
   .cell.level-3 { background: color-mix(in srgb, var(--accent) 75%, var(--surface-2)); }
   .cell.level-4 { background: var(--accent); box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 55%, transparent); }
   .cell.streak { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--fg) 60%, transparent); }
   .cell.today { outline: 1.5px solid var(--fg); outline-offset: 1px; }
-  .tip { position: absolute; transform: translate(-50%, calc(-100% - 8px)); z-index: 4; padding: 7px 10px; border: 1px solid var(--node-border); border-radius: var(--radius-control); background: var(--surface); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); white-space: nowrap; pointer-events: none; }
+  .tip { position: fixed; transform: translate(-50%, -100%); z-index: 40; padding: 7px 10px; border: 1px solid var(--node-border); border-radius: var(--radius-control); background: var(--surface); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); white-space: nowrap; pointer-events: none; animation: tip-in 140ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .tip.below { transform: translate(-50%, 0); }
+  .tip::after { content: ''; position: absolute; left: 50%; bottom: -5px; width: 8px; height: 8px; transform: translateX(-50%) rotate(45deg); background: var(--surface); border-right: 1px solid var(--node-border); border-bottom: 1px solid var(--node-border); }
+  .tip.below::after { bottom: auto; top: -5px; border: 0; border-left: 1px solid var(--node-border); border-top: 1px solid var(--node-border); }
+  @keyframes tip-in { from { opacity: 0; translate: 0 4px; } to { opacity: 1; translate: 0 0; } }
   .tip strong { display: block; font-size: 11px; font-weight: 500; color: var(--fg); }
   .tip span { display: block; margin-top: 2px; font-size: 10px; color: var(--muted); }
   .legend { display: flex; align-items: center; gap: 4px; justify-content: flex-end; margin-top: 10px; font-size: 8.5px; color: var(--faint); }
@@ -163,5 +170,5 @@
   @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
   @keyframes pop { from { opacity: 0; transform: scale(0.4); } to { opacity: 1; transform: scale(1); } }
   @keyframes flicker { 0%, 100% { transform: scale(1) rotate(-2deg); opacity: 1; } 50% { transform: scale(1.12) rotate(3deg); opacity: 0.85; } }
-  @media (prefers-reduced-motion: reduce) { .stat, .cell { animation: none; } .streak.alight .flame { animation: none; } .week-track i { transition: none; } }
+  @media (prefers-reduced-motion: reduce) { .stat, .cell, .tip { animation: none; } .streak.alight .flame { animation: none; } .week-track i, .cell { transition: none; } button.cell:hover { transform: none; } }
 </style>
