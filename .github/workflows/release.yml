@@ -54,7 +54,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Setup Rust
@@ -86,7 +86,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: "System Design Roulette ${{ github.ref_name }}"
+          releaseName: "Principia Desk ${{ github.ref_name }}"
           releaseBody: "Download the installer for your platform from the assets below."
           releaseDraft: false
           prerelease: false

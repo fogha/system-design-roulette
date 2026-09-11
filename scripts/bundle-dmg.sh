@@ -9,7 +9,8 @@ PRODUCT_NAME="$(node -p "require('./src-tauri/tauri.conf.json').productName")"
 VERSION="$(node -p "require('./package.json').version")"
 APP_PATH="$BUNDLE_DIR/macos/$PRODUCT_NAME.app"
 DMG_DIR="$BUNDLE_DIR/dmg"
-DMG="$DMG_DIR/${PRODUCT_NAME}_${VERSION}_$(uname -m).dmg"
+ARCH="${PRINCIPIA_DMG_ARCH:-$(uname -m)}"
+DMG="$DMG_DIR/${PRODUCT_NAME}_${VERSION}_${ARCH}.dmg"
 
 if [ ! -d "$APP_PATH" ]; then
   echo "App bundle missing: $APP_PATH. Run npm run tauri build -- --bundles app first." >&2
