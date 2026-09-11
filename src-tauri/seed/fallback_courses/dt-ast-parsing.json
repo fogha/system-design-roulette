@@ -1,5 +1,6 @@
 {
   "slug": "dt-ast-parsing",
+  "kind": "beginner",
   "title": "AST parsing pipelines: lexer, parser, and error recovery",
   "markdown": "## Why this matters\n\nEvery formatter, linter, bundler, and IDE feature is an AST pipeline. Lexer/parser design choices determine error quality, incremental speed, and refactor safety.\n\n## The simple version\n\nReading code is like reading a sentence in two passes. First you chop it into words — that's the **lexer** turning raw characters into tokens (`function`, `(`, `x`, `)`, `{`). Then you figure out the grammar — that's the **parser** deciding those words form a function declaration, not just a pile of words in a row. A good parser is like a proofreader who, on hitting one bad sentence, doesn't throw out the whole page — they mark that one sentence as broken and keep reading, so spell-check still works on the rest of the document.\n\n```mermaid\nflowchart LR\n  Source[\"raw source text\"] --> Lexer[Lexer]\n  Lexer --> Tokens[\"token stream: function, (, x, ), {\"]\n  Tokens --> Parser[Parser]\n  Parser --> AST[\"AST (valid structure)\"]\n  Parser -.on error.-> ErrorNode[\"Error node (partial tree kept)\"]\n  ErrorNode --> AST\n```\n\nWhere the analogy breaks: a human proofreader can use common sense to guess what a broken sentence probably meant. A parser's \"error recovery\" is much more mechanical — it typically just skips forward to the next token it recognizes as a safe restart point (a semicolon, a closing brace) and resumes from there, without understanding intent. That's why two syntax errors close together sometimes produce a confusing cascade of unrelated-looking diagnostics: the parser resynchronized at the wrong spot.\n\n## Core mechanics\n\nLexer tokenizes with lookahead buffers. Parser builds an AST (often recursive descent) and may recover by synchronizing on tokens. Error nodes preserve partial trees for IDE services.\n\n## Mental model\n\nParsing is streaming structure recognition: tokens are words, AST is syntax, diagnostics are UX.\n\n## Runnable experiment\n\n```js\n// npm i @babel/parser\nconst { parse } = require('@babel/parser');\n\nconst brokenSource = 'function f(x { return x + 1; }'; // missing `)`\nconst ast = parse(brokenSource, { errorRecovery: true });\nconsole.log(ast.errors.map((e) => `${e.reasonCode} @ ${e.loc.start.line}:${e.loc.start.column}`));\n```\n\n## Trade-offs and failure modes\n\nRegex-based codemods ignore nesting and syntax entirely; they break the moment a pattern appears inside a string literal or comment. AST-based tools cost more upfront (you need a parser and a printer) but handle those cases by construction.\n\n## Tool-building exercise\n\nBuild a 60-line CLI that parses a TS file and prints function declaration count plus first syntax error with line/column.\n\n## Key takeaways\n\n- Recovery keeps IDE features alive on broken code.\n- Token lookahead defines lexer complexity.\n- AST fidelity beats regex transforms.",
   "resources": [
@@ -28,7 +29,11 @@
       "why": "Shows edit application, old-tree reuse, ranges, and concurrency constraints."
     }
   ],
-  "key_takeaways": ["Tooling quality starts at parse fidelity.", "Error recovery enables IDE UX."],
+  "key_takeaways": [
+    "Tooling quality starts at parse fidelity.",
+    "Error recovery enables IDE UX.",
+    "A parser that recovers from errors keeps producing a tree so later stages still run."
+  ],
   "exercise": {
     "title": "Diagnose a syntax error with a real parser",
     "instructions": "Create a tiny package, install `@babel/parser`, and parse three deliberately broken snippets: a missing closing paren, a missing closing brace, and an unterminated string. Compare fail-fast and recovery modes, then classify which later declarations remain usable. Finally, describe when an incremental concrete-syntax-tree parser such as Tree-sitter is a better fit.\n\nAcceptance criteria: pin the parser and syntax plugins; print stable line/column diagnostics; preserve partial results where the parser supports them; test a string/comment false positive that a regex transform would corrupt; and document the parser/AST version as part of the tool's public contract.",
@@ -44,7 +49,12 @@
     {
       "prompt": "Why do IDEs prefer error-recovering parsers?",
       "kind": "mcq",
-      "choices": ["Partial ASTs still power completions", "They skip typechecking", "They emit bytecode", "They avoid lexing"],
+      "choices": [
+        "Partial ASTs still power completions",
+        "They skip typechecking",
+        "They emit bytecode",
+        "They avoid lexing"
+      ],
       "correct_answer": "Partial ASTs still power completions",
       "explanation": "The misconception: assuming a syntax error should halt all tooling for the file. Like a proofreader marking one bad sentence and reading on, the parser keeps most of the tree intact so autocomplete and hover keep working around the broken spot.",
       "section": "Core mechanics",
@@ -62,7 +72,12 @@
     {
       "prompt": "Why are regex codemods risky?",
       "kind": "mcq",
-      "choices": ["They ignore syntax and nesting", "They are slower than parsers", "They cannot read files", "They require network access"],
+      "choices": [
+        "They ignore syntax and nesting",
+        "They are slower than parsers",
+        "They cannot read files",
+        "They require network access"
+      ],
       "correct_answer": "They ignore syntax and nesting",
       "explanation": "The misconception: treating source code as flat text that pattern-matches safely. A regex has no concept of \"inside a string\" or \"inside a comment\" the way an AST does, so it matches text that merely looks right and breaks on real-world edge cases.",
       "section": "Trade-offs and failure modes",
@@ -71,7 +86,12 @@
     {
       "prompt": "Which workload most strongly favors an incremental parser such as Tree-sitter?",
       "kind": "mcq",
-      "choices": ["Recomputing syntax after every editor keystroke", "Parsing one valid file once during a release", "Comparing two lockfile hashes", "Serving a static image"],
+      "choices": [
+        "Recomputing syntax after every editor keystroke",
+        "Parsing one valid file once during a release",
+        "Comparing two lockfile hashes",
+        "Serving a static image"
+      ],
       "correct_answer": "Recomputing syntax after every editor keystroke",
       "explanation": "The misconception is treating all parsers as interchangeable. An editor needs robust partial trees and cheap reuse after small edits, which is the workload incremental parsing is designed to serve.",
       "section": "Production architecture lens",

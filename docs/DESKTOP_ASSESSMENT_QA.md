@@ -381,3 +381,25 @@ screen. Desktop pass pending the learner's absence.
 Validated offline by `tests/fixtures.rs`; retrieval sets feed
 `engineering::prepare_review` for the two Bash courses. No desktop pass is
 needed for content; the Bash classes are not enrolled on the QA profile.
+
+## Route revisions, badges and unit challenge — 2026-09-11
+
+Same isolated profile on the bundle built from the Bash-fixture commit, driven
+only while the Mac had been idle for over five minutes:
+
+- The TypeScript overview opened normally (screenshot 72); the Curriculum tab
+  showed the route denominators (required 0 / 35, coverage 0 / 35 core,
+  revision 1 from Foundations, nothing set aside) and the note that bypassed
+  and checked topics count toward neither (screenshot 73).
+- Check out on the first topic produced revision 2 with the topic badged
+  "Bypassed by choice · practicing" and an Include action, while other topics
+  read "Upcoming · Required" with Check out (screenshot 74); Include produced
+  revision 3. SQLite listed revisions 1, 2 and 3 for the class.
+- Unit challenge on the Foundations phase opened the challenge panel above
+  the map with its lettered choices, Skip and Save & next, and "Answers saved
+  on this device" (screenshot 76). The window then left the accessibility
+  tree before the result step could be captured (the process kept running;
+  the attempt remains `active` and resumable), so checking out demonstrated
+  samples is covered by `tests/challenges.rs` and the preview test rather than
+  a capture. The route card on the overview sits below the metrics and was not
+  scrolled into the capture.

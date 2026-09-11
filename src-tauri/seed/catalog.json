@@ -299,7 +299,10 @@
       ],
       "reference_lessons": [
         "dt-ast-parsing",
-        "dt-lsp-protocol"
+        "dt-lsp-protocol",
+        "dt-cli-design",
+        "dt-source-maps-v3",
+        "dt-webpack-vite-rspack-migration"
       ]
     },
     {
