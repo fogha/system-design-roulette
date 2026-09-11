@@ -434,3 +434,23 @@ capture. The rule row above it reads "Due now" because the QA app runs under
 `--debug-day`, where a scheduled appointment deliberately counts as startable;
 the appointment row shows the real disposition, and a normal launch shows the
 rule as due only when its appointment is due.
+
+## After removing the retired daily routine — 2026-09-11
+
+Rebuilt the QA bundle at the removal commits and reran the desk on the
+isolated profile. Today opens on "Your study desk is waiting" with the next
+class, the class scheduler card and the saved-sessions panel; the accessibility
+tree has no "Saved daily session" row anywhere, and the cluster bar reads "all
+systems nominal" instead of the old owed status (screenshots 89–90). Progress
+still reads the whole history: eight sessions across the German and TypeScript
+classes, including the 9 September day that the one-time import brought over
+from the legacy tables, and opening a saved lesson from the history renders its
+reader with the Lesson and Practice tabs (screenshots 91–92). Classes lists all
+nine subjects with the class detail, its tabs and the route card, and both the
+class settings and the desk settings render their runner and tutor controls
+(screenshots 93–95). Resuming the saved German session opens the shared lesson
+shell at `principia://languages/german/a1` with the stage rail, the pause and
+return control and an advisory status line, and no escape hatch appears because
+no class holds the desk (screenshot 96). Pausing returns to Today with the
+session resumable again, and a full restart comes back to the same desk with no
+errors in the system log (screenshots 97–98).
