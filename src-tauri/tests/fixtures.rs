@@ -11,7 +11,7 @@ const KINDS: [&str; 5] = [
     "capstone",
 ];
 /// Courses whose bundled set must already cover every representative kind.
-const COMPLETE: [&str; 4] = ["linux-bash", "bash-scripting", "typescript", "javascript"];
+const COMPLETE: [&str; 5] = ["linux-bash", "bash-scripting", "typescript", "javascript", "frontend-architecture"];
 
 fn concepts() -> Vec<db::Concept> {
     let path = std::env::temp_dir().join(format!(

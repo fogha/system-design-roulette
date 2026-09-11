@@ -240,7 +240,10 @@
       ],
       "reference_lessons": [
         "fa-domain-boundaries",
-        "fa-rendering-strategy"
+        "fa-rendering-strategy",
+        "fa-state-placement",
+        "fa-async-ui-state-machines",
+        "fa-server-component-mutation-boundaries"
       ]
     },
     {
