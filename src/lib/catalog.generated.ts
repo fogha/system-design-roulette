@@ -5,7 +5,7 @@ export type ClassroomSubjectId = FocusArea | LanguageId;
 export const COURSE_FINGERPRINTS: Record<ClassroomSubjectId, string> = {
   "system-design": "6553605e71097004df1a41aa2705f297f00bb7cfe87200230437ff4221b94203",
   "javascript": "19eb505d984b11914f5edf6718f7d463b5e411dc14ff1b4b8069a57a1c2881e8",
-  "typescript": "ea7143364a79a036b632ab134b3c61810d079a1bd2abe5b42a32def51e7cd9c7",
+  "typescript": "379763f7182cc4cecd5f12c89f4fda45cf60559c8cb29fe8a0a9448b5ae41c16",
   "frontend-architecture": "dbfb6d03b5288a8ab36e0109ebb4b40e6aa916af6960a3c783d9a487cb98b0f1",
   "developer-tooling": "c931434e7da0fb8c12f573e8483d98d32e6f4f39a5a6001ebbee72a238b4fbcf",
   "linux-bash": "4e0138ebf72d918e3b25d4662dba782e77cca08e72835a09392f35e91cd93d5c",

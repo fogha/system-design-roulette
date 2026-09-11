@@ -177,8 +177,11 @@
         "tutor"
       ],
       "reference_lessons": [
+        "ts-structural-typing",
         "ts-inference-flow",
-        "ts-structural-typing"
+        "ts-unknown-any-never",
+        "ts-type-guards-narrowing",
+        "ts-native-compiler-operations"
       ]
     },
     {
