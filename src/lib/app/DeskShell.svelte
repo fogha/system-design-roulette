@@ -42,7 +42,7 @@
   .brand img { width: 36px; height: 36px; }
   .brand small { display: block; margin-top: 6px; font-size: 8px; color: var(--faint); letter-spacing: 1.3px; }
   /* The routes: one rail, a glyph tile per route, and the route in view
-     lit with a bar that runs down to the rail's edge. */
+     lit: a tinted chip with a bright top edge and a glowing tile. */
   nav { display: flex; flex-wrap: wrap; gap: 3px; padding: 4px; border: 1px solid var(--node-border); border-radius: 11px; background: color-mix(in srgb, var(--node-bg) 85%, transparent); }
   nav button { position: relative; display: flex; align-items: center; gap: 8px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--muted); font: 11px var(--font-mono); letter-spacing: 0.4px; padding: 5px 12px 5px 6px; cursor: pointer; transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease; }
   nav button:hover { color: var(--fg); background: var(--surface); }
@@ -51,10 +51,9 @@
   nav button:hover .route-glyph { color: var(--muted); }
   .route-text { display: inline-flex; align-items: baseline; gap: 6px; }
   .route-index { color: var(--faint); font-size: 9px; letter-spacing: 0.6px; }
-  nav button.selected { color: var(--fg); border-color: color-mix(in srgb, var(--accent) 45%, var(--node-border)); background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 14%, var(--surface)), var(--surface)); }
+  nav button.selected { color: var(--fg); border-color: color-mix(in srgb, var(--accent) 45%, var(--node-border)); background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 14%, var(--surface)), var(--surface)); box-shadow: inset 0 1px 0 color-mix(in srgb, var(--accent) 55%, transparent), 0 8px 20px -12px color-mix(in srgb, var(--accent) 80%, transparent); }
   nav button.selected .route-glyph { background: var(--accent); color: var(--accent-fg); box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 45%, transparent); }
   nav button.selected .route-index { color: var(--accent); }
-  nav button.selected::after { content: ''; position: absolute; left: 10px; right: 10px; bottom: -5px; height: 2px; border-radius: 2px; background: var(--accent); box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 70%, transparent); }
   main { min-height: 0; min-width: 0; overflow-y: auto; display: flex; flex-direction: column; flex: 1; }
   .skip-link { position: fixed; top: -60px; left: 12px; padding: 8px 12px; background: var(--surface); color: var(--fg); z-index: 90; }
   .skip-link:focus { top: 8px; }
