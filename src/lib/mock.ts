@@ -654,6 +654,7 @@ function pauseMockClassWithoutSchedule(subjectId: ClassroomSubjectId) {
 export const mockApi = {
   getEnrollmentOptions: async (courseId: ClassroomSubjectId) => {
     const options = previewEnrollmentOptions(courseId);
+    options.default_configuration.tutor = { provider: mockAgent, model: mockModel, custom_agent_bin: mockCustomBin || null };
     const path = previewClassPath(courseId);
     if (path) options.default_configuration = structuredClone(path.configuration);
     return options;

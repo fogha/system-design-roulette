@@ -18,6 +18,14 @@ pub fn get_enrollment_options(
     course_id: String,
 ) -> CmdResult<crate::domain::enrollment::EnrollmentOptions> {
     let mut options = crate::domain::enrollment::options(&course_id).map_err(err)?;
+    // A class you are enrolling in for the first time starts on the desk's
+    // active tutor; class Settings is where a class gets its own afterwards.
+    let custom = state.generator.current_custom_bin();
+    options.default_configuration.tutor = crate::domain::enrollment::TutorPreference {
+        provider: state.generator.current_agent(),
+        model: state.generator.current_model(),
+        custom_agent_bin: (!custom.trim().is_empty()).then_some(custom),
+    };
     if let Some(configuration) =
         crate::domain::classes::current_configuration(&state.db.0.lock().unwrap(), &course_id)
             .map_err(err)?

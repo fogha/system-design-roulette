@@ -8,7 +8,6 @@
   import NodeCard from '../../components/NodeCard.svelte';
   import Dropdown from '../../components/Dropdown.svelte';
   import { api } from '../../ipc';
-  import RunnerSetup from '../runners/RunnerSetup.svelte';
   import { app } from '../../stores.svelte';
   import type { PathRecommendation } from '../../contracts/placement';
   import PlacementCheck from './PlacementCheck.svelte';
@@ -92,7 +91,7 @@
 {#if checking && view.draft}
   <PlacementCheck {embedded} draft={view.draft} onclose={() => (checking = false)} onrecommend={() => openNext(false)} />
 {:else if path}
-  <PathPreview {embedded} {path} onclose={() => (path = null)} onfoundations={includeFoundations} onaccept={accept} {accepting} error={operationError} />
+  <PathPreview {embedded} {path} tutor={configuration?.tutor ?? null} onclose={() => (path = null)} onfoundations={includeFoundations} onaccept={accept} {accepting} error={operationError} />
 {:else}
 <section class="enrollment" class:embedded aria-labelledby={`${uid}-title`}>
   {#if !embedded}<button class="back-link" onclick={close} disabled={closing}><ArrowLeft size={15} /> Classes</button>{/if}
@@ -150,7 +149,7 @@
 
     </NodeCard></FlowStage>
 
-    <FlowStage number="03"><NodeCard Icon={Clock} name="study-plan" badge={configuration.pace.session_minutes + ' min'} badgeTone="teal">
+    <FlowStage number="03" last><NodeCard Icon={Clock} name="study-plan" badge={configuration.pace.session_minutes + ' min'} badgeTone="teal">
     <div class="form-grid">
       <fieldset>
         <legend>Your goal</legend>
@@ -166,10 +165,6 @@
       </fieldset>
     </div>
     </NodeCard></FlowStage>
-    <FlowStage number="04" last><RunnerSetup bind:agent={() => configuration?.tutor.provider ?? 'claude', value => { if (configuration) configuration.tutor.provider = value as import('../../ipc').AgentId; }} bind:model={configuration.tutor.model}
-      bind:customBin={() => configuration?.tutor.custom_agent_bin ?? '', value => { if (configuration) configuration.tutor.custom_agent_bin = value; }}
-      onchange={changed} selectionHint="Saved with your draft. Applied to this class when you accept its path." />
-    </FlowStage>
   {/if}
 
   {#if operationError}<p class="save-error" role="alert">{operationError}</p>{/if}

@@ -1,8 +1,14 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import type { PathRecommendation, PathTopic } from '../../contracts/placement';
+  import type { EnrollmentConfiguration } from '../../contracts/enrollment';
+  type TutorPreference = EnrollmentConfiguration['tutor'];
+  import { app } from '../../stores.svelte';
   import { ArrowLeft, ArrowRight, Check, Flag, Search } from 'lucide-svelte';
-  let { path, onclose, onfoundations, onaccept, accepting = false, error = '', acceptedRevision, embedded = false }: { path: PathRecommendation; onclose: () => void; onfoundations: () => void; onaccept?: () => void; accepting?: boolean; error?: string; acceptedRevision?: number; embedded?: boolean } = $props();
+  let { path, onclose, onfoundations, onaccept, accepting = false, error = '', acceptedRevision, embedded = false, tutor = null }: { path: PathRecommendation; onclose: () => void; onfoundations: () => void; onaccept?: () => void; accepting?: boolean; error?: string; acceptedRevision?: number; embedded?: boolean; tutor?: TutorPreference | null } = $props();
+  /** The tutor this class starts on. It is the desk's active tutor unless the class already had its own. */
+  const tutorLine = $derived(tutor ? `${tutor.provider === 'custom' ? 'Custom CLI' : tutor.provider} · ${tutor.model || 'runner default'}` : '');
+  const inheritsDesk = $derived(!!tutor && !!app.state && tutor.provider === app.state.agent && tutor.model === app.state.model);
   $effect(() => { path.id; if (embedded) return; void tick().then(() => document.getElementById('desk-content')?.scrollTo(0, 0)); });
 
   const passed = $derived(path.criteria.filter((c) => c.verdict === 'passed').length);
@@ -101,6 +107,7 @@
   </section>
 
   <footer>
+    {#if !acceptedRevision && tutorLine}<p class="tutor-line"><span class="mono">TUTOR</span> {tutorLine}{inheritsDesk ? ', from your desk settings' : ''}. Lessons are written by it once the class is active; change it any time in this class's Settings tab.</p>{/if}
     <p>{acceptedRevision ? 'This accepted path guides future lessons. Saved lessons and their original results remain in your history.' : 'Accepting saves this path. A saved study time is required to activate the class. Existing work and schedules are preserved.'}</p>
     {#if error}<p class="activation-error" role="alert">{error}</p>{/if}
     <div class="actions">
@@ -161,6 +168,7 @@
 
   footer { display: grid; gap: 12px; }
   footer > p { margin: 0; font: 11px/1.7 var(--font-mono); color: var(--muted); border-left: 2px solid var(--node-border); padding-left: 12px; }
+  .tutor-line { font-family: var(--font-body) !important; font-size: 12px !important; color: var(--fg) !important; } .tutor-line .mono { font-size: 9px; letter-spacing: .7px; color: var(--faint); margin-right: 8px; }
   .activation-error { color: var(--led-err); }
   .actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; }
 
