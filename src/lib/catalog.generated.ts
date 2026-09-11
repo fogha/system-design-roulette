@@ -3,7 +3,7 @@ export type FocusArea = "system-design" | "javascript" | "typescript" | "fronten
 export type LanguageId = "german" | "italian";
 export type ClassroomSubjectId = FocusArea | LanguageId;
 export const COURSE_FINGERPRINTS: Record<ClassroomSubjectId, string> = {
-  "system-design": "6553605e71097004df1a41aa2705f297f00bb7cfe87200230437ff4221b94203",
+  "system-design": "2b6ee917fda6e1b2eccb10a01748f0426e44c8befbe6cbd324646778a1ffc200",
   "javascript": "b804c653fcc839e1c34b000e91404ed43011d6584dee310ce27bc467ded0da54",
   "typescript": "379763f7182cc4cecd5f12c89f4fda45cf60559c8cb29fe8a0a9448b5ae41c16",
   "frontend-architecture": "fbdebc631e57f3669900032e3c4de8f9a07cef86dd1e7a2937616932cd967698",
