@@ -307,6 +307,32 @@ pub fn set_class_focus_policy(
 }
 
 /// Skip an open appointment without starting a session. It is consumed once.
+/// Move one unfired appointment to another time today. The in-app watcher and
+/// the launch agent both honour the new time.
+#[tauri::command]
+pub fn reschedule_appointment(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    occurrence_id: String,
+    local_time: String,
+) -> CmdResult<crate::classroom::AppointmentView> {
+    let view = {
+        let conn = state.db.0.lock().unwrap();
+        let moved = crate::domain::schedule::reschedule(
+            &conn,
+            &occurrence_id,
+            &local_time,
+            &crate::domain::schedule::SystemZone,
+            chrono::Utc::now(),
+        )
+        .map_err(err)?;
+        crate::classroom::appointment_view(&conn, moved).map_err(err)?
+    };
+    refresh_os_schedule(&state)?;
+    let _ = app.emit("classroom:state", &view);
+    Ok(view)
+}
+
 #[tauri::command]
 pub fn skip_appointment(
     app: AppHandle,
@@ -374,7 +400,17 @@ fn refresh_os_schedule(state: &AppState) -> CmdResult<()> {
         if matches!(db::get_config(&conn, "schedule_paused"), Ok(Some(value)) if value == "1") {
             Vec::new()
         } else {
-            crate::classroom::all_schedule_times(&conn).map_err(err)?
+            // Rule times plus today's unfired appointments, so a moved
+            // appointment also wakes the app at the operating-system level.
+            let mut times = crate::classroom::all_schedule_times(&conn).map_err(err)?;
+            for time in
+                crate::domain::schedule::unfired_times_today(&conn, &state.today()).map_err(err)?
+            {
+                if !times.contains(&time) {
+                    times.push(time);
+                }
+            }
+            times
         }
     };
     crate::scheduler::install_many(&times)

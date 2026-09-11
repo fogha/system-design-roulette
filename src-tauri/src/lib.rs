@@ -335,6 +335,7 @@ pub fn run() {
             commands::pause_class_lesson,
             commands::skip_class_lesson,
             commands::skip_appointment,
+            commands::reschedule_appointment,
             commands::set_class_focus_policy,
             commands::get_class_appointments,
             commands::submit_language_session,

@@ -1233,6 +1233,7 @@ export const mockApi = {
   submitClassCheck: async () => { throw new Error('Shared-runtime knowledge checks need the desktop app.'); },
   submitClassLanguageCheck: async () => { throw new Error('Shared-runtime knowledge checks need the desktop app.'); },
   skipAppointment: async () => { throw new Error('Appointments need the desktop app.'); },
+  rescheduleAppointment: async () => { throw new Error('Appointments need the desktop app.'); },
   setClassFocusPolicy: async (subjectId: ClassroomSubjectId, policy: FocusPolicy) => {
     mockClassroomSettings[subjectId].focusPolicy = policy;
     return mockPrograms().find((program) => program.subject_id === subjectId)!;

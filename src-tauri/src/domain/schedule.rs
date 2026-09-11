@@ -380,6 +380,63 @@ pub fn skip(conn: &Connection, occurrence_id: &str, now: DateTime<Utc>) -> Resul
     Ok(updated)
 }
 
+/// Move an unfired appointment to another time on its own day. Consumed and
+/// missed appointments keep their history. The moved time survives
+/// materialization until the rule itself is edited, when the edit wins.
+pub fn reschedule(
+    conn: &Connection,
+    occurrence_id: &str,
+    local_time: &str,
+    zone: &dyn ZoneResolver,
+    now: DateTime<Utc>,
+) -> Result<Occurrence> {
+    let time = NaiveTime::parse_from_str(local_time.trim(), "%H:%M")
+        .map_err(|_| invalid("Choose a time as HH:MM."))?;
+    let tx = Transaction::new_unchecked(conn, TransactionBehavior::Immediate)?;
+    let occurrence = get(&tx, occurrence_id)?;
+    if !matches!(occurrence.disposition.as_str(), "scheduled" | "due") {
+        return Err(invalid(
+            "Only an appointment that has not started, been skipped or been missed can be moved.",
+        ));
+    }
+    let date = NaiveDate::parse_from_str(&occurrence.local_date, "%Y-%m-%d")
+        .map_err(|_| invalid("appointment date is unreadable"))?;
+    let fires_at = resolve_local(zone, date, time)?;
+    let disposition = if fires_at <= now { "due" } else { "scheduled" };
+    tx.execute(
+        "UPDATE schedule_occurrences SET local_time=?2, fires_at=?3, timezone=?4, disposition=?5, updated_at=?6 WHERE id=?1",
+        params![
+            occurrence_id,
+            time.format("%H:%M").to_string(),
+            stamp(fires_at),
+            zone.name(),
+            disposition,
+            stamp(now)
+        ],
+    )?;
+    let updated = get(&tx, occurrence_id)?;
+    tx.commit()?;
+    Ok(updated)
+}
+
+/// Today's unfired appointment times, so a moved appointment can also wake the
+/// app at the operating-system level.
+pub fn unfired_times_today(conn: &Connection, today: &str) -> Result<Vec<(u32, u32)>> {
+    let mut statement = conn.prepare(
+        "SELECT DISTINCT local_time FROM schedule_occurrences WHERE local_date = ?1 AND disposition IN ('scheduled','due')",
+    )?;
+    let rows = statement.query_map([today], |r| r.get::<_, String>(0))?;
+    let mut out = Vec::new();
+    for row in rows {
+        let value = row?;
+        if let Ok(time) = NaiveTime::parse_from_str(&value, "%H:%M") {
+            use chrono::Timelike;
+            out.push((time.hour(), time.minute()));
+        }
+    }
+    Ok(out)
+}
+
 /// Unfired appointments of a rule being deleted disappear; consumed and missed
 /// ones remain as history without the rule link.
 pub fn detach_rule(conn: &Connection, rule_id: i64) -> Result<()> {
