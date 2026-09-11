@@ -44,7 +44,7 @@
   const current = $derived(selected === 'live' ? null : runs.find((r) => r.run_id === selected) ?? null);
 </script>
 
-<div class="logs-page">
+<div class="logs-page page-frame">
   <header>
     <div class="meta-label">EXECUTION LOG — WHAT THE TUTOR DID</div>
     <h1>Logs</h1>
@@ -89,7 +89,7 @@
 </div>
 
 <style>
-  .logs-page { display: flex; flex-direction: column; flex: 1; min-height: 600px; padding: 20px 28px 24px; gap: 14px; }
+  .logs-page { display: flex; flex-direction: column; flex: 1; min-height: 600px; gap: 14px; }
   header p { font-size: 13px; color: var(--muted); margin: 0; max-width: 60ch; } h1 { font-size: 28px; margin: 8px 0 6px; }
   .layout { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 14px; flex: 1; min-height: 0; }
   .runs { display: flex; flex-direction: column; gap: 8px; min-height: 0; }

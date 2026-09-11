@@ -97,7 +97,7 @@
     return Number.isNaN(date.getTime()) ? 'Time unavailable' : date.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'}) + ' · ' + `${String(slot.hour).padStart(2,'0')}:${String(slot.minute).padStart(2,'0')}`;
   }
 </script>
-<div class="today">
+<div class="today page-frame">
   {#if app.state?.enforcement_disarmed}<p class="recovery mono" role="status">ENFORCEMENT DISARMED · a principia-unlock release token is present.</p>{/if}
   {#if alarm}
     <section class="alarm" class:snoozed={!!alarm.snoozed_until} role="alert" aria-live="assertive" aria-label="Study alarm">
@@ -184,12 +184,8 @@
     </div>
   </section>
 
-  {#if pulse}
-    <section class="pulse-section" aria-label="Study habit">
-      <div class="section-head"><span class="eyebrow mono"><Activity size={11} /> STUDY PULSE · LAST 26 WEEKS</span><span class="mono muted">{pulse.week_sessions} {pulse.week_sessions === 1 ? 'lesson' : 'lessons'} this week</span></div>
-      <StudyPulse {pulse} />
-    </section>
-  {/if}
+  <div class="desk" class:with-pulse={!!pulse}>
+  <div class="desk-main">
   {#if resumable.length}
     <section class="saved" aria-label="Saved sessions"><NodeCard Icon={Play} name="saved-sessions" badge="resumable" badgeTone="teal">
       {#each resumable as session}{@const pending = session.runtime === 'study' && ['planned', 'preparing'].includes(session.lifecycle)}<div class="study-row"><div><strong>{session.label}</strong><p>{session.title}{pending ? ' · preparation did not finish' : ''}</p></div>{#if pending}<button class="ghost mono-ghost" disabled={busy || !!app.preparingClass || heldElsewhere(session.subject_id)} onclick={() => app.startClass(session.subject_id)}>Retry<ArrowRight size={12} /></button>{:else}<button class="ghost mono-ghost" disabled={heldElsewhere(session.subject_id)} onclick={() => app.resumeClass(session.subject_id)}>Resume<ArrowRight size={12} /></button>{/if}</div>{/each}
@@ -209,12 +205,20 @@
       <button class="ghost mono-ghost" onclick={() => app.openClass()}>Browse courses<ArrowRight size={12} /></button>
     </NodeCard></section>
   </div>
+  </div>
+  {#if pulse}
+    <aside class="pulse-section" aria-label="Study habit">
+      <div class="section-head"><span class="eyebrow mono"><Activity size={11} /> STUDY PULSE · 26 WEEKS</span><span class="mono muted">{pulse.week_sessions} {pulse.week_sessions === 1 ? 'lesson' : 'lessons'} this week</span></div>
+      <StudyPulse {pulse} />
+    </aside>
+  {/if}
+  </div>
 </div>
 <style>
   .held { margin: 10px 0 0; font-size: 11px; color: var(--led-warn); }
-  .today { width: min(1080px,100%); padding: 26px 30px 40px; margin: 0 auto; }
+  .today { padding-bottom: 40px; }
   /* The hero: what to do next on the left, the time until it on the right. */
-  .hero { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px 40px; align-items: center; padding: 18px 8px 30px; animation: rise 520ms cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+  .hero { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px 40px; align-items: center; padding: 14px 0 30px; animation: rise 520ms cubic-bezier(0.22, 1, 0.36, 1) backwards; }
   .hero-copy { min-width: 0; }
   h1 { font-size: 38px; line-height: 1.08; margin: 10px 0 8px; letter-spacing: -0.01em; }
   .sub { color: var(--muted); font-size: 14px; margin: 0 0 20px; max-width: 560px; }
@@ -232,7 +236,12 @@
   .ring-when { font-size: 9px; color: var(--muted); margin-top: 2px; }
   /* `backwards`, not `both`: a finished transform, even an identity one,
      would trap the heat map's fixed-position tip inside this section. */
-  .pulse-section { margin: 4px 0 26px; animation: rise 520ms cubic-bezier(0.22, 1, 0.36, 1) 120ms backwards; }
+  /* Below the hero the desk splits: what to do on the left, the habit on the
+     right at the heat map's natural width. One column on a narrow window. */
+  .desk { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; align-items: start; }
+  .desk-main { min-width: 0; }
+  .pulse-section { min-width: 0; animation: rise 520ms cubic-bezier(0.22, 1, 0.36, 1) 120ms backwards; }
+  @media (min-width: 1100px) { .desk.with-pulse { grid-template-columns: minmax(0, 1fr) 524px; } }
   .section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; } .eyebrow { display: inline-flex; align-items: center; gap: 6px; color: var(--accent); font-size: 9px; letter-spacing: 1.4px; } .muted { font-size: 9.5px; color: var(--muted); }
   .ring-code { font-size: 9px; color: var(--accent); }
   .next-topic { display: flex; align-items: center; gap: 5px; color: var(--accent); }
@@ -240,7 +249,7 @@
   @keyframes breathe { 0%, 100% { transform: scale(0.94); opacity: 0.7; } 50% { transform: scale(1.06); opacity: 1; } }
   @media (prefers-reduced-motion: reduce) { .hero, .pulse-section { animation: none; } .glow { animation: none; } }
   @media (max-width: 760px) { .hero { grid-template-columns: 1fr; justify-items: center; text-align: center; } .hero-actions, .hero-facts { justify-content: center; } }
-  .overview { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding-top: 22px; border-top: 1px dashed var(--node-border); align-items: stretch; }
+  .overview { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; align-items: stretch; }
   /* The two panels share a row: each card fills its column, and the footer
      control sits on the same baseline in both whatever the rows above it. */
   .overview > section { display: flex; min-width: 0; } .overview > section :global(.node) { flex: 1; display: flex; flex-direction: column; } .overview > section :global(.node-body) { flex: 1; display: flex; flex-direction: column; } .overview > section :global(.node-body > .ghost:last-child) { margin-top: auto; align-self: flex-start; }

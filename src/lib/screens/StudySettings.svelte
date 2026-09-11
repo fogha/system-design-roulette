@@ -16,7 +16,7 @@
 
 </script>
 
-<div class="settings-page">
+<div class="settings-page page-frame">
   <header><div class="meta-label">CONFIGURATION — TUTOR · SEARCH · RECOVERY</div><h1>Configure your desk</h1><p>Each service has its own controls. Class-specific tutor preferences live with the class.</p></header>
   <FlowStage number="01"><section aria-label="Tutor configuration">
     <RunnerSetup bind:agent bind:model bind:customBin onUse={saveTutor} onKeyChanged={() => app.refresh()} />
@@ -28,7 +28,7 @@
   </NodeCard></section></FlowStage>
 </div>
 <style>
-  .settings-page { padding: 34px 24px 48px; width: min(780px, 100%); margin: 0 auto; }
+  .settings-page { padding-bottom: 48px; }
   header { margin-bottom: 26px; }
   h1 { font-size: 28px; margin: 8px 0 6px; }
   p { font-size: 13px; color: var(--muted); margin: 0; }
@@ -36,5 +36,5 @@
   .recovery { display: flex; align-items: flex-start; gap: 14px; border: 1px dashed #793030; border-radius: var(--radius-control); padding: 12px; background: #1f1316; }
   .recovery-tag { border: 1px solid #793030; border-radius: var(--radius-detail); font-size: 9px; color: var(--led-err); padding: 5px 7px; margin-top: 4px; }
   .recovery p + p { font-size: 10px; margin-top: 9px; }
-  @media (max-width: 620px) { .settings-page { padding: 26px 16px; } .recovery { flex-direction: column; gap: 8px; } }
+  @media (max-width: 620px) { .recovery { flex-direction: column; gap: 8px; } }
 </style>

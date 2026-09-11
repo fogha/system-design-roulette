@@ -73,7 +73,7 @@
   }
 </script>
 
-<div class="progress-page">
+<div class="progress-page page-frame">
   <header class="page-heading"><div><div class="meta-label">LEARNING LEDGER</div><h1>Progress</h1></div><p>A little practice, a clearer picture.</p></header>
   {#if error}<div class="error" role="alert"><span>{error}</span><button class="ghost mono-ghost" onclick={() => reload++}>Retry</button><button class="icon-button" aria-label="Dismiss progress error" onclick={() => error=''}><X size={15}/></button></div>{/if}
   <div class="progress-workspace" hidden={viewing!==null} aria-busy={busy}>
@@ -131,7 +131,7 @@
 </div>
 
 <style>
-  .progress-page { container:progress / size; display:flex; flex-direction:column; flex:1; min-height:0; min-width:0; padding:20px 28px 24px; overflow:hidden; }
+  .progress-page { container:progress / size; display:flex; flex-direction:column; flex:1; min-height:0; min-width:0; overflow:hidden; }
   .page-heading { display:flex; align-items:flex-end; justify-content:space-between; gap:16px; margin-bottom:18px; flex-shrink:0; } .page-heading h1 { font-size:28px; margin:6px 0 0; } .meta-label { font:9px var(--font-mono); letter-spacing:1.1px; color:var(--muted); } .page-heading p { color:var(--muted); font-size:12px; margin:0 0 4px; }
   .progress-workspace { display:grid; grid-template-columns:238px minmax(0,1fr); flex:1; min-height:0; overflow:hidden; background:var(--node-bg); border:1px solid var(--node-border); border-radius:var(--radius-panel); box-shadow:0 8px 30px #0002; }
   [hidden] { display:none!important; } aside { display:flex; flex-direction:column; min-height:0; border-right:1px solid var(--node-border); background:var(--bg); }
@@ -169,7 +169,7 @@
   @container progress (max-height:500px) and (max-width:780px) { .overview { position:relative; } .mobile-filter { width:calc(100% - 152px); margin-bottom:12px; } .compact-tabs { position:absolute; top:16px; right:16px; margin:0; } .compact-tabs span { display:none; } }
   .error { display:flex; gap:12px; align-items:center; padding:10px 12px; margin-bottom:12px; border:1px solid var(--bad-fg); border-radius:var(--radius-control); color:var(--bad-fg); background:var(--bad-bg); font-size:11px; } .error>span { flex:1; } .mobile-filter { display:none; }
   .archive { display:flex; flex-direction:column; flex:1; min-height:0; border:1px solid var(--node-border); border-radius:var(--radius-panel); background:var(--node-bg); overflow:hidden; } .archive>header { display:flex; align-items:center; gap:22px; padding:16px 20px; flex-shrink:0; } .archive>header>div { flex:1; min-width:0; } .archive h2 { font-size:20px; } .archive header p { font:10px var(--font-mono); color:var(--muted); margin:7px 0 0; } .archive-tabs { display:flex; gap:8px; padding:0 20px 12px; border-bottom:1px solid var(--node-border); flex-shrink:0; } .archive-tabs button { display:flex; gap:7px; align-items:center; padding:8px 12px; color:var(--muted); background:var(--bg); border:1px solid var(--node-border); font:11px var(--font-mono); cursor:pointer; } .archive-tabs button.active { border-color:var(--violet); color:var(--violet-fg); background:var(--violet-bg); } .archive-scroll { flex:1; min-height:0; overflow:auto; padding:20px; } .reader-card { margin:0 auto; max-width:800px; padding:24px 32px; border-radius:var(--radius-panel); background:var(--bg); color:var(--fg); }
-  @media(min-width:1500px) { .progress-page { width:100%; max-width:1500px; margin:auto; } }
+
   @media(max-width:1050px) { .progress-workspace { grid-template-columns:205px minmax(0,1fr); } .overview { padding:16px 16px 0; } .summary-grid { gap:8px; } .metric { padding:12px 10px; } .metric .meta-label { font-size:8px; letter-spacing:.5px; } .metric small { display:none; } }
   @media(max-width:780px) { .progress-workspace { grid-template-columns:minmax(0,1fr); } aside { display:none; } .mobile-filter { display:block; margin-bottom:12px; } .page-heading p { display:none; } .overview-heading { margin-bottom:12px; } }
   @media(max-width:520px) { .activity { grid-template-columns:145px minmax(0,1fr); gap:8px; } .activity-days { gap:2px; } .progress-page { padding:16px 12px; } .overview { padding:12px 10px 0; } .overview-heading h2 { font-size:20px; } .scope { display:none; } .summary-grid { gap:5px; } .metric { padding:10px 8px; } .metric .meta-label { font-size:7px; } .metric strong { font-size:25px; } .metric em { font-size:9px; } .history-tools { grid-template-columns:minmax(0,1fr) 135px; gap:8px; } th,td { padding-left:4px; padding-right:4px; } .lesson-cell { width:auto; } .date-cell { white-space:normal; } .result { font-size:8px; padding:4px; } .archive>header { align-items:flex-start; gap:10px; padding:12px; } .archive-scroll { padding:10px; } .reader-card { padding:18px; } }

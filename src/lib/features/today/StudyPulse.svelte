@@ -121,31 +121,33 @@
 </section>
 
 <style>
-  .pulse { display: flex; flex-direction: column; gap: 18px; }
-  .stats { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
-  @media (max-width: 900px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .this-week { grid-column: span 2; } }
-  .stat { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--node-border); border-radius: var(--radius-panel); background: var(--node-bg); min-width: 0; animation: rise 500ms cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+  .pulse { display: flex; flex-direction: column; gap: 12px; }
+  .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .this-week { grid-column: span 2; }
+  .stat { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--node-border); border-radius: var(--radius-panel); background: var(--node-bg); min-width: 0; animation: rise 500ms cubic-bezier(0.22, 1, 0.36, 1) backwards; }
   .stat:nth-child(2) { animation-delay: 60ms; } .stat:nth-child(3) { animation-delay: 120ms; } .stat:nth-child(4) { animation-delay: 180ms; } .stat:nth-child(5) { animation-delay: 240ms; }
-  .stat strong { display: block; font-size: 22px; line-height: 1.1; color: var(--fg); font-weight: 500; }
+  .stat strong { display: block; font-size: 20px; line-height: 1.1; color: var(--fg); font-weight: 500; }
   .stat strong em { font-style: normal; font-size: 11px; color: var(--muted); }
   .stat > div > span { display: block; margin-top: 4px; font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
   .stat small { margin-left: auto; font-size: 9px; color: var(--faint); white-space: nowrap; }
-  .glyph { display: grid; place-items: center; width: 34px; height: 34px; flex: none; border-radius: var(--radius-control); background: var(--surface-2); color: var(--accent); }
+  .glyph { display: grid; place-items: center; width: 30px; height: 30px; flex: none; border-radius: var(--radius-control); background: var(--surface-2); color: var(--accent); }
   .streak { border-color: color-mix(in srgb, var(--accent) 35%, var(--node-border)); background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 12%, var(--node-bg)), var(--node-bg) 70%); }
-  .flame { display: grid; place-items: center; width: 34px; height: 34px; flex: none; border-radius: var(--radius-control); background: color-mix(in srgb, var(--accent) 18%, var(--surface-2)); color: var(--faint); }
+  .flame { display: grid; place-items: center; width: 30px; height: 30px; flex: none; border-radius: var(--radius-control); background: color-mix(in srgb, var(--accent) 18%, var(--surface-2)); color: var(--faint); }
   .streak.alight .flame { color: var(--accent); animation: flicker 1.6s ease-in-out infinite; filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent) 70%, transparent)); }
   .this-week { grid-column: span 2; }
   .week-body { flex: 1; min-width: 0; }
   .week-track { position: relative; height: 6px; margin-top: 10px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
   .week-track i { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: linear-gradient(90deg, var(--accent), var(--ok-fg)); transition: width 900ms cubic-bezier(0.22, 1, 0.36, 1); }
 
-  .map { position: relative; padding: 14px 18px 12px; border: 1px solid var(--node-border); border-radius: var(--radius-panel); background: var(--node-bg); }
-  .months { display: grid; grid-template-columns: 30px repeat(26, minmax(12px, 1fr)); gap: 0 4px; margin-bottom: 8px; font-size: 8.5px; color: var(--faint); height: 12px; }
+  /* Squares stay square and small, the size a contribution graph is read at;
+     the card is as wide as the half year, no wider. */
+  .map { position: relative; padding: 12px 16px 10px; border: 1px solid var(--node-border); border-radius: var(--radius-panel); background: var(--node-bg); width: fit-content; max-width: 100%; overflow-x: auto; }
+  .months { display: grid; grid-template-columns: 26px repeat(26, 14px); gap: 0 3px; margin-bottom: 6px; font-size: 8.5px; color: var(--faint); height: 12px; }
   .months span { white-space: nowrap; }
-  .grid { display: grid; grid-template-columns: 30px repeat(26, minmax(12px, 1fr)); gap: 4px; }
-  .weekdays { display: grid; grid-template-rows: repeat(7, 1fr); gap: 4px; font-size: 8px; color: var(--faint); align-items: center; }
-  .week { display: grid; grid-template-rows: repeat(7, 1fr); gap: 4px; }
-  .cell { width: 100%; aspect-ratio: 1; padding: 0; border: 0; border-radius: 4px; background: var(--surface-2); cursor: default; animation: pop 420ms cubic-bezier(0.22, 1, 0.36, 1) both; transition: transform 140ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 140ms ease, filter 140ms ease; }
+  .grid { display: grid; grid-template-columns: 26px repeat(26, 14px); gap: 3px; }
+  .weekdays { display: grid; grid-template-rows: repeat(7, 14px); gap: 3px; font-size: 8px; color: var(--faint); align-items: center; }
+  .week { display: grid; grid-template-rows: repeat(7, 14px); gap: 3px; }
+  .cell { width: 14px; height: 14px; padding: 0; border: 0; border-radius: 3px; background: var(--surface-2); cursor: default; animation: pop 420ms cubic-bezier(0.22, 1, 0.36, 1) both; transition: transform 140ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 140ms ease, filter 140ms ease; }
   /* A square lifts under the pointer so the day you are reading about stands out. */
   button.cell:hover, button.cell:focus-visible { transform: scale(1.35); z-index: 3; filter: brightness(1.25); box-shadow: 0 0 0 2px var(--node-bg), 0 0 0 3.5px color-mix(in srgb, var(--accent) 70%, transparent), 0 6px 16px rgba(0, 0, 0, 0.45); }
   button.cell.level-0:hover, button.cell.level-0:focus-visible { background: color-mix(in srgb, var(--accent) 18%, var(--surface-2)); }
@@ -164,7 +166,7 @@
   .tip strong { display: block; font-size: 11px; font-weight: 500; color: var(--fg); }
   .tip span { display: block; margin-top: 2px; font-size: 10px; color: var(--muted); }
   .legend { display: flex; align-items: center; gap: 4px; justify-content: flex-end; margin-top: 10px; font-size: 8.5px; color: var(--faint); }
-  .legend .cell { width: 10px; height: 10px; aspect-ratio: auto; animation: none; }
+  .legend .cell { width: 10px; height: 10px; animation: none; }
   .legend span { margin: 0 4px; }
 
   @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }

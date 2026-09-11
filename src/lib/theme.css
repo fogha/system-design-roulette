@@ -260,6 +260,19 @@ summary::-webkit-details-marker { display: none; }
 summary::before { content: '›'; display: inline-block; width: 14px; color: var(--muted); font-family: var(--font-mono); transform-origin: 5px 50%; }
 details[open] > summary::before { transform: rotate(90deg); }
 
+/* The frame every main page sits in. Progress set the measure: 28px at the
+   sides, the full width, centred once the window passes 1500px. */
+.page-frame {
+  width: 100%;
+  padding: 20px 28px 24px;
+}
+@media (min-width: 1500px) {
+  .page-frame { max-width: 1500px; margin-left: auto; margin-right: auto; }
+}
+@media (max-width: 700px) {
+  .page-frame { padding: 16px 14px; }
+}
+
 .screen {
   flex: 1;
   display: flex;
