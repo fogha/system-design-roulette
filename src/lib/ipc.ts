@@ -662,14 +662,68 @@ export interface SearchResult {
   engine: string;
 }
 
-/** Where a lesson's CSV was written, and what it holds. */
-export interface LessonCsvResult {
+/** Where a lesson file was written, and what it holds. */
+export interface LessonFileResult {
   path: string;
   file_name: string;
   title: string;
   questions: number;
   /** True once the lesson's check has been submitted; before that the key is withheld. */
   answer_key: boolean;
+}
+
+export interface ExerciseDocument {
+  title: string;
+  instructions: string;
+  deliverable: string | null;
+  starter_code: string | null;
+  hints: string[];
+  draft: string | null;
+  reflection: string | null;
+  completed: boolean;
+}
+
+export interface QuestionDocument {
+  position: number;
+  prompt: string;
+  section: string;
+  objective: string;
+  choices: string[];
+  correct_answer: string | null;
+  explanation: string | null;
+  your_answer: string | null;
+  result: string | null;
+}
+
+export interface LanguageDocument {
+  scenario: string;
+  can_do: string;
+  phrases: LanguagePhrase[];
+  dialogue: LanguageDialogueLine[];
+  speaking_prompt: string;
+  writing_prompt: string;
+  listen_text: string;
+}
+
+/** One saved lesson gathered for leaving the desk; the PDF is laid out from it. */
+export interface LessonDocument {
+  file_stem: string;
+  class_label: string;
+  title: string;
+  topic: string;
+  category: string;
+  date: string;
+  status: string;
+  score: number | null;
+  tutor: string;
+  answer_key: boolean;
+  research_note: string | null;
+  review_notes: string[];
+  markdown: string;
+  resources: Resource[];
+  exercise: ExerciseDocument | null;
+  questions: QuestionDocument[];
+  language: LanguageDocument | null;
 }
 
 export interface ExerciseOwner {
@@ -889,8 +943,13 @@ const realApi = {
   getEscapePhrase: () => invoke<string>('get_escape_phrase'),
   getDashboard: (query: ProgressQuery = {}) => invoke<DashboardView>('get_dashboard', { query }),
   getProgressLesson: (source: ProgressEntry['source'], ownerId: string) => invoke<ProgressLesson | null>('get_progress_lesson', { source, ownerId }),
-  /** Write a saved lesson and its questions as a CSV file beside the profile exports. */
-  exportLessonCsv: (source: ProgressEntry['source'], ownerId: string) => invoke<LessonCsvResult>('export_lesson_csv', { source, ownerId }),
+  /** Write a saved lesson and its questions as a CSV file in its class's folder. */
+  exportLessonCsv: (source: ProgressEntry['source'], ownerId: string) => invoke<LessonFileResult>('export_lesson_csv', { source, ownerId }),
+  /** The saved lesson gathered for the PDF the desk lays out itself. */
+  getLessonDocument: (source: ProgressEntry['source'], ownerId: string) => invoke<LessonDocument>('get_lesson_document', { source, ownerId }),
+  /** Write a PDF the desk laid out into the lesson's class folder. */
+  saveLessonPdf: (source: ProgressEntry['source'], ownerId: string, bytes: Uint8Array) =>
+    invoke<LessonFileResult>('save_lesson_pdf', bytes, { headers: { 'x-lesson-source': source, 'x-lesson-owner': ownerId } }),
   /** Show an exported file in the system file browser. */
   revealExport: (path: string) => invoke<void>('reveal_export', { path }),
 };

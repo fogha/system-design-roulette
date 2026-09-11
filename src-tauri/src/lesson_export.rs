@@ -82,23 +82,133 @@ impl Row {
     }
 }
 
-/// The finished export: the rows, and what a reader should know about them.
+/// One saved lesson, gathered for leaving the desk: what the reader saw,
+/// the learner's own work, and the check with its key when the check is
+/// done. The CSV is a flattening of this; the PDF is laid out from it.
 #[derive(Debug, Clone, Serialize)]
-pub struct LessonExport {
+pub struct LessonDocument {
     /// A file name without extension, safe on every platform.
     pub file_stem: String,
+    /// The class the lesson belongs to, which names its folder.
+    pub class_label: String,
     pub title: String,
-    pub questions: usize,
-    /// Whether correct answers and explanations are in the file.
+    pub topic: String,
+    pub category: String,
+    pub date: String,
+    pub status: String,
+    pub score: Option<f64>,
+    pub tutor: String,
+    /// Whether correct answers and explanations are in the document.
     pub answer_key: bool,
-    #[serde(skip)]
-    pub rows: Vec<Row>,
+    pub research_note: Option<String>,
+    pub review_notes: Vec<String>,
+    pub markdown: String,
+    pub resources: Vec<crate::generator::Resource>,
+    pub exercise: Option<ExerciseDocument>,
+    pub questions: Vec<QuestionDocument>,
+    pub language: Option<LanguageDocument>,
 }
 
-impl LessonExport {
+#[derive(Debug, Clone, Serialize, PartialEq, Default)]
+pub struct ExerciseDocument {
+    pub title: String,
+    pub instructions: String,
+    pub deliverable: Option<String>,
+    pub starter_code: Option<String>,
+    pub hints: Vec<String>,
+    pub draft: Option<String>,
+    pub reflection: Option<String>,
+    pub completed: bool,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct QuestionDocument {
+    pub position: usize,
+    pub prompt: String,
+    pub section: String,
+    pub objective: String,
+    pub choices: Vec<String>,
+    pub correct_answer: Option<String>,
+    pub explanation: Option<String>,
+    pub your_answer: Option<String>,
+    pub result: Option<String>,
+}
+
+/// The parts of a language lesson that are not Markdown.
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct LanguageDocument {
+    pub scenario: String,
+    pub can_do: String,
+    pub phrases: Vec<crate::language::Phrase>,
+    pub dialogue: Vec<crate::language::DialogueLine>,
+    pub speaking_prompt: String,
+    pub writing_prompt: String,
+    pub listen_text: String,
+}
+
+impl LessonDocument {
     pub fn csv(&self) -> String {
-        csv(&self.rows)
+        csv(&rows(self))
     }
+}
+
+/// The CSV rows of a document: metadata first, then the reading, resources,
+/// exercise and work, then one row per question.
+pub fn rows(document: &LessonDocument) -> Vec<Row> {
+    let mut rows = vec![Row::meta("title", document.title.clone())];
+    match &document.language {
+        Some(language) => {
+            rows.push(Row::meta("scenario", language.scenario.clone()));
+            rows.push(Row::meta("can_do", language.can_do.clone()));
+        }
+        None => {
+            rows.push(Row::meta("topic", document.topic.clone()));
+            rows.push(Row::meta("category", document.category.clone()));
+        }
+    }
+    rows.push(Row::meta("class", document.class_label.clone()));
+    rows.push(Row::meta("date", document.date.clone()));
+    rows.push(Row::meta("status", document.status.clone()));
+    if let Some(score) = document.score {
+        rows.push(Row::meta("score", percent(Some(score))));
+    }
+    if !document.tutor.is_empty() {
+        rows.push(Row::meta("tutor", document.tutor.clone()));
+    }
+    rows.push(key_note(document.answer_key));
+    if let Some(note) = &document.research_note {
+        rows.push(Row::meta("sources", note.clone()));
+    }
+    for note in &document.review_notes {
+        rows.push(Row::meta("editor_note", note.clone()));
+    }
+    rows.extend(section_rows(&document.markdown));
+    if let Some(language) = &document.language {
+        rows.extend(language_rows(language));
+    }
+    rows.extend(resource_rows(&document.resources));
+    if let Some(exercise) = &document.exercise {
+        rows.extend(exercise_rows(exercise));
+    }
+    for question in &document.questions {
+        rows.push(question_row(question));
+    }
+    rows
+}
+
+fn question_row(question: &QuestionDocument) -> Row {
+    let mut row = Row::new("question", question.prompt.clone());
+    row.position = Some(question.position);
+    row.section = question.section.clone();
+    row.detail = question.objective.clone();
+    for (slot, choice) in row.choices.iter_mut().zip(&question.choices) {
+        *slot = choice.clone();
+    }
+    row.correct_answer = question.correct_answer.clone().unwrap_or_default();
+    row.explanation = question.explanation.clone().unwrap_or_default();
+    row.your_answer = question.your_answer.clone().unwrap_or_default();
+    row.result = question.result.clone().unwrap_or_default();
+    row
 }
 
 /// RFC 4180 text: CRLF line ends, fields quoted when they need it, doubled
@@ -266,29 +376,25 @@ impl Question {
             .unwrap_or_else(|| self.correct_text.clone())
     }
 
-    fn row(&self, key: bool, answer: Option<&str>) -> Row {
-        let mut row = Row::new("question", self.prompt.clone());
-        row.position = Some(self.position);
-        row.section = self.section.clone();
-        row.detail = self.objective.clone();
-        for (slot, choice) in row.choices.iter_mut().zip(&self.choices) {
-            *slot = choice.clone();
-        }
-        if key {
-            row.correct_answer = self.correct_answer();
-            row.explanation = self.explanation.clone();
-        }
-        if let Some(answer) = answer {
-            row.your_answer = answer.to_string();
-            if key {
-                row.result = if answer == self.correct_answer() {
-                    "correct".into()
-                } else {
-                    "incorrect".into()
-                };
+    fn document(&self, key: bool, answer: Option<&str>) -> QuestionDocument {
+        let result = answer.filter(|_| key).map(|answer| {
+            if answer == self.correct_answer() {
+                "correct".to_string()
+            } else {
+                "incorrect".to_string()
             }
+        });
+        QuestionDocument {
+            position: self.position,
+            prompt: self.prompt.clone(),
+            section: self.section.clone(),
+            objective: self.objective.clone(),
+            choices: self.choices.clone(),
+            correct_answer: key.then(|| self.correct_answer()),
+            explanation: key.then(|| self.explanation.clone()),
+            your_answer: answer.map(str::to_string),
+            result,
         }
-        row
     }
 }
 
@@ -328,7 +434,7 @@ fn round_questions(round: &Round) -> (Vec<Question>, Vec<Option<String>>, bool) 
     (questions, answers, round.submission.is_some())
 }
 
-fn exercise_rows(exercise: &crate::generator::Exercise) -> Vec<Row> {
+fn exercise_rows(exercise: &ExerciseDocument) -> Vec<Row> {
     let mut rows = Vec::new();
     let mut head = Row::new("exercise", exercise.title.clone());
     head.detail = exercise.instructions.clone();
@@ -352,21 +458,36 @@ fn exercise_rows(exercise: &crate::generator::Exercise) -> Vec<Row> {
         row.position = Some(index + 1);
         rows.push(row);
     }
-    rows
-}
-
-fn work_rows(draft: Option<&str>, completed: bool, reflection: &str) -> Vec<Row> {
-    let mut rows = Vec::new();
-    if let Some(draft) = draft.filter(|d| !d.trim().is_empty()) {
+    if let Some(draft) = exercise.draft.as_deref().filter(|d| !d.trim().is_empty()) {
         rows.push(Row::new("exercise_draft", draft));
     }
-    if !reflection.trim().is_empty() {
+    if let Some(reflection) = exercise
+        .reflection
+        .as_deref()
+        .filter(|r| !r.trim().is_empty())
+    {
         rows.push(Row::new("exercise_reflection", reflection.trim()));
     }
-    if completed {
+    if exercise.completed {
         rows.push(Row::new("exercise_status", "completed"));
     }
     rows
+}
+
+fn exercise_document(
+    exercise: &crate::generator::Exercise,
+    work: Option<&crate::db::ExerciseView>,
+) -> ExerciseDocument {
+    ExerciseDocument {
+        title: exercise.title.clone(),
+        instructions: exercise.instructions.clone(),
+        deliverable: exercise.deliverable.clone(),
+        starter_code: exercise.starter_code.clone(),
+        hints: exercise.hints.clone(),
+        draft: work.and_then(|work| work.draft.clone()),
+        reflection: work.map(|work| work.reflection.clone()),
+        completed: work.is_some_and(|work| work.completed),
+    }
 }
 
 fn resource_rows(resources: &[crate::generator::Resource]) -> Vec<Row> {
@@ -408,9 +529,9 @@ fn key_note(key: bool) -> Row {
     )
 }
 
-/// Export one saved lesson by the same source and owner the Progress page
+/// Gather one saved lesson by the same source and owner the Progress page
 /// uses to open it.
-pub fn export(conn: &Connection, source: &str, owner_id: &str) -> Result<LessonExport, String> {
+pub fn document(conn: &Connection, source: &str, owner_id: &str) -> Result<LessonDocument, String> {
     match source {
         "study" => study(conn, owner_id),
         "classroom" => legacy_classroom(conn, parse_id(owner_id)?),
@@ -426,7 +547,74 @@ fn parse_id(owner_id: &str) -> Result<i64, String> {
         .map_err(|_| "Invalid lesson identity".to_string())
 }
 
-fn study(conn: &Connection, owner_id: &str) -> Result<LessonExport, String> {
+fn question_documents(
+    questions: &[Question],
+    answers: &[Option<String>],
+    key: bool,
+) -> Vec<QuestionDocument> {
+    questions
+        .iter()
+        .enumerate()
+        .map(|(index, question)| {
+            question.document(key, answers.get(index).and_then(|answer| answer.as_deref()))
+        })
+        .collect()
+}
+
+fn stored_questions<T: Serialize>(questions: &[T]) -> Vec<Question> {
+    questions
+        .iter()
+        .enumerate()
+        .map(|(index, question)| {
+            Question::from_value(
+                index + 1,
+                &serde_json::to_value(question).unwrap_or_default(),
+            )
+        })
+        .collect()
+}
+
+fn language_rows(language: &LanguageDocument) -> Vec<Row> {
+    let mut rows = Vec::new();
+    for (index, phrase) in language.phrases.iter().enumerate() {
+        let mut row = Row::new("phrase", phrase.target.clone());
+        row.position = Some(index + 1);
+        row.detail = phrase.translation.clone();
+        row.section = phrase.note.clone();
+        rows.push(row);
+    }
+    for (index, line) in language.dialogue.iter().enumerate() {
+        let mut row = Row::new("dialogue", line.target.clone());
+        row.position = Some(index + 1);
+        row.section = line.speaker.clone();
+        row.detail = line.translation.clone();
+        rows.push(row);
+    }
+    for (kind, text) in [
+        ("speaking_prompt", &language.speaking_prompt),
+        ("writing_prompt", &language.writing_prompt),
+        ("listening_text", &language.listen_text),
+    ] {
+        if !text.trim().is_empty() {
+            rows.push(Row::new(kind, text.clone()));
+        }
+    }
+    rows
+}
+
+fn language_document(stored: &crate::language::StoredLesson) -> LanguageDocument {
+    LanguageDocument {
+        scenario: stored.scenario.clone(),
+        can_do: stored.can_do.clone(),
+        phrases: stored.phrases.clone(),
+        dialogue: stored.dialogue.clone(),
+        speaking_prompt: stored.speaking_prompt.clone(),
+        writing_prompt: stored.writing_prompt.clone(),
+        listen_text: stored.listen_text.clone(),
+    }
+}
+
+fn study(conn: &Connection, owner_id: &str) -> Result<LessonDocument, String> {
     let id = SessionId(owner_id.to_string());
     let session = sessions::get(conn, &id).map_err(|e| e.to_string())?;
     let lesson = sessions::lesson(conn, &id)
@@ -456,143 +644,79 @@ fn study(conn: &Connection, owner_id: &str) -> Result<LessonExport, String> {
         .or_else(|| lesson.content.provenance["runner"].as_str())
         .unwrap_or(&program.agent)
         .to_string();
-
-    let mut rows = vec![
-        Row::meta("title", lesson.content.title.clone()),
-        Row::meta("class", program.label.clone()),
-        Row::meta("date", date.clone()),
-        Row::meta("status", status),
-    ];
-    if let Some(score) = score {
-        rows.push(Row::meta("score", percent(Some(score))));
-    }
-    rows.push(Row::meta("tutor", tutor));
-    rows.push(Row::meta("lesson_id", id.0.clone()));
-
-    let (questions, answers, submitted) = match &round {
+    let (shown, answers, submitted) = match &round {
         Some(round) => round_questions(round),
         None => (Vec::new(), Vec::new(), false),
     };
     let key = submitted || session.status.terminal();
-    rows.push(key_note(key));
+    let title = lesson.content.title.clone();
+    let file_stem = file_stem(&program.short_code, &date, &title);
 
     match spec.kind {
         crate::catalog::SubjectKind::Engineering => {
             let stored: StoredEngineeringLesson =
                 serde_json::from_value(lesson.content.body.clone()).map_err(|e| e.to_string())?;
-            rows.insert(1, Row::meta("topic", stored.concept_title.clone()));
-            rows.insert(2, Row::meta("category", stored.category.clone()));
-            if let Some(note) = &stored.research_note {
-                rows.push(Row::meta("sources", note.clone()));
-            }
-            rows.extend(section_rows(&stored.markdown));
-            rows.extend(resource_rows(&stored.resources));
-            if let Some(exercise) = &stored.exercise {
-                rows.extend(exercise_rows(exercise));
-                let work = crate::subjects::engineering::exercise_view(conn, &id)?;
-                if let Some(work) = work {
-                    rows.extend(work_rows(
-                        work.draft.as_deref(),
-                        work.completed,
-                        &work.reflection,
-                    ));
-                }
-            }
-            let questions = if questions.is_empty() {
-                stored
-                    .questions
-                    .iter()
-                    .enumerate()
-                    .map(|(index, question)| {
-                        Question::from_value(
-                            index + 1,
-                            &serde_json::to_value(question).unwrap_or_default(),
-                        )
-                    })
-                    .collect()
-            } else {
-                questions
+            let work = match &stored.exercise {
+                Some(_) => crate::subjects::engineering::exercise_view(conn, &id)?,
+                None => None,
             };
-            let count = questions.len();
-            rows.extend(question_rows(&questions, &answers, key));
-            Ok(LessonExport {
-                file_stem: file_stem(&program.short_code, &date, &lesson.content.title),
-                title: lesson.content.title,
-                questions: count,
+            let questions = if shown.is_empty() {
+                stored_questions(&stored.questions)
+            } else {
+                shown
+            };
+            Ok(LessonDocument {
+                file_stem,
+                class_label: program.label,
+                title,
+                topic: stored.concept_title,
+                category: stored.category,
+                date,
+                status,
+                score,
+                tutor,
                 answer_key: key,
-                rows,
+                research_note: stored.research_note,
+                review_notes: stored.review_notes,
+                markdown: stored.markdown,
+                resources: stored.resources,
+                exercise: stored
+                    .exercise
+                    .as_ref()
+                    .map(|exercise| exercise_document(exercise, work.as_ref())),
+                questions: question_documents(&questions, &answers, key),
+                language: None,
             })
         }
         crate::catalog::SubjectKind::Language => {
             let stored: crate::language::StoredLesson =
                 serde_json::from_value(lesson.content.body.clone()).map_err(|e| e.to_string())?;
-            rows.insert(1, Row::meta("scenario", stored.scenario.clone()));
-            rows.insert(2, Row::meta("can_do", stored.can_do.clone()));
-            rows.extend(language_rows(&stored));
-            let questions = if questions.is_empty() {
-                stored
-                    .questions
-                    .iter()
-                    .enumerate()
-                    .map(|(index, question)| {
-                        Question::from_value(
-                            index + 1,
-                            &serde_json::to_value(question).unwrap_or_default(),
-                        )
-                    })
-                    .collect()
+            let questions = if shown.is_empty() {
+                stored_questions(&stored.questions)
             } else {
-                questions
+                shown
             };
-            let count = questions.len();
-            rows.extend(question_rows(&questions, &answers, key));
-            Ok(LessonExport {
-                file_stem: file_stem(&program.short_code, &date, &lesson.content.title),
-                title: lesson.content.title,
-                questions: count,
+            Ok(LessonDocument {
+                file_stem,
+                class_label: program.label,
+                title,
+                topic: stored.scenario.clone(),
+                category: stored.phase_label.clone(),
+                date,
+                status,
+                score,
+                tutor,
                 answer_key: key,
-                rows,
+                research_note: None,
+                review_notes: Vec::new(),
+                markdown: stored.markdown.clone(),
+                resources: Vec::new(),
+                exercise: None,
+                questions: question_documents(&questions, &answers, key),
+                language: Some(language_document(&stored)),
             })
         }
     }
-}
-
-fn question_rows(questions: &[Question], answers: &[Option<String>], key: bool) -> Vec<Row> {
-    questions
-        .iter()
-        .enumerate()
-        .map(|(index, question)| {
-            question.row(key, answers.get(index).and_then(|answer| answer.as_deref()))
-        })
-        .collect()
-}
-
-fn language_rows(stored: &crate::language::StoredLesson) -> Vec<Row> {
-    let mut rows = section_rows(&stored.markdown);
-    for (index, phrase) in stored.phrases.iter().enumerate() {
-        let mut row = Row::new("phrase", phrase.target.clone());
-        row.position = Some(index + 1);
-        row.detail = phrase.translation.clone();
-        row.section = phrase.note.clone();
-        rows.push(row);
-    }
-    for (index, line) in stored.dialogue.iter().enumerate() {
-        let mut row = Row::new("dialogue", line.target.clone());
-        row.position = Some(index + 1);
-        row.section = line.speaker.clone();
-        row.detail = line.translation.clone();
-        rows.push(row);
-    }
-    for (kind, text) in [
-        ("speaking_prompt", &stored.speaking_prompt),
-        ("writing_prompt", &stored.writing_prompt),
-        ("listening_text", &stored.listen_text),
-    ] {
-        if !text.trim().is_empty() {
-            rows.push(Row::new(kind, text.clone()));
-        }
-    }
-    rows
 }
 
 /// The columns of a retired classroom session the export reads.
@@ -608,7 +732,7 @@ struct LegacyClassroomRow {
     reflection: String,
 }
 
-fn legacy_classroom(conn: &Connection, session_id: i64) -> Result<LessonExport, String> {
+fn legacy_classroom(conn: &Connection, session_id: i64) -> Result<LessonDocument, String> {
     let row = conn
         .query_row(
             "SELECT p.label, p.short_code, s.session_date, s.status, s.score,
@@ -632,88 +756,65 @@ fn legacy_classroom(conn: &Connection, session_id: i64) -> Result<LessonExport, 
         )
         .optional()
         .map_err(|e| e.to_string())?;
-    let Some(LegacyClassroomRow {
-        label,
-        short_code,
-        date,
-        status,
-        score,
-        payload,
-        response,
-        exercise_completed,
-        reflection,
-    }) = row
-    else {
+    let Some(row) = row else {
         return Err("That lesson is no longer on this desk.".into());
     };
     let stored: StoredEngineeringLesson =
-        serde_json::from_str(&payload).map_err(|e| e.to_string())?;
-    let key = status == "completed";
-    let mut rows = vec![
-        Row::meta("title", stored.title.clone()),
-        Row::meta("topic", stored.concept_title.clone()),
-        Row::meta("category", stored.category.clone()),
-        Row::meta("class", label),
-        Row::meta("date", date.clone()),
-        Row::meta("status", status.replace('_', " ")),
-    ];
-    if let Some(score) = score {
-        rows.push(Row::meta("score", percent(Some(score))));
-    }
-    rows.push(Row::meta("tutor", stored.source.clone()));
-    rows.push(key_note(key));
-    if let Some(note) = &stored.research_note {
-        rows.push(Row::meta("sources", note.clone()));
-    }
-    rows.extend(section_rows(&stored.markdown));
-    rows.extend(resource_rows(&stored.resources));
-    if let Some(exercise) = &stored.exercise {
-        rows.extend(exercise_rows(exercise));
-        let draft = crate::db::get_exercise_draft(conn, None, Some(session_id))
-            .map_err(|e| e.to_string())?;
-        rows.extend(work_rows(draft.as_deref(), exercise_completed, &reflection));
-    }
-    let answers: Vec<Option<String>> = serde_json::from_str::<serde_json::Value>(&response)
+        serde_json::from_str(&row.payload).map_err(|e| e.to_string())?;
+    let key = row.status == "completed";
+    let exercise = match &stored.exercise {
+        Some(exercise) => {
+            let draft = crate::db::get_exercise_draft(conn, None, Some(session_id))
+                .map_err(|e| e.to_string())?;
+            let mut document = exercise_document(exercise, None);
+            document.draft = draft;
+            document.reflection = Some(row.reflection.clone());
+            document.completed = row.exercise_completed;
+            Some(document)
+        }
+        None => None,
+    };
+    let raw_answers: Vec<Option<String>> = serde_json::from_str::<serde_json::Value>(&row.response)
         .ok()
         .and_then(|value| value["answers"].as_array().cloned())
         .unwrap_or_default()
         .iter()
         .map(|answer| answer.as_u64().map(|index| index.to_string()))
         .collect();
-    let questions: Vec<Question> = stored
-        .questions
+    let questions = stored_questions(&stored.questions);
+    let answers: Vec<Option<String>> = questions
         .iter()
         .enumerate()
         .map(|(index, question)| {
-            Question::from_value(
-                index + 1,
-                &serde_json::to_value(question).unwrap_or_default(),
-            )
-        })
-        .collect();
-    let answers = questions
-        .iter()
-        .enumerate()
-        .map(|(index, question)| {
-            answers
+            raw_answers
                 .get(index)
                 .cloned()
                 .flatten()
                 .map(|raw| answer_text(question, &raw))
         })
-        .collect::<Vec<_>>();
-    let count = questions.len();
-    rows.extend(question_rows(&questions, &answers, key));
-    Ok(LessonExport {
-        file_stem: file_stem(&short_code, &date, &stored.title),
+        .collect();
+    Ok(LessonDocument {
+        file_stem: file_stem(&row.short_code, &row.date, &stored.title),
+        class_label: row.label,
         title: stored.title,
-        questions: count,
+        topic: stored.concept_title,
+        category: stored.category,
+        date: row.date,
+        status: row.status.replace('_', " "),
+        score: row.score,
+        tutor: stored.source,
         answer_key: key,
-        rows,
+        research_note: stored.research_note,
+        review_notes: stored.review_notes,
+        markdown: stored.markdown,
+        resources: stored.resources,
+        exercise,
+        questions: question_documents(&questions, &answers, key),
+        language: None,
     })
 }
 
-fn legacy_language(conn: &Connection, session_id: i64) -> Result<LessonExport, String> {
+fn legacy_language(conn: &Connection, session_id: i64) -> Result<LessonDocument, String> {
     let row: Option<(String, String, String, String, Option<f64>, String)> = conn
         .query_row(
             "SELECT s.language, p.label, s.session_date, s.status, s.score, s.lesson_json
@@ -739,45 +840,32 @@ fn legacy_language(conn: &Connection, session_id: i64) -> Result<LessonExport, S
     let stored: crate::language::StoredLesson =
         serde_json::from_str(&payload).map_err(|e| e.to_string())?;
     let key = status == "completed";
-    let mut rows = vec![
-        Row::meta("title", stored.title.clone()),
-        Row::meta("scenario", stored.scenario.clone()),
-        Row::meta("can_do", stored.can_do.clone()),
-        Row::meta("class", label),
-        Row::meta("date", date.clone()),
-        Row::meta("status", status.replace('_', " ")),
-    ];
-    if let Some(score) = score {
-        rows.push(Row::meta("score", percent(Some(score))));
-    }
-    rows.push(key_note(key));
-    rows.extend(language_rows(&stored));
-    let questions: Vec<Question> = stored
-        .questions
-        .iter()
-        .enumerate()
-        .map(|(index, question)| {
-            Question::from_value(
-                index + 1,
-                &serde_json::to_value(question).unwrap_or_default(),
-            )
-        })
-        .collect();
-    let count = questions.len();
-    rows.extend(question_rows(&questions, &[], key));
-    Ok(LessonExport {
+    let questions = stored_questions(&stored.questions);
+    Ok(LessonDocument {
         file_stem: file_stem(&language, &date, &stored.title),
-        title: stored.title,
-        questions: count,
+        class_label: label,
+        title: stored.title.clone(),
+        topic: stored.scenario.clone(),
+        category: stored.phase_label.clone(),
+        date,
+        status: status.replace('_', " "),
+        score,
+        tutor: String::new(),
         answer_key: key,
-        rows,
+        research_note: None,
+        review_notes: Vec::new(),
+        markdown: stored.markdown.clone(),
+        resources: Vec::new(),
+        exercise: None,
+        questions: question_documents(&questions, &[], key),
+        language: Some(language_document(&stored)),
     })
 }
 
 /// A lesson of the retired daily routine: the course, its questions and the
 /// answers given that day. Those sessions are finished, so the key is always
 /// included.
-fn primary(conn: &Connection, owner_id: &str) -> Result<LessonExport, String> {
+fn primary(conn: &Connection, owner_id: &str) -> Result<LessonDocument, String> {
     let course_id: Option<i64> = conn
         .query_row(
             "SELECT c.id FROM primary_session_ids i
@@ -804,80 +892,85 @@ fn primary(conn: &Connection, owner_id: &str) -> Result<LessonExport, String> {
         .unwrap_or_default();
     let resources: Vec<crate::generator::Resource> =
         serde_json::from_str(&course.resources_json).unwrap_or_default();
-    let mut rows = vec![
-        Row::meta("title", title.clone()),
-        Row::meta("topic", title.clone()),
-        Row::meta(
-            "category",
-            concept
-                .as_ref()
-                .map(|concept| concept.category.clone())
-                .unwrap_or_default(),
-        ),
-        Row::meta("class", crate::focus::label(&focus).to_string()),
-        Row::meta("date", course.session_date.clone()),
-        Row::meta("status", "completed"),
-        Row::meta("tutor", course.source.clone()),
-        key_note(true),
-    ];
-    rows.extend(section_rows(&course.markdown));
-    rows.extend(resource_rows(&resources));
-    if let Some(exercise) =
-        crate::db::get_course_exercise(conn, course_id).map_err(|e| e.to_string())?
-    {
-        rows.extend(exercise_rows(&crate::generator::Exercise {
-            title: exercise.title,
-            instructions: exercise.instructions,
-            starter_code: exercise.starter_code,
-            deliverable: exercise.deliverable,
-            hints: exercise.hints,
-        }));
-        let draft = crate::db::get_exercise_draft(conn, Some(course_id), None)
-            .map_err(|e| e.to_string())?;
-        let (completed, reflection) =
-            crate::db::get_exercise_completion(conn, Some(course_id), None)
-                .map_err(|e| e.to_string())?;
-        rows.extend(work_rows(draft.as_deref(), completed, &reflection));
-    }
+    let exercise =
+        match crate::db::get_course_exercise(conn, course_id).map_err(|e| e.to_string())? {
+            Some(exercise) => {
+                let draft = crate::db::get_exercise_draft(conn, Some(course_id), None)
+                    .map_err(|e| e.to_string())?;
+                let (completed, reflection) =
+                    crate::db::get_exercise_completion(conn, Some(course_id), None)
+                        .map_err(|e| e.to_string())?;
+                Some(ExerciseDocument {
+                    title: exercise.title,
+                    instructions: exercise.instructions,
+                    deliverable: exercise.deliverable,
+                    starter_code: exercise.starter_code,
+                    hints: exercise.hints,
+                    draft,
+                    reflection: Some(reflection),
+                    completed,
+                })
+            }
+            None => None,
+        };
     let attempts =
         crate::db::attempts_for_session(conn, &course.session_date).map_err(|e| e.to_string())?;
     let questions = crate::db::questions_for_course(conn, course_id).map_err(|e| e.to_string())?;
-    let count = questions.len();
-    for (index, question) in questions.iter().enumerate() {
-        let choices: Vec<String> = question
-            .choices_json
-            .as_deref()
-            .and_then(|json| serde_json::from_str(json).ok())
-            .unwrap_or_default();
-        let shaped = Question {
-            position: index + 1,
-            prompt: question.prompt.clone(),
-            correct_index: None,
-            correct_text: question.correct_answer.clone(),
-            explanation: question.explanation.clone(),
-            section: question.kind.clone(),
-            objective: String::new(),
-            choices,
-        };
-        let attempt = attempts
-            .iter()
-            .find(|attempt| attempt.question_id == question.id);
-        let mut row = shaped.row(true, attempt.map(|attempt| attempt.user_answer.as_str()));
-        if let Some(attempt) = attempt {
-            row.result = if attempt.correct {
-                "correct".into()
-            } else {
-                "incorrect".into()
+    let questions = questions
+        .iter()
+        .enumerate()
+        .map(|(index, question)| {
+            let choices: Vec<String> = question
+                .choices_json
+                .as_deref()
+                .and_then(|json| serde_json::from_str(json).ok())
+                .unwrap_or_default();
+            let shaped = Question {
+                position: index + 1,
+                prompt: question.prompt.clone(),
+                correct_index: None,
+                correct_text: question.correct_answer.clone(),
+                explanation: question.explanation.clone(),
+                section: question.kind.clone(),
+                objective: String::new(),
+                choices,
             };
-        }
-        rows.push(row);
-    }
-    Ok(LessonExport {
+            let attempt = attempts
+                .iter()
+                .find(|attempt| attempt.question_id == question.id);
+            let mut document =
+                shaped.document(true, attempt.map(|attempt| attempt.user_answer.as_str()));
+            if let Some(attempt) = attempt {
+                document.result = Some(if attempt.correct {
+                    "correct".into()
+                } else {
+                    "incorrect".into()
+                });
+            }
+            document
+        })
+        .collect();
+    Ok(LessonDocument {
         file_stem: file_stem(&focus, &course.session_date, &title),
-        title,
-        questions: count,
+        class_label: crate::focus::label(&focus).to_string(),
+        title: title.clone(),
+        topic: title,
+        category: concept
+            .as_ref()
+            .map(|concept| concept.category.clone())
+            .unwrap_or_default(),
+        date: course.session_date,
+        status: "completed".into(),
+        score: None,
+        tutor: course.source,
         answer_key: true,
-        rows,
+        research_note: None,
+        review_notes: Vec::new(),
+        markdown: course.markdown,
+        resources,
+        exercise,
+        questions,
+        language: None,
     })
 }
 
@@ -959,12 +1052,12 @@ mod tests {
                 "learning_objective": "order the queues"
             }),
         );
-        let hidden = question.row(false, Some("macrotasks"));
+        let hidden = question_row(&question.document(false, Some("macrotasks")));
         assert_eq!(hidden.correct_answer, "");
         assert_eq!(hidden.explanation, "");
         assert_eq!(hidden.your_answer, "macrotasks");
         assert_eq!(hidden.result, "");
-        let shown = question.row(true, Some("macrotasks"));
+        let shown = question_row(&question.document(true, Some("macrotasks")));
         assert_eq!(shown.correct_answer, "microtasks");
         assert_eq!(shown.result, "incorrect");
         assert_eq!(shown.section, "Core mechanics");

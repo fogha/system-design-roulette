@@ -675,7 +675,7 @@ fn a_lesson_exports_as_csv_and_keeps_its_key_until_the_check_is_submitted() {
     let (_, conn) = fixture();
     activate(&conn, "javascript", 9);
     let planned = plan(&conn, "javascript", None);
-    let refused = lesson_export::export(&conn, "study", &planned.id.0).unwrap_err();
+    let refused = lesson_export::document(&conn, "study", &planned.id.0).unwrap_err();
     assert!(refused.contains("not been prepared"), "{refused}");
 
     let session = publish(&conn, &planned);
@@ -683,8 +683,11 @@ fn a_lesson_exports_as_csv_and_keeps_its_key_until_the_check_is_submitted() {
     let check = answer_all(&conn, &session, &[2]);
 
     // Drafted answers travel with the lesson; the key does not, yet.
-    let before = lesson_export::export(&conn, "study", &session.id.0).unwrap();
-    assert_eq!(before.questions, 5);
+    let before = lesson_export::document(&conn, "study", &session.id.0).unwrap();
+    assert_eq!(before.questions.len(), 5);
+    assert_eq!(before.class_label, "JavaScript & Browser");
+    assert!(before.questions[1].correct_answer.is_none());
+    assert_eq!(before.questions[1].your_answer.as_deref(), Some("wrong"));
     assert!(!before.answer_key);
     assert!(
         before.file_stem.starts_with(&format!("js-{TODAY}-")),
@@ -720,8 +723,14 @@ fn a_lesson_exports_as_csv_and_keeps_its_key_until_the_check_is_submitted() {
         TODAY,
     )
     .unwrap();
-    let after = lesson_export::export(&conn, "study", &session.id.0).unwrap();
+    let after = lesson_export::document(&conn, "study", &session.id.0).unwrap();
     assert!(after.answer_key);
+    assert_eq!(after.questions[1].correct_answer.as_deref(), Some("right"));
+    assert_eq!(after.questions[1].result.as_deref(), Some("incorrect"));
+    assert_eq!(
+        after.exercise.as_ref().map(|e| e.title.as_str()),
+        Some("Build the probe")
+    );
     let csv = after.csv();
     assert!(csv.contains("meta,,answer_key,included"));
     assert!(csv.contains("meta,,status,completed"));

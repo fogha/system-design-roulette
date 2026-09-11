@@ -3,6 +3,7 @@
 use crate::domain::portability::{self, ArchiveSummary};
 use crate::state::AppState;
 use serde::Serialize;
+use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 type CmdResult<T> = Result<T, String>;
@@ -97,7 +98,7 @@ pub fn import_profile(
 
 /// Reveal an exported file in the system file browser.
 #[derive(Debug, Serialize)]
-pub struct LessonCsvResult {
+pub struct LessonFileResult {
     pub path: String,
     pub file_name: String,
     pub title: String,
@@ -107,38 +108,117 @@ pub struct LessonCsvResult {
     pub answer_key: bool,
 }
 
-/// Write one saved lesson, with its questions, as a CSV file next to the
-/// profile exports. A file of the same name from an earlier download is
-/// left alone; the new one gets a time suffix.
+/// Lessons are filed by class: `Documents/Principia Desk/lessons/<class>/`.
+fn lesson_directory(app: &AppHandle, state: &AppState, class_label: &str) -> PathBuf {
+    let folder: String = class_label
+        .chars()
+        .map(|c| {
+            if matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') {
+                '-'
+            } else {
+                c
+            }
+        })
+        .collect();
+    let folder = folder.trim().trim_matches('.').to_string();
+    export_directory(app, state)
+        .join("lessons")
+        .join(if folder.is_empty() {
+            "Other".to_string()
+        } else {
+            folder
+        })
+}
+
+/// A file of the same name from an earlier download is left alone; the new
+/// one gets a time suffix.
+fn fresh_path(directory: &Path, stem: &str, extension: &str) -> PathBuf {
+    let mut path = directory.join(format!("{stem}.{extension}"));
+    if path.exists() {
+        let stamp = chrono::Local::now().format("%H%M%S");
+        path = directory.join(format!("{stem}-{stamp}.{extension}"));
+    }
+    path
+}
+
+fn file_result(path: &Path, document: &crate::lesson_export::LessonDocument) -> LessonFileResult {
+    LessonFileResult {
+        file_name: path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default(),
+        path: path.to_string_lossy().into_owned(),
+        title: document.title.clone(),
+        questions: document.questions.len(),
+        answer_key: document.answer_key,
+    }
+}
+
+/// One saved lesson, gathered for the PDF the desk lays out in the webview.
+#[tauri::command]
+pub fn get_lesson_document(
+    state: State<'_, AppState>,
+    source: String,
+    owner_id: String,
+) -> CmdResult<crate::lesson_export::LessonDocument> {
+    let conn = state.db.0.lock().unwrap();
+    crate::lesson_export::document(&conn, &source, &owner_id)
+}
+
+/// Write one saved lesson, with its questions, as a CSV file in its class's
+/// folder beside the profile exports.
 #[tauri::command]
 pub fn export_lesson_csv(
     app: AppHandle,
     state: State<'_, AppState>,
     source: String,
     owner_id: String,
-) -> CmdResult<LessonCsvResult> {
-    let export = {
+) -> CmdResult<LessonFileResult> {
+    let document = {
         let conn = state.db.0.lock().unwrap();
-        crate::lesson_export::export(&conn, &source, &owner_id)?
+        crate::lesson_export::document(&conn, &source, &owner_id)?
     };
-    let directory = export_directory(&app, &state).join("lessons");
+    let directory = lesson_directory(&app, &state, &document.class_label);
     std::fs::create_dir_all(&directory).map_err(err)?;
-    let mut path = directory.join(format!("{}.csv", export.file_stem));
-    if path.exists() {
-        let stamp = chrono::Local::now().format("%H%M%S");
-        path = directory.join(format!("{}-{stamp}.csv", export.file_stem));
+    let path = fresh_path(&directory, &document.file_stem, "csv");
+    std::fs::write(&path, document.csv()).map_err(err)?;
+    Ok(file_result(&path, &document))
+}
+
+/// Write the PDF the webview laid out for one saved lesson. The bytes come
+/// as the raw request body; the lesson's source and owner ride in headers.
+#[tauri::command]
+pub fn save_lesson_pdf(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    request: tauri::ipc::Request<'_>,
+) -> CmdResult<LessonFileResult> {
+    let header = |name: &str| -> CmdResult<String> {
+        request
+            .headers()
+            .get(name)
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_string)
+            .ok_or_else(|| format!("missing {name} header"))
+    };
+    let source = header("x-lesson-source")?;
+    let owner_id = header("x-lesson-owner")?;
+    let bytes: Vec<u8> = match request.body() {
+        tauri::ipc::InvokeBody::Raw(bytes) => bytes.clone(),
+        tauri::ipc::InvokeBody::Json(_) => return Err("the PDF must be sent as bytes".into()),
+    };
+    if !bytes.starts_with(b"%PDF-") {
+        return Err("that is not a PDF document".into());
     }
-    std::fs::write(&path, export.csv()).map_err(err)?;
-    Ok(LessonCsvResult {
-        file_name: path
-            .file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_default(),
-        path: path.to_string_lossy().into_owned(),
-        title: export.title,
-        questions: export.questions,
-        answer_key: export.answer_key,
-    })
+    let document = {
+        let conn = state.db.0.lock().unwrap();
+        crate::lesson_export::document(&conn, &source, &owner_id)?
+    };
+    let directory = lesson_directory(&app, &state, &document.class_label);
+    std::fs::create_dir_all(&directory).map_err(err)?;
+    let path = fresh_path(&directory, &document.file_stem, "pdf");
+    std::fs::write(&path, bytes).map_err(err)?;
+    Ok(file_result(&path, &document))
 }
 
 #[tauri::command]

@@ -39,7 +39,8 @@ import type {
   LanguageLessonView,
   LanguageProgramView,
   LanguageSessionResult,
-  LessonCsvResult,
+  LessonDocument,
+  LessonFileResult,
   PlannedSlot,
   SearchProvider,
   SearchResult,
@@ -1254,7 +1255,40 @@ export const mockApi = {
     return {today:dateAt(0), classes:programs.map(p=>({...p,completed_sessions:history.filter(h=>h.subject_id===p.subject_id && h.status==='completed').length})), completed_sessions:completed.length, study_days:dates.size, streak, activity:Array.from({length:28},(_,i)=>({date:dateAt(27-i),completed:completed.filter(h=>h.date===dateAt(27-i)).length})), history:matching.slice(page*8,page*8+8),history_total:matching.length,page,page_size:8};
   },
   getProgressLesson: async (_source: ProgressEntry['source'], _ownerId: string): Promise<ProgressLesson | null> => ({ title: 'Preview lesson', date: new Date().toISOString().slice(0,10), markdown: COURSE_MD, course_id: null, classroom_session_id: null, study_session_id: null }),
-  exportLessonCsv: async (_source: ProgressEntry['source'], ownerId: string): Promise<LessonCsvResult> => {
+  getLessonDocument: async (_source: ProgressEntry['source'], _ownerId: string): Promise<LessonDocument> => {
+    const lesson = mockEngineeringLesson(mockSelectedFocus);
+    return {
+      file_stem: `preview-${lesson.concept_slug}`,
+      class_label: lesson.label,
+      title: lesson.title,
+      topic: lesson.concept_title,
+      category: lesson.category,
+      date: new Date().toISOString().slice(0, 10),
+      status: 'in progress',
+      score: null,
+      tutor: lesson.agent_used,
+      answer_key: false,
+      research_note: lesson.research_note,
+      review_notes: lesson.review_notes,
+      markdown: lesson.markdown,
+      resources: lesson.resources,
+      exercise: lesson.exercise ? { title: lesson.exercise.title, instructions: lesson.exercise.instructions, deliverable: lesson.exercise.deliverable ?? null, starter_code: lesson.exercise.starter_code ?? null, hints: lesson.exercise.hints, draft: null, reflection: null, completed: false } : null,
+      questions: lesson.questions.map((question, index) => ({ position: index + 1, prompt: question.prompt, section: question.section, objective: question.learning_objective, choices: question.choices, correct_answer: null, explanation: null, your_answer: index === 0 ? question.choices[1] : null, result: null })),
+      language: null,
+    };
+  },
+  saveLessonPdf: async (_source: ProgressEntry['source'], ownerId: string, bytes: Uint8Array): Promise<LessonFileResult> => {
+    const lesson = mockEngineeringLesson(mockSelectedFocus);
+    const fileName = `preview-${ownerId}.pdf`;
+    if (typeof document !== 'undefined') {
+      const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+      const anchor = document.createElement('a');
+      anchor.href = url; anchor.download = fileName; anchor.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+    return { path: `~/Documents/Principia Desk/lessons/${lesson.label}/${fileName}`, file_name: fileName, title: lesson.title, questions: lesson.questions.length, answer_key: false };
+  },
+  exportLessonCsv: async (_source: ProgressEntry['source'], ownerId: string): Promise<LessonFileResult> => {
     // The desktop writes the file natively; the preview hands the browser a
     // small stand-in so the control can be exercised end to end.
     const lesson = mockEngineeringLesson(mockSelectedFocus);

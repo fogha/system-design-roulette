@@ -12,8 +12,9 @@
   import ExerciseWorkspace from '../components/ExerciseWorkspace.svelte';
   import Markdown from '../components/Markdown.svelte';
   import LessonMap from '../features/lessons/LessonMap.svelte';
+  import DownloadMenu from '../features/lessons/DownloadMenu.svelte';
   import type { LessonSection } from '../features/lessons/sections';
-  import { Download, ExternalLink, MessageCircle, Sparkles } from 'lucide-svelte';
+  import { ExternalLink, MessageCircle, Sparkles } from 'lucide-svelte';
 
   const lesson = $derived(app.engineeringLesson);
   let session = $state<LessonSession | null>(null);
@@ -105,23 +106,6 @@
   /** A Focused/Strict session that engaged the kiosk cannot be paused here. */
   const lockedHere = $derived(app.isFocusLocked(lesson?.session_id));
 
-  let downloading = $state(false);
-  /** Write this lesson and its questions as a CSV file; the key joins once the check is in. */
-  async function download() {
-    if (!lesson || !session || downloading) return;
-    downloading = true;
-    try {
-      const saved = await api.exportLessonCsv(session.study ? 'study' : 'classroom', lesson.session_id);
-      app.notify(
-        `Saved ${saved.file_name} with ${saved.questions} questions${saved.answer_key ? ' and the answer key' : '; the answer key joins once you submit the check'}.`,
-        { label: 'Show file', run: () => void api.revealExport(saved.path) },
-      );
-    } catch (error) {
-      app.error = String(error);
-    } finally {
-      downloading = false;
-    }
-  }
 
   async function leave() {
     if (result) {
@@ -193,9 +177,7 @@
   >
     {#snippet actions()}
       <span class="quality mono"><Sparkles size={11} /> {retrieval ? 'delayed retrieval' : 'isolated teacher'}</span>
-      <button class="chat-button" type="button" onclick={download} disabled={downloading} title="Save this lesson and its questions as a CSV file">
-        <Download size={12} /> {downloading ? 'saving…' : 'download csv'}
-      </button>
+      <DownloadMenu source={lesson.runtime === 'study' ? 'study' : 'classroom'} ownerId={lesson.session_id} compact />
       {#if !retrieval}<button
         class="chat-button"
         class:active={chatOpen}
