@@ -42,6 +42,10 @@
     ],
     "resources": {
       "../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md"
-    }
+    },
+    "shortDescription": "Understand deeply. Practice daily.",
+    "longDescription": "Principia Desk is a study desk for learning subjects from their foundations: classes with personal starting points, lessons taught by your own AI tutor from verified primary sources, durable appointments, and enforcement you choose per class.",
+    "publisher": "darkmatter",
+    "copyright": "Copyright 2026 darkmatter"
   }
 }

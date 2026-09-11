@@ -430,6 +430,7 @@ On the rebuilt bundle, the TypeScript Schedule tab listed today's appointment
 row's `updated_at` advanced and it stayed `scheduled` at 09:00 (screenshot 88).
 Under `--debug-day` the launch agent is not rewritten, so the OS-level wake-up
 for a moved time is covered by the command's refresh path rather than a
-capture. The rule row above it reads "Due now" from the legacy slot logic
-while the appointment itself is not yet due; that wording is left for the
-legacy-engine cleanup.
+capture. The rule row above it reads "Due now" because the QA app runs under
+`--debug-day`, where a scheduled appointment deliberately counts as startable;
+the appointment row shows the real disposition, and a normal launch shows the
+rule as due only when its appointment is due.
