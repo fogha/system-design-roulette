@@ -3653,21 +3653,21 @@
     "curriculum": {
       "phase": "foundations",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Structural typing and excess property checking when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Predict assignability between two shapes and explain when excess property checking applies.",
       "mechanisms": [
-        "The first-principles mechanism behind Structural typing and excess property checking",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The types trade-off and its failure boundary"
+        "structural assignability by members",
+        "excess property checks on fresh literals",
+        "weak type detection"
       ],
-      "production_scenario": "Apply Structural typing and excess property checking inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "An API accepts a literal with a typo silently after the value passes through a variable.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "Passing an object through a variable disables excess property checking; only fresh literals are checked."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "A minimal file whose diagnostics change when the literal is moved into a variable.",
+      "artifact": "An assignability cheat sheet verified against the compiler for five cases.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://www.typescriptlang.org/docs/handbook/type-compatibility.html",
+        "https://www.typescriptlang.org/docs/handbook/2/objects.html"
       ],
       "related_concepts": []
     }
@@ -3682,21 +3682,21 @@
     "curriculum": {
       "phase": "foundations",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Type layers: types, interfaces, and aliases when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Choose between type aliases and interfaces by their merging, extension and display behavior.",
       "mechanisms": [
-        "The first-principles mechanism behind Type layers: types, interfaces, and aliases",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The types trade-off and its failure boundary"
+        "declaration merging of interfaces",
+        "alias expansion in hover text",
+        "extends versus intersection"
       ],
-      "production_scenario": "Apply Type layers: types, interfaces, and aliases inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "A library's public types become unreadable in editor hovers after switching to intersections.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "Interfaces and aliases are not interchangeable: interfaces merge and stay named, aliases expand."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "Hover output and merged declarations captured for the same shape in both forms.",
+      "artifact": "A type-layering guideline with examples for public and internal types.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://www.typescriptlang.org/docs/handbook/2/everyday-types.html",
+        "https://www.typescriptlang.org/docs/handbook/declaration-merging.html"
       ],
       "related_concepts": []
     }
@@ -3713,21 +3713,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Contextual typing and bidirectional inference when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Trace how contextual types flow into callbacks and literals and where inference stops.",
       "mechanisms": [
-        "The first-principles mechanism behind Contextual typing and bidirectional inference",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The inference trade-off and its failure boundary"
+        "contextual typing from expected types",
+        "return type inference",
+        "widening of literals without context"
       ],
-      "production_scenario": "Apply Contextual typing and bidirectional inference inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "A callback parameter is implicitly any because the array it maps over lost its element type.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "Inference flows in both directions, but only through positions the compiler can see at the same time."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "A file annotated with the inferred type at each position from editor hovers.",
+      "artifact": "An inference notebook for three real functions with the annotations that fixed them.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://www.typescriptlang.org/docs/handbook/type-inference.html",
+        "https://www.typescriptlang.org/docs/handbook/2/functions.html"
       ],
       "related_concepts": []
     }
@@ -3744,21 +3744,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Generics, variance, and assignability rules when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Explain why a generic type is covariant, contravariant or invariant in a parameter and predict assignability.",
       "mechanisms": [
-        "The first-principles mechanism behind Generics, variance, and assignability rules",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The types trade-off and its failure boundary"
+        "method parameter bivariance",
+        "strictFunctionTypes contravariance",
+        "variance annotations"
       ],
-      "production_scenario": "Apply Generics, variance, and assignability rules inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "A repository typed on a base entity accepts a subtype and then writes the wrong shape.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "A generic container is not automatically assignable when its argument is; it depends on how the argument is used."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "A test file showing accepted and rejected assignments under strictFunctionTypes.",
+      "artifact": "A variance table for the codebase's generic abstractions.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://www.typescriptlang.org/docs/handbook/2/generics.html",
+        "https://www.typescriptlang.org/tsconfig/strictFunctionTypes.html"
       ],
       "related_concepts": []
     }
@@ -3775,21 +3775,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Type guards, narrowing, and discriminated unions when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Narrow unions with guards, discriminants and predicates and know where narrowing stops.",
       "mechanisms": [
-        "The first-principles mechanism behind Type guards, narrowing, and discriminated unions",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The narrowing trade-off and its failure boundary"
+        "control-flow narrowing",
+        "discriminant properties",
+        "user-defined type predicates"
       ],
-      "production_scenario": "Apply Type guards, narrowing, and discriminated unions inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "A predicate lies about a shape and a crash appears far from the check.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "A type predicate is trusted, not verified; the compiler does not check its body."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "A set of narrowing examples with the resulting types captured from hovers.",
+      "artifact": "A narrowing guideline with tested predicates for the domain's unions.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://www.typescriptlang.org/docs/handbook/2/narrowing.html",
+        "https://www.typescriptlang.org/docs/handbook/release-notes/typescript-4-4.html"
       ],
       "related_concepts": []
     }
@@ -3807,21 +3807,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Conditional and mapped type combinators when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Build mapped and conditional types that transform an existing shape without losing readability.",
       "mechanisms": [
-        "The first-principles mechanism behind Conditional and mapped type combinators",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The metatypes trade-off and its failure boundary"
+        "mapped type key remapping",
+        "distributive conditional types",
+        "infer in conditional branches"
       ],
-      "production_scenario": "Apply Conditional and mapped type combinators inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "A utility type distributes over a union unexpectedly and produces never for one input.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "A conditional type over a naked type parameter distributes over unions."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "A playground file showing distribution and its suppression with tuple wrapping.",
+      "artifact": "A small, documented utility-type module with tests.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://www.typescriptlang.org/docs/handbook/2/conditional-types.html",
+        "https://www.typescriptlang.org/docs/handbook/2/mapped-types.html"
       ],
       "related_concepts": []
     }
@@ -3838,21 +3838,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Template literal types and string manipulation types when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Model string formats with template literal types and keep them useful at call sites.",
       "mechanisms": [
-        "The first-principles mechanism behind Template literal types and string manipulation types",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The metatypes trade-off and its failure boundary"
+        "template literal pattern matching",
+        "intrinsic string manipulation types",
+        "union explosion limits"
       ],
-      "production_scenario": "Apply Template literal types and string manipulation types inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "An event-name type explodes into thousands of members and slows the editor.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "A template literal type is a pattern, not a validator; runtime strings still need checking."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "A type test that accepts valid names and rejects invalid ones with hover cost noted.",
+      "artifact": "A typed naming scheme with a documented size limit.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://www.typescriptlang.org/docs/handbook/2/template-literal-types.html",
+        "https://www.typescriptlang.org/docs/handbook/release-notes/typescript-4-1.html"
       ],
       "related_concepts": []
     }
@@ -3869,21 +3869,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply TypeScript compiler API: program, checker, emitter when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Create a program, ask the checker for types and emit output using the compiler API.",
       "mechanisms": [
-        "The first-principles mechanism behind TypeScript compiler API: program, checker, emitter",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The compiler trade-off and its failure boundary"
+        "program and source files",
+        "type checker queries",
+        "emit with custom transformers"
       ],
-      "production_scenario": "Apply TypeScript compiler API: program, checker, emitter inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "A codemod needs the resolved type of an expression, not its syntax.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "The parser knows syntax; only the checker knows types, and it needs a full program."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "A script that prints the checker's type for a selected node.",
+      "artifact": "A small analysis tool built on the compiler API with tests.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://github.com/microsoft/TypeScript/wiki/Using-the-Compiler-API",
+        "https://github.com/microsoft/TypeScript/wiki/Architectural-Overview"
       ],
       "related_concepts": []
     }
@@ -3900,21 +3900,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Declaration emit, .d.ts rollups, and visibility when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Emit declarations that expose exactly the intended public surface.",
       "mechanisms": [
-        "The first-principles mechanism behind Declaration emit, .d.ts rollups, and visibility",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The compiler trade-off and its failure boundary"
+        "declaration emit from checked types",
+        "declaration maps",
+        "isolated declarations"
       ],
-      "production_scenario": "Apply Declaration emit, .d.ts rollups, and visibility inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "A private helper type appears in the package's public declarations because an exported function infers it.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "Declaration emit publishes whatever exported signatures reference, including internal types."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "A diff of emitted declarations before and after annotating public signatures.",
+      "artifact": "A published declaration surface reviewed against the intended API.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://www.typescriptlang.org/tsconfig/declaration.html",
+        "https://www.typescriptlang.org/tsconfig/isolatedDeclarations.html"
       ],
       "related_concepts": []
     }
@@ -3931,21 +3931,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply TypeScript 6 module resolution: bundler, node16/nodenext, and package exports when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Choose a module resolution mode and match it to the runtime and the package exports map.",
       "mechanisms": [
-        "The first-principles mechanism behind TypeScript 6 module resolution: bundler, node16/nodenext, and package exports",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The modules trade-off and its failure boundary"
+        "bundler versus node16 resolution",
+        "exports map conditions",
+        "extension requirements in ESM"
       ],
-      "production_scenario": "Apply TypeScript 6 module resolution: bundler, node16/nodenext, and package exports inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "A package resolves in the bundler but fails at runtime because the exports map lacks a types condition.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "The compiler resolving an import proves nothing about the runtime resolving it."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "A resolution trace from --traceResolution for one failing import.",
+      "artifact": "A resolution configuration with an exports-map test for consumers.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://www.typescriptlang.org/docs/handbook/modules/reference.html",
+        "https://www.typescriptlang.org/docs/handbook/modules/theory.html"
       ],
       "related_concepts": []
     }
@@ -3963,21 +3963,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Project references and incremental build graphs when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Structure a multi-project build with references so builds are incremental and ordered.",
       "mechanisms": [
-        "The first-principles mechanism behind Project references and incremental build graphs",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The build trade-off and its failure boundary"
+        "composite projects",
+        "tsbuildinfo incremental state",
+        "solution build ordering"
       ],
-      "production_scenario": "Apply Project references and incremental build graphs inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "A monorepo type-checks everything on every change and CI takes twenty minutes.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "References are not just for speed; they also stop one project from reaching another's unbuilt sources."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "A --verbose build log showing skipped up-to-date projects.",
+      "artifact": "A references graph for one workspace with measured rebuild times.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://www.typescriptlang.org/docs/handbook/project-references.html",
+        "https://www.typescriptlang.org/tsconfig/composite.html"
       ],
       "related_concepts": []
     }
@@ -3995,21 +3995,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Control-flow analysis and definite assignment when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Explain definite assignment and how control flow changes a variable's type across branches.",
       "mechanisms": [
-        "The first-principles mechanism behind Control-flow analysis and definite assignment",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The inference trade-off and its failure boundary"
+        "definite assignment analysis",
+        "aliased conditions",
+        "narrowing reset on assignment"
       ],
-      "production_scenario": "Apply Control-flow analysis and definite assignment inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "A variable is used before assignment in one branch and the compiler reports it only after enabling strict.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "Narrowing is per flow node; an assignment anywhere in the flow resets it."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "A file showing narrowed types before and after an intervening assignment.",
+      "artifact": "A control-flow guideline with examples of resets and aliases.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://www.typescriptlang.org/docs/handbook/2/narrowing.html",
+        "https://www.typescriptlang.org/tsconfig/strictPropertyInitialization.html"
       ],
       "related_concepts": []
     }
@@ -4026,21 +4026,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Branded types, opaque aliases, and nominal patterns when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Create nominal-like types with brands so two structurally identical values cannot be confused.",
       "mechanisms": [
-        "The first-principles mechanism behind Branded types, opaque aliases, and nominal patterns",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The patterns trade-off and its failure boundary"
+        "intersection with a phantom brand",
+        "constructor functions as the only source",
+        "unbranding at boundaries"
       ],
-      "production_scenario": "Apply Branded types, opaque aliases, and nominal patterns inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "A user id and an order id are both strings and a lookup swaps them silently.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "A brand is a compile-time discipline; it adds no runtime check."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "A test showing the swapped ids rejected by the compiler.",
+      "artifact": "A branded id module used at the domain boundaries.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://www.typescriptlang.org/docs/handbook/2/objects.html#intersection-types",
+        "https://www.typescriptlang.org/docs/handbook/declaration-files/do-s-and-don-ts.html"
       ],
       "related_concepts": []
     }
@@ -4057,21 +4057,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply The satisfies operator and type preservation when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Check a value against a type with satisfies while keeping its inferred, narrower type.",
       "mechanisms": [
-        "The first-principles mechanism behind The satisfies operator and type preservation",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The inference trade-off and its failure boundary"
+        "assignability check without widening",
+        "preserved literal types",
+        "contrast with as assertions"
       ],
-      "production_scenario": "Apply The satisfies operator and type preservation inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "A configuration object annotated with its type loses literal keys and autocomplete downstream.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "satisfies checks a value; an as assertion overrides the checker."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "Hover output comparing annotation, assertion and satisfies for the same object.",
+      "artifact": "A configuration module using satisfies with preserved literals.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://www.typescriptlang.org/docs/handbook/release-notes/typescript-4-9.html",
+        "https://www.typescriptlang.org/docs/handbook/2/everyday-types.html"
       ],
       "related_concepts": []
     }
@@ -4088,21 +4088,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Downlevel emit, helpers, and polyfill boundaries when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Predict what downlevel emit generates for a target and where helpers and polyfills are needed.",
       "mechanisms": [
-        "The first-principles mechanism behind Downlevel emit, helpers, and polyfill boundaries",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The compiler trade-off and its failure boundary"
+        "target-dependent syntax lowering",
+        "tslib helpers",
+        "lib versus polyfill responsibility"
       ],
-      "production_scenario": "Apply Downlevel emit, helpers, and polyfill boundaries inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "A build for older browsers ships async generators that crash without a regenerator runtime.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "Setting lib makes a type available; it does not add the runtime."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "Emitted output for one file at two targets with helper imports highlighted.",
+      "artifact": "A target and polyfill policy with a verified output sample.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://www.typescriptlang.org/tsconfig/target.html",
+        "https://www.typescriptlang.org/tsconfig/importHelpers.html"
       ],
       "related_concepts": []
     }
@@ -4119,21 +4119,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Standard decorators vs legacy experimental decorators and metadata emit when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Distinguish standard decorators from legacy experimental decorators and their metadata behavior.",
       "mechanisms": [
-        "The first-principles mechanism behind Standard decorators vs legacy experimental decorators and metadata emit",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The compiler trade-off and its failure boundary"
+        "standard decorator signatures",
+        "experimentalDecorators and emitDecoratorMetadata",
+        "migration constraints"
       ],
-      "production_scenario": "Apply Standard decorators vs legacy experimental decorators and metadata emit inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "A dependency-injection library breaks after standard decorators become the default.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "The two decorator systems are different features with different signatures, not versions of one."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "A file compiled under both flags with the resulting emit compared.",
+      "artifact": "A decorator migration note for one framework integration.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://www.typescriptlang.org/docs/handbook/release-notes/typescript-5-0.html",
+        "https://www.typescriptlang.org/tsconfig/experimentalDecorators.html"
       ],
       "related_concepts": []
     }
@@ -4151,21 +4151,21 @@
     "curriculum": {
       "phase": "synthesis",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply tsserver performance and solution-style builds when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Diagnose slow type checking and editor latency and restructure builds to fix it.",
       "mechanisms": [
-        "The first-principles mechanism behind tsserver performance and solution-style builds",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The build trade-off and its failure boundary"
+        "extended diagnostics",
+        "solution-style builds",
+        "type instantiation hot spots"
       ],
-      "production_scenario": "Apply tsserver performance and solution-style builds inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "Hovering a component takes seconds because one utility type instantiates millions of times.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "Editor slowness is usually a few expensive types, not the size of the codebase."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "A --extendedDiagnostics and --generateTrace report identifying the hot type.",
+      "artifact": "A performance fix with before and after diagnostics.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://github.com/microsoft/TypeScript/wiki/Performance",
+        "https://www.typescriptlang.org/tsconfig/generateTrace.html"
       ],
       "related_concepts": []
     }
@@ -4183,21 +4183,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Type erasure limits and runtime type contracts when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Explain what erasure removes and design runtime contracts where types cannot help.",
       "mechanisms": [
-        "The first-principles mechanism behind Type erasure limits and runtime type contracts",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The runtime trade-off and its failure boundary"
+        "erased types and enums",
+        "instanceof and typeof at runtime",
+        "runtime validation at boundaries"
       ],
-      "production_scenario": "Apply Type erasure limits and runtime type contracts inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "A JSON payload typed as User crashes because a field is missing at runtime.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "A type annotation on parsed data is a claim, not a check."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "A demonstration of erased types in emitted JavaScript next to the runtime failure.",
+      "artifact": "A boundary contract with runtime checks where types are erased.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://www.typescriptlang.org/docs/handbook/2/basic-types.html",
+        "https://www.typescriptlang.org/docs/handbook/2/narrowing.html"
       ],
       "related_concepts": []
     }
@@ -4214,21 +4214,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Typing generic, polymorphic component props when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Type generic and polymorphic component props without losing inference at call sites.",
       "mechanisms": [
-        "The first-principles mechanism behind Typing generic, polymorphic component props",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The components trade-off and its failure boundary"
+        "generic components",
+        "as-prop polymorphism",
+        "inference from children and callbacks"
       ],
-      "production_scenario": "Apply Typing generic, polymorphic component props inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "A polymorphic button loses its element props once the as prop is generic.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "Generic props must be inferred from the call site; explicit annotations at the definition do not help callers."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "Hover output at a call site showing inferred props for two element types.",
+      "artifact": "A polymorphic component with typed tests.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://www.typescriptlang.org/docs/handbook/2/generics.html",
+        "https://www.typescriptlang.org/docs/handbook/jsx.html"
       ],
       "related_concepts": []
     }
@@ -4245,21 +4245,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Discriminated unions as compile-time state machines when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Model async and UI states as discriminated unions so impossible combinations cannot compile.",
       "mechanisms": [
-        "The first-principles mechanism behind Discriminated unions as compile-time state machines",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The patterns trade-off and its failure boundary"
+        "discriminant literals",
+        "transition functions over unions",
+        "exhaustive switches"
       ],
-      "production_scenario": "Apply Discriminated unions as compile-time state machines inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "A component renders a spinner and an error at once because two booleans were both true.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "Optional fields on one object cannot express mutually exclusive states."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "A type test showing an impossible state rejected by the compiler.",
+      "artifact": "A state model for one feature with transitions and tests.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://www.typescriptlang.org/docs/handbook/2/narrowing.html#discriminated-unions",
+        "https://www.typescriptlang.org/docs/handbook/2/everyday-types.html#union-types"
       ],
       "related_concepts": []
     }
@@ -4276,21 +4276,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Exhaustiveness checking with never and assertUnreachable when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Make missing cases a compile error with never and assertUnreachable.",
       "mechanisms": [
-        "The first-principles mechanism behind Exhaustiveness checking with never and assertUnreachable",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The narrowing trade-off and its failure boundary"
+        "never as the exhausted union",
+        "default-branch assertion",
+        "switch(true) patterns"
       ],
-      "production_scenario": "Apply Exhaustiveness checking with never and assertUnreachable inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "A new union member is added and a switch silently returns undefined in production.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "A default branch that returns a fallback hides the missing case instead of reporting it."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "A compile error produced by adding a member to the union.",
+      "artifact": "An assertUnreachable helper adopted across the domain's switches.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://www.typescriptlang.org/docs/handbook/2/narrowing.html#exhaustiveness-checking",
+        "https://www.typescriptlang.org/docs/handbook/2/functions.html#never"
       ],
       "related_concepts": []
     }
@@ -4307,21 +4307,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Type-safe event emitters and pub/sub contracts when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Type an event emitter so each event name carries its payload type.",
       "mechanisms": [
-        "The first-principles mechanism behind Type-safe event emitters and pub/sub contracts",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The patterns trade-off and its failure boundary"
+        "mapped event maps",
+        "overloads versus generics for on and emit",
+        "listener variance"
       ],
-      "production_scenario": "Apply Type-safe event emitters and pub/sub contracts inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "A listener receives the wrong payload because event names are plain strings.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "A string union for names is not enough; the payload must be tied to the name."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "A type test rejecting a mismatched payload at emit and on.",
+      "artifact": "A typed emitter used for one subsystem with tests.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://www.typescriptlang.org/docs/handbook/2/mapped-types.html",
+        "https://www.typescriptlang.org/docs/handbook/2/generics.html"
       ],
       "related_concepts": []
     }
@@ -4338,21 +4338,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Ambient declarations and extending global or browser APIs safely when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Extend global or browser types safely with ambient declarations and module augmentation.",
       "mechanisms": [
-        "The first-principles mechanism behind Ambient declarations and extending global or browser APIs safely",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The types trade-off and its failure boundary"
+        "declare global blocks",
+        "module augmentation",
+        "script versus module files"
       ],
-      "production_scenario": "Apply Ambient declarations and extending global or browser APIs safely inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "A window property is typed in one file and disappears once the file becomes a module.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "A file with an import or export is a module; its declare global must be explicit."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "A declaration file that augments a global with a test file using it.",
+      "artifact": "A typings directory with documented augmentation rules.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://www.typescriptlang.org/docs/handbook/declaration-merging.html#global-augmentation",
+        "https://www.typescriptlang.org/docs/handbook/declaration-files/templates/global-d-ts.html"
       ],
       "related_concepts": []
     }
@@ -4369,21 +4369,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply What each strict compiler flag actually changes in real code when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Enable each strict flag deliberately and estimate the diagnostics it will produce.",
       "mechanisms": [
-        "The first-principles mechanism behind What each strict compiler flag actually changes in real code",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The compiler trade-off and its failure boundary"
+        "noImplicitAny",
+        "strictNullChecks",
+        "exactOptionalPropertyTypes"
       ],
-      "production_scenario": "Apply What each strict compiler flag actually changes in real code inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "Turning on strict in a large codebase produces thousands of errors and the migration stalls.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "strict is a bundle; enabling flags one at a time makes the blast radius measurable."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "A diagnostics count per flag for the codebase.",
+      "artifact": "A flag-by-flag migration plan with counts and owners.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://www.typescriptlang.org/tsconfig/strict.html",
+        "https://www.typescriptlang.org/tsconfig/exactOptionalPropertyTypes.html"
       ],
       "related_concepts": []
     }
@@ -4401,21 +4401,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Bridging static types and runtime validation at the network edge when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Validate untrusted data at the network edge and derive the static type from the validator.",
       "mechanisms": [
-        "The first-principles mechanism behind Bridging static types and runtime validation at the network edge",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The validation trade-off and its failure boundary"
+        "schema-derived types",
+        "parse, do not validate",
+        "boundary placement"
       ],
-      "production_scenario": "Apply Bridging static types and runtime validation at the network edge inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "A backend field rename ships and the frontend crashes deep inside rendering.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "A generated type describes what the server promises, not what it sent."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "A failing payload rejected at the boundary with the derived type unchanged.",
+      "artifact": "A boundary module with schemas and derived types for one API.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://www.typescriptlang.org/docs/handbook/2/narrowing.html",
+        "https://www.typescriptlang.org/docs/handbook/2/everyday-types.html"
       ],
       "related_concepts": [
         "fa-testing-contracts"
@@ -4435,21 +4435,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Generating typed API clients from OpenAPI and GraphQL schemas when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Generate typed clients from OpenAPI or GraphQL schemas and keep them honest at runtime.",
       "mechanisms": [
-        "The first-principles mechanism behind Generating typed API clients from OpenAPI and GraphQL schemas",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The tooling trade-off and its failure boundary"
+        "schema to type generation",
+        "operation typing",
+        "drift detection in CI"
       ],
-      "production_scenario": "Apply Generating typed API clients from OpenAPI and GraphQL schemas inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "The generated client is a week behind the deployed API and returns fields that no longer exist.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "Generated types are only as current as the schema they were generated from."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "A CI check that regenerates and diffs the client against the live schema.",
+      "artifact": "A generated client with a drift check in the pipeline.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://github.com/OpenAPITools/openapi-generator",
+        "https://www.typescriptlang.org/docs/handbook/modules/reference.html"
       ],
       "related_concepts": []
     }
@@ -4467,21 +4467,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Typing generic data-fetching and async state hooks when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Type a generic data-fetching hook whose result type follows the request.",
       "mechanisms": [
-        "The first-principles mechanism behind Typing generic data-fetching and async state hooks",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The patterns trade-off and its failure boundary"
+        "generic result unions",
+        "inference from a fetcher function",
+        "stale and error states typed"
       ],
-      "production_scenario": "Apply Typing generic data-fetching and async state hooks inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "Every call site casts the hook's data because the generic parameter is never inferred.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "A generic that must be specified by hand at every call is a sign the inference source is missing."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "Hover output at call sites showing inferred data types.",
+      "artifact": "A typed hook with tests for inference and states.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://www.typescriptlang.org/docs/handbook/2/generics.html",
+        "https://www.typescriptlang.org/docs/handbook/2/functions.html"
       ],
       "related_concepts": []
     }
@@ -4499,21 +4499,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Sharing types across a monorepo without circular builds when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Share types across packages without circular builds or duplicated declarations.",
       "mechanisms": [
-        "The first-principles mechanism behind Sharing types across a monorepo without circular builds",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The build trade-off and its failure boundary"
+        "type-only imports",
+        "project references across packages",
+        "exports for types"
       ],
-      "production_scenario": "Apply Sharing types across a monorepo without circular builds inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "Two packages import each other's types and the solution build cannot order them.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "Importing a type still creates a project dependency for the build graph."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "A references graph with the cycle removed and the build order shown.",
+      "artifact": "A shared-types package with a documented dependency direction.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://www.typescriptlang.org/docs/handbook/project-references.html",
+        "https://www.typescriptlang.org/docs/handbook/modules/reference.html#type-only-imports-and-exports"
       ],
       "related_concepts": []
     }
@@ -5750,21 +5750,21 @@
     "curriculum": {
       "phase": "foundations",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply unknown, any, never, and where type safety actually disappears when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Recognize where checking stops and choose unknown, any or never deliberately.",
       "mechanisms": [
-        "The first-principles mechanism behind unknown, any, never, and where type safety actually disappears",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The types trade-off and its failure boundary"
+        "unknown requiring narrowing",
+        "any propagating through derived values",
+        "never for exhaustiveness"
       ],
-      "production_scenario": "Apply unknown, any, never, and where type safety actually disappears inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "A payload typed any reaches a public function and a runtime crash looks like a compiler guarantee.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "An assertion is an unchecked promise, not a check."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "A file whose diagnostics change when any becomes unknown.",
+      "artifact": "A boundary moved from any to unknown with narrowing and documented assertions.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://www.typescriptlang.org/docs/handbook/2/everyday-types.html",
+        "https://www.typescriptlang.org/tsconfig/useUnknownInCatchVariables.html"
       ],
       "related_concepts": []
     }
@@ -5779,21 +5779,21 @@
     "curriculum": {
       "phase": "foundations",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Function contracts: parameters, callbacks, overloads, and assignability when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Type parameters, callbacks and overloads so callers get correct inference and errors.",
       "mechanisms": [
-        "The first-principles mechanism behind Function contracts: parameters, callbacks, overloads, and assignability",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The types trade-off and its failure boundary"
+        "parameter bivariance in methods",
+        "overload resolution order",
+        "callback parameter inference"
       ],
-      "production_scenario": "Apply Function contracts: parameters, callbacks, overloads, and assignability inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "An overloaded function accepts an argument combination no implementation handles.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "Overload signatures are checked in order; the implementation signature is not visible to callers."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "A test showing a rejected call and the overload that matched.",
+      "artifact": "A function contract guideline with reviewed overloads.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://www.typescriptlang.org/docs/handbook/2/functions.html",
+        "https://www.typescriptlang.org/docs/handbook/2/functions.html#function-overloads"
       ],
       "related_concepts": []
     }
@@ -5808,21 +5808,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply Literal inference, as const, readonly, and immutable data shapes when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Preserve literal types with as const, readonly and satisfies where the value's exact shape matters.",
       "mechanisms": [
-        "The first-principles mechanism behind Literal inference, as const, readonly, and immutable data shapes",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The inference trade-off and its failure boundary"
+        "literal widening rules",
+        "as const readonly tuples",
+        "const type parameters"
       ],
-      "production_scenario": "Apply Literal inference, as const, readonly, and immutable data shapes inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "A route table loses its literal paths and links accept any string.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "A literal is widened unless something asks for it to stay narrow."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "Hover output showing widened versus preserved literals.",
+      "artifact": "A constants module with preserved literals and tests.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://www.typescriptlang.org/docs/handbook/release-notes/typescript-3-4.html#const-assertions",
+        "https://www.typescriptlang.org/docs/handbook/release-notes/typescript-5-0.html#const-type-parameters"
       ],
       "related_concepts": []
     }
@@ -5837,21 +5837,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply Modeling product states with unions instead of optional-field bags when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Model states as unions of complete shapes instead of one object with optional fields.",
       "mechanisms": [
-        "The first-principles mechanism behind Modeling product states with unions instead of optional-field bags",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The patterns trade-off and its failure boundary"
+        "sum types versus product types",
+        "required fields per state",
+        "narrowing by discriminant"
       ],
-      "production_scenario": "Apply Modeling product states with unions instead of optional-field bags inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "A form model with twelve optional fields allows states no screen can render.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "Optional fields do not encode which combinations are valid."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "A type test rejecting an invalid combination.",
+      "artifact": "A remodelled domain type with migration notes.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://www.typescriptlang.org/docs/handbook/2/everyday-types.html#union-types",
+        "https://www.typescriptlang.org/docs/handbook/2/narrowing.html#discriminated-unions"
       ],
       "related_concepts": []
     }
@@ -5866,21 +5866,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply Designing readable public types for components and packages when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Design public types that read well in hovers and stay stable across releases.",
       "mechanisms": [
-        "The first-principles mechanism behind Designing readable public types for components and packages",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The api design trade-off and its failure boundary"
+        "named types over inline shapes",
+        "input versus output types",
+        "deprecation with JSDoc"
       ],
-      "production_scenario": "Apply Designing readable public types for components and packages inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "A package's hover shows a two-hundred-line expanded type and users give up.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "A clever type that is correct but unreadable is a bad public contract."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "Hover captures before and after naming the public types.",
+      "artifact": "A reviewed public type surface with a changelog.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://www.typescriptlang.org/docs/handbook/declaration-files/do-s-and-don-ts.html",
+        "https://www.typescriptlang.org/docs/handbook/jsdoc-supported-types.html"
       ],
       "related_concepts": []
     }
@@ -5898,21 +5898,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply Const type parameters and preserving literal intent through APIs when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Keep literal intent through generic APIs with const type parameters.",
       "mechanisms": [
-        "The first-principles mechanism behind Const type parameters and preserving literal intent through APIs",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The generics trade-off and its failure boundary"
+        "const modifier on type parameters",
+        "inference of readonly tuples",
+        "interaction with defaults"
       ],
-      "production_scenario": "Apply Const type parameters and preserving literal intent through APIs inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "A builder loses the literal keys passed to it and returns string.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "Callers should not need as const at every call site to keep literals."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "Hover output with and without the const modifier.",
+      "artifact": "A builder API preserving literals with tests.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://www.typescriptlang.org/docs/handbook/release-notes/typescript-5-0.html#const-type-parameters",
+        "https://www.typescriptlang.org/docs/handbook/2/generics.html"
       ],
       "related_concepts": []
     }
@@ -5930,21 +5930,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply Type-safe route params, search params, links, and loader contracts when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Type route params, search params and links so navigation targets are checked at compile time.",
       "mechanisms": [
-        "The first-principles mechanism behind Type-safe route params, search params, links, and loader contracts",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The application contracts trade-off and its failure boundary"
+        "template literal route patterns",
+        "param extraction types",
+        "loader contract typing"
       ],
-      "production_scenario": "Apply Type-safe route params, search params, links, and loader contracts inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "A renamed route breaks links across the app without any compiler error.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "A string path is not a route; typing it as a literal pattern lets the compiler check links."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "A type test rejecting a link to a nonexistent route.",
+      "artifact": "A typed router module with link and param tests.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://www.typescriptlang.org/docs/handbook/2/template-literal-types.html",
+        "https://www.typescriptlang.org/docs/handbook/2/conditional-types.html"
       ],
       "related_concepts": []
     }
@@ -5962,21 +5962,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply Typed forms without lying: DOM values, schemas, and submission states when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Type forms from DOM values through validation to submission states without lying about what exists.",
       "mechanisms": [
-        "The first-principles mechanism behind Typed forms without lying: DOM values, schemas, and submission states",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The validation trade-off and its failure boundary"
+        "FormData as strings",
+        "schema parse to domain type",
+        "submission state union"
       ],
-      "production_scenario": "Apply Typed forms without lying: DOM values, schemas, and submission states inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "A form's typed model claims numbers while every field arrives as a string.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "Input values are strings until something parses them."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "A test showing the string-to-domain parse and a rejected invalid input.",
+      "artifact": "A form contract with schema and submission states.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://www.typescriptlang.org/docs/handbook/2/narrowing.html",
+        "https://www.typescriptlang.org/docs/handbook/2/everyday-types.html"
       ],
       "related_concepts": []
     }
@@ -5993,21 +5993,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply Type-safe environment and runtime configuration boundaries when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Validate environment and runtime configuration once and expose a typed, frozen config.",
       "mechanisms": [
-        "The first-principles mechanism behind Type-safe environment and runtime configuration boundaries",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The validation trade-off and its failure boundary"
+        "process.env as strings or undefined",
+        "startup validation",
+        "typed config object"
       ],
-      "production_scenario": "Apply Type-safe environment and runtime configuration boundaries inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "A missing environment variable is read as undefined deep in a request handler.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "Declaring an env variable's type does not make it present."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "A startup failure with a clear message for a missing variable.",
+      "artifact": "A validated configuration module with tests.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://nodejs.org/api/process.html#processenv",
+        "https://www.typescriptlang.org/docs/handbook/2/everyday-types.html"
       ],
       "related_concepts": []
     }
@@ -6025,21 +6025,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply Type-aware lint rules, program reuse, and CI performance when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Run type-aware lint rules with program reuse so CI stays fast.",
       "mechanisms": [
-        "The first-principles mechanism behind Type-aware lint rules, program reuse, and CI performance",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The tooling trade-off and its failure boundary"
+        "parser services with type information",
+        "program caching",
+        "rule cost profiling"
       ],
-      "production_scenario": "Apply Type-aware lint rules, program reuse, and CI performance inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "Type-aware linting doubles CI time because each file builds its own program.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "Type-aware rules need a program; building one per file is the slow path."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "A timing comparison with and without project service reuse.",
+      "artifact": "A lint configuration with measured CI time.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://github.com/typescript-eslint/typescript-eslint",
+        "https://github.com/microsoft/TypeScript/wiki/Performance"
       ],
       "related_concepts": []
     }
@@ -6057,21 +6057,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply Package exports, declaration maps, and ESM-first library publishing when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Publish an ESM-first library with an exports map, declarations and declaration maps that consumers resolve correctly.",
       "mechanisms": [
-        "The first-principles mechanism behind Package exports, declaration maps, and ESM-first library publishing",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The modules trade-off and its failure boundary"
+        "exports conditions",
+        "types condition ordering",
+        "declaration maps for go-to-source"
       ],
-      "production_scenario": "Apply Package exports, declaration maps, and ESM-first library publishing inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "Consumers on node16 resolution cannot find the package's types.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "A types field at the top level does not satisfy an exports map; the condition must be inside it."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "A consumer test project resolving types under two resolution modes.",
+      "artifact": "A publishing checklist with a resolution test.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://www.typescriptlang.org/docs/handbook/modules/reference.html#packagejson-exports",
+        "https://www.typescriptlang.org/tsconfig/declarationMap.html"
       ],
       "related_concepts": []
     }
@@ -6089,21 +6089,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply Type complexity budgets: inference cliffs and editor latency when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Set and enforce budgets for type complexity so editors stay responsive.",
       "mechanisms": [
-        "The first-principles mechanism behind Type complexity budgets: inference cliffs and editor latency",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The performance trade-off and its failure boundary"
+        "instantiation counts",
+        "recursion depth limits",
+        "measurable inference cliffs"
       ],
-      "production_scenario": "Apply Type complexity budgets: inference cliffs and editor latency inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "A single utility type makes every file that imports it slow to type-check.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "The compiler's limits are not the budget; editor latency is."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "A trace identifying the expensive instantiation.",
+      "artifact": "A complexity budget with a CI check on diagnostics.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://www.typescriptlang.org/tsconfig/generateTrace.html",
+        "https://github.com/microsoft/TypeScript/wiki/Performance"
       ],
       "related_concepts": []
     }
@@ -6122,21 +6122,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply TypeScript 6 deprecations and migration toward the TypeScript 7 native compiler when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Prepare a codebase for the native compiler by removing deprecated options and verifying parity.",
       "mechanisms": [
-        "The first-principles mechanism behind TypeScript 6 deprecations and migration toward the TypeScript 7 native compiler",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The migration trade-off and its failure boundary"
+        "deprecated compiler options",
+        "native compiler flag coverage",
+        "parity checks in CI"
       ],
-      "production_scenario": "Apply TypeScript 6 deprecations and migration toward the TypeScript 7 native compiler inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "The native compiler rejects an option the JavaScript compiler still accepts.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "A faster compiler with different flag coverage is a migration, not a drop-in swap."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "A CI job running both compilers with differences listed.",
+      "artifact": "A migration note with recorded versions and unsupported options.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://github.com/microsoft/typescript-go",
+        "https://www.typescriptlang.org/docs/handbook/release-notes/typescript-5-0.html"
       ],
       "related_concepts": []
     }
@@ -7895,21 +7895,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Explicit resource management with using and DisposableStack when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Release resources deterministically with using declarations and DisposableStack.",
       "mechanisms": [
-        "The first-principles mechanism behind Explicit resource management with using and DisposableStack",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The patterns trade-off and its failure boundary"
+        "Symbol.dispose contracts",
+        "using scope exit ordering",
+        "DisposableStack composition"
       ],
-      "production_scenario": "Apply Explicit resource management with using and DisposableStack inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "File handles leak when an early return skips the cleanup call.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "using disposes at scope exit even on exceptions; manual cleanup does not."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "A test showing disposal order on normal exit and on throw.",
+      "artifact": "A resource wrapper adopted for one subsystem.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://www.typescriptlang.org/docs/handbook/release-notes/typescript-5-2.html",
+        "https://github.com/tc39/proposal-explicit-resource-management"
       ],
       "related_concepts": []
     }
@@ -7926,21 +7926,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Runtime schema architecture: Zod, Valibot, and generated validators when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Choose and structure runtime schema libraries so validation and static types stay in one place.",
       "mechanisms": [
-        "The first-principles mechanism behind Runtime schema architecture: Zod, Valibot, and generated validators",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The validation trade-off and its failure boundary"
+        "schema-first types",
+        "bundle size and tree-shaking",
+        "generated versus hand-written validators"
       ],
-      "production_scenario": "Apply Runtime schema architecture: Zod, Valibot, and generated validators inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "Three validation libraries coexist and the same payload is validated three different ways.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "A schema library is an architecture decision, not a utility import."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "A comparison of bundle size and inference for the same schema.",
+      "artifact": "A schema architecture record with one chosen approach.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://github.com/colinhacks/zod",
+        "https://github.com/fabian-hiller/valibot"
       ],
       "related_concepts": [
         "fa-consumer-contract-testing"
@@ -7960,21 +7960,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Typing server actions and serialized React boundaries when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Type server actions and serialized boundaries so only serializable values cross.",
       "mechanisms": [
-        "The first-principles mechanism behind Typing server actions and serialized React boundaries",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The application contracts trade-off and its failure boundary"
+        "serializable prop constraints",
+        "action input and result types",
+        "server-only markers"
       ],
-      "production_scenario": "Apply Typing server actions and serialized React boundaries inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "A server component passes a class instance to a client component and it arrives as a plain object.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "A type that is valid on both sides may still be unserializable across the boundary."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "A type test rejecting a function-valued prop across the boundary.",
+      "artifact": "A boundary typing module with tests.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://www.typescriptlang.org/docs/handbook/jsx.html",
+        "https://github.com/reactjs/rfcs/blob/main/text/0188-server-components.md"
       ],
       "related_concepts": []
     }
@@ -7991,21 +7991,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Svelte 5 runes and component contract typing when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Type Svelte 5 component props, snippets and rune state as contracts.",
       "mechanisms": [
-        "The first-principles mechanism behind Svelte 5 runes and component contract typing",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The components trade-off and its failure boundary"
+        "$props typing",
+        "Snippet types",
+        "generic components"
       ],
-      "production_scenario": "Apply Svelte 5 runes and component contract typing inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "A component's prop types drift from what parents pass because they were never declared.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "Runes infer state, but component contracts still need explicit prop types."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "A svelte-check run showing a rejected prop at a call site.",
+      "artifact": "A typed component library slice with checks in CI.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://github.com/sveltejs/svelte/tree/main/documentation/docs",
+        "https://www.typescriptlang.org/docs/handbook/2/generics.html"
       ],
       "related_concepts": []
     }
@@ -8022,21 +8022,21 @@
     "curriculum": {
       "phase": "synthesis",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Operating the native TypeScript compiler in editor, CI, and monorepo workflows when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Run the language service, tsc -b and the native compiler on one workspace and reconcile their results.",
       "mechanisms": [
-        "The first-principles mechanism behind Operating the native TypeScript compiler in editor, CI, and monorepo workflows",
-        "compile-time inference, assignability, and the runtime boundary the type system cannot prove",
-        "The compiler trade-off and its failure boundary"
+        "shared tsconfig across three inspections",
+        "project references and exports",
+        "recorded version differences"
       ],
-      "production_scenario": "Apply Operating the native TypeScript compiler in editor, CI, and monorepo workflows inside a public frontend package or multi-team application contract that must stay readable, safe, and fast in editors and CI.",
+      "production_scenario": "CI passes with the native compiler while developers see a diagnostic the JavaScript compiler reports.",
       "misconceptions": [
-        "Assuming a sophisticated type guarantees runtime truth or is automatically a maintainable public contract."
+        "Three tools reading one tsconfig can still disagree; differences must be recorded, not assumed away."
       ],
-      "evidence": "Compiler diagnostics, declaration output, type-level tests, and a runtime boundary test that expose both guarantees and limits.",
-      "artifact": "Extend the cumulative type-safe frontend package with a readable contract, migration note, and explicit soundness boundary.",
+      "evidence": "A CI log running both compilers with the diagnostics compared.",
+      "artifact": "A package shipped through all three inspections with a migration note.",
       "primary_sources": [
-        "https://www.typescriptlang.org/docs/",
-        "https://github.com/microsoft/TypeScript/wiki"
+        "https://github.com/microsoft/typescript-go",
+        "https://www.typescriptlang.org/docs/handbook/project-references.html"
       ],
       "related_concepts": []
     }
