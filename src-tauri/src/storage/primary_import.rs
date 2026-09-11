@@ -8,6 +8,30 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
+/// Shape of the retired daily quiz result (`quiz_result:*` config rows). The
+/// screens that produced it are gone; the import still recognises the bytes.
+#[derive(Deserialize)]
+#[allow(dead_code)]
+struct LegacyQuizResultItem {
+    question_id: i64,
+    prompt: String,
+    kind: String,
+    user_answer: String,
+    correct: Option<bool>,
+    feedback: String,
+    correct_answer: String,
+    explanation: String,
+    returns_tomorrow: bool,
+}
+
+#[derive(Deserialize)]
+#[allow(dead_code)]
+struct LegacyQuizResult {
+    items: Vec<LegacyQuizResultItem>,
+    score: f64,
+    self_assess: bool,
+}
+
 /// Preserve SQLite storage types and bytes, including unknown JSON formats.
 /// Floating point bits avoid turning a non-finite SQLite real into JSON null.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -399,7 +423,7 @@ pub fn inspect(conn: &Connection) -> Result<PrimaryImport> {
                         serde_json::from_value::<BTreeMap<String, String>>(value).is_err()
                     }
                     Some("quiz_result") => {
-                        serde_json::from_value::<crate::commands::ReviewData>(value).is_err()
+                        serde_json::from_value::<LegacyQuizResult>(value).is_err()
                     }
                     _ => true,
                 }
