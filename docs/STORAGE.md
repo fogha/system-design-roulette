@@ -15,7 +15,7 @@ Principia Desk keeps the existing application data location and SQLite database.
 
 Migration SQL and the frozen `legacy_v1.rs` implementation contribute to their checksums. Once committed, do not edit these sources, even for formatting. Add a new migration for later changes. The runner itself may evolve without changing an already-applied migration's meaning.
 
-An immediate transaction reserves the writer before backup and rechecks the ledger after acquiring the lock. A separate read connection uses SQLite's backup API to include all committed WAL pages. The checked, flushed backup is published under `backups/<database>.before-v<target>.<timestamp>-<nonce>.db`, alongside the database. Unix backup files use mode `0600`. Empty new databases and normal reopens do not create backups.
+An immediate transaction reserves the writer before backup and rechecks the ledger after acquiring the lock. A separate read connection uses SQLite's backup API to include all committed WAL pages. The checked, flushed backup is published under `backups/<database>.before-v<target>.<timestamp>-<nonce>.db`, alongside the database. Unix backup files use mode `0600`. The flush opens the file for writing, because Windows refuses to flush a handle opened without write access. Empty new databases and normal reopens do not create backups.
 
 The entire pending batch runs in one transaction. Every migration must pass SQLite integrity and foreign-key checks before its ledger row is recorded. SQL, backup or integrity failures abort the upgrade; foreign-key enforcement is restored on the connection. Errors after a successful backup include its path. Two concurrent openers share the completed upgrade rather than applying it twice.
 

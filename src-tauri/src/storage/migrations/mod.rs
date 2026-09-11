@@ -243,7 +243,9 @@ fn backup_before_upgrade(database: &Path, target_version: u32) -> Result<PathBuf
         snapshot.pragma_update(None, "journal_mode", "DELETE")?;
         integrity_check(&snapshot, false)?;
         drop(snapshot);
-        fs::File::open(&partial)?.sync_all()?;
+        // Windows refuses to flush a handle that was opened without write
+        // access, so the durability sync needs a writable one everywhere.
+        fs::OpenOptions::new().write(true).open(&partial)?.sync_all()?;
         fs::rename(&partial, &destination)?;
         #[cfg(unix)]
         fs::File::open(&directory)?.sync_all()?;
