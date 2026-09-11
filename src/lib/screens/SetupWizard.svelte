@@ -5,8 +5,10 @@
   import RunnerSetup from '../features/runners/RunnerSetup.svelte';
   import SearchSetup from '../features/runners/SearchSetup.svelte';
   import RecoveryGuide from '../features/recovery/RecoveryGuide.svelte';
-  import type { SearchSettingsView } from '../ipc';
-  import { ArrowLeft, ArrowRight, Check, Rocket, X } from 'lucide-svelte';
+  import type { RecoveryStatus, SearchSettingsView } from '../ipc';
+  import type { RunnerInfo } from '../contracts/agents';
+  import { guessStatus } from '../features/recovery/ladder';
+  import { ArrowLeft, ArrowRight, Bot, Check, Globe, KeyRound, Pencil, Rocket, ShieldCheck, TerminalSquare, X } from 'lucide-svelte';
 
   let model = $state('opus');
   let agent = $state('claude');
@@ -18,20 +20,48 @@
   let step = $state(0);
 
   const STEPS = [
-    { title: 'Tutor', heading: 'Choose the tutor that writes your lessons', blurb: 'Pick a runner and the model it should use. You can keep a shortlist of models per provider and change any of this later, per class.' },
-    { title: 'Search', heading: 'Give the tutor a way to look things up', blurb: 'Optional. A tutor on Ollama, OpenRouter or a bare API cannot browse; with a search engine set, the desk finds and fetches documentation itself and hands the tutor only pages it retrieved. Leave it off and lessons use the pages the curriculum names.' },
-    { title: 'Recovery', heading: 'Set your break-glass phrase, and learn the way out', blurb: 'An enforced session holds the machine until the lesson is done. This phrase ends one early: it is deliberately long so it cannot be typed on reflex, and using it breaks your streak. Below it, the recovery console: a key combination that works even if the desk goes blank.' },
-    { title: 'Deploy', heading: 'Review and deploy', blurb: 'This writes your preferences and opens the desk. Next you choose a class, set its starting point and add study times.' },
+    { title: 'Tutor', Icon: Bot, ahead: 'runner & model', heading: 'Choose the tutor that writes your lessons', blurb: 'Pick a runner and the model it should use. You can keep a shortlist of models per provider and change any of this later, per class.' },
+    { title: 'Search', Icon: Globe, ahead: 'optional', heading: 'Give the tutor a way to look things up', blurb: 'Optional. A tutor on Ollama, OpenRouter or a bare API cannot browse; with a search engine set, the desk finds and fetches documentation itself and hands the tutor only pages it retrieved. Leave it off and lessons use the pages the curriculum names.' },
+    { title: 'Recovery', Icon: KeyRound, ahead: 'phrase & way out', heading: 'Set your break-glass phrase, and learn the way out', blurb: 'An enforced session holds the machine until the lesson is done. This phrase ends one early: it is deliberately long so it cannot be typed on reflex, and using it breaks your streak. Below it, the recovery console: a key combination that works even if the desk goes blank.' },
+    { title: 'Deploy', Icon: Rocket, ahead: 'review & launch', heading: 'Review and deploy', blurb: 'Everything below is what the desk starts with. Deploy writes it to your profile and opens the desk; the first thing you do there is choose a class.' },
   ];
   const RECOVERY = 2;
+  const DEPLOY = 3;
 
-  /** The search choice, read for the review; it is saved as it is made. */
+  /** The search choice, read for the rail and the review; it is saved as it is made. */
   let search = $state<SearchSettingsView | null>(null);
   $effect(() => {
-    if (step !== STEPS.length - 1) return;
+    if (step < 1) return;
     api.getSearchSettings().then((view) => (search = view)).catch(() => (search = null));
   });
   const SEARCH_LABELS: Record<string, string> = { none: 'Off', searxng: 'SearXNG', brave: 'Brave Search', tavily: 'Tavily' };
+  const searchLine = $derived(
+    !search ? '…' : `${SEARCH_LABELS[search.provider] ?? search.provider}${search.provider === 'none' ? '' : search.available ? ' · working' : ' · setup needed'}`,
+  );
+
+  /** Runner names, so the rail and the review say "Claude Code", not "claude". */
+  let runners = $state<RunnerInfo[]>([]);
+  $effect(() => {
+    api.listAgentRunners().then((list) => (runners = list)).catch(() => (runners = []));
+  });
+  const tutorName = $derived(agent === 'custom' ? 'Custom CLI' : (runners.find((runner) => runner.provider === agent)?.label ?? agent));
+  const tutorLine = $derived(`${tutorName} · ${model || 'runner default'}`);
+
+  /** The recovery console as this platform names it, read for the review. */
+  let recovery = $state<RecoveryStatus>(guessStatus());
+  $effect(() => {
+    if (step < RECOVERY) return;
+    api.recoveryStatus().then((status) => (recovery = status)).catch(() => {});
+  });
+
+  /** What each step has settled on, for the rail under its name. */
+  function settled(index: number): string {
+    if (index > step) return STEPS[index].ahead;
+    if (index === 0) return tutorLine;
+    if (index === 1) return searchLine;
+    if (index === RECOVERY) return phraseReady ? 'phrase confirmed' : 'phrase pending';
+    return 'ready';
+  }
 
   const phraseReady = $derived(phrase.trim().length >= 40 && phrase.trim() === phrase2.trim());
   const phraseProblem = $derived(
@@ -84,15 +114,23 @@
 
     <ol class="steps" aria-label="Setup steps">
       {#each STEPS as item, index (item.title)}
-        <li class:done={index < step} class:current={index === step}>
+        {@const Icon = item.Icon}
+        <li class:done={index < step} class:current={index === step} class:ahead={index > step}>
           <button
             type="button"
             aria-current={index === step ? 'step' : undefined}
             disabled={index > step}
             onclick={() => goto(index)}
+            title={index > step ? `${item.title}: after the steps before it` : item.title}
           >
-            <span class="chip mono">{#if index < step}<Check size={12} />{:else}{index + 1}{/if}</span>
-            <span class="name">{item.title}</span>
+            <span class="step-tile" aria-hidden="true">
+              {#if index < step}<Check size={15} strokeWidth={2.4} />{:else}<Icon size={16} />{/if}
+            </span>
+            <span class="step-text">
+              <span class="step-no mono">{index < step ? 'done' : index === step ? 'now' : `0${index + 1}`}</span>
+              <span class="step-name">{item.title}</span>
+              <span class="step-sub" class:pending={index === RECOVERY && index === step && !phraseReady}>{settled(index)}</span>
+            </span>
           </button>
         </li>
       {/each}
@@ -133,13 +171,67 @@
           <RecoveryGuide {phrase} autoplay />
         </div>
       {:else}
-        <dl class="review">
-          <div><dt class="mono">TUTOR</dt><dd>{agent === 'custom' ? `Custom CLI · ${customBin || 'command set in the library'}` : agent}</dd></div>
-          <div><dt class="mono">MODEL</dt><dd>{model || 'runner default'}</dd></div>
-          <div><dt class="mono">SEARCH</dt><dd>{search ? `${SEARCH_LABELS[search.provider] ?? search.provider}${search.provider === 'none' ? '' : search.available ? ' · working' : ' · setup needed'}` : '…'}</dd></div>
-          <div><dt class="mono">ESCAPE_PHRASE</dt><dd>{phrase.trim().length} characters · confirmed</dd></div>
-          <div><dt class="mono">ENFORCEMENT</dt><dd>Advisory to start. Each class carries its own policy in its Settings tab.</dd></div>
-        </dl>
+        <div class="manifest">
+          <ul class="manifest-grid" aria-label="What the desk starts with">
+            <li class="mf-tile">
+              <span class="mf-icon"><Bot size={16} /></span>
+              <span class="mf-body">
+                <span class="mf-label mono">TUTOR</span>
+                <span class="mf-value">{tutorName}</span>
+                <span class="mf-sub">{agent === 'custom' ? (customBin || 'command set in the library') : `model · ${model || 'runner default'}`}</span>
+              </span>
+              <span class="mf-led ok" aria-hidden="true"></span>
+              <button type="button" class="mf-edit mono" onclick={() => goto(0)}><Pencil size={10} /> edit</button>
+            </li>
+            <li class="mf-tile">
+              <span class="mf-icon"><Globe size={16} /></span>
+              <span class="mf-body">
+                <span class="mf-label mono">SEARCH</span>
+                <span class="mf-value">{search ? (SEARCH_LABELS[search.provider] ?? search.provider) : '…'}</span>
+                <span class="mf-sub">{!search || search.provider === 'none' ? 'lessons use the pages the curriculum names' : search.available ? 'working · the tutor can look things up' : 'setup needed · lessons fall back to curriculum pages'}</span>
+              </span>
+              <span class="mf-led" class:ok={search?.provider !== 'none' && search?.available} class:warn={search?.provider !== 'none' && search && !search.available} class:off={!search || search.provider === 'none'} aria-hidden="true"></span>
+              <button type="button" class="mf-edit mono" onclick={() => goto(1)}><Pencil size={10} /> edit</button>
+            </li>
+            <li class="mf-tile">
+              <span class="mf-icon"><KeyRound size={16} /></span>
+              <span class="mf-body">
+                <span class="mf-label mono">ESCAPE PHRASE</span>
+                <span class="mf-value">{phrase.trim().length} characters · confirmed</span>
+                <span class="mf-sub">ends an enforced session early · breaks the streak</span>
+              </span>
+              <span class="mf-led ok" aria-hidden="true"></span>
+              <button type="button" class="mf-edit mono" onclick={() => goto(RECOVERY)}><Pencil size={10} /> edit</button>
+            </li>
+            <li class="mf-tile">
+              <span class="mf-icon"><TerminalSquare size={16} /></span>
+              <span class="mf-body">
+                <span class="mf-label mono">RECOVERY CONSOLE</span>
+                <span class="mf-keys" aria-label={recovery.combination.label}>
+                  {#each recovery.combination.keys as key, index (index)}{#if index > 0}<i>+</i>{/if}<kbd>{key.glyph}</kbd>{/each}
+                </span>
+                <span class="mf-sub">{recovery.registered ? `registered with ${recovery.combination.platform} · opens above a locked desk` : `${recovery.combination.platform} has not taken the combination yet · the release token still works`}</span>
+              </span>
+              <span class="mf-led" class:ok={recovery.registered} class:warn={!recovery.registered} aria-hidden="true"></span>
+              <button type="button" class="mf-edit mono" onclick={() => goto(RECOVERY)}><Pencil size={10} /> view</button>
+            </li>
+            <li class="mf-tile wide">
+              <span class="mf-icon"><ShieldCheck size={16} /></span>
+              <span class="mf-body">
+                <span class="mf-label mono">ENFORCEMENT</span>
+                <span class="mf-value">Advisory to start</span>
+                <span class="mf-sub">Nothing is locked yet. Each class carries its own policy (advisory, focused or strict) in its Settings tab, and every lock keeps the ways out above.</span>
+              </span>
+              <span class="mf-led off" aria-hidden="true"></span>
+            </li>
+          </ul>
+
+          <ol class="launch" aria-label="What deploy does">
+            <li><span class="launch-no mono">1</span><span><b>Writes</b> the tutor, search, phrase and policy to your profile.</span></li>
+            <li><span class="launch-no mono">2</span><span><b>Opens the desk</b> on Today, with the recovery console armed.</span></li>
+            <li><span class="launch-no mono">3</span><span><b>You choose a class</b>, set its starting point and add study times. Lessons are prepared ahead of each one.</span></li>
+          </ol>
+        </div>
       {/if}
     </section>
 
@@ -194,68 +286,116 @@
     max-width: 56ch;
   }
 
-  /* step rail */
+  /* step rail: four tiles on one track, each naming what it settled on */
   .steps {
     display: flex;
-    align-items: center;
-    gap: 10px;
+    gap: 8px;
     list-style: none;
-    margin: 0 0 18px;
+    margin: 0 0 22px;
     padding: 0;
   }
   .steps li {
-    display: flex;
-    align-items: center;
-    gap: 10px;
+    position: relative;
+    flex: 1;
     min-width: 0;
+    padding-bottom: 12px;
   }
-  .steps li + li::before {
+  .steps li::after {
+    /* the track: one segment per step, lit as far as the desk has come */
     content: '';
-    width: 28px;
-    border-top: 1.5px dashed var(--violet);
-    opacity: 0.6;
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--node-border);
+    transition: background 0.3s;
+  }
+  .steps li.done::after {
+    background: var(--accent);
+  }
+  .steps li.current::after {
+    background: linear-gradient(90deg, var(--accent) 0 40%, var(--node-border) 100%);
   }
   .steps button {
+    position: relative;
+    z-index: 1;
     display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 5px 9px 5px 5px;
-    border: 1px solid transparent;
-    border-radius: var(--radius-control);
+    align-items: flex-start;
+    gap: 10px;
+    width: 100%;
+    padding: 0 6px 0 0;
+    border: 0;
     background: transparent;
     color: var(--faint);
-    font-size: 12px;
+    text-align: left;
     cursor: pointer;
   }
   .steps button:disabled {
     cursor: default;
   }
-  .steps .current button {
-    border-color: var(--node-border);
-    background: var(--surface);
-    color: var(--fg);
+  .steps button:focus-visible .step-tile {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
   }
-  .steps .done button {
-    color: var(--muted);
-  }
-  .chip {
+  .step-tile {
+    flex: none;
     display: grid;
     place-items: center;
-    width: 24px;
-    height: 24px;
+    width: 36px;
+    height: 36px;
     border: 1px solid var(--node-border);
-    border-radius: var(--radius-control);
-    background: var(--bg);
-    font-size: 11px;
+    border-radius: 10px;
+    background: var(--surface);
+    color: var(--faint);
+    transition: border-color 0.25s, background 0.25s, color 0.25s, box-shadow 0.25s;
   }
-  .steps .current .chip {
+  .steps .current .step-tile {
     border-color: var(--accent);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 22%, var(--surface)), var(--surface));
     color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent), 0 8px 22px -12px var(--accent);
   }
-  .steps .done .chip {
+  .steps .done .step-tile {
+    border-color: color-mix(in srgb, var(--led-ok) 55%, var(--node-border));
+    background: var(--ok-bg);
+    color: var(--ok-fg);
+  }
+  .steps .done button:hover .step-tile {
     border-color: var(--led-ok);
-    color: var(--led-ok);
   }
+  .step-text {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+    padding-top: 2px;
+  }
+  .step-no {
+    font-size: 8.5px;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--faint);
+  }
+  .steps .current .step-no { color: var(--accent); }
+  .steps .done .step-no { color: var(--ok-fg); }
+  .step-name {
+    font-size: 13px;
+    color: var(--faint);
+  }
+  .steps .current .step-name { color: var(--fg); font-weight: 500; }
+  .steps .done .step-name { color: var(--muted); }
+  .step-sub {
+    font-size: 10.5px;
+    color: var(--faint);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .steps .current .step-sub { color: var(--muted); }
+  .steps .done .step-sub { color: var(--muted); }
+  .step-sub.pending { color: var(--warn-fg); }
 
   .panel {
     display: grid;
@@ -330,33 +470,82 @@
     margin: 2px 0 0;
   }
 
-  .review {
+  /* the manifest: what the desk starts with, one tile per setting */
+  .manifest { display: flex; flex-direction: column; gap: 16px; }
+  .manifest-grid {
     display: grid;
-    gap: 1px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
     margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .mf-tile {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 14px 12px 12px;
     border: 1px solid var(--node-border);
     border-radius: var(--radius-panel);
-    overflow: hidden;
-    background: var(--node-border);
+    background: var(--node-bg);
+    transition: border-color 0.2s;
   }
-  .review > div {
+  .mf-tile:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--node-border)); }
+  .mf-tile.wide { grid-column: 1 / -1; }
+  .mf-icon {
+    flex: none;
     display: grid;
-    grid-template-columns: 140px 1fr;
-    gap: 12px;
-    padding: 11px 13px;
-    background: var(--surface);
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--node-border));
+    border-radius: 10px;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 18%, var(--surface)), var(--surface));
+    color: var(--accent);
   }
-  .review dt {
-    font-size: 10px;
+  .mf-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; padding-right: 56px; }
+  .mf-label { font-size: 9px; letter-spacing: 1.2px; color: var(--faint); }
+  .mf-value { font-size: 13px; color: var(--fg); overflow-wrap: anywhere; }
+  .mf-sub { font-size: 11px; line-height: 1.45; color: var(--muted); }
+  .mf-keys { display: inline-flex; align-items: center; gap: 4px; margin: 1px 0; }
+  .mf-keys kbd { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--node-border)); border-bottom-width: 3px; border-radius: 5px; background: var(--surface); color: var(--fg); font: 500 11px/1 var(--font-mono); }
+  .mf-keys i { font-style: normal; font-size: 10px; color: var(--faint); }
+  .mf-led { position: absolute; top: 14px; right: 14px; width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+  .mf-led.ok { background: var(--led-ok); box-shadow: 0 0 8px var(--led-ok); }
+  .mf-led.warn { background: var(--led-warn); box-shadow: 0 0 8px var(--led-warn); }
+  .mf-led.off { background: var(--led-idle); }
+  .mf-edit {
+    position: absolute;
+    right: 12px;
+    bottom: 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 7px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-detail);
+    background: transparent;
     color: var(--faint);
-    letter-spacing: 0.6px;
+    font-size: 9.5px;
+    letter-spacing: 0.5px;
+    cursor: pointer;
   }
-  .review dd {
+  .mf-edit:hover { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, var(--node-border)); }
+
+  .launch {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
     margin: 0;
-    font-size: 12px;
-    color: var(--fg);
-    overflow-wrap: anywhere;
+    padding: 12px 14px;
+    list-style: none;
+    border: 1px dashed var(--node-border);
+    border-radius: var(--radius-control);
   }
+  .launch li { display: flex; gap: 10px; font-size: 11.5px; line-height: 1.5; color: var(--muted); }
+  .launch li b { color: var(--fg); font-weight: 500; }
+  .launch-no { flex: none; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--surface-2); color: var(--accent); font-size: 10px; }
 
   .error {
     color: var(--bad-fg);
@@ -377,16 +566,13 @@
     color: var(--faint);
   }
 
+  @media (max-width: 720px) {
+    .manifest-grid { grid-template-columns: 1fr; }
+    .launch { grid-template-columns: 1fr; }
+  }
   @media (max-width: 560px) {
-    .steps li + li::before {
-      width: 12px;
-    }
-    .steps .name {
-      display: none;
-    }
-    .review > div {
-      grid-template-columns: 1fr;
-      gap: 4px;
-    }
+    .steps { gap: 4px; }
+    .step-text { display: none; }
+    .steps button { justify-content: center; padding: 0; }
   }
 </style>

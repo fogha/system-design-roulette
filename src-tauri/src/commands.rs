@@ -1250,6 +1250,15 @@ pub fn recovery_command(
     Ok(crate::recovery::command(&app, &state, &recovery, &line))
 }
 
+/// The combination as this platform names it, whether the system took it,
+/// and the ladder: what Settings, onboarding and the console show.
+#[tauri::command]
+pub fn recovery_status(
+    recovery: State<'_, crate::recovery::RecoveryState>,
+) -> CmdResult<crate::recovery::Status> {
+    Ok(crate::recovery::status(&recovery))
+}
+
 /// Open the console from Settings, to see it before it is needed.
 #[tauri::command]
 pub fn open_recovery_console(app: AppHandle) -> CmdResult<()> {

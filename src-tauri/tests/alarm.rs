@@ -64,7 +64,10 @@ fn app_state(dir: &std::path::Path, conn: Connection) -> AppState {
 }
 
 /// A desk with one active class whose study time is already in the past
-/// today, so its appointment is due the moment it is materialised.
+/// today, so its appointment is due the moment it is materialised. The
+/// clock here resolves in UTC, so "today" is the UTC date: between local
+/// midnight and UTC midnight the local date is a day ahead, and a slot at
+/// midnight of that day would not be due for another hour.
 fn desk_with_due_class() -> (std::path::PathBuf, AppState) {
     let dir = std::env::temp_dir().join(format!(
         "principia-alarm-{}-{:016x}",
@@ -74,7 +77,7 @@ fn desk_with_due_class() -> (std::path::PathBuf, AppState) {
     std::fs::create_dir_all(&dir).unwrap();
     let conn = db::open(&dir.join("principia.db")).unwrap();
     db::seed_concepts(&conn, include_str!("../seed/concepts.json")).unwrap();
-    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+    let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
     language::initialize(&conn, &today).unwrap();
     classroom::initialize(&conn).unwrap();
     classroom::upsert_slot(

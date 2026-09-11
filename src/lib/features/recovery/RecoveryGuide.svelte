@@ -5,9 +5,9 @@
    * plays the exchange through, and the exits that need no console at all.
    */
   import { onMount } from 'svelte';
-  import { api, isTauri } from '../../ipc';
-  import { Play, RotateCcw, TerminalSquare, Usb, Timer, Keyboard } from 'lucide-svelte';
-  import { LADDER, VALVE_PRESSES, VALVE_SECONDS, shortcutLabel } from './ladder';
+  import { api, isTauri, type RecoveryStatus } from '../../ipc';
+  import { Play, RotateCcw, TerminalSquare, Usb, Timer, Keyboard, CircleAlert } from 'lucide-svelte';
+  import { guessStatus } from './ladder';
 
   let {
     phrase = '',
@@ -22,10 +22,12 @@
     showOpen?: boolean;
   } = $props();
 
-  const mac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform ?? navigator.userAgent);
-  const keys = mac
-    ? [{ glyph: '⌃', name: 'control' }, { glyph: '⌥', name: 'option' }, { glyph: '⇧', name: 'shift' }, { glyph: 'U', name: '' }]
-    : [{ glyph: 'Ctrl', name: '' }, { glyph: 'Alt', name: '' }, { glyph: 'Shift', name: '' }, { glyph: 'U', name: '' }];
+  /** The desk names the combination for the platform it runs on; until it
+   *  answers, the browser's guess stands in. */
+  let status = $state<RecoveryStatus>(guessStatus());
+  let answered = $state(false);
+  const keys = $derived(status.combination.keys);
+  const LADDER = $derived(status.ladder);
 
   const CODE = 'K7PM2X';
   const shownPhrase = $derived(phrase.trim() || 'your escape phrase');
@@ -90,6 +92,7 @@
   function stop() { run += 1; playing = false; }
 
   onMount(() => {
+    api.recoveryStatus().then((fresh) => { status = fresh; answered = true; }).catch(() => {});
     // Play once: straight away when asked to, otherwise the first time the
     // walkthrough scrolls into view, so it is seen without being hunted for.
     if (autoplay) {
@@ -116,15 +119,21 @@
 
 <div class="guide" bind:this={root}>
   <div class="combo">
-    <div class="keys" aria-label={`Press ${shortcutLabel()}`}>
-      {#each keys as key, index (key.glyph)}
+    <div class="keys" aria-label={`Press ${status.combination.label}`}>
+      {#each keys as key, index (index)}
         {#if index > 0}<span class="plus" aria-hidden="true">+</span>{/if}
-        <kbd class="keycap" class:letter={key.glyph.length === 1 && !mac}><span class="glyph">{key.glyph}</span>{#if key.name}<span class="name">{key.name}</span>{/if}</kbd>
+        <kbd class="keycap" class:word={key.glyph.length > 1}><span class="glyph">{key.glyph}</span>{#if key.name}<span class="name">{key.name}</span>{/if}</kbd>
       {/each}
     </div>
     <div class="combo-text">
-      <p class="combo-title">Opens the recovery console <em>above every window</em>, including a locked desk.</p>
-      <p class="combo-sub">The combination is registered with the system, not the page, so a blank or frozen screen cannot swallow it. Nothing changes until you type <code>release</code>.</p>
+      <p class="combo-title"><span class="combo-label mono">{status.combination.label}</span> opens the recovery console <em>above every window</em>, including a locked desk.</p>
+      <p class="combo-sub">The combination is registered with {status.combination.platform}, not the page, so a blank or frozen screen cannot swallow it. Nothing changes until you type <code>release</code>.</p>
+      <p class="combo-state mono" class:ok={answered && status.registered} class:warn={answered && !status.registered}>
+        {#if !answered}<span class="led idle"></span> {isTauri ? 'asking the desk…' : `preview · ${status.combination.platform} keys shown`}
+        {:else if status.registered}<span class="led ok"></span> registered with {status.combination.platform}
+        {:else}<CircleAlert size={11} /> {status.combination.platform} has not taken the combination{/if}
+      </p>
+      {#if answered && !status.registered}<p class="combo-note">{status.combination.note}</p>{/if}
     </div>
   </div>
 
@@ -169,7 +178,7 @@
   <div class="exits">
     <span class="exits-label mono">IF THE CONSOLE CANNOT OPEN</span>
     <ul>
-      <li><span class="exit-icon"><Keyboard size={12} /></span><span>Press the combination <b>{VALVE_PRESSES} times within {VALVE_SECONDS} seconds</b>. The lock releases on its own, no window needed.</span></li>
+      <li><span class="exit-icon"><Keyboard size={12} /></span><span>Press the combination <b>{status.valve_presses} times within {status.valve_seconds} seconds</b>. The lock releases on its own, no window needed.</span></li>
       <li><span class="exit-icon"><Usb size={12} /></span><span>Plug in a USB stick with a file named <code>principia-unlock</code> at its root. The lock drops within a second.</span></li>
       <li><span class="exit-icon"><Timer size={12} /></span><span>Wait. A lock lets go by itself after <b>three hours</b>, whatever the app believes.</span></li>
     </ul>
@@ -205,7 +214,7 @@
   .keycap:nth-child(5) { animation-delay: 0.16s; }
   .keycap:nth-child(7) { animation-delay: 0.24s; }
   .keycap .glyph { font-size: 15px; }
-  .keycap.letter .glyph { font-size: 12px; }
+  .keycap.word .glyph { font-size: 12px; }
   .keycap .name { font-size: 7.5px; letter-spacing: 0.8px; color: var(--muted); text-transform: uppercase; }
   @keyframes keypress {
     0%, 12%, 100% { transform: translateY(0); border-bottom-width: 4px; }
@@ -215,7 +224,14 @@
   .combo-text { flex: 1; min-width: 240px; }
   .combo-title { margin: 0 0 4px; font-size: 13px; color: var(--fg); }
   .combo-title em { font-style: normal; color: var(--accent); }
+  .combo-label { font-size: 11px; padding: 1px 6px; border-radius: 4px; background: var(--surface-2); color: var(--fg); white-space: nowrap; }
   .combo-sub { margin: 0; font-size: 11px; line-height: 1.55; color: var(--muted); }
+  .combo-state { display: inline-flex; align-items: center; gap: 6px; margin: 6px 0 0; font-size: 9.5px; letter-spacing: 0.6px; color: var(--faint); }
+  .combo-state.ok { color: var(--ok-fg); }
+  .combo-state.warn { color: var(--warn-fg); }
+  .combo-note { margin: 4px 0 0; font-size: 10.5px; line-height: 1.5; color: var(--warn-fg); }
+  .led { width: 6px; height: 6px; border-radius: 50%; background: var(--led-idle); }
+  .led.ok { background: var(--led-ok); box-shadow: 0 0 6px var(--led-ok); }
   .combo-sub code, .exits code { font-family: var(--font-mono); font-size: 10.5px; padding: 1px 5px; border-radius: 4px; background: var(--surface-2); color: var(--fg); }
 
   /* --- The ladder and its console --------------------------------------- */

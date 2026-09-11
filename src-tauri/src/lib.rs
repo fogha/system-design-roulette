@@ -426,6 +426,7 @@ pub fn run() {
             commands::resume_schedule,
             commands::escape_session,
             commands::recovery_command,
+            commands::recovery_status,
             commands::open_recovery_console,
             commands::close_recovery_console,
             commands::get_escape_phrase,

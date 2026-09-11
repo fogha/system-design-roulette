@@ -8,6 +8,7 @@ import type { SaveEnrollmentDraft } from './contracts/enrollment';
 import type { AcceptedPath, AcceptPath } from './contracts/classes';
 import { acceptPreviewClassPath, previewClassPath, previewPathSummary, revisePreviewClassPath } from './class-preview';
 import { applyPreviewChallenge, getPreviewChallenge, savePreviewChallengeResponse, startPreviewChallenge, submitPreviewChallenge } from './challenge-preview';
+import { guessStatus } from './features/recovery/ladder';
 import { scheduleConflicts, conflictMessage, type ScheduleCandidate, type ConflictScope } from './features/classes/schedule-conflicts';
 import { COURSES, courseDefinition } from './catalog';
 import seedConcepts from '../../src-tauri/seed/concepts.json';
@@ -43,6 +44,7 @@ import type {
   LessonFileResult,
   PlannedSlot,
   RecoveryReply,
+  RecoveryStatus,
   SearchProvider,
   SearchResult,
   SearchSettingsView,
@@ -780,6 +782,7 @@ export const mockApi = {
     if (verb === 'close' || verb === 'exit' || verb === 'quit') return { lines: [], released: false, close: true };
     return { lines: [`Unknown command: ${verb}. Type help.`], released: false, close: false };
   },
+  recoveryStatus: async (): Promise<RecoveryStatus> => guessStatus(true),
   openRecoveryConsole: async () => { if (typeof window !== 'undefined') window.open('/recovery', 'principia-recovery', 'width=720,height=460'); },
   closeRecoveryConsole: async () => { if (typeof window !== 'undefined' && window.name === 'principia-recovery') window.close(); },
   getSearchSettings: async (): Promise<SearchSettingsView> => mockSearch(),

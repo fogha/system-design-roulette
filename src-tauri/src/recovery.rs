@@ -13,14 +13,75 @@
 
 use crate::state::AppState;
 use serde::Serialize;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
 
-/// The combination, in the plugin's spelling. On macOS it is Control, Option,
-/// Shift and U together; elsewhere Control, Alt, Shift and U.
+/// The combination, in the plugin's spelling. The plugin maps it to the
+/// platform's own keys: Control, Option, Shift and U on macOS; Ctrl, Alt,
+/// Shift and U on Windows and Linux.
 pub const SHORTCUT: &str = "Ctrl+Alt+Shift+U";
 pub const WINDOW: &str = "recovery";
+
+/// One key of the combination as it reads on a keycap here.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct Key {
+    pub glyph: &'static str,
+    pub name: &'static str,
+}
+
+/// The combination as this platform names it, and what this platform
+/// makes of a system-wide shortcut. Every piece of text a person reads
+/// about the combination comes from here.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct Combination {
+    pub platform: &'static str,
+    /// The combination written out, as this platform's users write it.
+    pub label: &'static str,
+    pub keys: [Key; 4],
+    /// What to know about global shortcuts on this platform.
+    pub note: &'static str,
+}
+
+#[cfg(target_os = "macos")]
+pub const COMBINATION: Combination = Combination {
+    platform: "macOS",
+    label: "Control + Option + Shift + U",
+    keys: [
+        Key { glyph: "⌃", name: "control" },
+        Key { glyph: "⌥", name: "option" },
+        Key { glyph: "⇧", name: "shift" },
+        Key { glyph: "U", name: "" },
+    ],
+    note: "Registered with macOS as a system hot key. It works on every Space and over full-screen apps, and needs no permission.",
+};
+
+#[cfg(target_os = "windows")]
+pub const COMBINATION: Combination = Combination {
+    platform: "Windows",
+    label: "Ctrl + Alt + Shift + U",
+    keys: [
+        Key { glyph: "Ctrl", name: "" },
+        Key { glyph: "Alt", name: "" },
+        Key { glyph: "Shift", name: "" },
+        Key { glyph: "U", name: "" },
+    ],
+    note: "Registered with Windows as a system hot key. If another program already holds this combination, registration fails and the desk says so here.",
+};
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+pub const COMBINATION: Combination = Combination {
+    platform: "Linux",
+    label: "Ctrl + Alt + Shift + U",
+    keys: [
+        Key { glyph: "Ctrl", name: "" },
+        Key { glyph: "Alt", name: "" },
+        Key { glyph: "Shift", name: "" },
+        Key { glyph: "U", name: "" },
+    ],
+    note: "Registered with the X11 server. Wayland desktops do not hand global shortcuts to applications; there the desk says so here, and the release token and the escape hatch remain.",
+};
 /// Presses of the combination that release the lock without a console.
 pub const VALVE_PRESSES: usize = 5;
 pub const VALVE_WINDOW: Duration = Duration::from_secs(10);
@@ -36,11 +97,12 @@ pub enum Stage {
     Phrased,
 }
 
-/// The console's memory: the sequence in progress and recent presses of the
-/// combination, for the valve.
+/// The console's memory: the sequence in progress, recent presses of the
+/// combination for the valve, and whether the system took the shortcut.
 pub struct RecoveryState {
     pub stage: Mutex<Stage>,
     pub presses: Mutex<Vec<Instant>>,
+    pub registered: AtomicBool,
 }
 
 impl Default for RecoveryState {
@@ -48,7 +110,39 @@ impl Default for RecoveryState {
         Self {
             stage: Mutex::new(Stage::Idle),
             presses: Mutex::new(Vec::new()),
+            registered: AtomicBool::new(false),
         }
+    }
+}
+
+/// One rung of the ladder, for the guide.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct Rung {
+    pub command: &'static str,
+    pub what: &'static str,
+}
+
+/// Everything the guide shows: the combination as this platform names it,
+/// whether the system took it, the valve, and the ladder.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct Status {
+    pub combination: Combination,
+    pub registered: bool,
+    pub valve_presses: usize,
+    pub valve_seconds: u64,
+    pub ladder: Vec<Rung>,
+}
+
+pub fn status(recovery: &RecoveryState) -> Status {
+    Status {
+        combination: COMBINATION,
+        registered: recovery.registered.load(Ordering::SeqCst),
+        valve_presses: VALVE_PRESSES,
+        valve_seconds: VALVE_WINDOW.as_secs(),
+        ladder: LADDER
+            .iter()
+            .map(|(command, what)| Rung { command, what })
+            .collect(),
     }
 }
 
@@ -158,7 +252,8 @@ pub fn step(
             lines.push(String::new());
             lines.push("Also: status · cancel · close · help".into());
             lines.push(format!(
-                "If this console cannot open, press {SHORTCUT} {VALVE_PRESSES} times within {} seconds: the lock releases on its own.",
+                "If this console cannot open, press {} {VALVE_PRESSES} times within {} seconds: the lock releases on its own.",
+                COMBINATION.label,
                 VALVE_WINDOW.as_secs()
             ));
             (
@@ -402,8 +497,9 @@ pub fn open_console(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-/// Register the combination system-wide. A failure is logged, never fatal:
-/// the release token and the dead man's switch still stand.
+/// Register the combination system-wide and remember whether the system
+/// took it. A failure is logged and shown in Settings, never fatal: the
+/// release token and the dead man's switch still stand.
 pub fn install(app: &AppHandle) {
     use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
     let shortcut: tauri_plugin_global_shortcut::Shortcut = match SHORTCUT.parse() {
@@ -420,9 +516,18 @@ pub fn install(app: &AppHandle) {
                 summon(app);
             }
         });
+    let label = COMBINATION.label;
     match outcome {
-        Ok(()) => log::info!("recovery console on {SHORTCUT}"),
-        Err(error) => log::error!("recovery shortcut {SHORTCUT} could not be registered: {error}"),
+        Ok(()) => {
+            app.state::<RecoveryState>()
+                .registered
+                .store(true, Ordering::SeqCst);
+            log::info!("recovery console on {label} ({})", COMBINATION.platform);
+        }
+        Err(error) => log::error!(
+            "recovery shortcut {label} could not be registered on {}: {error}",
+            COMBINATION.platform
+        ),
     }
 }
 
@@ -447,6 +552,35 @@ mod tests {
         assert_eq!(LADDER.len(), 4);
         assert_eq!(LADDER[0].0, "unlock");
         assert_eq!(LADDER[3].0, "release");
+    }
+
+    #[test]
+    fn the_combination_is_named_for_this_platform() {
+        let shortcut: tauri_plugin_global_shortcut::Shortcut =
+            SHORTCUT.parse().expect("the plugin spelling parses");
+        assert!(shortcut
+            .mods
+            .contains(tauri_plugin_global_shortcut::Modifiers::CONTROL));
+        assert!(shortcut
+            .mods
+            .contains(tauri_plugin_global_shortcut::Modifiers::ALT));
+        assert!(shortcut
+            .mods
+            .contains(tauri_plugin_global_shortcut::Modifiers::SHIFT));
+        assert_eq!(COMBINATION.keys[3].glyph, "U");
+        assert_eq!(COMBINATION.keys.len(), 4);
+        if cfg!(target_os = "macos") {
+            assert_eq!(COMBINATION.platform, "macOS");
+            assert_eq!(COMBINATION.label, "Control + Option + Shift + U");
+            assert_eq!(COMBINATION.keys[1].name, "option");
+        } else {
+            assert_eq!(COMBINATION.label, "Ctrl + Alt + Shift + U");
+            assert_eq!(COMBINATION.keys[1].glyph, "Alt");
+        }
+        let status = status(&RecoveryState::default());
+        assert!(!status.registered, "nothing is registered before install");
+        assert_eq!(status.ladder.len(), 4);
+        assert_eq!(status.valve_presses, VALVE_PRESSES);
     }
 
     fn run(stage: &Stage, line: &str, phrase_ok: bool) -> (Stage, Reply, Outcome) {
@@ -512,7 +646,10 @@ mod tests {
         assert_eq!(stage, Stage::Idle);
         let (_, reply, outcome) = run(&Stage::Idle, "help", true);
         assert_eq!(outcome, Outcome::Say);
-        assert!(reply.lines.iter().any(|line| line.contains(SHORTCUT)));
+        assert!(reply
+            .lines
+            .iter()
+            .any(|line| line.contains(COMBINATION.label)));
         assert_eq!(run(&Stage::Idle, "close", true).2, Outcome::Close);
     }
 }

@@ -674,6 +674,22 @@ export interface RecoveryReply {
   close: boolean;
 }
 
+/** One key of the recovery combination as it reads on a keycap here. */
+export interface RecoveryKey {
+  glyph: string;
+  name: string;
+}
+
+/** The recovery combination as this platform names it, whether the system
+ *  took it, the valve, and the four-command ladder. */
+export interface RecoveryStatus {
+  combination: { platform: string; label: string; keys: RecoveryKey[]; note: string };
+  registered: boolean;
+  valve_presses: number;
+  valve_seconds: number;
+  ladder: { command: string; what: string }[];
+}
+
 export type SearchProvider = 'none' | 'searxng' | 'brave' | 'tavily';
 
 /** The web search the desk uses to find documentation, and whether it works right now. */
@@ -813,6 +829,7 @@ const realApi = {
   setRunnerKey: (runner: string, value: string) => invoke<void>('set_runner_key', { runner, value }),
   /** One line typed at the recovery console. */
   recoveryCommand: (line: string) => invoke<RecoveryReply>('recovery_command', { line }),
+  recoveryStatus: () => invoke<RecoveryStatus>('recovery_status'),
   openRecoveryConsole: () => invoke<void>('open_recovery_console'),
   closeRecoveryConsole: () => invoke<void>('close_recovery_console'),
   getSearchSettings: () => invoke<SearchSettingsView>('get_search_settings'),

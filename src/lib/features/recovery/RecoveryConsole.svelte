@@ -56,7 +56,8 @@
 
   onMount(() => {
     void (async () => {
-      await say('note', `PRINCIPIA RECOVERY CONSOLE · opened with ${shortcutLabel()}`);
+      const label = await api.recoveryStatus().then((status) => status.combination.label).catch(() => shortcutLabel());
+      await say('note', `PRINCIPIA RECOVERY CONSOLE · opened with ${label}`);
       try {
         const reply = await api.recoveryCommand('help');
         for (const text of reply.lines) await say('out', text);

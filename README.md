@@ -70,6 +70,8 @@ Strict mode blocks Cmd+Tab, Force Quit and logout, so it must never be the only 
    | 4 | `release` | Pauses the session with its work intact, breaks the streak, drops the lock and closes the console. |
 
    `status` shows where you are in the sequence, `cancel` starts it over, `close` (or Esc) leaves the console with the desk untouched. Nothing changes until the fourth command. If the console itself cannot appear, **press the combination five times within ten seconds** and the lock releases on its own. The same steps are shown in Settings › Recovery, with a walkthrough you can replay.
+
+   The combination is one registration, named per platform by the desk itself: macOS calls it Control + Option + Shift + U (a system hot key, no permission needed, works over full-screen apps and on every Space); Windows and Linux call it Ctrl + Alt + Shift + U. On Windows another program already holding the combination makes registration fail; on Linux it needs X11, since Wayland desktops do not hand global shortcuts to applications. Settings › Recovery shows whether the system took it; when it did not, the release token and the escape hatch still stand.
 4. **A release token.** Create a file or folder named `principia-unlock` in any of these places and the lock releases within a second:
    - your home directory (`touch ~/principia-unlock`),
    - the temporary directory (`/tmp` on macOS and Linux),
