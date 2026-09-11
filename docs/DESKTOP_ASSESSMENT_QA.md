@@ -421,3 +421,15 @@ engineering course's fingerprint, so the profile's accepted paths were stale:
   with the new fingerprint `379763f7…` while revisions 1–3 keep the old one
   (screenshot 86). The class row now points at the new revision, the overview
   shows "Next:" again and no curriculum-changed notice remains.
+
+## Moving an appointment — 2026-09-11
+
+On the rebuilt bundle, the TypeScript Schedule tab listed today's appointment
+(`2026-09-11 09:00 · scheduled`) with a time input and Move beside it
+(screenshot 87). Move with the time unchanged ran the command end to end: the
+row's `updated_at` advanced and it stayed `scheduled` at 09:00 (screenshot 88).
+Under `--debug-day` the launch agent is not rewritten, so the OS-level wake-up
+for a moved time is covered by the command's refresh path rather than a
+capture. The rule row above it reads "Due now" from the legacy slot logic
+while the appointment itself is not yet due; that wording is left for the
+legacy-engine cleanup.
