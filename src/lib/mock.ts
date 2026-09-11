@@ -46,7 +46,41 @@ import type {
   SearchResult,
   SearchSettingsView,
   SessionPlan,
+  StudyPulse,
 } from './ipc';
+
+/** A believable half year of study for the preview: weekday sessions with a few gaps and a live streak. */
+function mockPulse(): StudyPulse {
+  const today = new Date();
+  today.setHours(12, 0, 0, 0);
+  const weekday = (today.getDay() + 6) % 7;
+  const first = new Date(today);
+  first.setDate(today.getDate() - weekday - 7 * 25);
+  const days: StudyPulse['days'] = [];
+  let seed = 7;
+  const random = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
+  for (let cursor = new Date(first); cursor <= today; cursor.setDate(cursor.getDate() + 1)) {
+    const dow = (cursor.getDay() + 6) % 7;
+    const ago = Math.round((today.getTime() - cursor.getTime()) / 86400000);
+    const studied = ago < 6 ? true : dow < 5 ? random() > 0.28 : random() > 0.72;
+    const completed = studied ? (random() > 0.75 ? 2 : 1) : 0;
+    days.push({ date: cursor.toISOString().slice(0, 10), completed, minutes: completed * (random() > 0.5 ? 30 : 45), classes: completed ? (completed > 1 ? ['SD', 'LB'] : ['SD']) : [] });
+  }
+  const studyDays = days.filter((day) => day.completed > 0).length;
+  const week = days.slice(-(weekday + 1));
+  return {
+    today: days[days.length - 1].date,
+    streak: 6,
+    longest_streak: 14,
+    study_days: studyDays,
+    completed_sessions: days.reduce((sum, day) => sum + day.completed, 0),
+    days,
+    week_minutes: week.reduce((sum, day) => sum + day.minutes, 0),
+    week_target_minutes: 210,
+    week_sessions: week.reduce((sum, day) => sum + day.completed, 0),
+    pass_rate: 0.82,
+  };
+}
 
 let mockSearchProvider: SearchProvider = 'none';
 let mockSearxngUrl = 'http://127.0.0.1:8899';
@@ -733,6 +767,7 @@ export const mockApi = {
   listAgentRunners: async () => previewRunners(),
   getRunnerModels: async (runner: string, _refresh = false) => previewModels(runner),
   setRunnerKey: desktopRequired,
+  getStudyPulse: async (): Promise<StudyPulse> => mockPulse(),
   getSearchSettings: async (): Promise<SearchSettingsView> => mockSearch(),
   setSearchSettings: async (provider: SearchProvider, searxngUrl: string): Promise<SearchSettingsView> => { mockSearchProvider = provider; mockSearxngUrl = searxngUrl || 'http://127.0.0.1:8899'; return mockSearch(); },
   setSearchKey: async (provider: SearchProvider, value: string): Promise<SearchSettingsView> => { if (provider === 'brave') mockBraveKey = !!value.trim(); if (provider === 'tavily') mockTavilyKey = !!value.trim(); return mockSearch(); },

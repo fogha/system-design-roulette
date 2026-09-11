@@ -644,6 +644,29 @@ export interface ExerciseView {
   reflection: string;
 }
 
+/** One day of the study pulse: what was finished and about how long it took. */
+export interface PulseDay {
+  date: string;
+  completed: number;
+  minutes: number;
+  classes: string[];
+}
+
+/** The home page's view of the habit: streaks, half a year of days, this week. */
+export interface StudyPulse {
+  today: string;
+  streak: number;
+  longest_streak: number;
+  study_days: number;
+  completed_sessions: number;
+  /** Whole weeks from a Monday, ending today. */
+  days: PulseDay[];
+  week_minutes: number;
+  week_target_minutes: number;
+  week_sessions: number;
+  pass_rate: number | null;
+}
+
 export type SearchProvider = 'none' | 'searxng' | 'brave' | 'tavily';
 
 /** The web search the desk uses to find documentation, and whether it works right now. */
@@ -945,6 +968,8 @@ const realApi = {
   escapeSession: (phrase: string) => invoke<boolean>('escape_session', { phrase }),
   getEscapePhrase: () => invoke<string>('get_escape_phrase'),
   getDashboard: (query: ProgressQuery = {}) => invoke<DashboardView>('get_dashboard', { query }),
+  /** Streaks, half a year of study days and this week against its target, for the home page. */
+  getStudyPulse: () => invoke<StudyPulse>('get_study_pulse'),
   getProgressLesson: (source: ProgressEntry['source'], ownerId: string) => invoke<ProgressLesson | null>('get_progress_lesson', { source, ownerId }),
   /** Write a saved lesson and its questions as a CSV file in its class's folder. */
   exportLessonCsv: (source: ProgressEntry['source'], ownerId: string) => invoke<LessonFileResult>('export_lesson_csv', { source, ownerId }),

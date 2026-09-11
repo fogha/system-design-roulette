@@ -82,6 +82,174 @@ pub struct DashboardView {
     pub page_size: i64,
 }
 
+/// One day of the study pulse: what was finished, and about how long it took.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct PulseDay {
+    pub date: String,
+    pub completed: i64,
+    pub minutes: i64,
+    /// Short codes of the classes studied that day, for the tooltip.
+    pub classes: Vec<String>,
+}
+
+/// The home page's view of the habit: streaks, the last half year of days,
+/// and this week against its target.
+#[derive(Debug, Clone, Serialize)]
+pub struct StudyPulse {
+    pub today: String,
+    pub streak: i64,
+    pub longest_streak: i64,
+    pub study_days: i64,
+    pub completed_sessions: i64,
+    /// Every day of the window, oldest first, starting on a Monday so a
+    /// heat map lays out in whole weeks.
+    pub days: Vec<PulseDay>,
+    pub week_minutes: i64,
+    pub week_target_minutes: i64,
+    pub week_sessions: i64,
+    /// Share of submitted checks that passed, 0 to 1, when any were.
+    pub pass_rate: Option<f64>,
+}
+
+/// Days covered by the pulse: twenty-six weeks, the way a contribution
+/// graph shows half a year.
+pub const PULSE_WEEKS: i64 = 26;
+
+pub fn pulse(conn: &Connection, today: &str) -> Result<StudyPulse, String> {
+    let today_date = NaiveDate::parse_from_str(today, "%Y-%m-%d").map_err(|e| e.to_string())?;
+    let read = || -> rusqlite::Result<StudyPulse> {
+        // Completed sessions by day, with the class and its session length.
+        let mut statement = conn.prepare(&format!(
+            "{HISTORY} SELECT h.date, h.subject_id, COALESCE(p.short_code, upper(substr(h.subject_id,1,2))), COALESCE(p.session_minutes, 30), COUNT(*)
+             FROM history h LEFT JOIN classroom_programs p ON p.subject_id = h.subject_id
+             WHERE h.status='completed' AND h.date<=?1 GROUP BY h.date, h.subject_id ORDER BY h.date"
+        ))?;
+        let rows = statement
+            .query_map([today], |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, String>(2)?,
+                    r.get::<_, i64>(3)?,
+                    r.get::<_, i64>(4)?,
+                ))
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        let mut by_day: std::collections::BTreeMap<String, PulseDay> =
+            std::collections::BTreeMap::new();
+        for (date, _subject, short_code, minutes, count) in &rows {
+            let day = by_day.entry(date.clone()).or_insert_with(|| PulseDay {
+                date: date.clone(),
+                completed: 0,
+                minutes: 0,
+                classes: Vec::new(),
+            });
+            day.completed += count;
+            day.minutes += minutes * count;
+            if !day.classes.contains(short_code) {
+                day.classes.push(short_code.clone());
+            }
+        }
+        let completed_sessions = by_day.values().map(|day| day.completed).sum();
+        let study_days = by_day.len() as i64;
+
+        // Streaks: the current one may start yesterday; the longest is over all.
+        let dates: Vec<NaiveDate> = by_day
+            .keys()
+            .filter_map(|date| NaiveDate::parse_from_str(date, "%Y-%m-%d").ok())
+            .collect();
+        let mut streak = 0;
+        let mut expected = today_date;
+        for day in dates.iter().rev() {
+            if streak == 0 && *day == today_date - Duration::days(1) {
+                expected = *day;
+            }
+            if *day != expected {
+                break;
+            }
+            streak += 1;
+            expected -= Duration::days(1);
+        }
+        let mut longest_streak = 0;
+        let mut run = 0;
+        let mut previous: Option<NaiveDate> = None;
+        for day in &dates {
+            run = match previous {
+                Some(last) if *day == last + Duration::days(1) => run + 1,
+                _ => 1,
+            };
+            longest_streak = longest_streak.max(run);
+            previous = Some(*day);
+        }
+
+        // The window: whole weeks, Monday first, ending today.
+        let weekday = chrono::Datelike::weekday(&today_date).num_days_from_monday() as i64;
+        let first = today_date - Duration::days(weekday + 7 * (PULSE_WEEKS - 1));
+        let mut days = Vec::new();
+        let mut cursor = first;
+        while cursor <= today_date {
+            let key = cursor.to_string();
+            days.push(by_day.get(&key).cloned().unwrap_or(PulseDay {
+                date: key,
+                completed: 0,
+                minutes: 0,
+                classes: Vec::new(),
+            }));
+            cursor += Duration::days(1);
+        }
+
+        // This week against the classes' own targets.
+        let week_start = today_date - Duration::days(weekday);
+        let (week_minutes, week_sessions) = by_day
+            .values()
+            .filter(|day| {
+                NaiveDate::parse_from_str(&day.date, "%Y-%m-%d")
+                    .is_ok_and(|date| date >= week_start)
+            })
+            .fold((0, 0), |(minutes, sessions), day| {
+                (minutes + day.minutes, sessions + day.completed)
+            });
+        let mut statement = conn.prepare(
+            "SELECT p.subject_id, p.session_minutes, p.target_weekly_minutes,
+                    (SELECT COALESCE(SUM(json_array_length(weekdays_json)),0) FROM classroom_schedule_slots s WHERE s.subject_id=p.subject_id AND s.enabled=1)
+             FROM classroom_programs p WHERE p.enabled=1",
+        )?;
+        let week_target_minutes: i64 = statement
+            .query_map([], |r| {
+                Ok((
+                    r.get::<_, i64>(1)?,
+                    r.get::<_, i64>(2)?,
+                    r.get::<_, i64>(3)?,
+                ))
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?
+            .into_iter()
+            .map(|(session, target, slots)| if target > 0 { target } else { session * slots })
+            .sum();
+
+        let (passed, submitted): (i64, i64) = conn.query_row(
+            &format!(
+                "{HISTORY} SELECT COALESCE(SUM(CASE WHEN score >= 0.8 THEN 1 ELSE 0 END),0), COUNT(*) FROM history WHERE status='completed' AND score IS NOT NULL AND date<=?1"
+            ),
+            [today],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )?;
+        Ok(StudyPulse {
+            today: today.to_string(),
+            streak,
+            longest_streak,
+            study_days,
+            completed_sessions,
+            days,
+            week_minutes,
+            week_target_minutes,
+            week_sessions,
+            pass_rate: (submitted > 0).then(|| passed as f64 / submitted as f64),
+        })
+    };
+    read().map_err(|e| e.to_string())
+}
+
 pub fn read(
     conn: &Connection,
     today: &str,

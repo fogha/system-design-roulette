@@ -1253,6 +1253,13 @@ pub fn get_dashboard(
     crate::progress::read(&conn, &state.today(), &query.unwrap_or_default())
 }
 
+/// The home page's habit view: streaks, half a year of days, this week.
+#[tauri::command]
+pub fn get_study_pulse(state: State<'_, AppState>) -> CmdResult<crate::progress::StudyPulse> {
+    let conn = state.db.0.lock().unwrap();
+    crate::progress::pulse(&conn, &state.today())
+}
+
 #[tauri::command]
 pub fn get_progress_lesson(
     state: State<'_, AppState>,

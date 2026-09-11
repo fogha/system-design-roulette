@@ -773,3 +773,51 @@ fn a_foundations_path_makes_foundations_topics_beginner_lessons_and_later_ones_s
     assert!(contract.contains("inside 10 minutes"));
     assert!(contract.contains("Explain every term the first time it appears"));
 }
+
+#[test]
+fn the_study_pulse_counts_streaks_days_and_the_week_against_its_target() {
+    let (_, conn) = fixture();
+    activate(&conn, "javascript", 9);
+    let empty = progress::pulse(&conn, TODAY).unwrap();
+    assert_eq!(empty.streak, 0);
+    assert_eq!(empty.longest_streak, 0);
+    assert_eq!(
+        empty.days.len() as i64,
+        25 * 7 + 2,
+        "whole weeks from a Monday, ending today, a Tuesday"
+    );
+    assert_eq!(empty.days.first().unwrap().date, "2026-01-26", "a Monday");
+    assert_eq!(empty.days.last().unwrap().date, TODAY);
+    assert!(empty.days.iter().all(|day| day.completed == 0));
+    assert_eq!(
+        empty.week_target_minutes,
+        30 * 7,
+        "one class, every day, thirty minutes"
+    );
+    assert_eq!(empty.pass_rate, None);
+
+    let session = publish(&conn, &plan(&conn, "javascript", None));
+    engineering::activate(&conn, &session.id).unwrap();
+    let check = answer_all(&conn, &session, &[]);
+    engineering::submit(
+        &conn,
+        &session.id,
+        &check.round_id,
+        check.revision,
+        "Done.",
+        TODAY,
+    )
+    .unwrap();
+    let pulse = progress::pulse(&conn, TODAY).unwrap();
+    assert_eq!(pulse.streak, 1);
+    assert_eq!(pulse.longest_streak, 1);
+    assert_eq!(pulse.study_days, 1);
+    assert_eq!(pulse.completed_sessions, 1);
+    let today = pulse.days.last().unwrap();
+    assert_eq!(today.completed, 1);
+    assert_eq!(today.minutes, 30);
+    assert_eq!(today.classes, vec!["JS".to_string()]);
+    assert_eq!(pulse.week_minutes, 30);
+    assert_eq!(pulse.week_sessions, 1);
+    assert_eq!(pulse.pass_rate, Some(1.0));
+}

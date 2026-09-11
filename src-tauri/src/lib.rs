@@ -379,6 +379,7 @@ pub fn run() {
             commands::portability::export_lesson_csv,
             commands::portability::get_lesson_document,
             commands::portability::save_lesson_pdf,
+            commands::get_study_pulse,
             commands::search::get_search_settings,
             commands::search::set_search_settings,
             commands::search::set_search_key,
