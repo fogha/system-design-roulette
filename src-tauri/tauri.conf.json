@@ -28,7 +28,8 @@
           "$APPDATA/audio/**"
         ]
       }
-    }
+    },
+    "macOSPrivateApi": true
   },
   "bundle": {
     "active": true,

@@ -326,6 +326,31 @@ pub fn reschedule_appointment(
     Ok(view)
 }
 
+/// Bring the desk window forward from the menu bar panel.
+#[tauri::command]
+pub fn show_desk(app: AppHandle) {
+    crate::tray::hide_panel(&app);
+    crate::tray::show_window(&app);
+}
+
+/// Start the due class from the menu bar panel.
+#[tauri::command]
+pub fn start_from_tray(app: AppHandle, occurrence_id: String) -> CmdResult<()> {
+    crate::tray::start_from_outside(&app, &occurrence_id)
+}
+
+/// Quit from the menu bar panel; refused while an alarm rings or a session holds the desk.
+#[tauri::command]
+pub fn quit_desk(app: AppHandle) -> CmdResult<()> {
+    crate::tray::quit(&app)
+}
+
+/// Close the menu bar panel without doing anything.
+#[tauri::command]
+pub fn hide_tray_panel(app: AppHandle) {
+    crate::tray::hide_panel(&app);
+}
+
 /// Hold the alarm for a fixed number of minutes. It rings again afterwards;
 /// only starting the lesson ends it.
 #[tauri::command]

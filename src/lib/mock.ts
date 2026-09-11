@@ -1166,6 +1166,10 @@ export const mockApi = {
     mockDeepseekKeyConfigured = key.trim().length > 0;
   },
   snoozeAlarm: async (_occurrenceId: string, minutes: number) => new Date(Date.now() + minutes * 60_000).toISOString(),
+  showDesk: async () => {},
+  startFromTray: async () => {},
+  quitDesk: async () => { throw new Error('The browser preview cannot quit the desk.'); },
+  hideTrayPanel: async () => {},
   pauseSchedule: async () => {
     mockPaused = true;
   },

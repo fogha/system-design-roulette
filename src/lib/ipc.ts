@@ -728,6 +728,10 @@ const realApi = {
     }),
   skipAppointment: (occurrenceId: string) => invoke<AppointmentView>('skip_appointment', { occurrenceId }),
   snoozeAlarm: (occurrenceId: string, minutes: number) => invoke<string>('snooze_alarm', { occurrenceId, minutes }),
+  showDesk: () => invoke<void>('show_desk'),
+  startFromTray: (occurrenceId: string) => invoke<void>('start_from_tray', { occurrenceId }),
+  quitDesk: () => invoke<void>('quit_desk'),
+  hideTrayPanel: () => invoke<void>('hide_tray_panel'),
   rescheduleAppointment: (occurrenceId: string, localTime: string) => invoke<AppointmentView>('reschedule_appointment', { occurrenceId, localTime }),
   getClassAppointments: (subjectId: ClassroomSubjectId) => invoke<AppointmentView[]>('get_class_appointments', { subjectId }),
   resumeClassroomSession: (subjectId: ClassroomSubjectId) =>

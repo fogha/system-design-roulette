@@ -276,12 +276,20 @@ pub fn run() {
                 // The desk stays resident: closing the window hides it behind
                 // the menu bar icon, and a lock keeps it in front.
                 api.prevent_close();
+                if window.label() == tray::PANEL_LABEL {
+                    let _ = window.hide();
+                    return;
+                }
                 let state = window.app_handle().state::<AppState>();
                 if state.debug_day || !state.locked.load(Ordering::SeqCst) {
                     let _ = window.hide();
                 }
             }
             tauri::WindowEvent::Focused(false) => {
+                if window.label() == tray::PANEL_LABEL {
+                    let _ = window.hide();
+                    return;
+                }
                 let state = window.app_handle().state::<AppState>();
                 if !state.debug_day && state.locked.load(Ordering::SeqCst) {
                     let _ = window.set_focus();
@@ -352,6 +360,10 @@ pub fn run() {
             commands::skip_class_lesson,
             commands::skip_appointment,
             commands::snooze_alarm,
+            commands::show_desk,
+            commands::start_from_tray,
+            commands::quit_desk,
+            commands::hide_tray_panel,
             commands::reschedule_appointment,
             commands::set_class_focus_policy,
             commands::get_class_appointments,

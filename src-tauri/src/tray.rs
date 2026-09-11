@@ -12,11 +12,17 @@ use crate::state::AppState;
 use std::sync::atomic::Ordering;
 use tauri::{
     menu::{Menu, MenuBuilder, MenuItemBuilder},
-    tray::TrayIconBuilder,
-    AppHandle, Emitter, Manager,
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, WebviewUrl, WebviewWindowBuilder,
 };
 
 pub const TRAY_ID: &str = "desk";
+/// The popover under the icon. A left click toggles it; the native menu stays
+/// on the right button so Quit and the plain list are never more than a click
+/// away if the panel misbehaves.
+pub const PANEL_LABEL: &str = "tray";
+const PANEL_WIDTH: f64 = 380.0;
+const PANEL_HEIGHT: f64 = 600.0;
 
 fn label_item(
     app: &AppHandle,
@@ -149,6 +155,36 @@ pub fn show_window(app: &AppHandle) {
     }
 }
 
+/// Start a due class from outside the desk window: bring the desk up and let
+/// its store run the start, so preparation shows exactly as it would in-app.
+pub fn start_from_outside(app: &AppHandle, occurrence: &str) -> Result<(), String> {
+    let state = app.state::<AppState>();
+    let alarm = alarm::current(&state).ok_or("Nothing is due right now.")?;
+    if alarm.occurrence_id != occurrence && alarm.queued == 0 {
+        return Err("That appointment is not the one due.".into());
+    }
+    hide_panel(app);
+    show_window(app);
+    app.emit(
+        "tray:start",
+        serde_json::json!({ "course_id": alarm.course_id, "occurrence_id": occurrence }),
+    )
+    .map_err(|e| e.to_string())
+}
+
+/// Quit from the menu bar: refused while an alarm rings or a session holds the desk.
+pub fn quit(app: &AppHandle) -> Result<(), String> {
+    let state = app.state::<AppState>();
+    if state.alarm_ringing.load(Ordering::SeqCst) {
+        return Err("The study alarm is ringing. Start the lesson first.".into());
+    }
+    if state.locked.load(Ordering::SeqCst) {
+        return Err("A focused session holds the desk. Finish or break the glass first.".into());
+    }
+    app.exit(0);
+    Ok(())
+}
+
 fn handle(app: &AppHandle, id: &str) {
     let state = app.state::<AppState>();
     match id {
@@ -166,25 +202,14 @@ fn handle(app: &AppHandle, id: &str) {
             alarm::evaluate(app);
         }
         "quit" => {
-            if state.alarm_ringing.load(Ordering::SeqCst) || state.locked.load(Ordering::SeqCst) {
-                log::warn!("quit refused: an alarm or a focused session holds the desk");
-                return;
+            if let Err(error) = quit(app) {
+                log::warn!("quit refused: {error}");
             }
-            app.exit(0);
         }
         other => {
             if let Some(occurrence) = other.strip_prefix("start:") {
-                if let Some(alarm) = alarm::current(&state) {
-                    if alarm.occurrence_id == occurrence || alarm.queued > 0 {
-                        show_window(app);
-                        let _ = app.emit(
-                            "tray:start",
-                            serde_json::json!({
-                                "course_id": alarm.course_id,
-                                "occurrence_id": occurrence,
-                            }),
-                        );
-                    }
+                if let Err(error) = start_from_outside(app, occurrence) {
+                    log::warn!("start from the menu bar failed: {error}");
                 }
             } else if let Some(rest) = other.strip_prefix("snooze:") {
                 if let Some((occurrence, minutes)) = rest.rsplit_once(':') {
@@ -202,14 +227,71 @@ fn handle(app: &AppHandle, id: &str) {
     }
 }
 
+/// The panel window, created on first use and hidden rather than closed.
+fn panel(app: &AppHandle) -> tauri::Result<tauri::WebviewWindow> {
+    if let Some(window) = app.get_webview_window(PANEL_LABEL) {
+        return Ok(window);
+    }
+    let window = WebviewWindowBuilder::new(app, PANEL_LABEL, WebviewUrl::App("tray".into()))
+        .title("Principia Desk")
+        .decorations(false)
+        .transparent(true)
+        .resizable(false)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .visible(false)
+        .inner_size(PANEL_WIDTH, PANEL_HEIGHT)
+        .build()?;
+    Ok(window)
+}
+
+/// Show the panel centred under the icon, or hide it if it is showing.
+fn toggle_panel(app: &AppHandle, rect: tauri::Rect) {
+    let Ok(window) = panel(app) else {
+        return;
+    };
+    if window.is_visible().unwrap_or(false) {
+        let _ = window.hide();
+        return;
+    }
+    let scale = window.scale_factor().unwrap_or(1.0);
+    let position = rect.position.to_logical::<f64>(scale);
+    let size = rect.size.to_logical::<f64>(scale);
+    let x = (position.x + size.width / 2.0 - PANEL_WIDTH / 2.0).max(8.0);
+    let y = position.y + size.height + 6.0;
+    let _ = window.set_size(LogicalSize::new(PANEL_WIDTH, PANEL_HEIGHT));
+    let _ = window.set_position(LogicalPosition::new(x, y));
+    let _ = window.show();
+    let _ = window.set_focus();
+    let _ = app.emit("tray:refresh", ());
+}
+
+/// Hide the panel, for instance when it loses focus or after an action.
+pub fn hide_panel(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window(PANEL_LABEL) {
+        let _ = window.hide();
+    }
+}
+
 /// Install the icon once at startup. Later state changes go through `refresh`.
 pub fn install(app: &AppHandle) -> tauri::Result<()> {
     let menu = build(app, None)?;
     let mut builder = TrayIconBuilder::with_id(TRAY_ID)
         .tooltip("Principia Desk")
         .menu(&menu)
-        .show_menu_on_left_click(true)
-        .on_menu_event(|app, event| handle(app, event.id().as_ref()));
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, event| handle(app, event.id().as_ref()))
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                rect,
+                ..
+            } = event
+            {
+                toggle_panel(tray.app_handle(), rect);
+            }
+        });
     if let Some(icon) = app.default_window_icon().cloned() {
         builder = builder.icon(icon);
     }
