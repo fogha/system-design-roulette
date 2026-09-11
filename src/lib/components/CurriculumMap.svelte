@@ -23,16 +23,18 @@
     onchallenge?: (phase: CurriculumPhase, label: string) => void;
   } = $props();
 
-  const BADGES: Record<CurriculumConceptView['path_status'], { label: string; tone: string }> = {
-    completed_here: { label: 'Completed here', tone: 'ok' },
-    prior_knowledge_checked: { label: 'Prior knowledge checked', tone: 'teal' },
-    bypassed_by_choice: { label: 'Bypassed by choice', tone: 'muted' },
-    needs_refresher: { label: 'Needs refresher', tone: 'warn' },
-    not_assessed: { label: 'Not assessed', tone: 'muted' },
-    bridge: { label: 'Bridge lesson', tone: 'warn' },
-    in_progress: { label: 'In progress', tone: 'accent' },
-    upcoming: { label: 'Upcoming', tone: 'faint' },
+  const BADGES: Record<CurriculumConceptView['path_status'], { label: string; tone: string; meaning: string }> = {
+    completed_here: { label: 'Completed here', tone: 'ok', meaning: 'You finished a lesson on this topic in this class.' },
+    prior_knowledge_checked: { label: 'Prior knowledge checked', tone: 'teal', meaning: 'A unit challenge showed you already know this, so no lesson is scheduled.' },
+    bypassed_by_choice: { label: 'Set aside by choice', tone: 'muted', meaning: 'You chose to skip it. It was never assessed and earns no credit.' },
+    needs_refresher: { label: 'Needs refresher', tone: 'warn', meaning: 'A sample for this topic was not demonstrated in your starting-point check, so a short refresher runs before the work that depends on it.' },
+    not_assessed: { label: 'Not assessed', tone: 'muted', meaning: 'Before your starting point and never sampled: unknown rather than failed.' },
+    bridge: { label: 'Bridge lesson', tone: 'warn', meaning: 'A gap seen during practice. A short lesson is queued before more dependent work.' },
+    in_progress: { label: 'In progress', tone: 'accent', meaning: 'A lesson on this topic is open right now.' },
+    upcoming: { label: 'Upcoming', tone: 'faint', meaning: 'On your route and still ahead of you.' },
   };
+  /** Only the states actually present, so the legend explains what is on screen. */
+  const legend = $derived([...new Set(map.concepts.map((c) => c.path_status))].map((status) => ({ status, ...BADGES[status] })).filter((row) => row.label));
   const canBypass = (status: CurriculumConceptView['path_status']) => ['upcoming', 'in_progress', 'needs_refresher'].includes(status);
   const canInclude = (status: CurriculumConceptView['path_status']) => ['bypassed_by_choice', 'not_assessed', 'prior_knowledge_checked'].includes(status);
 
@@ -72,7 +74,13 @@
           <div><dt>Route</dt><dd>revision {map.path.revision} · from {map.path.entry_label}</dd></div>
           <div><dt>Set aside</dt><dd>{map.path.bypassed} bypassed · {map.path.checked} checked · {map.path.refreshers} refreshers{#if map.path.bridges} · {map.path.bridges} bridges{/if}</dd></div>
         </dl>
-        <p class="coverage-note">Bypassed and checked topics count toward neither denominator; revising the route never rewrites earlier results.</p>
+        <p class="coverage-note">Set-aside and checked topics count toward neither denominator; revising the route never rewrites earlier results.</p>
+        {#if legend.length}
+          <details class="legend"><summary>What these labels mean</summary>
+            <dl>{#each legend as row (row.status)}<div><dt><span class={`badge tone-${row.tone}`}>{row.label}</span></dt><dd>{row.meaning}</dd></div>{/each}</dl>
+            {#if onrevise}<p class="coverage-note"><strong>Check out</strong> removes a topic from your route without a lesson, and it stops counting toward your progress. <strong>Include</strong> puts one back. Neither awards credit, and neither changes work you have already done.</p>{/if}
+          </details>
+        {/if}
       {/if}
       {#if map.bridge_proposals.length && onrevise}
         <section class="bridges" aria-label="Suggested bridge lessons">
@@ -123,7 +131,7 @@
                 <strong>{concept.title}</strong>
                 <p>{concept.learner_outcome}</p>
                 <span class="meta mono">
-                  <span class={`badge tone-${BADGES[concept.path_status]?.tone ?? 'faint'}`}>{BADGES[concept.path_status]?.label ?? concept.path_status}</span>
+                  <span class={`badge tone-${BADGES[concept.path_status]?.tone ?? 'faint'}`} title={BADGES[concept.path_status]?.meaning ?? ''}>{BADGES[concept.path_status]?.label ?? concept.path_status}</span>
                   {#if concept.required}<span class="badge tone-accent">required</span>{/if}
                   {concept.mastery_state}
                   {#if concept.prerequisites.length}
@@ -149,6 +157,10 @@
   .coverage { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px 16px; margin: 12px 0 0; font-size: 10px; }
   .coverage div { display: grid; gap: 2px; } .coverage dt { color: var(--faint); letter-spacing: 0.08em; text-transform: uppercase; font-size: 9px; } .coverage dd { margin: 0; color: var(--fg); }
   .coverage-note { margin-top: 8px !important; font-size: 11px !important; color: var(--faint) !important; }
+  .legend { margin-top: 10px; } .legend summary { cursor: pointer; font-size: 11px; color: var(--violet-fg); }
+  .legend dl { display: grid; gap: 7px; margin: 9px 0 4px; } .legend dl > div { display: grid; grid-template-columns: 190px 1fr; gap: 10px; align-items: baseline; }
+  .legend dt { margin: 0; } .legend dd { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
+  @media (max-width: 620px) { .legend dl > div { grid-template-columns: 1fr; gap: 2px; } }
   .badge { display: inline-block; border: 1px solid var(--node-border); border-radius: var(--radius-detail); padding: 1px 6px; margin-right: 6px; font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; }
   .badge.tone-ok { color: var(--green); border-color: var(--green); } .badge.tone-teal { color: var(--teal-fg); border-color: var(--teal-fg); } .badge.tone-warn { color: var(--led-warn); border-color: var(--led-warn); }
   .badge.tone-accent { color: var(--accent); border-color: var(--accent); } .badge.tone-muted { color: var(--muted); } .badge.tone-faint { color: var(--faint); }

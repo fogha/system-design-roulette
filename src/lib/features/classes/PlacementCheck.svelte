@@ -20,6 +20,7 @@
   const question = $derived(check?.questions[index]);
   const selected = $derived(question ? work?.responses[question.id]?.answer ?? '' : '');
   const recovery = $derived(work?.status === 'conflict' || work?.status === 'error');
+  const demonstrated = $derived(check?.criteria.filter((row) => row.verdict === 'passed').length ?? 0);
   const label = (verdict: string) => verdict === 'passed' ? 'Sample demonstrated' : verdict === 'needs_practice' ? 'Needs practice' : 'Unassessed';
   function install(value: DiagnosticView) {
     if (!alive) return;
@@ -100,8 +101,23 @@
       </div></div>{/if}
     {:else}
       <NodeCard Icon={Compass} name="entry-evidence" badge="samples only" badgeTone="teal">
-        <div class="results">{#each check.criteria as row}<details><summary><span>{row.label}</span><span class:passed={row.verdict === 'passed'} class="verdict mono">{label(row.verdict)}</span></summary>{#each row.evidence as item, i}<div class="evidence"><p class="mono">{i === 0 ? 'Initial sample' : 'Follow-up'} · {label(item.verdict)}</p><p>{item.explanation}</p><p><strong>Expected:</strong> {item.expected_answer}</p></div>{/each}</details>{/each}</div>
-        <p class="scope"><strong>Still unassessed:</strong> {check.unknown_areas.join('; ')}.</p>
+        <div class="score">
+          <p class="tally"><strong>{demonstrated}</strong> <span>of {check.criteria.length} sampled criteria demonstrated</span></p>
+          <div class="meter" role="img" aria-label={`${demonstrated} of ${check.criteria.length} sampled criteria demonstrated`}><i style:width={`${check.criteria.length ? (demonstrated / check.criteria.length) * 100 : 0}%`}></i></div>
+          <p class="reading">{demonstrated === check.criteria.length
+            ? 'Every sample held up, so the suggested route starts after the material they cover.'
+            : demonstrated === 0
+              ? 'No sample held up, so the suggested route starts from the foundations.'
+              : `The suggested route starts after the last pair that held up, and the ${check.criteria.length - demonstrated} that did not become refreshers.`}</p>
+        </div>
+        {#each [{ key: 'passed', title: 'Demonstrated' }, { key: 'needs_practice', title: 'Needs practice' }, { key: 'unknown', title: 'Skipped' }] as group (group.key)}
+          {@const rows = check.criteria.filter((row) => row.verdict === group.key)}
+          {#if rows.length}
+            <h4 class="group mono">{group.title} · {rows.length}</h4>
+            <div class="results">{#each rows as row (row.id)}<details><summary><span>{row.label}</span><span class:passed={row.verdict === 'passed'} class="verdict mono">{label(row.verdict)}</span></summary>{#each row.evidence as item, i}<div class="evidence"><p class="mono">{i === 0 ? 'Initial sample' : 'Follow-up'} · {label(item.verdict)}</p><p>{item.explanation}</p><p><strong>Expected:</strong> {item.expected_answer}</p></div>{/each}</details>{/each}</div>
+          {/if}
+        {/each}
+        <details class="unmeasured"><summary>What this check did not measure · {check.unknown_areas.length}</summary><p class="scope">Unknown, not failed. Six samples cannot cover a course, so these stay open: lessons cover them as you reach them, and a unit challenge can check one early. Nothing here needs action now.</p><ul>{#each check.unknown_areas as area (area)}<li>{area}</li>{/each}</ul></details>
         <div class="actions">
           {#if check.can_follow_up}<button class="ghost mono-ghost" disabled={busy} onclick={() => run(async () => install(await api.continuePlacementCheck(draft.id, check!.round_id)))}>Try prerequisite follow-up · up to 2 questions</button>{/if}
           {#if !check.completed}<button class="cta mono-cta" disabled={busy} onclick={finish}>Use these results</button>
@@ -122,6 +138,15 @@
   .actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin-top: 20px; }
   .save-state { color: var(--muted); font-size: 10px; }
   .warning { border-left: 2px solid var(--led-warn); background: var(--warn-bg); color: var(--warn-fg); padding: 10px 14px; font-size: 12px; line-height: 1.7; }
+  .score { border: 1px solid var(--accent); border-radius: var(--radius-panel); padding: 13px 15px; margin-bottom: 16px; display: grid; gap: 8px; }
+  .tally strong { font: 30px var(--font-display); color: var(--fg); } .tally span { color: var(--muted); font-size: 13px; }
+  .tally { margin: 0; display: flex; align-items: baseline; gap: 8px; }
+  .meter { height: 5px; border-radius: 3px; background: var(--bg); overflow: hidden; } .meter i { display: block; height: 100%; background: var(--accent); }
+  .reading { margin: 0; font-size: 13px; line-height: 1.6; }
+  .group { font-size: 10px; letter-spacing: .7px; color: var(--faint); margin: 16px 0 2px; text-transform: uppercase; }
+  .unmeasured { margin-top: 16px; border-top: 1px dashed var(--node-divider); padding-top: 12px; }
+  .unmeasured summary { cursor: pointer; font-size: 12px; color: var(--violet-fg); }
+  .unmeasured ul { margin: 6px 0 0; padding-left: 18px; } .unmeasured li { font-size: 12px; line-height: 1.6; color: var(--muted); }
   .results details { border-bottom: 1px dashed var(--node-divider); padding: 13px 0; }
   summary { cursor: pointer; font-size: 13px; line-height: 1.6; }
   .verdict { display: inline-block; margin-left: 12px; color: var(--muted); font-size: 10px; }
