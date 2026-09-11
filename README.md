@@ -54,19 +54,27 @@ Each class carries a focus policy: **advisory** (the window comes to front, noth
 
 ![Class settings with enforcement](docs/screenshots/17-class-settings-enforcement.png)
 
-### The only ways out of a locked session
+### Ways out of a locked session
+
+Strict mode blocks Cmd+Tab, Force Quit and logout, so it must never be the only thing standing between you and your own machine. Four ways out, in the order you would reach for them:
 
 1. **Finish the check.**
 2. **Break glass.** A dim link reveals a long phrase rendered as non-copyable SVG (paste disabled). Typing it pauses the focused class lesson with its work kept and releases the lock; three wrong attempts lock the input for 60 seconds.
-3. **The dev back door.** `touch ~/sdr-unlock` releases the lock within a second. Delete this code path if you want no mercy.
+3. **A release token.** Create a file or folder named `sdr-unlock` in any of these places and the lock releases within a second:
+   - your home directory (`touch ~/sdr-unlock`),
+   - the temporary directory (`/tmp` on macOS and Linux),
+   - **the root of any mounted volume** — a USB stick, an external disk, a mounted share.
 
-Force-shutdown does not help: an active focused session reopens at its saved position on the next launch.
+   The volume rule is the one that needs no terminal and no second machine: prepare a stick once, keep it near the desk, and plug it in. While a token exists the kiosk also refuses to engage at all, so a machine that boots with the stick in stays free. Delete the token to re-arm.
+4. **The dead man's switch.** A lock releases itself after three hours regardless of what the app believes. No lesson runs that long; a lock still standing is a stuck process, and it lets go.
+
+A force shutdown alone does not end a session: an active focused session reopens at its saved position on the next launch. Boot with the release token in place instead.
 
 ### Recovery (if a broken build ever locks you out)
 
 The kiosk refuses to engage until the webview reports ready (white-screen guard), so a dead frontend cannot hold a lock. If you are ever stuck anyway:
 
-1. **From another machine** (SSH/Screen Sharing):
+1. **Plug in the release stick** described above, or create the file from another machine over SSH or Screen Sharing:
    ```bash
    touch ~/sdr-unlock
    launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.darkmatter.system-design-roulette.plist
@@ -75,7 +83,7 @@ The kiosk refuses to engage until the webview reports ready (white-screen guard)
 2. **Safe Mode** (Apple Silicon: hold power → pick disk → hold Shift): third-party LaunchAgents do not load. Run the same commands in Terminal, reboot.
 3. **Recovery Mode Terminal**: `rm "/Volumes/Macintosh HD/Users/<you>/Library/LaunchAgents/com.darkmatter.system-design-roulette.plist"` and `touch "/Volumes/Macintosh HD/Users/<you>/sdr-unlock"`, then reboot.
 
-While `~/sdr-unlock` exists the app can never hold a lock; delete it to re-arm.
+Nothing here depends on the app being healthy: the token is checked by the same loop that holds focus, and the dead man's switch fires without any input at all.
 
 ## Content generation: your provider
 

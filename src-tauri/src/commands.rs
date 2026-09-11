@@ -213,9 +213,7 @@ pub fn get_app_state(state: State<'_, AppState>) -> CmdResult<AppStateView> {
                 .unwrap_or(0),
         )
     };
-    let enforcement_disarmed = std::env::var_os("HOME")
-        .map(|h| std::path::Path::new(&h).join("sdr-unlock").exists())
-        .unwrap_or(false);
+    let enforcement_disarmed = crate::kiosk::release_token().is_some();
     let (schedule_paused, kiosk_level, selected_focus) = {
         let conn = state.db.0.lock().unwrap();
         (
