@@ -618,3 +618,51 @@ fn a_due_topic_gets_a_retrieval_session_from_fresh_or_repeated_material() {
         "ts-inference-flow"
     );
 }
+
+#[test]
+fn a_lease_left_by_a_crashed_run_is_released_at_startup_so_start_is_never_trapped() {
+    let (_, conn) = fixture();
+    activate(&conn, "typescript", 12);
+    let session = plan(&conn, "typescript", None);
+    let now = chrono::Utc::now();
+    // A worker claims an hour, then the process dies mid-generation.
+    let dead = sessions::claim_preparation(&conn, &session.id, now, 3600)
+        .unwrap()
+        .unwrap();
+    assert!(
+        sessions::claim_preparation(&conn, &session.id, now, 3600)
+            .unwrap()
+            .is_none(),
+        "while the lease stands nothing else may prepare"
+    );
+
+    // The next launch finds the orphan and fails it.
+    assert_eq!(
+        sessions::release_orphaned_preparations(&conn, now).unwrap(),
+        1
+    );
+    assert_eq!(
+        sessions::release_orphaned_preparations(&conn, now).unwrap(),
+        0
+    );
+    let job = sessions::preparation(&conn, &session.id).unwrap();
+    assert_eq!(job.status, "failed");
+    assert!(job.error.unwrap().contains("did not survive"));
+
+    // The dead worker can no longer publish, and a fresh Start can.
+    assert!(sessions::publish_preparation(
+        &conn,
+        &dead,
+        &PreparedLesson {
+            title: "ghost".into(),
+            body: json!({}),
+            provenance: json!({"kind":"ghost"}),
+        },
+        now
+    )
+    .is_err());
+    sessions::retry_preparation(&conn, &session.id, now).unwrap();
+    assert!(sessions::claim_preparation(&conn, &session.id, now, 60)
+        .unwrap()
+        .is_some());
+}

@@ -114,6 +114,11 @@ pub fn run() {
             }
             scheduler::retire_legacy();
             let conn = db::open(&database)?;
+            match domain::sessions::release_orphaned_preparations(&conn, chrono::Utc::now()) {
+                Ok(0) => {}
+                Ok(count) => log::warn!("released {count} preparation lease(s) orphaned by the last run"),
+                Err(error) => log::error!("could not release orphaned preparations: {error}"),
+            }
             db::seed_concepts(&conn, SEED_CONCEPTS)?;
             let startup_today = chrono::Local::now().format("%Y-%m-%d").to_string();
             language::initialize(&conn, &startup_today).map_err(std::io::Error::other)?;

@@ -490,6 +490,21 @@ pub fn fail_preparation(
     tx.commit()?;
     Ok(())
 }
+/// Fail every preparation that was still running when the app last stopped.
+///
+/// Preparation workers live inside this process, so a lease still standing at
+/// startup belongs to a worker that no longer exists: the app crashed or was
+/// killed mid-generation. Left alone, that lease blocks every Start for up to
+/// an hour while the study alarm rings, which is a trap. Marking the job
+/// failed lets the next Start retry it, and the old worker could not publish
+/// anyway because its token is gone with it.
+pub fn release_orphaned_preparations(conn: &Connection, now: DateTime<Utc>) -> Result<usize> {
+    let released = conn.execute(
+        "UPDATE study_preparation_jobs SET status='failed',lease_token=NULL,lease_expires_at=NULL,finished_token=NULL,error='Preparation did not survive an app restart. Start again to retry it.',updated_at=?1 WHERE status='running'",
+        [stamp(now)],
+    )?;
+    Ok(released)
+}
 pub fn retry_preparation(conn: &Connection, id: &SessionId, now: DateTime<Utc>) -> Result<()> {
     let tx = transaction(conn)?;
     if get(&tx, id)?.status != Status::Preparing {
