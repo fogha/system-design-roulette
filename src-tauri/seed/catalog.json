@@ -127,7 +127,10 @@
       ],
       "reference_lessons": [
         "js-event-loop",
-        "js-v8-hidden-classes"
+        "js-v8-hidden-classes",
+        "js-closures-scope",
+        "js-browser-security-model",
+        "js-atomics-sharedarraybuffer"
       ]
     },
     {
