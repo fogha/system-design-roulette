@@ -36,11 +36,11 @@ pub fn default_model(id: RunnerId) -> String {
     match id {
         RunnerId::ClaudeCli => "opus".into(),
         RunnerId::DeepseekApi => {
-            std::env::var("DEEPSEEK_MODEL").unwrap_or_else(|_| "deepseek-v4-flash".into())
+            std::env::var("DEEPSEEK_MODEL").unwrap_or_else(|_| "deepseek-flash".into())
         }
-        RunnerId::AnthropicApi => "claude-sonnet-4-6".into(),
-        RunnerId::OpenaiApi => "gpt-4o-mini".into(),
-        RunnerId::GoogleApi => "gemini-2.5-flash".into(),
+        RunnerId::AnthropicApi => "claude-sonnet-5".into(),
+        RunnerId::OpenaiApi => "gpt-5.6-terra".into(),
+        RunnerId::GoogleApi => "gemini-3.5-flash".into(),
         RunnerId::OpenrouterApi => "openrouter/free".into(),
         RunnerId::GroqApi => "llama-3.3-70b-versatile".into(),
         RunnerId::MistralApi => "mistral-large-latest".into(),

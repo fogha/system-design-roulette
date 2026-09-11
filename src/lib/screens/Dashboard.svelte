@@ -22,7 +22,10 @@
   let compactTab = $state<'summary' | 'history'>('summary');
   let opener: HTMLButtonElement | null = null;
   const selectedClass = $derived(data?.classes.find(c => c.subject_id === selected));
-  const classOptions = $derived([{value:'',label:'All classes'},...(data?.classes??[]).map(c=>({value:c.subject_id,label:c.label}))]);
+  /** The ledger lists the classes you actually study: active ones, plus any
+   *  paused class that still holds completed sessions. */
+  const ledgerClasses = $derived((data?.classes ?? []).filter(c => c.enabled || c.completed_sessions > 0 || c.subject_id === selected));
+  const classOptions = $derived([{value:'',label:'All classes'},...ledgerClasses.map(c=>({value:c.subject_id,label:c.label}))]);
   const statusOptions = [{value:'',label:'All results'},{value:'completed',label:'Completed'},{value:'in_progress',label:'In progress'},{value:'skipped',label:'Skipped'}];
   const pageCount = $derived(Math.max(1,Math.ceil((data?.history_total??0)/(data?.page_size??8))));
   const recentCompleted = $derived(data?.activity.reduce((sum,day)=>sum+day.completed,0)??0);
@@ -72,10 +75,10 @@
   {#if error}<div class="error" role="alert"><span>{error}</span><button class="ghost mono-ghost" onclick={() => reload++}>Retry</button><button class="icon-button" aria-label="Dismiss progress error" onclick={() => error=''}><X size={15}/></button></div>{/if}
   <div class="progress-workspace" hidden={viewing!==null} aria-busy={busy}>
     <aside aria-label="Progress by class">
-      <div class="sidebar-heading mono">YOUR CLASSES<span>{data?.classes.length??'—'}</span></div>
+      <div class="sidebar-heading mono">YOUR CLASSES<span>{data ? ledgerClasses.length : '—'}</span></div>
       <button class="all-classes" class:selected={!selected} aria-pressed={!selected} onclick={() => chooseClass('')}><Layers size={18}/><span>All classes<small>Your complete learning record</small></span></button>
       <nav class="class-list" aria-label="Filter progress by class">
-        {#each data?.classes??[] as course (course.subject_id)}
+        {#each ledgerClasses as course (course.subject_id)}
           <button class="class-row" class:selected={selected===course.subject_id} aria-pressed={selected===course.subject_id} onclick={() => chooseClass(course.subject_id)}>
             <CourseGlyph courseId={course.subject_id} size={30}/><span class="class-copy"><strong>{course.label}</strong><span class="class-meta"><span>{course.completed_sessions} completed</span><span>{Math.round(course.progress*100)}%</span></span><span class="coverage-track" aria-label={course.progress_label}><i style:width={`${Math.max(0,Math.min(100,course.progress*100))}%`}></i></span></span>
           </button>

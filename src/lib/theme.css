@@ -74,9 +74,17 @@ button, input, textarea {
   border-radius: var(--radius-control);
 }
 
-:is(button, input, select, textarea, summary, a):focus-visible {
+:is(button, select, summary, a, input[type='checkbox'], input[type='radio']):focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
+}
+
+/* Text fields carry their own focus indication. An offset ring escapes the
+   compound controls they sit in — a search row with a leading icon or a
+   trailing button — where the wrapper's overflow clips it to a stray sliver.
+   Those wrappers light their own border with :focus-within instead. */
+:is(input[type='text'], input[type='time'], input[type='search'], input[type='password'], input[type='number'], input[type='url'], textarea):focus-visible {
+  outline: none;
 }
 
 html,
@@ -203,6 +211,11 @@ textarea {
 }
 input:focus,
 textarea:focus {
+  border-color: var(--accent);
+}
+
+/* A control that wraps a borderless input shows the focus on the wrapper. */
+.field-group:focus-within {
   border-color: var(--accent);
 }
 

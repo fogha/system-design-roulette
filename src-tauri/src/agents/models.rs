@@ -118,18 +118,141 @@ pub fn decode(id: RunnerId, value: Value) -> Vec<ModelOption> {
     out.dedup_by(|a, b| a.id == b.id);
     out
 }
+/// Model identifiers published by each provider, used before a key is saved so
+/// a shortlist can be built offline. The live `/models` catalogue replaces this
+/// as soon as a key exists, and any other identifier can be typed in by hand.
+/// Sources: each provider's own model documentation, checked 2026-09-11.
+/// Model names each CLI documents for its `--model` flag. A CLI has no
+/// catalogue endpoint, so these come from its own reference pages (checked
+/// 2026-09-11); every one of these CLIs also accepts any other identifier,
+/// which the shortlist's "Add by ID" control covers.
+pub fn cli(id: RunnerId) -> Vec<ModelOption> {
+    let rows: &[(&str, &str)] = match id {
+        RunnerId::ClaudeCli => &[
+            ("default", "Runner default · your account's model"),
+            ("best", "Best available to your account"),
+            ("fable", "Latest Fable"),
+            ("opus", "Latest Opus"),
+            ("sonnet", "Latest Sonnet"),
+            ("haiku", "Latest Haiku"),
+            ("opusplan", "Opus while planning, Sonnet while executing"),
+            ("fable[1m]", "Fable · 1M-token context"),
+            ("opus[1m]", "Opus · 1M-token context"),
+            ("sonnet[1m]", "Sonnet · 1M-token context"),
+            ("claude-fable-5-1", "Claude Fable 5.1"),
+            ("claude-opus-5", "Claude Opus 5"),
+            ("claude-sonnet-5", "Claude Sonnet 5"),
+            ("claude-haiku-4-5", "Claude Haiku 4.5"),
+        ],
+        RunnerId::CodexCli => &[
+            ("default", "Runner default · your account's model"),
+            ("gpt-6-astra", "GPT-6 Astra"),
+            ("gpt-5.6-sol", "GPT-5.6 Sol"),
+            ("gpt-5.6-terra", "GPT-5.6 Terra"),
+            ("gpt-5.6-luna", "GPT-5.6 Luna"),
+            ("gpt-5.3-codex-spark", "GPT-5.3 Codex Spark"),
+            ("gpt-5.5", "GPT-5.5"),
+        ],
+        RunnerId::GeminiCli => &[
+            ("default", "Runner default · your account's model"),
+            ("auto", "Auto · the CLI picks per request"),
+            ("pro", "Pro tier alias"),
+            ("flash", "Flash tier alias"),
+            ("flash-lite", "Flash-Lite tier alias"),
+            ("gemini-3.1-pro-preview", "Gemini 3.1 Pro (preview)"),
+            ("gemini-3.5-flash", "Gemini 3.5 Flash"),
+            ("gemini-3-flash", "Gemini 3 Flash"),
+            ("gemini-3.1-flash-lite", "Gemini 3.1 Flash-Lite"),
+            ("gemini-2.5-pro", "Gemini 2.5 Pro"),
+            ("gemini-2.5-flash", "Gemini 2.5 Flash"),
+            ("gemini-2.5-flash-lite", "Gemini 2.5 Flash-Lite"),
+        ],
+        RunnerId::CursorCli => &[
+            ("default", "Runner default · your account's model"),
+            ("auto", "Auto · Cursor selects the model"),
+            ("auto-smart", "Cursor Router · balances cost and capability"),
+            ("composer-2.5", "Composer 2.5"),
+            ("composer-2", "Composer 2"),
+            ("claude-opus-5", "Claude Opus 5"),
+            ("claude-opus-5-fast", "Claude Opus 5 Fast"),
+            ("gpt-5.6-sol", "GPT-5.6 Sol"),
+            ("gemini-3.1-pro", "Gemini 3.1 Pro"),
+            ("grok-4.6", "Grok 4.6"),
+        ],
+        _ => &[("default", "Runner default · your account's model")],
+    };
+    rows.iter()
+        .map(|(id, label)| {
+            let mut model = option(id);
+            model.label = (*label).into();
+            model
+        })
+        .collect()
+}
+pub fn bundled(id: RunnerId) -> Vec<ModelOption> {
+    let rows: &[(&str, &str)] = match id {
+        RunnerId::AnthropicApi => &[
+            ("claude-fable-5-1", "Claude Fable 5.1"),
+            ("claude-opus-5", "Claude Opus 5"),
+            ("claude-sonnet-5", "Claude Sonnet 5"),
+            ("claude-haiku-4-5-20251001", "Claude Haiku 4.5"),
+        ],
+        RunnerId::OpenaiApi => &[
+            ("gpt-6-astra", "GPT-6 Astra"),
+            ("gpt-5.6-sol", "GPT-5.6 Sol"),
+            ("gpt-5.6-terra", "GPT-5.6 Terra"),
+            ("gpt-5.6-luna", "GPT-5.6 Luna"),
+            ("gpt-5.5", "GPT-5.5"),
+            ("gpt-5.5-pro", "GPT-5.5 Pro"),
+            ("gpt-5.4-mini", "GPT-5.4 mini"),
+            ("gpt-5.3-codex", "GPT-5.3 Codex"),
+        ],
+        RunnerId::GoogleApi => &[
+            ("gemini-3.8-flash", "Gemini 3.8 Flash"),
+            ("gemini-3.7-flash", "Gemini 3.7 Flash"),
+            ("gemini-3.6-flash", "Gemini 3.6 Flash"),
+            ("gemini-3.5-flash", "Gemini 3.5 Flash"),
+            ("gemini-3.5-flash-lite", "Gemini 3.5 Flash-Lite"),
+            ("gemini-3.1-pro-preview", "Gemini 3.1 Pro (preview)"),
+            ("gemini-2.5-pro", "Gemini 2.5 Pro"),
+            ("gemini-2.5-flash", "Gemini 2.5 Flash"),
+        ],
+        RunnerId::GroqApi => &[
+            ("llama-3.3-70b-versatile", "Llama 3.3 70B Versatile"),
+            ("llama-3.1-8b-instant", "Llama 3.1 8B Instant"),
+            ("openai/gpt-oss-120b", "GPT-OSS 120B"),
+            ("openai/gpt-oss-20b", "GPT-OSS 20B"),
+            ("groq/compound", "Groq Compound"),
+            ("groq/compound-mini", "Groq Compound Mini"),
+        ],
+        RunnerId::MistralApi => &[
+            ("mistral-large-latest", "Mistral Large 3"),
+            ("mistral-medium-latest", "Mistral Medium 3.5"),
+            ("mistral-small-latest", "Mistral Small 4"),
+            ("ministral-14b-latest", "Ministral 3 14B"),
+            ("ministral-8b-latest", "Ministral 3 8B"),
+            ("ministral-3b-latest", "Ministral 3 3B"),
+            ("codestral-latest", "Codestral"),
+        ],
+        RunnerId::DeepseekApi => &[
+            ("deepseek-flash", "DeepSeek V4.1 Flash"),
+            ("deepseek-v4-pro", "DeepSeek V4 Pro"),
+        ],
+        _ => &[],
+    };
+    rows.iter()
+        .map(|(id, label)| {
+            let mut model = option(id);
+            model.label = (*label).into();
+            model
+        })
+        .collect()
+}
 pub async fn discover(_runner: &Runner, id: RunnerId, refresh: bool) -> Result<ModelCatalog> {
     if id.kind() == "cli" {
         return Ok(ModelCatalog {
-            models: if id == RunnerId::ClaudeCli {
-                ["default", "opus", "sonnet", "haiku"]
-                    .into_iter()
-                    .map(option)
-                    .collect()
-            } else {
-                vec![option("default")]
-            },
-            source: "CLI aliases; enter a full model ID for another model".into(),
+            models: cli(id),
+            source: "Documented CLI model names · any other ID can be added by hand".into(),
             error: None,
         });
     }
@@ -144,8 +267,8 @@ pub async fn discover(_runner: &Runner, id: RunnerId, refresh: bool) -> Result<M
     let key = api::key(id);
     if id.metered() && id != RunnerId::OpenrouterApi && key.is_none() {
         return Ok(ModelCatalog {
-            models: vec![],
-            source: "API key required".into(),
+            models: bundled(id),
+            source: "Published models · save a key to load the live catalogue".into(),
             error: None,
         });
     }

@@ -742,3 +742,39 @@ async fn unusable_provider_response_still_accounts_actual_model_tokens_and_cost(
     assert_eq!(calls[0].output_tokens, Some(2048));
     assert_eq!(calls[0].cost_usd, Some(0.025));
 }
+
+#[test]
+fn every_runner_offers_models_before_a_key_exists() {
+    for id in RunnerId::ALL {
+        let listed = if id.kind() == "cli" {
+            models::cli(id)
+        } else {
+            models::bundled(id)
+        };
+        if id == RunnerId::CustomCli {
+            assert_eq!(listed.len(), 1, "the custom CLI only knows its own default");
+            continue;
+        }
+        if id == RunnerId::OpenrouterApi || id == RunnerId::OllamaApi {
+            // Both list live: OpenRouter needs no key, Ollama reads this machine.
+            continue;
+        }
+        assert!(
+            listed.len() > 1,
+            "{} should publish its models before a key exists",
+            id.label()
+        );
+        for model in &listed {
+            assert!(!model.id.trim().is_empty() && !model.id.contains(' '));
+            assert!(!model.label.trim().is_empty());
+        }
+        let mut ids: Vec<_> = listed.iter().map(|m| m.id.clone()).collect();
+        ids.sort();
+        let total = ids.len();
+        ids.dedup();
+        assert_eq!(ids.len(), total, "{} lists a model twice", id.label());
+    }
+    assert!(models::cli(RunnerId::ClaudeCli)
+        .iter()
+        .any(|m| m.id == "default"));
+}

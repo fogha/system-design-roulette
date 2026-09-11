@@ -66,7 +66,14 @@
   .status-line { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; } .status-line strong { font-size: 13px; } .status-line span { color: var(--muted); font: 9px var(--font-mono); } .status-line .running { color: var(--led-ok); } .status-line button { margin-left: auto; }
   .small-action { padding: 6px 8px; background: var(--bg); border: 1px solid var(--node-border); color: var(--text); font-size: 10px; cursor: pointer; white-space: nowrap; } button:disabled { opacity: .4; cursor: default; }
   .install { display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px dashed var(--node-border); padding: 11px; } a { color: var(--accent); font-size: 11px; }
-  .tabs { display: flex; gap: 14px; border-bottom: 1px solid var(--node-border); } .tabs button { padding: 9px 0; color: var(--muted); border: 0; border-bottom: 2px solid transparent; background: transparent; font-size: 11px; cursor: pointer; } .tabs .active { color: var(--accent); border-bottom-color: var(--accent); } .tabs span { font: 9px var(--font-mono); margin-left: 4px; }
+  .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--node-border); }
+  .tabs button { position: relative; display: flex; align-items: center; gap: 6px; padding: 9px 11px; margin-bottom: -1px; color: var(--muted); border: 0; background: transparent; font-size: 11px; line-height: 1; cursor: pointer; border-radius: var(--radius-detail) var(--radius-detail) 0 0; }
+  .tabs button:hover:not(.active) { color: var(--text); background: var(--surface); }
+  .tabs button::after { content: ''; position: absolute; inset: auto 0 0; height: 2px; background: transparent; }
+  .tabs .active { color: var(--accent); } .tabs .active::after { background: var(--accent); }
+  .tabs button:focus-visible { outline: 1px solid var(--accent); outline-offset: -3px; }
+  .tabs span { min-width: 15px; padding: 2px 4px; border-radius: var(--radius-detail); background: var(--surface-2); color: var(--muted); font: 9px/1.3 var(--font-mono); text-align: center; }
+  .tabs .active span { background: var(--accent); color: var(--bg); }
   .search-row { display: flex; gap: 8px; } input { min-width: 0; flex: 1; border: 1px solid var(--node-border); background: var(--bg); color: var(--text); font-size: 11px; padding: 9px; }
   .model-row { border-bottom: 1px solid var(--node-border); padding-bottom: 10px; } .row-main { display: flex; align-items: center; gap: 7px; min-height: 37px; } .model-copy { flex: 1; min-width: 0; display: grid; gap: 5px; } .model-copy strong { color: var(--text); font-size: 11px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .model-copy span { color: var(--muted); font-size: 9px; } .expand { padding: 0; border: 0; background: transparent; text-align: left; cursor: pointer; }
   .detail { padding-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; } .detail p { flex-basis: 100%; }

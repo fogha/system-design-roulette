@@ -3,7 +3,7 @@
   import { app } from '../stores.svelte';
   import ClusterBar from '../components/ClusterBar.svelte';
   import RunnerSetup from '../features/runners/RunnerSetup.svelte';
-  import { Rocket, X } from 'lucide-svelte';
+  import { ArrowLeft, ArrowRight, Check, Rocket, X } from 'lucide-svelte';
 
   let model = $state('opus');
   let agent = $state('claude');
@@ -12,15 +12,40 @@
   let phrase2 = $state('');
   let submitting = $state(false);
   let error = $state('');
+  let step = $state(0);
+
+  const STEPS = [
+    { title: 'Tutor', heading: 'Choose the tutor that writes your lessons', blurb: 'Pick a runner and the model it should use. You can keep a shortlist of models per provider and change any of this later, per class.' },
+    { title: 'Recovery', heading: 'Set your break-glass phrase', blurb: 'Typing this phrase ends an enforced session. It is deliberately long so it cannot be reflexive, and using it breaks your streak.' },
+    { title: 'Deploy', heading: 'Review and deploy', blurb: 'This writes your preferences and opens the desk. Next you choose a class, set its starting point and add study times.' },
+  ];
+
+  const phraseReady = $derived(phrase.trim().length >= 40 && phrase.trim() === phrase2.trim());
+  const phraseProblem = $derived(
+    phrase.trim().length < 40
+      ? `escape phrase must be at least 40 characters · ${phrase.trim().length}/40`
+      : phrase.trim() !== phrase2.trim()
+        ? 'phrases do not match'
+        : '',
+  );
+
+  function canLeave(index: number) {
+    return index === 0 || (index === 1 ? phraseReady : true);
+  }
+  function goto(next: number) {
+    if (next > step && !canLeave(step)) {
+      error = phraseProblem;
+      return;
+    }
+    error = '';
+    step = Math.max(0, Math.min(STEPS.length - 1, next));
+  }
 
   async function finish() {
     error = '';
-    if (phrase.trim().length < 40) {
-      error = 'escape phrase must be at least 40 characters';
-      return;
-    }
-    if (phrase.trim() !== phrase2.trim()) {
-      error = 'phrases do not match';
+    if (!phraseReady) {
+      step = 1;
+      error = phraseProblem;
       return;
     }
     submitting = true;
@@ -41,48 +66,75 @@
   <div class="boot-body">
     <header class="boot-head">
       <h1>Bootstrap your training cluster</h1>
-      <p class="sub">
-        Configure your tutor and recovery preferences, then choose a class and its study times.
-      </p>
+      <p class="sub">Three short steps: your tutor, your way out, then deploy.</p>
     </header>
 
-    <div class="flow">
-      <!-- 01 · tutor -->
-      <section class="stage">
-        <span class="step mono">01</span>
+    <ol class="steps" aria-label="Setup steps">
+      {#each STEPS as item, index (item.title)}
+        <li class:done={index < step} class:current={index === step}>
+          <button
+            type="button"
+            aria-current={index === step ? 'step' : undefined}
+            disabled={index > step}
+            onclick={() => goto(index)}
+          >
+            <span class="chip mono">{#if index < step}<Check size={12} />{:else}{index + 1}{/if}</span>
+            <span class="name">{item.title}</span>
+          </button>
+        </li>
+      {/each}
+    </ol>
+
+    <section class="panel" aria-label={STEPS[step].title}>
+      <h2>{STEPS[step].heading}</h2>
+      <p class="sub">{STEPS[step].blurb}</p>
+
+      {#if step === 0}
         <RunnerSetup bind:agent bind:model bind:customBin initiallyExpanded onKeyChanged={() => app.refresh()} />
-      </section>
-
-        <div class="pipe" aria-hidden="true"></div>
-
-      <!-- escape phrase -->
-      <section class="stage">
-        <span class="step mono">02</span>
+      {:else if step === 1}
         <div class="break-glass">
-          <div class="bg-tag">BREAK<br />GLASS</div>
+          <div class="bg-tag mono">BREAK<br />GLASS</div>
           <div class="bg-fields">
-            <div class="bg-label">ESCAPE_PHRASE — circuit breaker · trips streak to 0 · min 40 chars</div>
-            <input class="bg-input mono" type="text" bind:value={phrase} />
+            <label class="bg-label mono" for="escape-phrase">ESCAPE_PHRASE — circuit breaker · trips streak to 0 · min 40 chars</label>
+            <input id="escape-phrase" class="bg-input mono" type="text" bind:value={phrase} />
             <input
               class="bg-input mono"
               type="text"
+              aria-label="Repeat the escape phrase"
               placeholder="type it again to confirm"
               bind:value={phrase2}
             />
+            <p class="bg-state mono" role="status">
+              {phraseReady ? 'phrase confirmed' : phraseProblem}
+            </p>
           </div>
         </div>
-      </section>
-    </div>
+      {:else}
+        <dl class="review">
+          <div><dt class="mono">TUTOR</dt><dd>{agent === 'custom' ? `Custom CLI · ${customBin || 'command set in the library'}` : agent}</dd></div>
+          <div><dt class="mono">MODEL</dt><dd>{model || 'runner default'}</dd></div>
+          <div><dt class="mono">ESCAPE_PHRASE</dt><dd>{phrase.trim().length} characters · confirmed</dd></div>
+          <div><dt class="mono">ENFORCEMENT</dt><dd>Advisory to start. Each class carries its own policy in its Settings tab.</dd></div>
+        </dl>
+      {/if}
+    </section>
 
     {#if error}<p class="error mono"><X size={12} /> {error}</p>{/if}
 
-    <div class="deploy-row">
-      <button class="cta mono-cta" onclick={finish} disabled={submitting}>
-        {#if !submitting}<Rocket size={14} />{/if}{submitting ? '… deploying' : 'deploy to prod'}
+    <div class="nav-row">
+      <button class="ghost mono-ghost" disabled={step === 0 || submitting} onclick={() => goto(step - 1)}>
+        <ArrowLeft size={13} /> Back
       </button>
-      <span class="hint">
-        Next: choose a class, set your starting point and add study times.
-      </span>
+      <span class="hint mono">Step {step + 1} of {STEPS.length}</span>
+      {#if step < STEPS.length - 1}
+        <button class="cta mono-cta" disabled={!canLeave(step)} onclick={() => goto(step + 1)}>
+          Continue <ArrowRight size={13} />
+        </button>
+      {:else}
+        <button class="cta mono-cta" onclick={finish} disabled={submitting}>
+          {#if !submitting}<Rocket size={14} />{/if}{submitting ? '… deploying' : 'deploy to prod'}
+        </button>
+      {/if}
     </div>
   </div>
 </div>
@@ -101,57 +153,96 @@
     padding: 34px 24px 64px;
   }
   .boot-head {
-    margin-bottom: 26px;
+    margin-bottom: 22px;
   }
   h1 {
     font-size: 28px;
     margin-bottom: 6px;
   }
+  h2 {
+    font-size: 17px;
+    margin: 0 0 6px;
+  }
   .sub {
     color: var(--muted);
     font-size: 13px;
     margin: 0;
-    max-width: 52ch;
+    max-width: 56ch;
   }
 
-  /* vertical service flow */
-  .flow {
+  /* step rail */
+  .steps {
     display: flex;
-    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    list-style: none;
+    margin: 0 0 18px;
+    padding: 0;
   }
-  .stage {
-    position: relative;
-    padding-left: 38px;
+  .steps li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
   }
-  /* step number rail */
-  .step {
-    position: absolute;
-    left: 0;
-    top: 10px;
-    width: 24px;
-    text-align: center;
-    font-size: 11px;
+  .steps li + li::before {
+    content: '';
+    width: 28px;
+    border-top: 1.5px dashed var(--violet);
+    opacity: 0.6;
+  }
+  .steps button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 9px 5px 5px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-control);
+    background: transparent;
     color: var(--faint);
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .steps button:disabled {
+    cursor: default;
+  }
+  .steps .current button {
+    border-color: var(--node-border);
+    background: var(--surface);
+    color: var(--fg);
+  }
+  .steps .done button {
+    color: var(--muted);
+  }
+  .chip {
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
     border: 1px solid var(--node-border);
     border-radius: var(--radius-control);
-    padding: 3px 0;
     background: var(--bg);
+    font-size: 11px;
   }
-  /* dashed connector between stages, aligned over the step rail */
-  .pipe {
-    width: 0;
-    height: 22px;
-    margin-left: 11px;
-    border-left: 1.5px dashed var(--violet);
-    opacity: 0.7;
+  .steps .current .chip {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .steps .done .chip {
+    border-color: var(--led-ok);
+    color: var(--led-ok);
   }
 
-  .hint {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    color: var(--faint);
-    line-height: 1.6;
+  .panel {
+    display: grid;
+    gap: 14px;
+    align-content: start;
+    min-height: 260px;
   }
+  .panel .sub {
+    margin-bottom: 4px;
+  }
+
   .break-glass {
     background: #1f1316;
     border: 1px dashed #793030;
@@ -162,7 +253,6 @@
     align-items: flex-start;
   }
   .bg-tag {
-    font-family: var(--font-mono);
     font-size: 10px;
     color: var(--led-err);
     border: 1px solid #793030;
@@ -179,13 +269,11 @@
     gap: 8px;
   }
   .bg-label {
-    font-family: var(--font-mono);
     font-size: 10px;
     color: #a05050;
     letter-spacing: 0.5px;
   }
   .bg-input {
-    font-family: var(--font-mono);
     font-size: 12px;
     color: #d8b0a8;
     background: var(--bg);
@@ -196,15 +284,69 @@
   .bg-input:focus {
     border-color: #793030;
   }
+  .bg-state {
+    font-size: 10px;
+    color: #a05050;
+    margin: 2px 0 0;
+  }
+
+  .review {
+    display: grid;
+    gap: 1px;
+    margin: 0;
+    border: 1px solid var(--node-border);
+    border-radius: var(--radius-panel);
+    overflow: hidden;
+    background: var(--node-border);
+  }
+  .review > div {
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    gap: 12px;
+    padding: 11px 13px;
+    background: var(--surface);
+  }
+  .review dt {
+    font-size: 10px;
+    color: var(--faint);
+    letter-spacing: 0.6px;
+  }
+  .review dd {
+    margin: 0;
+    font-size: 12px;
+    color: var(--fg);
+    overflow-wrap: anywhere;
+  }
+
   .error {
     color: var(--bad-fg);
     font-size: 12px;
     margin: 14px 0 0;
   }
-  .deploy-row {
+  .nav-row {
     margin-top: 22px;
     display: flex;
     align-items: center;
     gap: 16px;
+  }
+  .nav-row .cta {
+    margin-left: auto;
+  }
+  .hint {
+    font-size: 10px;
+    color: var(--faint);
+  }
+
+  @media (max-width: 560px) {
+    .steps li + li::before {
+      width: 12px;
+    }
+    .steps .name {
+      display: none;
+    }
+    .review > div {
+      grid-template-columns: 1fr;
+      gap: 4px;
+    }
   }
 </style>

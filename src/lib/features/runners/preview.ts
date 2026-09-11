@@ -3,10 +3,10 @@ import type { RunnerInfo, ModelCatalog, LocalStatus, RunnerId, RunnerConfigurati
 const definitions = [
   ['claude', 'Claude Code', 'opus'], ['codex', 'Codex', 'default'],
   ['cursor', 'Cursor Agent', 'default'], ['gemini', 'Gemini CLI', 'default'],
-  ['custom', 'Custom CLI', 'default'], ['anthropic', 'Anthropic API', 'claude-sonnet-4-6'],
-  ['openai', 'OpenAI API', 'gpt-4o-mini'], ['google', 'Google Gemini API', 'gemini-2.5-flash'],
+  ['custom', 'Custom CLI', 'default'], ['anthropic', 'Anthropic API', 'claude-sonnet-5'],
+  ['openai', 'OpenAI API', 'gpt-5.6-terra'], ['google', 'Google Gemini API', 'gemini-3.5-flash'],
   ['openrouter', 'OpenRouter', 'openrouter/free'], ['groq', 'Groq API', 'llama-3.3-70b-versatile'],
-  ['mistral', 'Mistral API', 'mistral-large-latest'], ['deepseek', 'DeepSeek API', 'deepseek-v4-flash'],
+  ['mistral', 'Mistral API', 'mistral-large-latest'], ['deepseek', 'DeepSeek API', 'deepseek-flash'],
   ['ollama', 'Ollama', 'llama3.2:3b'],
 ];
 const cli = new Set(['claude', 'codex', 'cursor', 'gemini', 'custom']);
