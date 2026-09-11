@@ -71,7 +71,7 @@ fn a_challenge_checks_out_demonstrated_samples_only_without_credit_or_sessions()
             challenge.questions.len(),
             challenge.submitted
         ),
-        ("foundations", 1, 2, false)
+        ("foundations", 1, 3, false)
     );
     assert_eq!(
         challenges::get(&conn, "typescript")
@@ -116,6 +116,18 @@ fn a_challenge_checks_out_demonstrated_samples_only_without_credit_or_sessions()
         },
     )
     .unwrap();
+    let revision = challenges::save_response(
+        &conn,
+        "typescript",
+        &challenge.round_id,
+        revision,
+        &challenge.questions[2].id,
+        Response {
+            answer: String::new(),
+            status: ResponseStatus::Skipped,
+        },
+    )
+    .unwrap();
     assert!(challenges::apply(
         &conn,
         "typescript",
@@ -137,7 +149,7 @@ fn a_challenge_checks_out_demonstrated_samples_only_without_credit_or_sessions()
             .collect::<Vec<_>>(),
         vec![first.competency.as_str()]
     );
-    assert_eq!(submitted.needs_practice.len(), 1);
+    assert_eq!(submitted.needs_practice.len(), 2);
     assert_eq!(submitted.applied_revision, None);
     // Submission is immutable and re-submission returns the same view.
     assert_eq!(
@@ -145,7 +157,7 @@ fn a_challenge_checks_out_demonstrated_samples_only_without_credit_or_sessions()
             .unwrap()
             .criteria
             .len(),
-        2
+        3
     );
     let path = challenges::apply(
         &conn,
@@ -280,7 +292,7 @@ fn one_open_challenge_per_class_and_only_authored_units() {
         .unwrap();
     }
     let failed = challenges::submit(&conn, "typescript", &open.round_id, revision).unwrap();
-    assert!(failed.demonstrated.is_empty() && failed.needs_practice.len() == 2);
+    assert!(failed.demonstrated.is_empty() && failed.needs_practice.len() == 3);
     assert!(
         challenges::apply(&conn, "typescript", &failed.attempt_id.0, 1, "2026-09-10")
             .unwrap_err()

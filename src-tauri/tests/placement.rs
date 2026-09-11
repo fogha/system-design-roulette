@@ -81,7 +81,15 @@ fn all_nine_banks_and_command_flows_work_without_lessons_focus_or_mastery() {
         let wire = serde_json::to_value(&view).unwrap();
         assert!(wire["questions"][0].get("answer").is_none());
         assert!(view.matches_draft);
-        assert!(view.questions.len() >= 2 && view.questions.len() <= 6);
+        let sampled_stages = if course.kind == catalog::SubjectKind::Language {
+            2 // the fixture's default goal is A2, so B1 and B2 are not sampled
+        } else {
+            4
+        };
+        assert_eq!(
+            view.questions.len(),
+            sampled_stages * placement::CRITERIA_PER_ENTRY_POINT
+        );
         let done = answer(&conn, &draft, view, &[], false);
         assert!(done.criteria.iter().all(|r| r.verdict == Verdict::Passed));
         assert!(
@@ -91,7 +99,13 @@ fn all_nine_banks_and_command_flows_work_without_lessons_focus_or_mastery() {
         placement::finish(&conn, &draft.id, &done.round_id).unwrap();
         let recommendation = placement::recommend(&conn, &draft.id, draft.revision).unwrap();
         assert!(!recommendation.required_outcome.is_empty());
-        assert!(!recommendation.unknown_areas.is_empty());
+        // Every stage was sampled, so a full pass reaches the last one and
+        // nothing is left with the excuse of never having been measured.
+        assert_eq!(
+            recommendation.criteria.len(),
+            sampled_stages * placement::CRITERIA_PER_ENTRY_POINT,
+            "the check samples every stage it can place you in"
+        );
         assert_eq!(
             recommendation.entry_point,
             if course.kind == catalog::SubjectKind::Language {
@@ -207,15 +221,36 @@ fn skipped_checks_remain_unknown_and_uneven_profiles_get_specific_bridges() {
             .entry_point,
         "foundations"
     );
+    // An uneven profile: foundations demonstrated, one mechanisms sample
+    // missed. The route stops there rather than reading the later stage as
+    // permission to skip the gap.
     let next = placement::start(&conn, &draft.id, draft.revision, true).unwrap();
     assert_ne!(next.attempt_id, skipped.attempt_id);
-    let done = answer(&conn, &draft, next, &[0, 4, 5], false);
+    let done = answer(&conn, &draft, next, &[4], false);
     placement::finish(&conn, &draft.id, &done.round_id).unwrap();
     let path = placement::recommend(&conn, &draft.id, draft.revision).unwrap();
-    assert_eq!(path.entry_point, "production");
-    assert!(path.refreshers.iter().any(|r| r.id == "bs-arguments"));
-    assert_eq!(count(&conn, "assessment_attempts"), 2);
-    assert_eq!(count(&conn, "assessment_submissions"), 2);
+    assert_eq!(path.entry_point, "mechanisms");
+    assert!(
+        path.refreshers.iter().any(|r| r.id == "bs-loops"),
+        "an earlier prerequisite that upcoming work needs and the check did not sample is queued as a refresher"
+    );
+    assert!(
+        !path.refreshers.iter().any(|r| r.id == "bs-arguments"),
+        "a demonstrated sample is not queued again"
+    );
+    // A stage the learner never reached is not silently skipped.
+    let third = placement::start(&conn, &draft.id, draft.revision, true).unwrap();
+    let all_right = answer(&conn, &draft, third, &[], false);
+    placement::finish(&conn, &draft.id, &all_right.round_id).unwrap();
+    assert_eq!(
+        placement::recommend(&conn, &draft.id, draft.revision)
+            .unwrap()
+            .entry_point,
+        "synthesis",
+        "every stage demonstrated reaches the last one"
+    );
+    assert_eq!(count(&conn, "assessment_attempts"), 3);
+    assert_eq!(count(&conn, "assessment_submissions"), 3);
 }
 #[test]
 fn followups_are_bounded_idempotent_and_retain_original_criterion_evidence() {
@@ -251,8 +286,8 @@ fn changed_goal_invalidates_recommendation_without_rewriting_the_old_check() {
     let first = placement::start(&conn, &draft.id, draft.revision, false).unwrap();
     assert_eq!(
         first.questions.len(),
-        4,
-        "A2 goal should not require B1 samples"
+        2 * placement::CRITERIA_PER_ENTRY_POINT,
+        "an A2 goal samples A1 and A2 and leaves B1 and B2 alone"
     );
     let done = answer(&conn, &draft, first, &[], false);
     placement::finish(&conn, &draft.id, &done.round_id).unwrap();
@@ -281,7 +316,10 @@ fn changed_goal_invalidates_recommendation_without_rewriting_the_old_check() {
             .matches_draft
     );
     let fresh = placement::start(&conn, &edited.id, edited.revision, true).unwrap();
-    assert_eq!(fresh.questions.len(), 6);
+    assert_eq!(
+        fresh.questions.len(),
+        3 * placement::CRITERIA_PER_ENTRY_POINT
+    );
     assert_ne!(Some(fresh.attempt_id), original.assessment_attempt_id);
     assert_eq!(count(&conn, "assessment_submissions"), 1);
 }

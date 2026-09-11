@@ -98,12 +98,6 @@
 
   <section class="outcome" aria-label="Required outcome">
     <p>{path.required_outcome}</p>
-    {#if path.unknown_areas.length}
-      <details><summary>What this route has not measured · {path.unknown_areas.length}</summary>
-        <p class="fine">Unknown, not failed. Lessons cover these as you reach them, and a unit challenge can check one early.</p>
-        <ul>{#each path.unknown_areas as area (area)}<li>{area}</li>{/each}</ul>
-      </details>
-    {/if}
   </section>
 
   <footer>
@@ -164,10 +158,6 @@
 
   .outcome { border-left: 2px solid var(--violet); padding-left: 14px; display: grid; gap: 8px; }
   .outcome > p { margin: 0; font-size: 13px; line-height: 1.65; }
-  .outcome summary { cursor: pointer; font-size: 11px; color: var(--violet-fg); }
-  .outcome details ul { margin: 6px 0 0; padding-left: 18px; }
-  .outcome details li { font-size: 11px; line-height: 1.6; color: var(--muted); }
-  .fine { font-size: 11px; color: var(--muted); margin: 6px 0 0; line-height: 1.6; }
 
   footer { display: grid; gap: 12px; }
   footer > p { margin: 0; font: 11px/1.7 var(--font-mono); color: var(--muted); border-left: 2px solid var(--node-border); padding-left: 12px; }

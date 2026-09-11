@@ -28,7 +28,8 @@ describe('preview placement contracts', () => {
       expect(path.entry_point).toBe(course.kind === 'language' ? 'A2' : 'synthesis');
       expect(path.criteria.every((r) => r.verdict === 'passed')).toBe(true);
       expect(path.required_outcome).toBe(course.outcome);
-      expect(path.unknown_areas.length).toBeGreaterThan(0);
+      expect(check.stages.length).toBe(course.kind === 'language' ? 2 : 4);
+      expect(check.stages.every((stage) => stage.questions === 3 && stage.samples.length === 3)).toBe(true);
     }
   });
   it('restores drafts, rejects stale answers and wrong owners, and preserves skipped samples as unknown', async () => {

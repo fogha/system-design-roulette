@@ -55,9 +55,18 @@ function view(id: EnrollmentDraftId, attempt: Attempt): DiagnosticView {
     criteria: collect(attempt), submitted: round.result !== null, completed: attempt.completed,
     can_follow_up: followups(attempt).length > 0,
     matches_draft: current.status === 'draft' && same(current, attempt.draft) && same(current.course, previewEnrollmentOptions(current.course.course_id).course) && same(bank(current.course.course_id), attempt.bank),
-    course: attempt.draft.course, scope_note: attempt.bank.scope_note, unknown_areas: attempt.bank.unknown_areas,
+    course: attempt.draft.course, scope_note: attempt.bank.scope_note,
+    stages: stageSamples(attempt),
     estimated_minutes: Math.min(attempt.rounds[0].questions.length + 2, attempt.bank.estimated_minutes),
   };
+}
+function stageSamples(attempt: Attempt) {
+  const entries = previewEnrollmentOptions(attempt.draft.course.course_id).entry_points;
+  const first = new Set(attempt.rounds[0].questions.map((q) => q.id));
+  return entries.flatMap((entry) => {
+    const samples = attempt.bank.questions.filter((q) => q.entry_point === entry.id && first.has(q.id)).map((q) => q.label);
+    return samples.length ? [{ id: entry.id, label: entry.label, questions: samples.length, samples }] : [];
+  });
 }
 function round(questions: Question[]): Round { return { id: `preview-round-${crypto.randomUUID()}` as AssessmentRoundId, questions: structuredClone(questions), revision: 0, responses: {}, result: null }; }
 export async function getPreviewPlacement(id: EnrollmentDraftId) { draft(id); const attempt = history(id).at(-1); return attempt ? view(id, attempt) : null; }
@@ -113,15 +122,19 @@ export async function recommendPreviewPath(id: EnrollmentDraftId, revision: numb
   const current = draft(id, revision); const course = courseDefinition(current.course.course_id)!;
   const entries = course.entry_points; const entry = current.configuration.entry;
   let start = entry.route === 'manual' ? entries.findIndex((e) => e.id === entry.entry_point) : 0;
-  let criteria: CriterionResult[] = []; let unknown = ['Prior knowledge has not been assessed by this setup.']; let attemptId: AssessmentAttemptId | null = null;
+  let criteria: CriterionResult[] = []; let attemptId: AssessmentAttemptId | null = null;
   let explanation = entry.route === 'foundations' ? 'Begin with the introductory material. Familiar topics can be revisited or checked later.' : 'Your declared starting point sets this provisional route. Earlier material remains available; this choice does not award grades or mastery.';
   if (entry.route === 'diagnostic') {
     const { attempt } = latest(id); const diagnostic = view(id, attempt);
     if (!attempt.completed) throw new Error('Finish the diagnostic or choose another entry route before reviewing the path.');
     if (!diagnostic.matches_draft) throw new Error('The setup, goal or diagnostic bank changed; complete a new check or choose a manual starting point.');
-    criteria = diagnostic.criteria; unknown = diagnostic.unknown_areas; attemptId = attempt.id;
-    entries.forEach((entry, index) => { const rows = criteria.filter((r) => r.entry_point === entry.id); if (rows.length >= 2 && rows.every((r) => r.verdict === 'passed')) start = Math.min(index + 1, entries.length - 1); });
-    explanation = 'This provisional starting point follows the latest fully demonstrated pair of samples. Earlier gaps need targeted refreshers; six samples do not establish whole-course mastery.';
+    criteria = diagnostic.criteria; attemptId = attempt.id;
+    for (const [index, stage] of entries.entries()) {
+      const rows = criteria.filter((r) => r.entry_point === stage.id);
+      if (rows.length !== 3 || !rows.every((r) => r.verdict === 'passed')) break;
+      start = Math.min(index + 1, entries.length - 1);
+    }
+    explanation = 'The check sampled every stage of this course. Your lessons begin at the first stage you did not fully demonstrate, and anything missed earlier becomes a refresher before the work that depends on it.';
   }
   const goal = current.configuration.goal;
   if (goal.kind === 'language_level') start = Math.min(start, entries.findIndex((e) => e.id === goal.target_level));
@@ -134,5 +147,5 @@ export async function recommendPreviewPath(id: EnrollmentDraftId, revision: numb
     for (const topic of earlier) if (dependencies.has(topic.id) && !criteria.some((r) => r.competency === topic.id && r.verdict === 'passed')) refreshers.push({ ...topic, reason: 'An upcoming topic depends on this earlier material; check it before dependent work.' });
   } else for (const band of entries.slice(0, start)) earlier.push({ id: band.id, label: `${band.label} introductory material`, reason: 'A provisional band preference; listening, speaking and writing remain separately assessed.' });
   for (const row of criteria) if (row.verdict !== 'passed' && entries.findIndex((e) => e.id === row.entry_point) < start && !refreshers.some((r) => r.id === row.competency)) refreshers.push({ id: row.competency, label: row.label, reason: row.verdict === 'unknown' ? 'This prerequisite sample was skipped and remains unknown.' : 'This sample showed a gap; revisit it before dependent work.' });
-  return { id: `preview-recommendation-${id}-${revision}-${attemptId ?? entry.route}`, draft_id: id, draft_revision: revision, course: current.course, route: entry.route, entry_point: entries[start].id, entry_label: entries[start].label, explanation, earlier_topics: earlier, refreshers, criteria, unknown_areas: unknown, required_outcome: course.outcome, assessment_attempt_id: attemptId };
+  return { id: `preview-recommendation-${id}-${revision}-${attemptId ?? entry.route}`, draft_id: id, draft_revision: revision, course: current.course, route: entry.route, entry_point: entries[start].id, entry_label: entries[start].label, explanation, earlier_topics: earlier, refreshers, criteria, required_outcome: course.outcome, assessment_attempt_id: attemptId };
 }

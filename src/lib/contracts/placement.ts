@@ -11,14 +11,17 @@ export interface DiagnosticView {
   questions: { id: string; label: string; prompt: string; choices: { id: string; text: string }[] }[];
   responses: Record<string, AssessmentResponse>; criteria: CriterionResult[];
   submitted: boolean; completed: boolean; can_follow_up: boolean; matches_draft: boolean;
-  course: CourseReference; scope_note: string; unknown_areas: string[]; estimated_minutes: number;
+  course: CourseReference; scope_note: string; estimated_minutes: number;
+  /** What the first round samples, stage by stage, so the learner is briefed before the first question. */
+  stages: StageSample[];
 }
+export interface StageSample { id: string; label: string; questions: number; samples: string[] }
 export interface PathTopic { id: string; label: string; reason: string }
 export interface PathRecommendation {
   id: string; draft_id: EnrollmentDraftId; draft_revision: number; course: CourseReference;
   route: 'foundations' | 'manual' | 'diagnostic'; entry_point: string; entry_label: string; explanation: string;
   earlier_topics: PathTopic[]; refreshers: PathTopic[]; criteria: CriterionResult[];
-  unknown_areas: string[]; required_outcome: string; assessment_attempt_id: AssessmentAttemptId | null;
+  required_outcome: string; assessment_attempt_id: AssessmentAttemptId | null;
   /** Topics left by choice after acceptance: not assessed, no credit. */
   bypassed?: PathTopic[];
   /** Topics whose prior knowledge a unit challenge demonstrated. */

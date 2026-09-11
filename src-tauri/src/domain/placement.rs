@@ -39,7 +39,6 @@ pub struct Bank {
     pub version: String,
     pub estimated_minutes: u32,
     pub scope_note: String,
-    pub unknown_areas: Vec<String>,
     pub questions: Vec<Question>,
 }
 #[derive(Deserialize)]
@@ -120,11 +119,31 @@ pub fn bank(course_id: &str) -> Result<Bank> {
             return Err(invalid("follow-up coverage changed"));
         }
     }
-    if criteria.len() != 6 || bank.version.is_empty() || bank.unknown_areas.is_empty() {
+    // A check that skips a stage cannot place anyone in it, and a stage
+    // sampled once cannot justify skipping it. Every entry point carries the
+    // same weight of evidence.
+    let per_stage = CRITERIA_PER_ENTRY_POINT;
+    for entry in &options.entry_points {
+        let covering = bank
+            .questions
+            .iter()
+            .filter(|q| q.followup_for.is_none() && q.entry_point == entry.id)
+            .count();
+        if covering != per_stage {
+            return Err(invalid(
+                "a diagnostic bank must sample every entry point of its course",
+            ));
+        }
+    }
+    if criteria.len() != per_stage * options.entry_points.len() || bank.version.is_empty() {
         return Err(invalid("incomplete diagnostic bank"));
     }
     Ok(bank)
 }
+
+/// Criteria sampled per entry point. Three is the smallest number that lets a
+/// stage be skipped on evidence rather than on a single lucky answer.
+pub const CRITERIA_PER_ENTRY_POINT: usize = 3;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Frozen {
@@ -178,8 +197,18 @@ pub struct DiagnosticView {
     pub matches_draft: bool,
     pub course: CourseReference,
     pub scope_note: String,
-    pub unknown_areas: Vec<String>,
     pub estimated_minutes: u32,
+    /// What the first round samples, stage by stage, so a learner is told
+    /// what is coming before the first question rather than after the last.
+    pub stages: Vec<StageSample>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct StageSample {
+    pub id: String,
+    pub label: String,
+    pub questions: usize,
+    /// The skills the questions in this stage touch, in their own words.
+    pub samples: Vec<String>,
 }
 fn owner(id: &EnrollmentDraftId) -> Owner {
     Owner::EnrollmentDraft(id.0.clone())
@@ -269,6 +298,7 @@ fn view(conn: &Connection, id: &EnrollmentDraftId, attempt: &Attempt) -> Result<
             )
         })
         .collect();
+    let stages = stage_samples(&frozen, attempt)?;
     Ok(DiagnosticView {
         attempt_id: attempt.id.clone(),
         round_id: round.id.clone(),
@@ -291,10 +321,39 @@ fn view(conn: &Connection, id: &EnrollmentDraftId, attempt: &Attempt) -> Result<
         matches_draft: matches_draft(&enrollment::draft(conn, id)?, &frozen)?,
         course: frozen.draft.course,
         scope_note: frozen.bank.scope_note,
-        unknown_areas: frozen.bank.unknown_areas,
         estimated_minutes: (attempt.rounds[0].items.len() as u32 + 2)
             .min(frozen.bank.estimated_minutes),
+        stages,
     })
+}
+
+/// The stages the first round covers, in course order, with the label of
+/// every sampled skill. Follow-up rounds re-ask a criterion; they add no stage.
+fn stage_samples(frozen: &Frozen, attempt: &Attempt) -> Result<Vec<StageSample>> {
+    let entries = enrollment::options(&frozen.draft.course.course_id)?.entry_points;
+    let first: HashSet<&str> = attempt.rounds[0]
+        .items
+        .iter()
+        .map(|item| item.id.as_str())
+        .collect();
+    Ok(entries
+        .iter()
+        .filter_map(|entry| {
+            let sampled: Vec<String> = frozen
+                .bank
+                .questions
+                .iter()
+                .filter(|q| q.entry_point == entry.id && first.contains(q.id.as_str()))
+                .map(|q| q.label.clone())
+                .collect();
+            (!sampled.is_empty()).then(|| StageSample {
+                id: entry.id.clone(),
+                label: entry.label.clone(),
+                questions: sampled.len(),
+                samples: sampled,
+            })
+        })
+        .collect())
 }
 pub fn get(conn: &Connection, id: &EnrollmentDraftId) -> Result<Option<DiagnosticView>> {
     enrollment::draft(conn, id)?;
@@ -542,7 +601,6 @@ pub struct Recommendation {
     pub earlier_topics: Vec<PathTopic>,
     pub refreshers: Vec<PathTopic>,
     pub criteria: Vec<CriterionResult>,
-    pub unknown_areas: Vec<String>,
     pub required_outcome: String,
     pub assessment_attempt_id: Option<AttemptId>,
     /// Topics the learner chose to leave after acceptance: not assessed, no credit.
@@ -582,7 +640,6 @@ pub(crate) fn recommend_in_transaction(
     let (_, snapshot) = enrollment::course_snapshot(&draft.course.course_id)?;
     let mut start = 0;
     let mut results = Vec::new();
-    let mut unknown = vec!["Prior knowledge has not been assessed by this setup.".into()];
     let mut attempt_id = None;
     let (route, explanation) = match &draft.configuration.entry {
         EntryChoice::Foundations => ("foundations", "Begin with the introductory material. Familiar topics can be revisited or checked later."),
@@ -598,11 +655,16 @@ pub(crate) fn recommend_in_transaction(
             results = criteria(&attempt)?;
             for (index, entry) in options.entry_points.iter().enumerate() {
                 let rows: Vec<_> = results.iter().filter(|row| row.entry_point == entry.id).collect();
-                if rows.len() >= 2 && rows.iter().all(|row| row.verdict == Verdict::Passed) { start = (index+1).min(options.entry_points.len()-1); }
+                let demonstrated = rows.len() == CRITERIA_PER_ENTRY_POINT
+                    && rows.iter().all(|row| row.verdict == Verdict::Passed);
+                if !demonstrated {
+                    break;
+                }
+                start = (index + 1).min(options.entry_points.len() - 1);
             }
-            unknown = frozen.bank.unknown_areas;
+            let _ = &frozen;
             attempt_id = Some(attempt.id);
-            ("diagnostic", "This provisional starting point follows the latest fully demonstrated pair of samples. Earlier gaps need targeted refreshers; six samples do not establish whole-course mastery.")
+            ("diagnostic", "The check sampled every stage of this course. Your lessons begin at the first stage you did not fully demonstrate, and anything missed earlier becomes a refresher before the work that depends on it.")
         }
     };
     if let LearningGoal::LanguageLevel { target_level, .. } = &draft.configuration.goal {
@@ -691,7 +753,6 @@ pub(crate) fn recommend_in_transaction(
         earlier_topics: earlier,
         refreshers,
         criteria: results,
-        unknown_areas: unknown,
         required_outcome: snapshot["course"]["outcome"].as_str().unwrap().into(),
         assessment_attempt_id: attempt_id,
         bypassed: Vec::new(),

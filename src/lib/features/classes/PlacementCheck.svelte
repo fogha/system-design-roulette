@@ -13,6 +13,8 @@
   let work = $state<AssessmentEditorState | null>(null);
   let editor = $state<ReturnType<typeof assessmentEditor>>();
   let index = $state(0);
+  /** The briefing is shown until the learner starts, unless answers already exist. */
+  let briefed = $state(false);
   let busy = $state(false);
   let error = $state('');
   let alive = false;
@@ -32,6 +34,7 @@
       unsubscribe = editor.subscribe((state) => { work = state; });
       const next = value.questions.findIndex((q) => work?.responses[q.id]?.status === 'draft');
       index = next < 0 ? value.questions.length : next;
+      briefed = briefed || value.ordinal > 1 || Object.values(work?.responses ?? {}).some((r) => r.status !== 'draft' || r.answer);
       if (work?.status === 'saving') void editor.flush();
     }
   }
@@ -75,8 +78,24 @@
 </script>
 <section class="check" class:embedded aria-label="Starting-point check">
   <button class="ghost mono-ghost" onclick={close}><ArrowLeft size={13} /> Back to setup</button>
-  <header><p class="eyebrow mono">PLACEMENT · {draft.course.course_id}</p><h2>Find your starting point</h2><p>Take your time. Skip anything unfamiliar; your answers are saved as you go.</p></header>
-  {#if check}
+  <header><p class="eyebrow mono">PLACEMENT · {draft.course.course_id}</p><h2>Find your starting point</h2><p>{briefed ? 'Take your time. Skip anything unfamiliar; your answers are saved as you go.' : 'Before you begin, here is exactly what the check covers and how it is used.'}</p></header>
+  {#if check && !check.submitted && !briefed}
+    <NodeCard Icon={Compass} name="what-to-expect" badge={`${check.questions.length} questions · ~${check.estimated_minutes} min`} badgeTone="violet">
+      <p class="scope">{check.scope_note}</p>
+      <ol class="stages" aria-label="Stages the check samples">
+        {#each check.stages as stage, n (stage.id)}
+          <li><span class="stage-name"><b class="mono">{n + 1}</b>{stage.label}<i class="mono">{stage.questions} questions</i></span><span class="stage-samples">{stage.samples.join(' · ')}</span></li>
+        {/each}
+      </ol>
+      <dl class="rules">
+        <div><dt>How it places you</dt><dd>Lessons start at the first stage you do not fully demonstrate. Passing every question in a stage is what lets you skip it.</dd></div>
+        <div><dt>Skipping</dt><dd>Skip anything unfamiliar. A skip counts as not demonstrated, never as wrong, and it is not shown to anyone.</dd></div>
+        <div><dt>Saving</dt><dd>Every answer saves as you go. You can close the app and pick up where you left off.</dd></div>
+        <div><dt>What it is not</dt><dd>Not a grade and not course credit. It only decides where lessons begin, and you can move that point yourself afterwards.</dd></div>
+      </dl>
+      <div class="actions"><button class="cta mono-cta" onclick={() => (briefed = true)}><ArrowRight size={13} /> Start the check</button></div>
+    </NodeCard>
+  {:else if check}
     <p class="scope">{check.scope_note} About {check.estimated_minutes} minutes for the initial check.</p>
     {#if !check.matches_draft}<p class="warning" role="status">Your setup changed after this check began. These answers retain their original context. Return to setup to choose another route, or finish this check before starting a new one.</p>{/if}
     {#if !check.submitted}
@@ -117,7 +136,7 @@
             <div class="results">{#each rows as row (row.id)}<details><summary><span>{row.label}</span><span class:passed={row.verdict === 'passed'} class="verdict mono">{label(row.verdict)}</span></summary>{#each row.evidence as item, i}<div class="evidence"><p class="mono">{i === 0 ? 'Initial sample' : 'Follow-up'} · {label(item.verdict)}</p><p>{item.explanation}</p><p><strong>Expected:</strong> {item.expected_answer}</p></div>{/each}</details>{/each}</div>
           {/if}
         {/each}
-        <details class="unmeasured"><summary>What this check did not measure · {check.unknown_areas.length}</summary><p class="scope">Unknown, not failed. Six samples cannot cover a course, so these stay open: lessons cover them as you reach them, and a unit challenge can check one early. Nothing here needs action now.</p><ul>{#each check.unknown_areas as area (area)}<li>{area}</li>{/each}</ul></details>
+        <p class="scope">Every stage of this course was sampled, three skills each. What you did not demonstrate becomes a refresher or the place your lessons start; nothing is left unmeasured.</p>
         <div class="actions">
           {#if check.can_follow_up}<button class="ghost mono-ghost" disabled={busy} onclick={() => run(async () => install(await api.continuePlacementCheck(draft.id, check!.round_id)))}>Try prerequisite follow-up · up to 2 questions</button>{/if}
           {#if !check.completed}<button class="cta mono-cta" disabled={busy} onclick={finish}>Use these results</button>
@@ -144,9 +163,17 @@
   .meter { height: 5px; border-radius: 3px; background: var(--bg); overflow: hidden; } .meter i { display: block; height: 100%; background: var(--accent); }
   .reading { margin: 0; font-size: 13px; line-height: 1.6; }
   .group { font-size: 10px; letter-spacing: .7px; color: var(--faint); margin: 16px 0 2px; text-transform: uppercase; }
-  .unmeasured { margin-top: 16px; border-top: 1px dashed var(--node-divider); padding-top: 12px; }
-  .unmeasured summary { cursor: pointer; font-size: 12px; color: var(--violet-fg); }
-  .unmeasured ul { margin: 6px 0 0; padding-left: 18px; } .unmeasured li { font-size: 12px; line-height: 1.6; color: var(--muted); }
+  .stages { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 1px; border: 1px solid var(--node-border); border-radius: var(--radius-panel); overflow: hidden; background: var(--node-border); }
+  .stages li { display: grid; gap: 4px; padding: 10px 13px; background: var(--surface); }
+  .stage-name { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+  .stage-name b { display: grid; place-items: center; width: 20px; height: 20px; border: 1px solid var(--node-border); border-radius: var(--radius-detail); font-size: 10px; color: var(--violet-fg); }
+  .stage-name i { margin-left: auto; font-style: normal; font-size: 9px; color: var(--faint); letter-spacing: .5px; }
+  .stage-samples { font-size: 11px; line-height: 1.55; color: var(--muted); }
+  .rules { display: grid; gap: 10px; margin: 16px 0 0; }
+  .rules div { display: grid; grid-template-columns: 130px 1fr; gap: 12px; }
+  .rules dt { font-size: 10px; letter-spacing: .6px; text-transform: uppercase; color: var(--faint); padding-top: 2px; }
+  .rules dd { margin: 0; font-size: 12px; line-height: 1.6; }
+  @media(max-width:620px) { .rules div { grid-template-columns: 1fr; gap: 3px; } }
   .results details { border-bottom: 1px dashed var(--node-divider); padding: 13px 0; }
   summary { cursor: pointer; font-size: 13px; line-height: 1.6; }
   .verdict { display: inline-block; margin-left: 12px; color: var(--muted); font-size: 10px; }

@@ -15,16 +15,17 @@ describe('unit challenges in the browser preview', () => {
     const accepted = await acceptFoundations();
     await expect(mockApi.startUnitChallenge('typescript', 'foundations')).resolves.toMatchObject({ unit: 'foundations', submitted: false, path_revision: accepted.revision });
     const challenge = (await mockApi.getUnitChallenge('typescript'))!;
-    expect(challenge.questions).toHaveLength(2);
-    const [first, second] = challenge.questions;
-    // First sample correct, second skipped.
+    expect(challenge.questions).toHaveLength(3);
+    const [first, second, third] = challenge.questions;
+    // First sample correct, the other two skipped.
     const correct = (await import('../../../../src-tauri/seed/diagnostics.json')).default.courses.find((c) => c.course_id === 'typescript')!.questions.find((q) => q.id === first.id)!.answer;
     let revision = await mockApi.saveUnitChallengeResponse('typescript', challenge.round_id, challenge.revision, first.id, { answer: correct, status: 'answered' });
     revision = await mockApi.saveUnitChallengeResponse('typescript', challenge.round_id, revision, second.id, { answer: '', status: 'skipped' });
+    revision = await mockApi.saveUnitChallengeResponse('typescript', challenge.round_id, revision, third.id, { answer: '', status: 'skipped' });
     const submitted = await mockApi.submitUnitChallengeRound('typescript', challenge.round_id, revision);
     expect(submitted.submitted).toBe(true);
     expect(submitted.demonstrated.map((t) => t.id)).toEqual([submitted.criteria[0].competency]);
-    expect(submitted.needs_practice.map((t) => t.id)).toEqual([submitted.criteria[1].competency]);
+    expect(submitted.needs_practice.map((t) => t.id)).toEqual([submitted.criteria[1].competency, submitted.criteria[2].competency]);
     const path = await mockApi.applyUnitChallenge('typescript', submitted.attempt_id, accepted.revision);
     expect(path.revision).toBe(accepted.revision + 1);
     expect(path.recommendation.checked?.map((t) => t.id)).toEqual(submitted.demonstrated.map((t) => t.id));
