@@ -16,7 +16,11 @@
   let sequence = 0;
   const picked = $derived(runners.find(r => r.provider === selected));
   const group = $derived(runners.filter(r => r.kind === route));
-  const routes = [{ id: 'cli', label: 'CLI agents', Icon: Terminal }, { id: 'api', label: 'API providers', Icon: KeyRound }, { id: 'local', label: 'Local models', Icon: HardDrive }];
+  const routes = [
+    { id: 'cli', label: 'CLI agents', hint: 'Claude Code, Codex, Gemini and friends, signed in on this machine', Icon: Terminal },
+    { id: 'api', label: 'API providers', hint: 'A key each: Anthropic, OpenAI, OpenRouter, DeepSeek and more', Icon: KeyRound },
+    { id: 'local', label: 'Local models', hint: 'Ollama on this machine, no account and no network', Icon: HardDrive },
+  ];
   const docs: Record<string,string> = { claude: 'https://code.claude.com/docs/en/setup', codex: 'https://developers.openai.com/codex/cli', cursor: 'https://cursor.com/docs/cli', gemini: 'https://github.com/google-gemini/gemini-cli' };
   async function load(provider: string) {
     const token = ++sequence; loading = true; message = ''; error = ''; keyInput = ''; keyOpen = false;
@@ -47,7 +51,7 @@
 </script>
 
 <div class="runner-library">
-  <div class="routes" aria-label="Runner configuration categories">{#each routes as item}<button type="button" class:active={route === item.id} aria-pressed={route === item.id} onclick={() => browse(item.id)}><item.Icon size={14} /><span>{item.label}</span><small>{runners.filter(r => r.kind === item.id).length}</small></button>{/each}</div>
+  <div class="routes" aria-label="Runner configuration categories">{#each routes as item}<button type="button" class:active={route === item.id} aria-pressed={route === item.id} onclick={() => browse(item.id)}><span class="route-art" aria-hidden="true"><item.Icon size={20} /></span><span class="route-text"><span class="route-label">{item.label}</span><span class="route-hint">{item.hint}</span></span><small>{runners.filter(r => r.kind === item.id).length}</small></button>{/each}</div>
   {#if route === 'local'}
     {#if draft}<LocalModels bind:models={draft.models} onchanged={onchanged} />{/if}
   {:else}
@@ -76,8 +80,19 @@
 
 <style>
   .runner-library { display: grid; gap: 16px; }
-  .routes { display: flex; gap: 5px; border-bottom: 1px solid var(--node-border); padding-bottom: 10px; }
-  .routes button { display: flex; align-items: center; gap: 7px; flex: 1; padding: 9px 7px; color: var(--muted); background: var(--bg); border: 1px solid var(--node-border); border-radius: var(--radius-control); font-size: 11px; cursor: pointer; } .routes .active { color: var(--accent); border-color: var(--accent); } .routes small { margin-left: auto; font: 9px var(--font-mono); opacity: .6; }
+  /* The three ways to run a tutor, as cards: the icon in a lit tile, the
+     name, what the category holds, and how many runners are in it. */
+  .routes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; border-bottom: 1px solid var(--node-border); padding-bottom: 12px; }
+  .routes button { display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 10px 12px; text-align: left; color: var(--muted); background: var(--bg); border: 1px solid var(--node-border); border-radius: var(--radius-panel); cursor: pointer; transition: border-color 140ms ease, background 140ms ease, transform 140ms ease; }
+  .routes button:hover { border-color: var(--muted); transform: translateY(-1px); }
+  .routes .active { color: var(--fg); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 7%, var(--bg)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent), 0 8px 22px color-mix(in srgb, var(--accent) 12%, transparent); }
+  .route-art { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--radius-control); background: var(--surface-2); color: var(--muted); border: 1px solid var(--node-border); transition: background 140ms ease, color 140ms ease, box-shadow 140ms ease; }
+  .routes .active .route-art { background: linear-gradient(160deg, color-mix(in srgb, var(--accent) 34%, var(--surface-2)), color-mix(in srgb, var(--accent) 12%, var(--surface-2))); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, var(--node-border)); box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 35%, transparent); }
+  .routes button:hover .route-art { color: var(--fg); }
+  .route-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .route-label { font-size: 12px; font-weight: 500; color: inherit; }
+  .route-hint { font-size: 9.5px; line-height: 1.4; color: var(--muted); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
+  .routes small { margin-left: auto; flex: none; min-width: 22px; padding: 3px 6px; border-radius: 999px; background: var(--surface-2); text-align: center; font: 9px var(--font-mono); color: var(--muted); } .routes .active small { background: color-mix(in srgb, var(--accent) 18%, var(--surface-2)); color: var(--accent); }
   .workspace { display: grid; grid-template-columns: 152px minmax(0,1fr); gap: 17px; }
   .providers { display: grid; align-content: start; gap: 4px; } .providers button { display: flex; align-items: center; gap: 8px; border: 1px solid transparent; padding: 9px 7px; border-radius: var(--radius-control); background: transparent; color: var(--muted); text-align: left; font-size: 11px; cursor: pointer; } .providers .editing { color: var(--text); background: var(--surface-2); border-color: var(--node-border); }
   .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--faint); flex-shrink: 0; } .dot.ready { background: var(--led-ok); } .providers button.refresh { font-size: 9px; margin-top: 10px; padding-left: 0; color: var(--accent); }
@@ -89,5 +104,5 @@
   .free-toggle { justify-self: start; display: flex; align-items: center; gap: 7px; background: transparent; border: 0; color: var(--text); font-size: 11px; padding: 0; cursor: pointer; } .free-toggle span { border-radius: var(--radius-detail); display: grid; place-items: center; width: 16px; height: 16px; border: 1px solid var(--node-border); color: var(--accent); }
   .save-row { border-top: 1px dashed var(--node-border); padding-top: 13px; display: flex; align-items: center; gap: 12px; } .save-row > span { font-size: 10px; color: var(--muted); line-height: 1.5; } .save { padding: 9px 11px; border: 1px solid var(--accent); background: var(--bg); color: var(--accent); font-size: 10px; cursor: pointer; white-space: nowrap; } button:disabled { opacity: .4; cursor: default; }
   .notice { color: var(--led-ok); } .error { color: var(--led-err); overflow-wrap: anywhere; }
-  @media(max-width:620px) { .workspace { grid-template-columns: 1fr; } .providers { grid-template-columns: repeat(2,1fr); } .providers button.refresh { margin-top: 0; } .editor { border-left: 0; padding-left: 0; border-top: 1px dashed var(--node-border); padding-top: 12px; } .routes small { display: none; } .save-row { flex-wrap: wrap; } }
+  @media(max-width:620px) { .workspace { grid-template-columns: 1fr; } .providers { grid-template-columns: repeat(2,1fr); } .providers button.refresh { margin-top: 0; } .editor { border-left: 0; padding-left: 0; border-top: 1px dashed var(--node-border); padding-top: 12px; } .routes { grid-template-columns: 1fr; } .routes small { display: none; } .route-hint { display: none; } .routes button { min-height: 48px; } .save-row { flex-wrap: wrap; } }
 </style>

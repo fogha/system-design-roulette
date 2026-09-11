@@ -3,6 +3,8 @@
   import { app } from '../stores.svelte';
   import ClusterBar from '../components/ClusterBar.svelte';
   import RunnerSetup from '../features/runners/RunnerSetup.svelte';
+  import SearchSetup from '../features/runners/SearchSetup.svelte';
+  import type { SearchSettingsView } from '../ipc';
   import { ArrowLeft, ArrowRight, Check, Rocket, X } from 'lucide-svelte';
 
   let model = $state('opus');
@@ -16,9 +18,19 @@
 
   const STEPS = [
     { title: 'Tutor', heading: 'Choose the tutor that writes your lessons', blurb: 'Pick a runner and the model it should use. You can keep a shortlist of models per provider and change any of this later, per class.' },
+    { title: 'Search', heading: 'Give the tutor a way to look things up', blurb: 'Optional. A tutor on Ollama, OpenRouter or a bare API cannot browse; with a search engine set, the desk finds and fetches documentation itself and hands the tutor only pages it retrieved. Leave it off and lessons use the pages the curriculum names.' },
     { title: 'Recovery', heading: 'Set your break-glass phrase', blurb: 'Typing this phrase ends an enforced session. It is deliberately long so it cannot be reflexive, and using it breaks your streak.' },
     { title: 'Deploy', heading: 'Review and deploy', blurb: 'This writes your preferences and opens the desk. Next you choose a class, set its starting point and add study times.' },
   ];
+  const RECOVERY = 2;
+
+  /** The search choice, read for the review; it is saved as it is made. */
+  let search = $state<SearchSettingsView | null>(null);
+  $effect(() => {
+    if (step !== STEPS.length - 1) return;
+    api.getSearchSettings().then((view) => (search = view)).catch(() => (search = null));
+  });
+  const SEARCH_LABELS: Record<string, string> = { none: 'Off', searxng: 'SearXNG', brave: 'Brave Search', tavily: 'Tavily' };
 
   const phraseReady = $derived(phrase.trim().length >= 40 && phrase.trim() === phrase2.trim());
   const phraseProblem = $derived(
@@ -30,7 +42,7 @@
   );
 
   function canLeave(index: number) {
-    return index === 0 || (index === 1 ? phraseReady : true);
+    return index === RECOVERY ? phraseReady : true;
   }
   function goto(next: number) {
     if (next > step && !canLeave(step)) {
@@ -44,7 +56,7 @@
   async function finish() {
     error = '';
     if (!phraseReady) {
-      step = 1;
+      step = RECOVERY;
       error = phraseProblem;
       return;
     }
@@ -66,7 +78,7 @@
   <div class="boot-body">
     <header class="boot-head">
       <h1>Bootstrap your training cluster</h1>
-      <p class="sub">Three short steps: your tutor, your way out, then deploy.</p>
+      <p class="sub">Four short steps: your tutor, its search, your way out, then deploy.</p>
     </header>
 
     <ol class="steps" aria-label="Setup steps">
@@ -92,6 +104,8 @@
       {#if step === 0}
         <RunnerSetup bind:agent bind:model bind:customBin initiallyExpanded onKeyChanged={() => app.refresh()} />
       {:else if step === 1}
+        <SearchSetup />
+      {:else if step === RECOVERY}
         <div class="break-glass">
           <div class="bg-tag mono">BREAK<br />GLASS</div>
           <div class="bg-fields">
@@ -113,6 +127,7 @@
         <dl class="review">
           <div><dt class="mono">TUTOR</dt><dd>{agent === 'custom' ? `Custom CLI · ${customBin || 'command set in the library'}` : agent}</dd></div>
           <div><dt class="mono">MODEL</dt><dd>{model || 'runner default'}</dd></div>
+          <div><dt class="mono">SEARCH</dt><dd>{search ? `${SEARCH_LABELS[search.provider] ?? search.provider}${search.provider === 'none' ? '' : search.available ? ' · working' : ' · setup needed'}` : '…'}</dd></div>
           <div><dt class="mono">ESCAPE_PHRASE</dt><dd>{phrase.trim().length} characters · confirmed</dd></div>
           <div><dt class="mono">ENFORCEMENT</dt><dd>Advisory to start. Each class carries its own policy in its Settings tab.</dd></div>
         </dl>
@@ -148,7 +163,7 @@
     animation: fade-in 0.35s ease;
   }
   .boot-body {
-    width: min(680px, 92vw);
+    width: min(1040px, 94vw);
     margin: 0 auto;
     padding: 34px 24px 64px;
   }

@@ -1,14 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Globe, Search } from 'lucide-svelte';
+  import { Globe, Search, Server, KeyRound, Sparkles, CircleOff, ExternalLink } from 'lucide-svelte';
   import { api, type SearchProvider, type SearchResult, type SearchSettingsView } from '$lib/ipc';
   import NodeCard from '$lib/components/NodeCard.svelte';
 
-  const PROVIDERS: { id: SearchProvider; label: string; hint: string }[] = [
-    { id: 'searxng', label: 'SearXNG', hint: 'Open source, runs on your machine, no key. Asks the public engines for you. Remote Ledger installs one on port 8899; the desk can share it.' },
-    { id: 'brave', label: 'Brave Search', hint: '2,000 queries a month free. One key, nothing to run.' },
-    { id: 'tavily', label: 'Tavily', hint: 'Returns cleaned page text as well as links. One key, nothing to run.' },
-    { id: 'none', label: 'Off', hint: 'No web search. Lessons use only the pages the curriculum names, and their mirrors.' },
+  const PROVIDERS: { id: SearchProvider; label: string; hint: string; Icon: typeof Globe }[] = [
+    { id: 'searxng', label: 'SearXNG', hint: 'Runs on your machine, no key. Asks the public engines for you.', Icon: Server },
+    { id: 'brave', label: 'Brave Search', hint: '2,000 queries a month free. One key, nothing to run.', Icon: KeyRound },
+    { id: 'tavily', label: 'Tavily', hint: 'Cleaned page text as well as links. One key, nothing to run.', Icon: Sparkles },
+    { id: 'none', label: 'Off', hint: 'Lessons use only the pages the curriculum names, and their mirrors.', Icon: CircleOff },
   ];
 
   let settings = $state<SearchSettingsView | null>(null);
@@ -20,6 +20,7 @@
   let results = $state<SearchResult[] | null>(null);
   const provider = $derived(settings?.provider ?? 'none');
   const keySet = $derived(provider === 'brave' ? !!settings?.brave_key_set : provider === 'tavily' ? !!settings?.tavily_key_set : false);
+  const tone = $derived(!settings ? 'idle' : settings.available ? 'ok' : provider === 'none' ? 'idle' : 'warn');
 
   onMount(() => { void load(); });
 
@@ -30,7 +31,7 @@
     finally { busy = ''; }
   }
   async function choose(next: SearchProvider) {
-    if (busy) return;
+    if (busy || next === provider) return;
     busy = 'provider'; error = ''; results = null;
     try { settings = await api.setSearchSettings(next, url || settings?.default_searxng_url || ''); url = settings.searxng_url; }
     catch (e) { error = String(e); }
@@ -54,58 +55,129 @@
     catch (e) { error = String(e); }
     finally { busy = ''; }
   }
+  function host(link: string) {
+    try { return new URL(link).host.replace(/^www\./, ''); } catch { return link; }
+  }
 </script>
 
 <NodeCard Icon={Globe} name="web-search" badge={settings ? (settings.available ? 'working' : provider === 'none' ? 'off' : 'setup needed') : '…'} badgeTone={settings?.available ? 'teal' : provider === 'none' ? 'muted' : 'amber'}>
-  <div class="head"><strong>Web search for the tutor</strong><p>A tutor on Ollama, OpenRouter or a bare API cannot look anything up. With a search engine configured, the desk searches and fetches the documentation itself and hands the tutor only pages it actually retrieved, still held to each subject's source allowlist.</p></div>
-  <div class="chips" role="radiogroup" aria-label="Search provider">
+  <div class="head"><strong>Web search for the tutor</strong><p>A tutor on Ollama, OpenRouter or a bare API cannot look anything up. With an engine set, the desk searches and fetches the documentation itself and hands the tutor only pages it retrieved, still held to each subject's source allowlist.</p></div>
+
+  <div class="providers" role="radiogroup" aria-label="Search provider">
     {#each PROVIDERS as option (option.id)}
-      <button type="button" class="chip mono" class:on={provider === option.id} role="radio" aria-checked={provider === option.id} disabled={!!busy} title={option.hint} onclick={() => choose(option.id)}>{option.label}</button>
+      <button type="button" class="provider" class:active={provider === option.id} class:off={option.id === 'none'} role="radio" aria-checked={provider === option.id} disabled={!!busy} onclick={() => choose(option.id)}>
+        <span class="art" aria-hidden="true"><option.Icon size={18} /></span>
+        <span class="text"><span class="label">{option.label}</span><span class="hint">{option.hint}</span></span>
+        {#if provider === option.id}<span class="led" class:ok={tone === 'ok'} class:warn={tone === 'warn'} aria-hidden="true"></span>{/if}
+      </button>
     {/each}
   </div>
-  <p class="hint">{PROVIDERS.find((option) => option.id === provider)?.hint}</p>
-
-  {#if provider === 'searxng'}
-    <label class="field"><span class="mono">SEARXNG ADDRESS</span><div class="row"><input type="url" bind:value={url} placeholder={settings?.default_searxng_url} spellcheck="false" /><button type="button" class="secondary mono" disabled={!!busy} onclick={saveUrl}>{busy === 'url' ? 'Saving…' : 'Save'}</button></div></label>
-    <p class="hint">JSON output must be on: <code>json</code> under <code>search.formats</code> in its settings.yml, or the API answers 403.</p>
-  {:else if provider === 'brave' || provider === 'tavily'}
-    <label class="field"><span class="mono">{provider === 'brave' ? 'BRAVE SEARCH' : 'TAVILY'} API KEY · {keySet ? 'set' : 'not set'}</span><div class="row"><input type="password" bind:value={key} placeholder={keySet ? 'Paste a new key to replace it, or leave blank to clear' : 'Paste the key'} autocomplete="off" spellcheck="false" /><button type="button" class="secondary mono" disabled={!!busy} onclick={saveKey}>{busy === 'key' ? 'Saving…' : key ? 'Save key' : keySet ? 'Clear key' : 'Save key'}</button></div></label>
-    <p class="hint">Kept in the system keychain, never in the profile database or its exports.</p>
-  {/if}
-
-  {#if settings}
-    <div class="status" class:ok={settings.available} role="status">{settings.why}</div>
-  {/if}
 
   {#if provider !== 'none'}
-    <div class="test">
-      <label class="field"><span class="mono">TRY A SEARCH</span><div class="row"><input type="text" bind:value={query} spellcheck="false" onkeydown={(event) => { if (event.key === 'Enter') void test(); }} /><button type="button" class="secondary mono" disabled={!!busy || !settings?.available} onclick={test}><Search size={11} /> {busy === 'test' ? 'Searching…' : 'Search'}</button></div></label>
+    <div class="console" aria-label="Search configuration">
+      <div class="console-head mono">
+        <span class="led" class:ok={tone === 'ok'} class:warn={tone === 'warn'} aria-hidden="true"></span>
+        <span class="state">{settings?.why ?? 'checking…'}</span>
+      </div>
+
+      {#if provider === 'searxng'}
+        <div class="row">
+          <label class="field">
+            <span class="mono">ADDRESS</span>
+            <input class="mono" type="url" bind:value={url} placeholder={settings?.default_searxng_url} spellcheck="false" onkeydown={(event) => { if (event.key === 'Enter') void saveUrl(); }} />
+          </label>
+          <button type="button" class="ghost mono-ghost" disabled={!!busy} onclick={saveUrl}>{busy === 'url' ? 'saving…' : 'save'}</button>
+        </div>
+        <p class="note mono">Remote Ledger's local instance answers on port 8899 and can be shared. The JSON API must be on: <code>json</code> under <code>search.formats</code> in settings.yml, or it answers 403.</p>
+      {:else}
+        <div class="row">
+          <label class="field">
+            <span class="mono">{provider === 'brave' ? 'BRAVE SEARCH' : 'TAVILY'} API KEY <em class:set={keySet}>{keySet ? '· set' : '· not set'}</em></span>
+            <input class="mono" type="password" bind:value={key} placeholder={keySet ? 'paste a new key to replace it' : 'paste the key'} autocomplete="off" spellcheck="false" onkeydown={(event) => { if (event.key === 'Enter') void saveKey(); }} />
+          </label>
+          <button type="button" class="ghost mono-ghost" disabled={!!busy || (!key && !keySet)} onclick={saveKey}>{busy === 'key' ? 'saving…' : key ? 'save key' : 'clear key'}</button>
+        </div>
+        <p class="note mono">Kept in the system keychain, never in the profile database or its exports. {#if provider === 'brave'}<a href="https://brave.com/search/api/" target="_blank" rel="noreferrer">Get a key <ExternalLink size={9} /></a>{:else}<a href="https://tavily.com" target="_blank" rel="noreferrer">Get a key <ExternalLink size={9} /></a>{/if}</p>
+      {/if}
+
+      <div class="row try">
+        <label class="field">
+          <span class="mono">TRY A SEARCH</span>
+          <input class="mono" type="text" bind:value={query} spellcheck="false" onkeydown={(event) => { if (event.key === 'Enter') void test(); }} />
+        </label>
+        <button type="button" class="ghost mono-ghost" disabled={!!busy || !settings?.available} onclick={test}><Search size={11} /> {busy === 'test' ? 'searching…' : 'search'}</button>
+      </div>
       {#if results}
-        {#if results.length === 0}<p class="hint">No results came back for that query.</p>{:else}
+        {#if results.length === 0}
+          <p class="note mono">No results came back for that query.</p>
+        {:else}
           <ol class="results">
-            {#each results as result (result.url)}
-              <li><strong>{result.title || result.url}</strong><span class="mono url">{result.url}</span>{#if result.snippet}<p>{result.snippet}</p>{/if}</li>
+            {#each results as result, index (result.url)}
+              <li>
+                <span class="index mono">{String(index + 1).padStart(2, '0')}</span>
+                <div class="result-body">
+                  <strong>{result.title || result.url}</strong>
+                  <span class="meta mono"><span class="host">{host(result.url)}</span>{#if result.engine} · via {result.engine}{/if}</span>
+                  {#if result.snippet}<p>{result.snippet}</p>{/if}
+                </div>
+              </li>
             {/each}
           </ol>
         {/if}
       {/if}
     </div>
   {/if}
-  {#if error}<p class="error" role="alert">{error}</p>{/if}
+  {#if error}<p class="error mono" role="alert">{error}</p>{/if}
 </NodeCard>
 
 <style>
-  .head { margin-bottom: 14px; } .head strong { display: block; font-size: 14px; font-weight: 500; } .head p, .hint { margin: 5px 0 0; font-size: 11px; color: var(--muted); line-height: 1.6; }
-  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
-  .chip { padding: 8px 12px; border: 1px solid var(--node-border); background: var(--bg); color: var(--muted); font-size: 10px; letter-spacing: .5px; cursor: pointer; }
-  .chip.on { border-color: var(--violet); color: var(--violet-fg); background: var(--violet-bg); }
-  .chip:disabled { opacity: .5; cursor: default; }
-  .field { display: block; margin-top: 14px; } .field > span { display: block; font-size: 9px; letter-spacing: 1px; color: var(--faint); margin-bottom: 6px; }
-  .row { display: flex; gap: 8px; } .row input { flex: 1; min-width: 0; font-size: 12px; padding: 8px 10px; }
-  .secondary { display: inline-flex; align-items: center; gap: 6px; padding: 8px 11px; background: var(--bg); border: 1px solid var(--node-border); color: var(--text); font-size: 10px; cursor: pointer; white-space: nowrap; } .secondary:disabled { opacity: .4; cursor: default; }
-  code { font-family: var(--font-mono); font-size: 10px; color: var(--fg); }
-  .status { margin-top: 14px; padding: 9px 11px; border: 1px solid var(--node-border); font-size: 11px; color: var(--muted); } .status.ok { border-color: var(--led-ok); color: var(--fg); }
-  .test { margin-top: 6px; }
-  .results { margin: 12px 0 0; padding: 0 0 0 18px; display: flex; flex-direction: column; gap: 10px; } .results li { font-size: 12px; } .results strong { font-weight: 500; display: block; } .results p { margin: 3px 0 0; font-size: 11px; color: var(--muted); line-height: 1.5; } .url { display: block; font-size: 9.5px; color: var(--accent); overflow-wrap: anywhere; margin-top: 2px; }
-  .error { color: var(--led-err); font-size: 11px; margin-top: 10px; overflow-wrap: anywhere; }
+  .head { margin-bottom: 14px; } .head strong { display: block; font-size: 14px; font-weight: 500; } .head p { margin: 5px 0 0; font-size: 11px; color: var(--muted); line-height: 1.6; max-width: 76ch; }
+
+  /* The engines as cards, like the runner kinds: an icon tile, the name, a
+     line on what it costs to run, and a light when it is the one in use. */
+  .providers { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+  .provider { position: relative; display: flex; align-items: center; gap: 11px; min-height: 64px; padding: 10px 12px; text-align: left; color: var(--muted); background: var(--bg); border: 1px solid var(--node-border); border-radius: var(--radius-panel); cursor: pointer; transition: border-color 140ms ease, background 140ms ease, transform 140ms ease; }
+  .provider:hover:not(:disabled) { border-color: var(--muted); transform: translateY(-1px); }
+  .provider:disabled { cursor: default; }
+  .provider.active { color: var(--fg); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 7%, var(--bg)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent), 0 8px 22px color-mix(in srgb, var(--accent) 12%, transparent); }
+  .provider.off.active { border-color: var(--muted); background: var(--surface); box-shadow: none; }
+  .art { flex: none; display: grid; place-items: center; width: 38px; height: 38px; border-radius: var(--radius-control); background: var(--surface-2); border: 1px solid var(--node-border); color: var(--muted); transition: background 140ms ease, color 140ms ease, box-shadow 140ms ease; }
+  .provider.active .art { background: linear-gradient(160deg, color-mix(in srgb, var(--accent) 34%, var(--surface-2)), color-mix(in srgb, var(--accent) 12%, var(--surface-2))); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, var(--node-border)); box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 35%, transparent); }
+  .provider.off.active .art { background: var(--surface-2); color: var(--fg); border-color: var(--node-border); box-shadow: none; }
+  .text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .label { font-size: 12px; font-weight: 500; }
+  .hint { font-size: 9.5px; line-height: 1.4; color: var(--muted); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
+  .provider .led { position: absolute; top: 10px; right: 10px; }
+
+  .led { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--led-idle); flex: none; }
+  .led.ok { background: var(--led-ok); box-shadow: 0 0 8px var(--led-ok); animation: led-breathe 2.4s ease-in-out infinite; }
+  .led.warn { background: var(--led-warn); box-shadow: 0 0 8px var(--led-warn); }
+  @keyframes led-breathe { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+
+  /* The chosen engine's controls, in one console block. */
+  .console { margin-top: 12px; border: 1px solid var(--node-border); border-radius: var(--radius-panel); background: var(--bg); overflow: hidden; }
+  .console-head { display: flex; align-items: center; gap: 9px; padding: 9px 14px; border-bottom: 1px solid var(--node-border); background: var(--surface); font-size: 10px; color: var(--muted); letter-spacing: 0.3px; }
+  .console-head .state { color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row { display: flex; align-items: flex-end; gap: 8px; padding: 14px 14px 0; }
+  .row.try { padding: 16px 14px 14px; margin-top: 4px; border-top: 1px dashed var(--node-divider); }
+  .field { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+  .field > span { font-size: 8.5px; letter-spacing: 1.1px; color: var(--faint); display: flex; gap: 6px; }
+  .field em { font-style: normal; color: var(--led-warn); } .field em.set { color: var(--led-ok); }
+  .field input { width: 100%; min-width: 0; min-height: 34px; padding: 7px 11px; font-size: 12px; color: var(--fg); background: var(--surface); border: 1px solid var(--node-border); border-radius: var(--radius-control); outline: none; transition: border-color 120ms ease, box-shadow 120ms ease; }
+  .field input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+  .field input::placeholder { color: var(--faint); }
+  .row :global(button) { flex: none; }
+  .note { margin: 8px 14px 14px; font-size: 9.5px; line-height: 1.6; color: var(--muted); }
+  .note code { font-family: inherit; color: var(--fg); }
+  .note a { display: inline-flex; align-items: center; gap: 3px; color: var(--accent); text-decoration: none; margin-left: 4px; }
+  .results { list-style: none; margin: 0; padding: 0 14px 6px; }
+  .results li { display: flex; gap: 10px; padding: 10px 0; border-top: 1px dashed var(--node-divider); }
+  .index { flex: none; padding-top: 2px; font-size: 9px; color: var(--accent); }
+  .result-body { min-width: 0; } .result-body strong { display: block; font-size: 12px; font-weight: 500; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .meta { display: block; margin-top: 2px; font-size: 9px; color: var(--faint); } .host { color: var(--muted); }
+  .result-body p { margin: 4px 0 0; font-size: 11px; line-height: 1.5; color: var(--muted); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
+  .error { color: var(--led-err); font-size: 10.5px; margin-top: 10px; overflow-wrap: anywhere; }
+  @media (max-width: 900px) { .providers { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 560px) { .row { flex-direction: column; align-items: stretch; } .provider .hint { display: none; } }
+  @media (prefers-reduced-motion: reduce) { .led.ok { animation: none; } .provider:hover:not(:disabled) { transform: none; } }
 </style>
