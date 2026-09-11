@@ -6528,21 +6528,21 @@
     "curriculum": {
       "phase": "foundations",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Domain-oriented frontend boundaries and public feature contracts when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Draw feature boundaries with explicit public contracts so teams change internals without breaking neighbours.",
       "mechanisms": [
-        "The first-principles mechanism behind Domain-oriented frontend boundaries and public feature contracts",
-        "ownership boundaries, data and control flow, deployment coupling, and failure propagation",
-        "The organization trade-off and its failure boundary"
+        "public feature entry points",
+        "dependency direction rules",
+        "enforced import boundaries"
       ],
-      "production_scenario": "Apply Domain-oriented frontend boundaries and public feature contracts inside a multi-team product facing 10x traffic or organizational growth with explicit budgets, migration pressure, and rollback needs.",
+      "production_scenario": "Two features import each other's internals and a refactor in one breaks the other's build.",
       "misconceptions": [
-        "Choosing an architecture by popularity without naming the ownership pressure, failure mode, and signal that justifies it."
+        "A folder structure is not a boundary; only an enforced public surface is."
       ],
-      "evidence": "An ADR-quality decision with boundary diagrams, measurable budgets, failure telemetry, and a reversible migration slice.",
-      "artifact": "Extend the cumulative reference architecture with an ADR, boundary contract, operational evidence, and rollback path.",
+      "evidence": "A boundary lint report before and after the rule is enforced.",
+      "artifact": "A boundary map with enforced public entry points for one product area.",
       "primary_sources": [
-        "https://web.dev/learn/performance/",
-        "https://www.w3.org/WAI/standards-guidelines/wcag/"
+        "https://web.dev/articles/rendering-on-the-web",
+        "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Modules"
       ],
       "related_concepts": []
     }
@@ -6557,21 +6557,21 @@
     "curriculum": {
       "phase": "foundations",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Component API design: controlled state, composition, and escape hatches when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Design component APIs with controlled and uncontrolled state, composition and documented escape hatches.",
       "mechanisms": [
-        "The first-principles mechanism behind Component API design: controlled state, composition, and escape hatches",
-        "ownership boundaries, data and control flow, deployment coupling, and failure propagation",
-        "The components trade-off and its failure boundary"
+        "controlled versus uncontrolled props",
+        "composition over configuration",
+        "escape hatches that preserve invariants"
       ],
-      "production_scenario": "Apply Component API design: controlled state, composition, and escape hatches inside a multi-team product facing 10x traffic or organizational growth with explicit budgets, migration pressure, and rollback needs.",
+      "production_scenario": "A select component grows thirty boolean props and nobody can predict their combinations.",
       "misconceptions": [
-        "Choosing an architecture by popularity without naming the ownership pressure, failure mode, and signal that justifies it."
+        "More props do not make a component more flexible; composition does."
       ],
-      "evidence": "An ADR-quality decision with boundary diagrams, measurable budgets, failure telemetry, and a reversible migration slice.",
-      "artifact": "Extend the cumulative reference architecture with an ADR, boundary contract, operational evidence, and rollback path.",
+      "evidence": "A usage review comparing prop-driven and composed versions of one component.",
+      "artifact": "A component API guideline with a refactored reference component.",
       "primary_sources": [
-        "https://web.dev/learn/performance/",
-        "https://www.w3.org/WAI/standards-guidelines/wcag/"
+        "https://react.dev/learn/passing-props-to-a-component",
+        "https://svelte.dev/docs/svelte/snippet"
       ],
       "related_concepts": []
     }
@@ -6586,21 +6586,21 @@
     "curriculum": {
       "phase": "foundations",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Routes as product, data, error, and ownership boundaries when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Treat routes as product, data, error and ownership boundaries rather than URL patterns.",
       "mechanisms": [
-        "The first-principles mechanism behind Routes as product, data, error, and ownership boundaries",
-        "ownership boundaries, data and control flow, deployment coupling, and failure propagation",
-        "The routing trade-off and its failure boundary"
+        "route-level data loading",
+        "error boundaries per route",
+        "ownership by route segment"
       ],
-      "production_scenario": "Apply Routes as product, data, error, and ownership boundaries inside a multi-team product facing 10x traffic or organizational growth with explicit budgets, migration pressure, and rollback needs.",
+      "production_scenario": "A single global loader fetches every screen's data and one slow query blocks the whole app.",
       "misconceptions": [
-        "Choosing an architecture by popularity without naming the ownership pressure, failure mode, and signal that justifies it."
+        "A route is a unit of ownership and failure, not only a path."
       ],
-      "evidence": "An ADR-quality decision with boundary diagrams, measurable budgets, failure telemetry, and a reversible migration slice.",
-      "artifact": "Extend the cumulative reference architecture with an ADR, boundary contract, operational evidence, and rollback path.",
+      "evidence": "A route map naming data, error handling and owner for each segment.",
+      "artifact": "A route architecture record for one application.",
       "primary_sources": [
-        "https://web.dev/learn/performance/",
-        "https://www.w3.org/WAI/standards-guidelines/wcag/"
+        "https://developer.mozilla.org/en-US/docs/Web/API/Navigation_API",
+        "https://react.dev/learn/start-a-new-react-project"
       ],
       "related_concepts": []
     }
@@ -6615,21 +6615,21 @@
     "curriculum": {
       "phase": "foundations",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply State placement: local, URL, server cache, shared client, and persistent when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Place each value in the smallest store every reader can reach: local, URL, server cache, shared client or persistent.",
       "mechanisms": [
-        "The first-principles mechanism behind State placement: local, URL, server cache, shared client, and persistent",
-        "ownership boundaries, data and control flow, deployment coupling, and failure propagation",
-        "The state trade-off and its failure boundary"
+        "audience and lifetime of a value",
+        "URL as shareable state",
+        "server cache keyed by identity"
       ],
-      "production_scenario": "Apply State placement: local, URL, server cache, shared client, and persistent inside a multi-team product facing 10x traffic or organizational growth with explicit budgets, migration pressure, and rollback needs.",
+      "production_scenario": "A filter resets on back navigation and a server record is edited in a client store.",
       "misconceptions": [
-        "Choosing an architecture by popularity without naming the ownership pressure, failure mode, and signal that justifies it."
+        "Hoisting state outward is a cost, not a default."
       ],
-      "evidence": "An ADR-quality decision with boundary diagrams, measurable budgets, failure telemetry, and a reversible migration slice.",
-      "artifact": "Extend the cumulative reference architecture with an ADR, boundary contract, operational evidence, and rollback path.",
+      "evidence": "A placement table for one screen with justified moves.",
+      "artifact": "A state placement guideline with a re-placed screen.",
       "primary_sources": [
-        "https://web.dev/learn/performance/",
-        "https://www.w3.org/WAI/standards-guidelines/wcag/"
+        "https://developer.mozilla.org/en-US/docs/Web/API/History_API",
+        "https://developer.mozilla.org/en-US/docs/Web/HTTP/Caching"
       ],
       "related_concepts": []
     }
@@ -6644,21 +6644,21 @@
     "curriculum": {
       "phase": "foundations",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Server, client, edge, and browser capability boundaries when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Decide what runs on the server, the edge, the client and the browser by capability and cost.",
       "mechanisms": [
-        "The first-principles mechanism behind Server, client, edge, and browser capability boundaries",
-        "ownership boundaries, data and control flow, deployment coupling, and failure propagation",
-        "The rendering trade-off and its failure boundary"
+        "capability differences per runtime",
+        "serialization across boundaries",
+        "latency and privacy constraints"
       ],
-      "production_scenario": "Apply Server, client, edge, and browser capability boundaries inside a multi-team product facing 10x traffic or organizational growth with explicit budgets, migration pressure, and rollback needs.",
+      "production_scenario": "Code that needs a secret ends up in the client bundle.",
       "misconceptions": [
-        "Choosing an architecture by popularity without naming the ownership pressure, failure mode, and signal that justifies it."
+        "A file can run anywhere in a framework; where it must run is a design decision."
       ],
-      "evidence": "An ADR-quality decision with boundary diagrams, measurable budgets, failure telemetry, and a reversible migration slice.",
-      "artifact": "Extend the cumulative reference architecture with an ADR, boundary contract, operational evidence, and rollback path.",
+      "evidence": "A boundary map marking each module's runtime and why.",
+      "artifact": "A runtime boundary record for one feature.",
       "primary_sources": [
-        "https://web.dev/learn/performance/",
-        "https://www.w3.org/WAI/standards-guidelines/wcag/"
+        "https://web.dev/articles/rendering-on-the-web",
+        "https://react.dev/reference/rsc/server-components"
       ],
       "related_concepts": []
     }
@@ -6673,21 +6673,21 @@
     "curriculum": {
       "phase": "foundations",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Server data, client caches, freshness, identity, and invalidation when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Model server data as a cache with identity, freshness and invalidation rules.",
       "mechanisms": [
-        "The first-principles mechanism behind Server data, client caches, freshness, identity, and invalidation",
-        "ownership boundaries, data and control flow, deployment coupling, and failure propagation",
-        "The data trade-off and its failure boundary"
+        "cache keys by identity",
+        "freshness windows",
+        "invalidation after mutations"
       ],
-      "production_scenario": "Apply Server data, client caches, freshness, identity, and invalidation inside a multi-team product facing 10x traffic or organizational growth with explicit budgets, migration pressure, and rollback needs.",
+      "production_scenario": "Two screens show different versions of the same record after an edit.",
       "misconceptions": [
-        "Choosing an architecture by popularity without naming the ownership pressure, failure mode, and signal that justifies it."
+        "A client copy of server data is a cache, not a second source of truth."
       ],
-      "evidence": "An ADR-quality decision with boundary diagrams, measurable budgets, failure telemetry, and a reversible migration slice.",
-      "artifact": "Extend the cumulative reference architecture with an ADR, boundary contract, operational evidence, and rollback path.",
+      "evidence": "A cache-key and invalidation table for one domain.",
+      "artifact": "A data layer with documented freshness rules.",
       "primary_sources": [
-        "https://web.dev/learn/performance/",
-        "https://www.w3.org/WAI/standards-guidelines/wcag/"
+        "https://developer.mozilla.org/en-US/docs/Web/HTTP/Caching",
+        "https://web.dev/articles/stale-while-revalidate"
       ],
       "related_concepts": []
     }
@@ -6702,21 +6702,21 @@
     "curriculum": {
       "phase": "foundations",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Design-system contracts: tokens, primitives, components, and policy when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Separate tokens, primitives, components and policy so each layer changes at its own pace.",
       "mechanisms": [
-        "The first-principles mechanism behind Design-system contracts: tokens, primitives, components, and policy",
-        "ownership boundaries, data and control flow, deployment coupling, and failure propagation",
-        "The design systems trade-off and its failure boundary"
+        "token layering",
+        "primitive versus composed components",
+        "policy as lint and review"
       ],
-      "production_scenario": "Apply Design-system contracts: tokens, primitives, components, and policy inside a multi-team product facing 10x traffic or organizational growth with explicit budgets, migration pressure, and rollback needs.",
+      "production_scenario": "A brand refresh requires editing hundreds of components because colors are hard-coded.",
       "misconceptions": [
-        "Choosing an architecture by popularity without naming the ownership pressure, failure mode, and signal that justifies it."
+        "A design system is a set of contracts, not a component library."
       ],
-      "evidence": "An ADR-quality decision with boundary diagrams, measurable budgets, failure telemetry, and a reversible migration slice.",
-      "artifact": "Extend the cumulative reference architecture with an ADR, boundary contract, operational evidence, and rollback path.",
+      "evidence": "A layer diagram with the change path for one token.",
+      "artifact": "A design-system layering document with one migrated component.",
       "primary_sources": [
-        "https://web.dev/learn/performance/",
-        "https://www.w3.org/WAI/standards-guidelines/wcag/"
+        "https://developer.mozilla.org/en-US/docs/Web/CSS/Using_CSS_custom_properties",
+        "https://www.w3.org/TR/design-tokens/"
       ],
       "related_concepts": []
     }
@@ -6731,21 +6731,21 @@
     "curriculum": {
       "phase": "foundations",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Accessibility architecture: semantic ownership and focus contracts when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Assign semantic and focus ownership so accessibility survives composition.",
       "mechanisms": [
-        "The first-principles mechanism behind Accessibility architecture: semantic ownership and focus contracts",
-        "ownership boundaries, data and control flow, deployment coupling, and failure propagation",
-        "The accessibility trade-off and its failure boundary"
+        "semantic ownership per component",
+        "focus management contracts",
+        "live-region responsibility"
       ],
-      "production_scenario": "Apply Accessibility architecture: semantic ownership and focus contracts inside a multi-team product facing 10x traffic or organizational growth with explicit budgets, migration pressure, and rollback needs.",
+      "production_scenario": "A modal inside a drawer traps focus in the wrong container.",
       "misconceptions": [
-        "Choosing an architecture by popularity without naming the ownership pressure, failure mode, and signal that justifies it."
+        "Accessibility is not a final audit; it is an ownership contract per component."
       ],
-      "evidence": "An ADR-quality decision with boundary diagrams, measurable budgets, failure telemetry, and a reversible migration slice.",
-      "artifact": "Extend the cumulative reference architecture with an ADR, boundary contract, operational evidence, and rollback path.",
+      "evidence": "An accessibility tree inspection for a composed screen with owners named.",
+      "artifact": "A focus and semantics contract for the component library.",
       "primary_sources": [
-        "https://web.dev/learn/performance/",
-        "https://www.w3.org/WAI/standards-guidelines/wcag/"
+        "https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA",
+        "https://www.w3.org/WAI/ARIA/apg/"
       ],
       "related_concepts": []
     }
@@ -6760,21 +6760,21 @@
     "curriculum": {
       "phase": "foundations",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Performance budgets as architectural constraints when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Set performance budgets as constraints that architecture decisions must satisfy.",
       "mechanisms": [
-        "The first-principles mechanism behind Performance budgets as architectural constraints",
-        "ownership boundaries, data and control flow, deployment coupling, and failure propagation",
-        "The performance trade-off and its failure boundary"
+        "budgets per metric and route",
+        "budget enforcement in CI",
+        "trade-offs recorded against budgets"
       ],
-      "production_scenario": "Apply Performance budgets as architectural constraints inside a multi-team product facing 10x traffic or organizational growth with explicit budgets, migration pressure, and rollback needs.",
+      "production_scenario": "A new dependency pushes the bundle past its budget and nobody notices until users complain.",
       "misconceptions": [
-        "Choosing an architecture by popularity without naming the ownership pressure, failure mode, and signal that justifies it."
+        "A budget that is not enforced is a wish."
       ],
-      "evidence": "An ADR-quality decision with boundary diagrams, measurable budgets, failure telemetry, and a reversible migration slice.",
-      "artifact": "Extend the cumulative reference architecture with an ADR, boundary contract, operational evidence, and rollback path.",
+      "evidence": "A CI check failing on a budget breach with the offending change.",
+      "artifact": "A budget document with enforcement in the pipeline.",
       "primary_sources": [
-        "https://web.dev/learn/performance/",
-        "https://www.w3.org/WAI/standards-guidelines/wcag/"
+        "https://web.dev/articles/performance-budgets-101",
+        "https://web.dev/articles/vitals"
       ],
       "related_concepts": [
         "js-core-web-vitals",
@@ -6795,21 +6795,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Choosing CSR, SSR, SSG, streaming, and islands per route when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Choose CSR, SSR, SSG, streaming or islands per route from its data, personalization and interactivity.",
       "mechanisms": [
-        "The first-principles mechanism behind Choosing CSR, SSR, SSG, streaming, and islands per route",
-        "ownership boundaries, data and control flow, deployment coupling, and failure propagation",
-        "The rendering trade-off and its failure boundary"
+        "render location and timing",
+        "streaming boundaries",
+        "cache-ability by route"
       ],
-      "production_scenario": "Apply Choosing CSR, SSR, SSG, streaming, and islands per route inside a multi-team product facing 10x traffic or organizational growth with explicit budgets, migration pressure, and rollback needs.",
+      "production_scenario": "A personalized page is statically generated and leaks another user's data through a cache.",
       "misconceptions": [
-        "Choosing an architecture by popularity without naming the ownership pressure, failure mode, and signal that justifies it."
+        "A rendering strategy is a per-route decision."
       ],
-      "evidence": "An ADR-quality decision with boundary diagrams, measurable budgets, failure telemetry, and a reversible migration slice.",
-      "artifact": "Extend the cumulative reference architecture with an ADR, boundary contract, operational evidence, and rollback path.",
+      "evidence": "A route table with strategy, cache rule and measured metrics.",
+      "artifact": "A rendering decision record for one application.",
       "primary_sources": [
-        "https://web.dev/learn/performance/",
-        "https://www.w3.org/WAI/standards-guidelines/wcag/"
+        "https://web.dev/articles/rendering-on-the-web",
+        "https://react.dev/reference/react-dom/server"
       ],
       "related_concepts": [
         "js-rendering-architectures-ssr-ssg"
@@ -6829,21 +6829,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Backend-for-Frontend boundaries, API composition, and overfetching when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Introduce a backend-for-frontend when composition, overfetching or auth shape demands it.",
       "mechanisms": [
-        "The first-principles mechanism behind Backend-for-Frontend boundaries, API composition, and overfetching",
-        "ownership boundaries, data and control flow, deployment coupling, and failure propagation",
-        "The data trade-off and its failure boundary"
+        "per-client API composition",
+        "overfetching and underfetching",
+        "auth and session termination at the BFF"
       ],
-      "production_scenario": "Apply Backend-for-Frontend boundaries, API composition, and overfetching inside a multi-team product facing 10x traffic or organizational growth with explicit budgets, migration pressure, and rollback needs.",
+      "production_scenario": "A mobile screen makes nine calls to render one list.",
       "misconceptions": [
-        "Choosing an architecture by popularity without naming the ownership pressure, failure mode, and signal that justifies it."
+        "A BFF is owned by the frontend team and shaped by screens, not by services."
       ],
-      "evidence": "An ADR-quality decision with boundary diagrams, measurable budgets, failure telemetry, and a reversible migration slice.",
-      "artifact": "Extend the cumulative reference architecture with an ADR, boundary contract, operational evidence, and rollback path.",
+      "evidence": "A request count and payload size comparison before and after composition.",
+      "artifact": "A BFF boundary decision with measured request reduction.",
       "primary_sources": [
-        "https://web.dev/learn/performance/",
-        "https://www.w3.org/WAI/standards-guidelines/wcag/"
+        "https://web.dev/articles/rendering-on-the-web",
+        "https://www.rfc-editor.org/rfc/rfc9110"
       ],
       "related_concepts": []
     }
@@ -6861,21 +6861,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply URL and navigation state as durable application architecture when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Make the URL and navigation history durable application state with restoration rules.",
       "mechanisms": [
-        "The first-principles mechanism behind URL and navigation state as durable application architecture",
-        "ownership boundaries, data and control flow, deployment coupling, and failure propagation",
-        "The state trade-off and its failure boundary"
+        "URL as state container",
+        "history entries and restoration",
+        "scroll and focus restoration"
       ],
-      "production_scenario": "Apply URL and navigation state as durable application architecture inside a multi-team product facing 10x traffic or organizational growth with explicit budgets, migration pressure, and rollback needs.",
+      "production_scenario": "Pressing back after a modal closes the whole flow.",
       "misconceptions": [
-        "Choosing an architecture by popularity without naming the ownership pressure, failure mode, and signal that justifies it."
+        "If the back button should change it, it belongs in the navigation state."
       ],
-      "evidence": "An ADR-quality decision with boundary diagrams, measurable budgets, failure telemetry, and a reversible migration slice.",
-      "artifact": "Extend the cumulative reference architecture with an ADR, boundary contract, operational evidence, and rollback path.",
+      "evidence": "A navigation transcript showing entries and restoration for one flow.",
+      "artifact": "A navigation state design for one application area.",
       "primary_sources": [
-        "https://web.dev/learn/performance/",
-        "https://www.w3.org/WAI/standards-guidelines/wcag/"
+        "https://developer.mozilla.org/en-US/docs/Web/API/Navigation_API",
+        "https://developer.mozilla.org/en-US/docs/Web/API/History_API"
       ],
       "related_concepts": []
     }
@@ -6892,21 +6892,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Async UI state machines for loading, stale, error, retry, and cancellation when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Model async UI as explicit states with transitions for retry, cancellation and stale data.",
       "mechanisms": [
-        "The first-principles mechanism behind Async UI state machines for loading, stale, error, retry, and cancellation",
-        "ownership boundaries, data and control flow, deployment coupling, and failure propagation",
-        "The state trade-off and its failure boundary"
+        "discriminated states",
+        "superseded request handling",
+        "stale-while-revalidate"
       ],
-      "production_scenario": "Apply Async UI state machines for loading, stale, error, retry, and cancellation inside a multi-team product facing 10x traffic or organizational growth with explicit budgets, migration pressure, and rollback needs.",
+      "production_scenario": "A component shows a spinner and an error at once because booleans disagree.",
       "misconceptions": [
-        "Choosing an architecture by popularity without naming the ownership pressure, failure mode, and signal that justifies it."
+        "Booleans admit impossible combinations; a union names the states that exist."
       ],
-      "evidence": "An ADR-quality decision with boundary diagrams, measurable budgets, failure telemetry, and a reversible migration slice.",
-      "artifact": "Extend the cumulative reference architecture with an ADR, boundary contract, operational evidence, and rollback path.",
+      "evidence": "A type test rejecting an impossible state and a trace of a cancelled request.",
+      "artifact": "An async state model reused across features.",
       "primary_sources": [
-        "https://web.dev/learn/performance/",
-        "https://www.w3.org/WAI/standards-guidelines/wcag/"
+        "https://developer.mozilla.org/en-US/docs/Web/API/AbortController",
+        "https://react.dev/learn/choosing-the-state-structure"
       ],
       "related_concepts": []
     }
@@ -6924,21 +6924,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Headless components, slots, compound APIs, and behavior ownership when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Separate behavior from rendering with headless components, slots and compound APIs.",
       "mechanisms": [
-        "The first-principles mechanism behind Headless components, slots, compound APIs, and behavior ownership",
-        "ownership boundaries, data and control flow, deployment coupling, and failure propagation",
-        "The components trade-off and its failure boundary"
+        "behavior hooks or primitives",
+        "slot and snippet composition",
+        "compound component context"
       ],
-      "production_scenario": "Apply Headless components, slots, compound APIs, and behavior ownership inside a multi-team product facing 10x traffic or organizational growth with explicit budgets, migration pressure, and rollback needs.",
+      "production_scenario": "A dropdown's keyboard behavior is copied into five differently styled variants.",
       "misconceptions": [
-        "Choosing an architecture by popularity without naming the ownership pressure, failure mode, and signal that justifies it."
+        "Style variants should share one behavior implementation."
       ],
-      "evidence": "An ADR-quality decision with boundary diagrams, measurable budgets, failure telemetry, and a reversible migration slice.",
-      "artifact": "Extend the cumulative reference architecture with an ADR, boundary contract, operational evidence, and rollback path.",
+      "evidence": "A composition demo with one behavior and three renderings.",
+      "artifact": "A headless primitive with documented composition.",
       "primary_sources": [
-        "https://web.dev/learn/performance/",
-        "https://www.w3.org/WAI/standards-guidelines/wcag/"
+        "https://svelte.dev/docs/svelte/snippet",
+        "https://react.dev/learn/passing-data-deeply-with-context"
       ],
       "related_concepts": []
     }
@@ -6955,21 +6955,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Design tokens, themes, modes, and cross-platform semantic layers when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Build a semantic token layer that supports themes, modes and platforms without forks.",
       "mechanisms": [
-        "The first-principles mechanism behind Design tokens, themes, modes, and cross-platform semantic layers",
-        "ownership boundaries, data and control flow, deployment coupling, and failure propagation",
-        "The design systems trade-off and its failure boundary"
+        "semantic over raw tokens",
+        "mode switching via custom properties",
+        "cross-platform token pipeline"
       ],
-      "production_scenario": "Apply Design tokens, themes, modes, and cross-platform semantic layers inside a multi-team product facing 10x traffic or organizational growth with explicit budgets, migration pressure, and rollback needs.",
+      "production_scenario": "Dark mode requires a second stylesheet that drifts from the first.",
       "misconceptions": [
-        "Choosing an architecture by popularity without naming the ownership pressure, failure mode, and signal that justifies it."
+        "Themes are token values, not separate components."
       ],
-      "evidence": "An ADR-quality decision with boundary diagrams, measurable budgets, failure telemetry, and a reversible migration slice.",
-      "artifact": "Extend the cumulative reference architecture with an ADR, boundary contract, operational evidence, and rollback path.",
+      "evidence": "A theme switch demo with a single component tree.",
+      "artifact": "A semantic token layer with two modes.",
       "primary_sources": [
-        "https://web.dev/learn/performance/",
-        "https://www.w3.org/WAI/standards-guidelines/wcag/"
+        "https://developer.mozilla.org/en-US/docs/Web/CSS/Using_CSS_custom_properties",
+        "https://www.w3.org/TR/design-tokens/"
       ],
       "related_concepts": []
     }
@@ -6987,21 +6987,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Error boundaries, degraded UX, retries, and partial failure when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Contain failures with boundaries and design degraded experiences and retries deliberately.",
       "mechanisms": [
-        "The first-principles mechanism behind Error boundaries, degraded UX, retries, and partial failure",
-        "ownership boundaries, data and control flow, deployment coupling, and failure propagation",
-        "The reliability trade-off and its failure boundary"
+        "error boundaries per region",
+        "degraded rendering",
+        "retry with backoff and limits"
       ],
-      "production_scenario": "Apply Error boundaries, degraded UX, retries, and partial failure inside a multi-team product facing 10x traffic or organizational growth with explicit budgets, migration pressure, and rollback needs.",
+      "production_scenario": "One failing widget blanks the entire dashboard for every user at once.",
       "misconceptions": [
-        "Choosing an architecture by popularity without naming the ownership pressure, failure mode, and signal that justifies it."
+        "Catching an error is not resilience; deciding what the user sees is."
       ],
-      "evidence": "An ADR-quality decision with boundary diagrams, measurable budgets, failure telemetry, and a reversible migration slice.",
-      "artifact": "Extend the cumulative reference architecture with an ADR, boundary contract, operational evidence, and rollback path.",
+      "evidence": "A failure injection showing the contained region and the degraded state.",
+      "artifact": "A resilience map with boundaries and degraded states.",
       "primary_sources": [
-        "https://web.dev/learn/performance/",
-        "https://www.w3.org/WAI/standards-guidelines/wcag/"
+        "https://react.dev/reference/react/Component#catching-rendering-errors-with-an-error-boundary",
+        "https://web.dev/articles/resilient-search-experiences"
       ],
       "related_concepts": []
     }
@@ -7019,21 +7019,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Frontend observability: RUM, traces, errors, releases, and user context when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Instrument real-user monitoring with traces, errors, releases and user context that point at causes.",
       "mechanisms": [
-        "The first-principles mechanism behind Frontend observability: RUM, traces, errors, releases, and user context",
-        "ownership boundaries, data and control flow, deployment coupling, and failure propagation",
-        "The observability trade-off and its failure boundary"
+        "release and version tagging",
+        "error grouping",
+        "trace correlation to backend"
       ],
-      "production_scenario": "Apply Frontend observability: RUM, traces, errors, releases, and user context inside a multi-team product facing 10x traffic or organizational growth with explicit budgets, migration pressure, and rollback needs.",
+      "production_scenario": "A regression is visible in metrics but cannot be tied to a deploy or a component.",
       "misconceptions": [
-        "Choosing an architecture by popularity without naming the ownership pressure, failure mode, and signal that justifies it."
+        "A metric without release and attribution context cannot be acted on."
       ],
-      "evidence": "An ADR-quality decision with boundary diagrams, measurable budgets, failure telemetry, and a reversible migration slice.",
-      "artifact": "Extend the cumulative reference architecture with an ADR, boundary contract, operational evidence, and rollback path.",
+      "evidence": "A RUM event with release, route and attribution fields for one regression.",
+      "artifact": "An observability setup that traced one regression to its release.",
       "primary_sources": [
-        "https://web.dev/learn/performance/",
-        "https://www.w3.org/WAI/standards-guidelines/wcag/"
+        "https://developer.mozilla.org/en-US/docs/Web/API/PerformanceObserver",
+        "https://sre.google/sre-book/monitoring-distributed-systems/"
       ],
       "related_concepts": []
     }
@@ -7051,21 +7051,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Testing architecture: contracts, components, journeys, and confidence when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Choose tests by the contract they protect: unit, component, contract and journey.",
       "mechanisms": [
-        "The first-principles mechanism behind Testing architecture: contracts, components, journeys, and confidence",
-        "ownership boundaries, data and control flow, deployment coupling, and failure propagation",
-        "The testing trade-off and its failure boundary"
+        "test pyramid by confidence",
+        "contract tests at boundaries",
+        "journey tests for critical paths"
       ],
-      "production_scenario": "Apply Testing architecture: contracts, components, journeys, and confidence inside a multi-team product facing 10x traffic or organizational growth with explicit budgets, migration pressure, and rollback needs.",
+      "production_scenario": "Hundreds of snapshot tests pass while a checkout journey is broken.",
       "misconceptions": [
-        "Choosing an architecture by popularity without naming the ownership pressure, failure mode, and signal that justifies it."
+        "Coverage is not confidence; the right test at the right boundary is."
       ],
-      "evidence": "An ADR-quality decision with boundary diagrams, measurable budgets, failure telemetry, and a reversible migration slice.",
-      "artifact": "Extend the cumulative reference architecture with an ADR, boundary contract, operational evidence, and rollback path.",
+      "evidence": "A test map assigning each contract to a test type.",
+      "artifact": "A testing architecture record with the journeys covered.",
       "primary_sources": [
-        "https://web.dev/learn/performance/",
-        "https://www.w3.org/WAI/standards-guidelines/wcag/"
+        "https://web.dev/articles/ta-strategies",
+        "https://developer.mozilla.org/en-US/docs/Learn_web_development/Extensions/Testing"
       ],
       "related_concepts": [
         "ts-runtime-validation-boundary"
@@ -7085,21 +7085,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Frontend trust boundaries: untrusted data, secrets, auth, and browser policy when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Mark trust boundaries for untrusted data, secrets, auth and browser policy in the frontend.",
       "mechanisms": [
-        "The first-principles mechanism behind Frontend trust boundaries: untrusted data, secrets, auth, and browser policy",
-        "ownership boundaries, data and control flow, deployment coupling, and failure propagation",
-        "The security trade-off and its failure boundary"
+        "untrusted input sinks",
+        "secrets never in the bundle",
+        "CSP and trusted types"
       ],
-      "production_scenario": "Apply Frontend trust boundaries: untrusted data, secrets, auth, and browser policy inside a multi-team product facing 10x traffic or organizational growth with explicit budgets, migration pressure, and rollback needs.",
+      "production_scenario": "An API key ships in the client bundle because it was needed for a request.",
       "misconceptions": [
-        "Choosing an architecture by popularity without naming the ownership pressure, failure mode, and signal that justifies it."
+        "The browser is not a trusted environment; anything sent to it is public."
       ],
-      "evidence": "An ADR-quality decision with boundary diagrams, measurable budgets, failure telemetry, and a reversible migration slice.",
-      "artifact": "Extend the cumulative reference architecture with an ADR, boundary contract, operational evidence, and rollback path.",
+      "evidence": "A trust-boundary review listing each secret's location and each sink.",
+      "artifact": "A trust boundary document with fixes applied.",
       "primary_sources": [
-        "https://web.dev/learn/performance/",
-        "https://www.w3.org/WAI/standards-guidelines/wcag/"
+        "https://developer.mozilla.org/en-US/docs/Web/Security",
+        "https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP"
       ],
       "related_concepts": []
     }
@@ -7117,21 +7117,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Realtime frontend architecture: ordering, reconnects, backpressure, and presence when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Design realtime frontends for ordering, reconnects, backpressure and presence.",
       "mechanisms": [
-        "The first-principles mechanism behind Realtime frontend architecture: ordering, reconnects, backpressure, and presence",
-        "ownership boundaries, data and control flow, deployment coupling, and failure propagation",
-        "The data trade-off and its failure boundary"
+        "message ordering and sequence numbers",
+        "reconnect and resume",
+        "client-side backpressure"
       ],
-      "production_scenario": "Apply Realtime frontend architecture: ordering, reconnects, backpressure, and presence inside a multi-team product facing 10x traffic or organizational growth with explicit budgets, migration pressure, and rollback needs.",
+      "production_scenario": "A live dashboard shows events out of order after a reconnect.",
       "misconceptions": [
-        "Choosing an architecture by popularity without naming the ownership pressure, failure mode, and signal that justifies it."
+        "A live connection does not guarantee order or delivery across reconnects."
       ],
-      "evidence": "An ADR-quality decision with boundary diagrams, measurable budgets, failure telemetry, and a reversible migration slice.",
-      "artifact": "Extend the cumulative reference architecture with an ADR, boundary contract, operational evidence, and rollback path.",
+      "evidence": "A reconnect test showing resumed, ordered delivery.",
+      "artifact": "A realtime client with ordering and resume tests.",
       "primary_sources": [
-        "https://web.dev/learn/performance/",
-        "https://www.w3.org/WAI/standards-guidelines/wcag/"
+        "https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API",
+        "https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events"
       ],
       "related_concepts": []
     }
@@ -7149,21 +7149,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Offline-first data: local authority, sync queues, and conflict resolution when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Give local data authority when offline and sync with conflict resolution rules.",
       "mechanisms": [
-        "The first-principles mechanism behind Offline-first data: local authority, sync queues, and conflict resolution",
-        "ownership boundaries, data and control flow, deployment coupling, and failure propagation",
-        "The data trade-off and its failure boundary"
+        "local-first writes",
+        "sync queue with retries",
+        "conflict resolution strategy"
       ],
-      "production_scenario": "Apply Offline-first data: local authority, sync queues, and conflict resolution inside a multi-team product facing 10x traffic or organizational growth with explicit budgets, migration pressure, and rollback needs.",
+      "production_scenario": "Two devices edit the same note offline and one edit disappears.",
       "misconceptions": [
-        "Choosing an architecture by popularity without naming the ownership pressure, failure mode, and signal that justifies it."
+        "Last write wins is a decision with data loss, not a default."
       ],
-      "evidence": "An ADR-quality decision with boundary diagrams, measurable budgets, failure telemetry, and a reversible migration slice.",
-      "artifact": "Extend the cumulative reference architecture with an ADR, boundary contract, operational evidence, and rollback path.",
+      "evidence": "A conflict scenario resolved by the chosen rule with both edits accounted for.",
+      "artifact": "An offline data layer with a documented conflict policy.",
       "primary_sources": [
-        "https://web.dev/learn/performance/",
-        "https://www.w3.org/WAI/standards-guidelines/wcag/"
+        "https://developer.mozilla.org/en-US/docs/Web/API/Service_Worker_API",
+        "https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API"
       ],
       "related_concepts": []
     }
@@ -7181,21 +7181,21 @@
     "curriculum": {
       "phase": "mechanisms",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Internationalization architecture: messages, formats, routing, and layout when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Architect messages, formats, routing and layout for many locales from the start.",
       "mechanisms": [
-        "The first-principles mechanism behind Internationalization architecture: messages, formats, routing, and layout",
-        "ownership boundaries, data and control flow, deployment coupling, and failure propagation",
-        "The globalization trade-off and its failure boundary"
+        "message catalogs and plurals",
+        "locale-aware formatting",
+        "bidirectional layout"
       ],
-      "production_scenario": "Apply Internationalization architecture: messages, formats, routing, and layout inside a multi-team product facing 10x traffic or organizational growth with explicit budgets, migration pressure, and rollback needs.",
+      "production_scenario": "Right-to-left users see mirrored icons and truncated plurals.",
       "misconceptions": [
-        "Choosing an architecture by popularity without naming the ownership pressure, failure mode, and signal that justifies it."
+        "Translation is the last step; formats, routing and layout come first."
       ],
-      "evidence": "An ADR-quality decision with boundary diagrams, measurable budgets, failure telemetry, and a reversible migration slice.",
-      "artifact": "Extend the cumulative reference architecture with an ADR, boundary contract, operational evidence, and rollback path.",
+      "evidence": "A locale switch demo covering plurals, dates and RTL layout.",
+      "artifact": "An internationalization architecture record for one application.",
       "primary_sources": [
-        "https://web.dev/learn/performance/",
-        "https://www.w3.org/WAI/standards-guidelines/wcag/"
+        "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl",
+        "https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_logical_properties_and_values"
       ],
       "related_concepts": []
     }
@@ -7213,21 +7213,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Monorepo modularity: package graph, ownership, boundaries, and releases when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Structure a monorepo package graph with ownership, boundaries and release rules.",
       "mechanisms": [
-        "The first-principles mechanism behind Monorepo modularity: package graph, ownership, boundaries, and releases",
-        "ownership boundaries, data and control flow, deployment coupling, and failure propagation",
-        "The organization trade-off and its failure boundary"
+        "package graph direction",
+        "ownership per package",
+        "release and versioning policy"
       ],
-      "production_scenario": "Apply Monorepo modularity: package graph, ownership, boundaries, and releases inside a multi-team product facing 10x traffic or organizational growth with explicit budgets, migration pressure, and rollback needs.",
+      "production_scenario": "A shared package changes and forty consumers break in one commit.",
       "misconceptions": [
-        "Choosing an architecture by popularity without naming the ownership pressure, failure mode, and signal that justifies it."
+        "A monorepo does not remove versioning; it moves it into the graph."
       ],
-      "evidence": "An ADR-quality decision with boundary diagrams, measurable budgets, failure telemetry, and a reversible migration slice.",
-      "artifact": "Extend the cumulative reference architecture with an ADR, boundary contract, operational evidence, and rollback path.",
+      "evidence": "A package graph with ownership and the affected consumers for one change.",
+      "artifact": "A modularity record with enforced boundaries.",
       "primary_sources": [
-        "https://web.dev/learn/performance/",
-        "https://www.w3.org/WAI/standards-guidelines/wcag/"
+        "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Modules",
+        "https://web.dev/articles/rendering-on-the-web"
       ],
       "related_concepts": []
     }
@@ -7246,21 +7246,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Micro-frontends: when independent deployment earns runtime complexity when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Decide whether independent deployment justifies micro-frontend runtime complexity.",
       "mechanisms": [
-        "The first-principles mechanism behind Micro-frontends: when independent deployment earns runtime complexity",
-        "ownership boundaries, data and control flow, deployment coupling, and failure propagation",
-        "The organization trade-off and its failure boundary"
+        "deployment independence",
+        "shared runtime and duplication",
+        "integration boundaries"
       ],
-      "production_scenario": "Apply Micro-frontends: when independent deployment earns runtime complexity inside a multi-team product facing 10x traffic or organizational growth with explicit budgets, migration pressure, and rollback needs.",
+      "production_scenario": "Three teams ship one page and every release blocks on the others.",
       "misconceptions": [
-        "Choosing an architecture by popularity without naming the ownership pressure, failure mode, and signal that justifies it."
+        "Micro-frontends solve an organizational problem and create a runtime one."
       ],
-      "evidence": "An ADR-quality decision with boundary diagrams, measurable budgets, failure telemetry, and a reversible migration slice.",
-      "artifact": "Extend the cumulative reference architecture with an ADR, boundary contract, operational evidence, and rollback path.",
+      "evidence": "A decision record weighing deployment gains against runtime cost with numbers.",
+      "artifact": "A micro-frontend decision record for one product.",
       "primary_sources": [
-        "https://web.dev/learn/performance/",
-        "https://www.w3.org/WAI/standards-guidelines/wcag/"
+        "https://web.dev/articles/rendering-on-the-web",
+        "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/import"
       ],
       "related_concepts": [
         "js-runtime-module-federation",
@@ -7281,21 +7281,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Server Components, streaming UI, serialization, and mutation boundaries when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Use server components and streaming with clear serialization and mutation boundaries.",
       "mechanisms": [
-        "The first-principles mechanism behind Server Components, streaming UI, serialization, and mutation boundaries",
-        "ownership boundaries, data and control flow, deployment coupling, and failure propagation",
-        "The rendering trade-off and its failure boundary"
+        "server-only rendering",
+        "streaming suspense boundaries",
+        "serializable props"
       ],
-      "production_scenario": "Apply Server Components, streaming UI, serialization, and mutation boundaries inside a multi-team product facing 10x traffic or organizational growth with explicit budgets, migration pressure, and rollback needs.",
+      "production_scenario": "A server component passes a function to a client component and the build fails.",
       "misconceptions": [
-        "Choosing an architecture by popularity without naming the ownership pressure, failure mode, and signal that justifies it."
+        "Server and client components are a boundary, not a performance flag."
       ],
-      "evidence": "An ADR-quality decision with boundary diagrams, measurable budgets, failure telemetry, and a reversible migration slice.",
-      "artifact": "Extend the cumulative reference architecture with an ADR, boundary contract, operational evidence, and rollback path.",
+      "evidence": "A boundary check output for one component tree.",
+      "artifact": "A streaming architecture slice with boundaries documented.",
       "primary_sources": [
-        "https://web.dev/learn/performance/",
-        "https://www.w3.org/WAI/standards-guidelines/wcag/"
+        "https://react.dev/reference/rsc/server-components",
+        "https://react.dev/reference/react/Suspense"
       ],
       "related_concepts": []
     }
@@ -7313,21 +7313,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Islands, partial hydration, resumability, and interaction boundaries when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Hydrate only interactive islands and decide interaction boundaries per component.",
       "mechanisms": [
-        "The first-principles mechanism behind Islands, partial hydration, resumability, and interaction boundaries",
-        "ownership boundaries, data and control flow, deployment coupling, and failure propagation",
-        "The rendering trade-off and its failure boundary"
+        "static markup with islands",
+        "hydration triggers",
+        "resumability"
       ],
-      "production_scenario": "Apply Islands, partial hydration, resumability, and interaction boundaries inside a multi-team product facing 10x traffic or organizational growth with explicit budgets, migration pressure, and rollback needs.",
+      "production_scenario": "A content page ships a large bundle to hydrate static text.",
       "misconceptions": [
-        "Choosing an architecture by popularity without naming the ownership pressure, failure mode, and signal that justifies it."
+        "Hydration re-executes component logic; islands limit where."
       ],
-      "evidence": "An ADR-quality decision with boundary diagrams, measurable budgets, failure telemetry, and a reversible migration slice.",
-      "artifact": "Extend the cumulative reference architecture with an ADR, boundary contract, operational evidence, and rollback path.",
+      "evidence": "A trace of hydrated islands versus full hydration.",
+      "artifact": "An island boundary map with measured bundle reduction.",
       "primary_sources": [
-        "https://web.dev/learn/performance/",
-        "https://www.w3.org/WAI/standards-guidelines/wcag/"
+        "https://web.dev/articles/rendering-on-the-web",
+        "https://www.w3.org/TR/html-aria/"
       ],
       "related_concepts": [
         "js-hydration-strategies"
@@ -7347,21 +7347,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Mutation architecture: optimistic UI, invalidation, conflicts, and rollback when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Design mutations with optimistic UI, invalidation, conflict handling and rollback.",
       "mechanisms": [
-        "The first-principles mechanism behind Mutation architecture: optimistic UI, invalidation, conflicts, and rollback",
-        "ownership boundaries, data and control flow, deployment coupling, and failure propagation",
-        "The data trade-off and its failure boundary"
+        "optimistic copies",
+        "invalidation of affected keys",
+        "rollback on failure"
       ],
-      "production_scenario": "Apply Mutation architecture: optimistic UI, invalidation, conflicts, and rollback inside a multi-team product facing 10x traffic or organizational growth with explicit budgets, migration pressure, and rollback needs.",
+      "production_scenario": "An optimistic insert fails on the server and a phantom row remains.",
       "misconceptions": [
-        "Choosing an architecture by popularity without naming the ownership pressure, failure mode, and signal that justifies it."
+        "Optimistic updates without rollback are lies the UI tells."
       ],
-      "evidence": "An ADR-quality decision with boundary diagrams, measurable budgets, failure telemetry, and a reversible migration slice.",
-      "artifact": "Extend the cumulative reference architecture with an ADR, boundary contract, operational evidence, and rollback path.",
+      "evidence": "A test showing rollback after a failed mutation.",
+      "artifact": "A mutation architecture with tested rollback.",
       "primary_sources": [
-        "https://web.dev/learn/performance/",
-        "https://www.w3.org/WAI/standards-guidelines/wcag/"
+        "https://react.dev/reference/react/useOptimistic",
+        "https://developer.mozilla.org/en-US/docs/Web/HTTP/Caching"
       ],
       "related_concepts": []
     }
@@ -7379,21 +7379,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Feature flags, progressive delivery, kill switches, and cleanup when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Roll features out progressively with flags, kill switches and cleanup rules.",
       "mechanisms": [
-        "The first-principles mechanism behind Feature flags, progressive delivery, kill switches, and cleanup",
-        "ownership boundaries, data and control flow, deployment coupling, and failure propagation",
-        "The release trade-off and its failure boundary"
+        "percentage rollouts",
+        "kill switches",
+        "flag lifecycle and removal"
       ],
-      "production_scenario": "Apply Feature flags, progressive delivery, kill switches, and cleanup inside a multi-team product facing 10x traffic or organizational growth with explicit budgets, migration pressure, and rollback needs.",
+      "production_scenario": "A flag stays for two years and both branches ship forever.",
       "misconceptions": [
-        "Choosing an architecture by popularity without naming the ownership pressure, failure mode, and signal that justifies it."
+        "A flag is a temporary structure with a removal date."
       ],
-      "evidence": "An ADR-quality decision with boundary diagrams, measurable budgets, failure telemetry, and a reversible migration slice.",
-      "artifact": "Extend the cumulative reference architecture with an ADR, boundary contract, operational evidence, and rollback path.",
+      "evidence": "A flag inventory with ages and owners.",
+      "artifact": "A progressive delivery process with a cleanup rule.",
       "primary_sources": [
-        "https://web.dev/learn/performance/",
-        "https://www.w3.org/WAI/standards-guidelines/wcag/"
+        "https://sre.google/workbook/canarying-releases/",
+        "https://web.dev/articles/rendering-on-the-web"
       ],
       "related_concepts": []
     }
@@ -7412,21 +7412,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Design-system governance: adoption, versioning, migrations, and exceptions when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Govern a design system's adoption, versioning, migrations and exceptions.",
       "mechanisms": [
-        "The first-principles mechanism behind Design-system governance: adoption, versioning, migrations, and exceptions",
-        "ownership boundaries, data and control flow, deployment coupling, and failure propagation",
-        "The design systems trade-off and its failure boundary"
+        "semantic versioning of components",
+        "migration codemods",
+        "exception process"
       ],
-      "production_scenario": "Apply Design-system governance: adoption, versioning, migrations, and exceptions inside a multi-team product facing 10x traffic or organizational growth with explicit budgets, migration pressure, and rollback needs.",
+      "production_scenario": "Teams pin old versions and the system fragments into five variants.",
       "misconceptions": [
-        "Choosing an architecture by popularity without naming the ownership pressure, failure mode, and signal that justifies it."
+        "Adoption is governed by migration cost, not by mandate."
       ],
-      "evidence": "An ADR-quality decision with boundary diagrams, measurable budgets, failure telemetry, and a reversible migration slice.",
-      "artifact": "Extend the cumulative reference architecture with an ADR, boundary contract, operational evidence, and rollback path.",
+      "evidence": "An adoption dashboard with versions in use and a migration path.",
+      "artifact": "A governance record with a migration plan.",
       "primary_sources": [
-        "https://web.dev/learn/performance/",
-        "https://www.w3.org/WAI/standards-guidelines/wcag/"
+        "https://developer.mozilla.org/en-US/docs/Web/CSS/Using_CSS_custom_properties",
+        "https://www.w3.org/TR/design-tokens/"
       ],
       "related_concepts": []
     }
@@ -7445,21 +7445,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Multi-tenant and white-label frontend architecture without forks when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Serve many tenants and brands from one codebase through configuration, tokens and boundaries.",
       "mechanisms": [
-        "The first-principles mechanism behind Multi-tenant and white-label frontend architecture without forks",
-        "ownership boundaries, data and control flow, deployment coupling, and failure propagation",
-        "The platform trade-off and its failure boundary"
+        "tenant configuration",
+        "brand tokens",
+        "feature entitlement boundaries"
       ],
-      "production_scenario": "Apply Multi-tenant and white-label frontend architecture without forks inside a multi-team product facing 10x traffic or organizational growth with explicit budgets, migration pressure, and rollback needs.",
+      "production_scenario": "A white-label client gets a fork and diverges within a quarter.",
       "misconceptions": [
-        "Choosing an architecture by popularity without naming the ownership pressure, failure mode, and signal that justifies it."
+        "A fork is the most expensive configuration mechanism."
       ],
-      "evidence": "An ADR-quality decision with boundary diagrams, measurable budgets, failure telemetry, and a reversible migration slice.",
-      "artifact": "Extend the cumulative reference architecture with an ADR, boundary contract, operational evidence, and rollback path.",
+      "evidence": "A tenant matrix showing configuration instead of forks.",
+      "artifact": "A multi-tenant architecture record with one onboarded tenant.",
       "primary_sources": [
-        "https://web.dev/learn/performance/",
-        "https://www.w3.org/WAI/standards-guidelines/wcag/"
+        "https://developer.mozilla.org/en-US/docs/Web/CSS/Using_CSS_custom_properties",
+        "https://www.rfc-editor.org/rfc/rfc9110"
       ],
       "related_concepts": []
     }
@@ -7478,21 +7478,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply Frontend platform teams: paved roads, autonomy, metrics, and governance when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Run a frontend platform team with paved roads, autonomy and measurable adoption.",
       "mechanisms": [
-        "The first-principles mechanism behind Frontend platform teams: paved roads, autonomy, metrics, and governance",
-        "ownership boundaries, data and control flow, deployment coupling, and failure propagation",
-        "The organization trade-off and its failure boundary"
+        "paved road defaults",
+        "metrics for adoption",
+        "governance without gates"
       ],
-      "production_scenario": "Apply Frontend platform teams: paved roads, autonomy, metrics, and governance inside a multi-team product facing 10x traffic or organizational growth with explicit budgets, migration pressure, and rollback needs.",
+      "production_scenario": "A platform mandates tooling nobody adopts and teams build their own.",
       "misconceptions": [
-        "Choosing an architecture by popularity without naming the ownership pressure, failure mode, and signal that justifies it."
+        "A platform earns adoption by being the easiest path, not by mandate."
       ],
-      "evidence": "An ADR-quality decision with boundary diagrams, measurable budgets, failure telemetry, and a reversible migration slice.",
-      "artifact": "Extend the cumulative reference architecture with an ADR, boundary contract, operational evidence, and rollback path.",
+      "evidence": "An adoption metric trend for one paved road.",
+      "artifact": "A platform charter with measured adoption.",
       "primary_sources": [
-        "https://web.dev/learn/performance/",
-        "https://www.w3.org/WAI/standards-guidelines/wcag/"
+        "https://sre.google/sre-book/introduction/",
+        "https://web.dev/articles/performance-budgets-101"
       ],
       "related_concepts": []
     }
@@ -7510,21 +7510,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply Frontend incident response: detection, triage, rollback, and learning when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Detect, triage, roll back and learn from frontend incidents.",
       "mechanisms": [
-        "The first-principles mechanism behind Frontend incident response: detection, triage, rollback, and learning",
-        "ownership boundaries, data and control flow, deployment coupling, and failure propagation",
-        "The reliability trade-off and its failure boundary"
+        "detection from RUM and errors",
+        "rollback as first response",
+        "blameless review"
       ],
-      "production_scenario": "Apply Frontend incident response: detection, triage, rollback, and learning inside a multi-team product facing 10x traffic or organizational growth with explicit budgets, migration pressure, and rollback needs.",
+      "production_scenario": "A bad deploy takes an hour to notice and longer to revert.",
       "misconceptions": [
-        "Choosing an architecture by popularity without naming the ownership pressure, failure mode, and signal that justifies it."
+        "Fixing forward is slower than rolling back."
       ],
-      "evidence": "An ADR-quality decision with boundary diagrams, measurable budgets, failure telemetry, and a reversible migration slice.",
-      "artifact": "Extend the cumulative reference architecture with an ADR, boundary contract, operational evidence, and rollback path.",
+      "evidence": "An incident timeline with detection, rollback and learning.",
+      "artifact": "An incident runbook for the frontend.",
       "primary_sources": [
-        "https://web.dev/learn/performance/",
-        "https://www.w3.org/WAI/standards-guidelines/wcag/"
+        "https://sre.google/sre-book/managing-incidents/",
+        "https://sre.google/sre-book/postmortem-culture/"
       ],
       "related_concepts": []
     }
@@ -7543,21 +7543,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply Large data interfaces: virtualization, pagination, workers, and interaction budgets when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Render large datasets within interaction budgets using virtualization, pagination and workers.",
       "mechanisms": [
-        "The first-principles mechanism behind Large data interfaces: virtualization, pagination, workers, and interaction budgets",
-        "ownership boundaries, data and control flow, deployment coupling, and failure propagation",
-        "The performance trade-off and its failure boundary"
+        "windowed rendering",
+        "server pagination",
+        "off-thread processing"
       ],
-      "production_scenario": "Apply Large data interfaces: virtualization, pagination, workers, and interaction budgets inside a multi-team product facing 10x traffic or organizational growth with explicit budgets, migration pressure, and rollback needs.",
+      "production_scenario": "A ten-thousand-row table freezes the tab on sort.",
       "misconceptions": [
-        "Choosing an architecture by popularity without naming the ownership pressure, failure mode, and signal that justifies it."
+        "Rendering only what is visible is the first optimization, not the last."
       ],
-      "evidence": "An ADR-quality decision with boundary diagrams, measurable budgets, failure telemetry, and a reversible migration slice.",
-      "artifact": "Extend the cumulative reference architecture with an ADR, boundary contract, operational evidence, and rollback path.",
+      "evidence": "A profile comparing full render and virtualized render.",
+      "artifact": "A large-data component with measured interaction latency.",
       "primary_sources": [
-        "https://web.dev/learn/performance/",
-        "https://www.w3.org/WAI/standards-guidelines/wcag/"
+        "https://developer.mozilla.org/en-US/docs/Web/API/Intersection_Observer_API",
+        "https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API"
       ],
       "related_concepts": []
     }
@@ -7576,21 +7576,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply Edge rendering and personalization without cache or privacy leaks when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Personalize at the edge without leaking across cache keys or privacy boundaries.",
       "mechanisms": [
-        "The first-principles mechanism behind Edge rendering and personalization without cache or privacy leaks",
-        "ownership boundaries, data and control flow, deployment coupling, and failure propagation",
-        "The rendering trade-off and its failure boundary"
+        "cache key design",
+        "edge computation limits",
+        "privacy constraints"
       ],
-      "production_scenario": "Apply Edge rendering and personalization without cache or privacy leaks inside a multi-team product facing 10x traffic or organizational growth with explicit budgets, migration pressure, and rollback needs.",
+      "production_scenario": "A personalized banner is cached and shown to the wrong user.",
       "misconceptions": [
-        "Choosing an architecture by popularity without naming the ownership pressure, failure mode, and signal that justifies it."
+        "Personalization and caching conflict unless the cache key includes the variant."
       ],
-      "evidence": "An ADR-quality decision with boundary diagrams, measurable budgets, failure telemetry, and a reversible migration slice.",
-      "artifact": "Extend the cumulative reference architecture with an ADR, boundary contract, operational evidence, and rollback path.",
+      "evidence": "A cache key audit for one personalized route.",
+      "artifact": "An edge personalization design with a privacy review.",
       "primary_sources": [
-        "https://web.dev/learn/performance/",
-        "https://www.w3.org/WAI/standards-guidelines/wcag/"
+        "https://developer.mozilla.org/en-US/docs/Web/HTTP/Caching",
+        "https://www.rfc-editor.org/rfc/rfc9111"
       ],
       "related_concepts": []
     }
@@ -7609,21 +7609,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply Incremental frontend architecture migrations with stranglers and compatibility layers when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Migrate architecture incrementally with stranglers and compatibility layers.",
       "mechanisms": [
-        "The first-principles mechanism behind Incremental frontend architecture migrations with stranglers and compatibility layers",
-        "ownership boundaries, data and control flow, deployment coupling, and failure propagation",
-        "The migration trade-off and its failure boundary"
+        "strangler routing",
+        "compatibility adapters",
+        "measured cutovers"
       ],
-      "production_scenario": "Apply Incremental frontend architecture migrations with stranglers and compatibility layers inside a multi-team product facing 10x traffic or organizational growth with explicit budgets, migration pressure, and rollback needs.",
+      "production_scenario": "A rewrite runs for two years while the old app still gets features.",
       "misconceptions": [
-        "Choosing an architecture by popularity without naming the ownership pressure, failure mode, and signal that justifies it."
+        "A rewrite without a strangler never catches up."
       ],
-      "evidence": "An ADR-quality decision with boundary diagrams, measurable budgets, failure telemetry, and a reversible migration slice.",
-      "artifact": "Extend the cumulative reference architecture with an ADR, boundary contract, operational evidence, and rollback path.",
+      "evidence": "A migration map with routes moved and remaining.",
+      "artifact": "A migration plan with measured progress.",
       "primary_sources": [
-        "https://web.dev/learn/performance/",
-        "https://www.w3.org/WAI/standards-guidelines/wcag/"
+        "https://developer.mozilla.org/en-US/docs/Web/API/Navigation_API",
+        "https://web.dev/articles/rendering-on-the-web"
       ],
       "related_concepts": []
     }
@@ -7642,21 +7642,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply Designing a reference frontend architecture for many teams and surfaces when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Design a reference architecture that many teams can adopt with local variation.",
       "mechanisms": [
-        "The first-principles mechanism behind Designing a reference frontend architecture for many teams and surfaces",
-        "ownership boundaries, data and control flow, deployment coupling, and failure propagation",
-        "The platform trade-off and its failure boundary"
+        "reference layers",
+        "allowed variation points",
+        "conformance checks"
       ],
-      "production_scenario": "Apply Designing a reference frontend architecture for many teams and surfaces inside a multi-team product facing 10x traffic or organizational growth with explicit budgets, migration pressure, and rollback needs.",
+      "production_scenario": "Every team invents its own data layer and nothing composes.",
       "misconceptions": [
-        "Choosing an architecture by popularity without naming the ownership pressure, failure mode, and signal that justifies it."
+        "A reference architecture is adopted through defaults and checks, not documents."
       ],
-      "evidence": "An ADR-quality decision with boundary diagrams, measurable budgets, failure telemetry, and a reversible migration slice.",
-      "artifact": "Extend the cumulative reference architecture with an ADR, boundary contract, operational evidence, and rollback path.",
+      "evidence": "A conformance report for one team's application.",
+      "artifact": "A reference architecture with conformance checks.",
       "primary_sources": [
-        "https://web.dev/learn/performance/",
-        "https://www.w3.org/WAI/standards-guidelines/wcag/"
+        "https://web.dev/articles/rendering-on-the-web",
+        "https://sre.google/sre-book/introduction/"
       ],
       "related_concepts": []
     }
@@ -7675,21 +7675,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply Frontend capacity and cost modeling across edge, server, network, and browser when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Model capacity and cost across edge, server, network and browser for frontend decisions.",
       "mechanisms": [
-        "The first-principles mechanism behind Frontend capacity and cost modeling across edge, server, network, and browser",
-        "ownership boundaries, data and control flow, deployment coupling, and failure propagation",
-        "The performance trade-off and its failure boundary"
+        "cost per request and render",
+        "client device budgets",
+        "traffic modeling"
       ],
-      "production_scenario": "Apply Frontend capacity and cost modeling across edge, server, network, and browser inside a multi-team product facing 10x traffic or organizational growth with explicit budgets, migration pressure, and rollback needs.",
+      "production_scenario": "A rendering change doubles server cost at peak without anyone forecasting it.",
       "misconceptions": [
-        "Choosing an architecture by popularity without naming the ownership pressure, failure mode, and signal that justifies it."
+        "Browser cost is paid by users; server cost is paid by the company; both are budgets."
       ],
-      "evidence": "An ADR-quality decision with boundary diagrams, measurable budgets, failure telemetry, and a reversible migration slice.",
-      "artifact": "Extend the cumulative reference architecture with an ADR, boundary contract, operational evidence, and rollback path.",
+      "evidence": "A cost model comparing two rendering options at peak traffic.",
+      "artifact": "A capacity and cost model for one application.",
       "primary_sources": [
-        "https://web.dev/learn/performance/",
-        "https://www.w3.org/WAI/standards-guidelines/wcag/"
+        "https://sre.google/sre-book/software-engineering-in-sre/",
+        "https://web.dev/articles/performance-budgets-101"
       ],
       "related_concepts": []
     }
@@ -7708,21 +7708,21 @@
     "curriculum": {
       "phase": "elective",
       "core": false,
-      "learner_outcome": "Diagnose, explain, and apply AI-native frontend architecture: streaming, tool states, citations, and trust when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Architect AI-driven interfaces with streaming, tool states, citations and trust signals.",
       "mechanisms": [
-        "The first-principles mechanism behind AI-native frontend architecture: streaming, tool states, citations, and trust",
-        "ownership boundaries, data and control flow, deployment coupling, and failure propagation",
-        "The ai trade-off and its failure boundary"
+        "streamed responses",
+        "tool call state machines",
+        "citation and trust rendering"
       ],
-      "production_scenario": "Apply AI-native frontend architecture: streaming, tool states, citations, and trust inside a multi-team product facing 10x traffic or organizational growth with explicit budgets, migration pressure, and rollback needs.",
+      "production_scenario": "A chat interface shows a partial answer as final and cites nothing.",
       "misconceptions": [
-        "Choosing an architecture by popularity without naming the ownership pressure, failure mode, and signal that justifies it."
+        "Streaming output is a state, not a rendering trick."
       ],
-      "evidence": "An ADR-quality decision with boundary diagrams, measurable budgets, failure telemetry, and a reversible migration slice.",
-      "artifact": "Extend the cumulative reference architecture with an ADR, boundary contract, operational evidence, and rollback path.",
+      "evidence": "A state trace for a streamed response with tool calls.",
+      "artifact": "An AI interaction architecture slice with citations.",
       "primary_sources": [
-        "https://web.dev/learn/performance/",
-        "https://www.w3.org/WAI/standards-guidelines/wcag/"
+        "https://developer.mozilla.org/en-US/docs/Web/API/Streams_API",
+        "https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events"
       ],
       "related_concepts": []
     }
@@ -8053,21 +8053,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Frontend authentication architecture: PKCE, sessions, refresh, and BFF boundaries when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Design frontend authentication with PKCE, sessions, refresh and a BFF boundary.",
       "mechanisms": [
-        "The first-principles mechanism behind Frontend authentication architecture: PKCE, sessions, refresh, and BFF boundaries",
-        "ownership boundaries, data and control flow, deployment coupling, and failure propagation",
-        "The security trade-off and its failure boundary"
+        "authorization code with PKCE",
+        "session cookies via BFF",
+        "token refresh without exposure"
       ],
-      "production_scenario": "Apply Frontend authentication architecture: PKCE, sessions, refresh, and BFF boundaries inside a multi-team product facing 10x traffic or organizational growth with explicit budgets, migration pressure, and rollback needs.",
+      "production_scenario": "Access tokens live in localStorage and an XSS drains them.",
       "misconceptions": [
-        "Choosing an architecture by popularity without naming the ownership pressure, failure mode, and signal that justifies it."
+        "Tokens in the browser are exposed; a BFF keeps them server-side."
       ],
-      "evidence": "An ADR-quality decision with boundary diagrams, measurable budgets, failure telemetry, and a reversible migration slice.",
-      "artifact": "Extend the cumulative reference architecture with an ADR, boundary contract, operational evidence, and rollback path.",
+      "evidence": "A sequence diagram with tokens never reaching the browser.",
+      "artifact": "An auth architecture with a BFF session boundary.",
       "primary_sources": [
-        "https://web.dev/learn/performance/",
-        "https://www.w3.org/WAI/standards-guidelines/wcag/"
+        "https://www.rfc-editor.org/rfc/rfc7636",
+        "https://www.rfc-editor.org/rfc/rfc6749"
       ],
       "related_concepts": []
     }
@@ -8084,21 +8084,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Consumer-driven contract testing for frontend/API evolution when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Test API evolution with consumer-driven contracts so frontends and services change safely.",
       "mechanisms": [
-        "The first-principles mechanism behind Consumer-driven contract testing for frontend/API evolution",
-        "ownership boundaries, data and control flow, deployment coupling, and failure propagation",
-        "The testing trade-off and its failure boundary"
+        "consumer expectations as contracts",
+        "provider verification",
+        "contract versioning"
       ],
-      "production_scenario": "Apply Consumer-driven contract testing for frontend/API evolution inside a multi-team product facing 10x traffic or organizational growth with explicit budgets, migration pressure, and rollback needs.",
+      "production_scenario": "A backend renames a field and three frontends break in production.",
       "misconceptions": [
-        "Choosing an architecture by popularity without naming the ownership pressure, failure mode, and signal that justifies it."
+        "An integration test against a live API is not a contract."
       ],
-      "evidence": "An ADR-quality decision with boundary diagrams, measurable budgets, failure telemetry, and a reversible migration slice.",
-      "artifact": "Extend the cumulative reference architecture with an ADR, boundary contract, operational evidence, and rollback path.",
+      "evidence": "A provider verification run failing on the renamed field.",
+      "artifact": "A contract suite for one consumer and provider.",
       "primary_sources": [
-        "https://web.dev/learn/performance/",
-        "https://www.w3.org/WAI/standards-guidelines/wcag/"
+        "https://www.rfc-editor.org/rfc/rfc9110",
+        "https://developer.mozilla.org/en-US/docs/Web/HTTP"
       ],
       "related_concepts": [
         "ts-runtime-schema-libraries"
@@ -8117,21 +8117,21 @@
     "curriculum": {
       "phase": "production",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Feature flags, experimentation, and evidence-driven cleanup when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Run experiments behind flags with evidence-driven decisions and cleanup.",
       "mechanisms": [
-        "The first-principles mechanism behind Feature flags, experimentation, and evidence-driven cleanup",
-        "ownership boundaries, data and control flow, deployment coupling, and failure propagation",
-        "The release trade-off and its failure boundary"
+        "assignment and exposure",
+        "metric selection",
+        "flag removal after decision"
       ],
-      "production_scenario": "Apply Feature flags, experimentation, and evidence-driven cleanup inside a multi-team product facing 10x traffic or organizational growth with explicit budgets, migration pressure, and rollback needs.",
+      "production_scenario": "An experiment runs indefinitely because nobody set a decision date.",
       "misconceptions": [
-        "Choosing an architecture by popularity without naming the ownership pressure, failure mode, and signal that justifies it."
+        "An experiment without a decision date is technical debt."
       ],
-      "evidence": "An ADR-quality decision with boundary diagrams, measurable budgets, failure telemetry, and a reversible migration slice.",
-      "artifact": "Extend the cumulative reference architecture with an ADR, boundary contract, operational evidence, and rollback path.",
+      "evidence": "An experiment record with exposure, metric and decision.",
+      "artifact": "An experimentation process with decision dates and cleanup.",
       "primary_sources": [
-        "https://web.dev/learn/performance/",
-        "https://www.w3.org/WAI/standards-guidelines/wcag/"
+        "https://sre.google/workbook/canarying-releases/",
+        "https://web.dev/articles/vitals"
       ],
       "related_concepts": []
     }
@@ -8148,21 +8148,21 @@
     "curriculum": {
       "phase": "synthesis",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Edge middleware, geo routing, and personalization boundaries when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Use edge middleware for geo routing and personalization within clear boundaries.",
       "mechanisms": [
-        "The first-principles mechanism behind Edge middleware, geo routing, and personalization boundaries",
-        "ownership boundaries, data and control flow, deployment coupling, and failure propagation",
-        "The platform trade-off and its failure boundary"
+        "edge request rewriting",
+        "geo signals",
+        "personalization limits at the edge"
       ],
-      "production_scenario": "Apply Edge middleware, geo routing, and personalization boundaries inside a multi-team product facing 10x traffic or organizational growth with explicit budgets, migration pressure, and rollback needs.",
+      "production_scenario": "Edge middleware personalizes a cached page and mixes regions.",
       "misconceptions": [
-        "Choosing an architecture by popularity without naming the ownership pressure, failure mode, and signal that justifies it."
+        "The edge sees the request, not the user's session state."
       ],
-      "evidence": "An ADR-quality decision with boundary diagrams, measurable budgets, failure telemetry, and a reversible migration slice.",
-      "artifact": "Extend the cumulative reference architecture with an ADR, boundary contract, operational evidence, and rollback path.",
+      "evidence": "A trace showing edge decisions and the cache key used.",
+      "artifact": "An edge middleware decision record with boundaries.",
       "primary_sources": [
-        "https://web.dev/learn/performance/",
-        "https://www.w3.org/WAI/standards-guidelines/wcag/"
+        "https://developer.mozilla.org/en-US/docs/Web/HTTP/Caching",
+        "https://www.rfc-editor.org/rfc/rfc9111"
       ],
       "related_concepts": []
     }
@@ -8179,21 +8179,21 @@
     "curriculum": {
       "phase": "synthesis",
       "core": true,
-      "learner_outcome": "Diagnose, explain, and apply Server component serialization and mutation boundaries when building or operating a production frontend, then defend the decision with evidence.",
+      "learner_outcome": "Encode the serialization boundary as a checked allow-list and run mutations behind validated actions.",
       "mechanisms": [
-        "The first-principles mechanism behind Server component serialization and mutation boundaries",
-        "ownership boundaries, data and control flow, deployment coupling, and failure propagation",
-        "The rendering trade-off and its failure boundary"
+        "serializable prop allow-list",
+        "validated server actions",
+        "optimistic copies with rollback"
       ],
-      "production_scenario": "Apply Server component serialization and mutation boundaries inside a multi-team product facing 10x traffic or organizational growth with explicit budgets, migration pressure, and rollback needs.",
+      "production_scenario": "A callback prop crosses the server boundary and fails in production.",
       "misconceptions": [
-        "Choosing an architecture by popularity without naming the ownership pressure, failure mode, and signal that justifies it."
+        "Props that crossed the boundary are copies; edits never reach the server without an action."
       ],
-      "evidence": "An ADR-quality decision with boundary diagrams, measurable budgets, failure telemetry, and a reversible migration slice.",
-      "artifact": "Extend the cumulative reference architecture with an ADR, boundary contract, operational evidence, and rollback path.",
+      "evidence": "A boundary checker output for three real props and a rollback test.",
+      "artifact": "A boundary and mutation contract with an ADR and rollback path.",
       "primary_sources": [
-        "https://web.dev/learn/performance/",
-        "https://www.w3.org/WAI/standards-guidelines/wcag/"
+        "https://react.dev/reference/rsc/server-functions",
+        "https://react.dev/reference/react/useOptimistic"
       ],
       "related_concepts": []
     }
