@@ -15,4 +15,9 @@ export default defineConfig({
   trailingSlash: "never",
   devToolbar: { enabled: false },
   integrations: [sitemap({ lastmod: new Date() })],
+  // Pin the tsconfig. Vite 8 resolves one per transformed file by walking up
+  // the tree, and this folder lives inside the desk's repository whose own
+  // tsconfig extends a generated .svelte-kit file that a fresh checkout does
+  // not have; without the pin the landing build failed in CI on that file.
+  vite: { tsconfig: "./tsconfig.json" },
 });
