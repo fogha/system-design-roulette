@@ -362,6 +362,8 @@ export interface CurriculumMapView {
   path: PathCoverage | null;
   /** Gaps seen in practice that a short bridge lesson would close. */
   bridge_proposals: BridgeProposal[];
+  /** Unit challenges need the course's question bank; a learner's own class has none until it is written. */
+  challenges_available?: boolean;
 }
 
 export interface ClassroomSlotView {

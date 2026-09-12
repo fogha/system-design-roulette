@@ -53,6 +53,14 @@ fn digest(value: &impl Serialize) -> Result<String> {
     Ok(format!("{:x}", Sha256::digest(serde_json::to_vec(value)?)))
 }
 
+/// Whether an authored diagnostic bank exists for the course, without
+/// validating it (that happens when it is used).
+pub fn has_bank(course_id: &str) -> bool {
+    serde_json::from_str::<Banks>(include_str!("../../seed/diagnostics.json"))
+        .map(|banks| banks.courses.iter().any(|b| b.course_id == course_id))
+        .unwrap_or(false)
+}
+
 pub fn bank(course_id: &str) -> Result<Bank> {
     let banks: Banks = serde_json::from_str(include_str!("../../seed/diagnostics.json"))?;
     if banks.schema_version != 1 {

@@ -1583,6 +1583,9 @@ pub struct CurriculumMapView {
     pub path: Option<PathCoverage>,
     /// Gaps seen in practice that a short bridge lesson would close.
     pub bridge_proposals: Vec<crate::domain::classes::BridgeProposal>,
+    /// Unit challenges sample the course's question bank; a learner's own
+    /// class has none until it is written.
+    pub challenges_available: bool,
 }
 
 pub fn curriculum_map(conn: &Connection, focus: &str) -> Result<CurriculumMapView> {
@@ -1726,6 +1729,7 @@ pub fn curriculum_map(conn: &Connection, focus: &str) -> Result<CurriculumMapVie
         path: path_coverage,
         bridge_proposals: crate::domain::classes::bridge_proposals(conn, focus)
             .map_err(|error| error.to_string())?,
+        challenges_available: crate::domain::placement::has_bank(focus),
     })
 }
 

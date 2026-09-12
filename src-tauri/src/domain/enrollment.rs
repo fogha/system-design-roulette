@@ -90,6 +90,14 @@ pub struct EnrollmentOptions {
     pub entry_points: Vec<EntryPointOption>,
     pub familiarity_options: Vec<FamiliarityOption>,
     pub default_configuration: EnrollmentConfiguration,
+    /// Whether a placement check exists for this course. A learner's own
+    /// class has none until its question bank is written.
+    #[serde(default = "yes")]
+    pub diagnostic_available: bool,
+}
+
+fn yes() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -211,6 +219,7 @@ pub fn options(course_id: &str) -> Result<EnrollmentOptions> {
             .collect()
     };
     Ok(EnrollmentOptions {
+        diagnostic_available: crate::domain::placement::has_bank(course_id),
         course: reference,
         entry_points: course
             .entry_points

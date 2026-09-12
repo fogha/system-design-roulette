@@ -896,6 +896,7 @@ export const mockApi = {
         bridges: concepts.filter((concept) => concept.path_status === 'bridge').length,
       } : null,
       bridge_proposals: [],
+      challenges_available: !String(focus).startsWith('custom-'),
     };
   },
   configureClassroomProgram: async (input: {

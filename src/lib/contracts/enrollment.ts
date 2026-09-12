@@ -21,6 +21,8 @@ export interface EnrollmentOptions {
   entry_points: { id: string; label: string }[];
   familiarity_options: { id: string; label: string; group: string | null }[];
   default_configuration: EnrollmentConfiguration;
+  /** A placement check exists for the course. A learner's own class has none until its question bank is written. */
+  diagnostic_available?: boolean;
 }
 export interface EnrollmentDraft {
   id: EnrollmentDraftId;

@@ -16,6 +16,7 @@ export function previewEnrollmentOptions(courseId: ClassroomSubjectId): Enrollme
   return {
     course: { course_id: courseId, version: course.version, fingerprint: (COURSE_FINGERPRINTS as Record<string, string>)[courseId] ?? `preview-${courseId}-${course.version}` },
     entry_points: course.entry_points.map((point) => ({ ...point })),
+    diagnostic_available: !courseId.startsWith('custom-'),
     familiarity_options: course.kind === 'engineering'
       ? concepts.filter((concept) => concept.focus === courseId).map((concept) => ({ id: concept.slug, label: concept.title, group: concept.curriculum.phase }))
       : languageStrands.map((strand) => ({ id: strand, label: strand.replaceAll('_', ' '), group: null })),

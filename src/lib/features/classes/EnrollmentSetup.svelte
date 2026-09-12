@@ -34,6 +34,8 @@
     { id: 'manual', title: 'Choose my starting point', description: 'Pick a course stage and tell us which topics already feel familiar.', icon: ListStart },
   ] as const;
   const entryOptions = $derived(view.options?.entry_points.map((point) => ({ value: point.id, label: point.label })) ?? []);
+  /** A class without a question bank offers the two routes that need none. */
+  const availableRoutes = $derived(routes.filter((route) => route.id !== 'diagnostic' || (view.options?.diagnostic_available ?? true)));
   const familiarity = $derived(view.options?.familiarity_options.filter((option) => option.label.toLowerCase().includes(search.toLowerCase())) ?? []);
 
   onMount(() => {
@@ -119,13 +121,14 @@
     <fieldset class="entry-options">
       <legend>Your starting point</legend>
       <div class="route-grid">
-        {#each routes as route}
+        {#each availableRoutes as route}
           <label class:selected={configuration.entry.route === route.id}>
             <span class="route-top"><route.icon size={14} /><input type="radio" name={`${uid}-entry-route`} value={route.id} checked={configuration.entry.route === route.id} onchange={() => choose(route.id)} /></span>
             <strong>{route.title}</strong><span>{route.description}</span>
           </label>
         {/each}
       </div>
+      {#if view.options && view.options.diagnostic_available === false}<p class="no-bank">The placement check needs a question bank, which this class does not have yet. Start from scratch or choose a stage.</p>{/if}
     </fieldset>
     {#if configuration.entry.route === 'diagnostic'}
       <p class="notice">About 3–8 minutes, with optional prerequisite follow-ups. No tutor connection or focus lock is required. Skip anything unfamiliar; answers remain saved.</p>
@@ -218,6 +221,7 @@
   .manual-entry { margin-top: 18px; padding-top: 16px; border-top: 1px dashed var(--node-divider); }
   .notice { border-left: 2px solid var(--violet); padding: 8px 12px; margin: 0 0 20px 38px; color: var(--muted); font: 11px/1.6 var(--font-mono); }
   .entry-options + .notice { margin: 14px 0 0; }
+  .no-bank { margin: 10px 0 0; font-size: 11px; color: var(--muted); }
   .field { display: flex; flex-direction: column; gap: 7px; margin-bottom: 15px; font-size: 13px; min-width: 0; }
   .field small { color: var(--muted); font-weight: 400; margin-left: 5px; }
   .field input, textarea { border: 1px solid var(--border); background: var(--bg); color: var(--fg); padding: 10px 12px; border-radius: var(--radius-control); font: inherit; width: 100%; }

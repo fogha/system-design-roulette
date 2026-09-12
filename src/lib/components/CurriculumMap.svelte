@@ -114,7 +114,7 @@
           </span>
         </div>
         {#if map.current_phase === phase.id}<small class="you-are-here">current phase</small>{/if}
-        {#if onchallenge && map.path && phase.id !== 'elective' && concepts.some((concept) => concept.required)}<button type="button" class="ghost mono-ghost challenge-button" disabled={revising} onclick={() => onchallenge?.(phase.id, phase.label)}>Unit challenge</button>{/if}
+        {#if onchallenge && map.path && (map.challenges_available ?? true) && phase.id !== 'elective' && concepts.some((concept) => concept.required)}<button type="button" class="ghost mono-ghost challenge-button" disabled={revising} onclick={() => onchallenge?.(phase.id, phase.label)}>Unit challenge</button>{/if}
         <ol>
           {#each concepts as concept}
             <li class:complete={complete(concept.mastery_state)} class:elective={!concept.core}>
