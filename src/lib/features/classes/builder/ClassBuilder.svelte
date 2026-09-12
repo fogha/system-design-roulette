@@ -16,7 +16,7 @@
   import ModelPicker from '../../../components/ModelPicker.svelte';
   import { confirmDialog, promptDialog } from '../../../components/dialog.svelte';
   import CurriculumEditor from './CurriculumEditor.svelte';
-  import { ArrowLeft, ArrowRight, Bot, Check, FileJson, FileUp, PenLine, Rocket, ShieldCheck, Sparkles, Trash2, Globe, CircleAlert, CircleCheck, CircleDashed, X, Save, ListChecks, Wand2, BookOpenCheck, Lock, RotateCcw } from 'lucide-svelte';
+  import { ArrowLeft, ArrowRight, Bot, Check, FileJson, FileUp, PenLine, Rocket, ShieldCheck, Sparkles, Trash2, Globe, CircleAlert, CircleCheck, CircleDashed, X, Save, ListChecks, Wand2, BookOpenCheck, Lock, RotateCcw, ChevronDown } from 'lucide-svelte';
 
   let { id = null, onclose, onpublished }: { id?: string | null; onclose: () => void; onpublished: (id: string) => void } = $props();
 
@@ -45,6 +45,25 @@
   /** The finding the tutor is working on, so its row says so. */
   let fixing = $state<number | null>(null);
   let logTail = $derived(app.genLog.slice(-6));
+  /** When the tutor's current call began, for the clock beside the feed; ticks while it runs. */
+  let busySince = $state<number | null>(null);
+  let now = $state(Date.now());
+  $effect(() => {
+    if (busySince === null) return;
+    const timer = setInterval(() => (now = Date.now()), 1000);
+    return () => clearInterval(timer);
+  });
+  const DOING: Record<string, string> = { draft: 'drafting the curriculum', review: 'reading the draft back', fix: 'changing the draft', sources: 'fetching the sources', bank: 'writing the question bank' };
+  const elapsed = $derived.by(() => {
+    if (busySince === null) return '';
+    const total = Math.max(0, Math.floor((now - busySince) / 1000));
+    const m = Math.floor(total / 60), sec = total % 60;
+    return m ? `${m}m ${String(sec).padStart(2, '0')}s` : `${sec}s`;
+  });
+  /** Gates fold to their head once done, and can be folded or unfolded by hand. */
+  let foldedGate = $state<Record<string, boolean>>({});
+  const isFolded = (key: string, done: boolean) => foldedGate[key] ?? done;
+  const toggleGate = (key: string, done: boolean) => (foldedGate = { ...foldedGate, [key]: !isFolded(key, done) });
   /** The scrolling pane; a new step starts at its top. */
   let pane = $state<HTMLDivElement | undefined>(undefined);
   $effect(() => { void step; pane?.scrollTo({ top: 0 }); });
@@ -88,8 +107,8 @@
     draft = structuredClone(next.draft);
     // A call the desk is still running (started here or before the page was
     // left) shows as such, and the view is fetched again until it ends.
-    if (next.working) { busy = next.working; watch(next.id); }
-    else if (busy === 'draft' || busy === 'review' || busy === 'sources' || busy === 'bank' || busy === 'fix') { busy = ''; fixing = null; }
+    if (next.working) { busy = next.working; busySince ??= Date.now(); watch(next.id); }
+    else if (busy === 'draft' || busy === 'review' || busy === 'sources' || busy === 'bank' || busy === 'fix') { busy = ''; busySince = null; fixing = null; }
   }
 
   /** While the desk works, ask again every few seconds; the desk also says when it is done. */
@@ -130,11 +149,11 @@
 
   async function askTutor() {
     if (!view || busy) return;
-    busy = 'draft'; error = '';
+    busy = 'draft'; busySince = Date.now(); error = '';
     watch(view.id);
     try { adopt(await api.draftCustomCourse(view.id)); step = 'review'; }
-    catch (cause) { error = String(cause); busy = ''; }
-    finally { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } if (!view?.working) busy = ''; }
+    catch (cause) { error = String(cause); busy = ''; busySince = null; }
+    finally { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } if (!view?.working) { busy = ''; busySince = null; } }
   }
   function writeByHand() { step = 'review'; }
   async function importFile(event: Event) {
@@ -172,10 +191,10 @@
   async function tutorCall(kind: 'review' | 'sources' | 'bank' | 'fix', call: (id: string) => Promise<CustomCourseView>) {
     if (!view || busy) return;
     await flush();
-    busy = kind; error = '';
+    busy = kind; busySince = Date.now(); error = '';
     watch(view.id);
-    try { adopt(await call(view.id)); } catch (cause) { error = String(cause); busy = ''; }
-    finally { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } if (!view?.working) { busy = ''; fixing = null; } }
+    try { adopt(await call(view.id)); } catch (cause) { error = String(cause); busy = ''; busySince = null; }
+    finally { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } if (!view?.working) { busy = ''; busySince = null; fixing = null; } }
   }
   const review = () => tutorCall('review', (id) => api.reviewCustomCourse(id));
   const verifySources = () => tutorCall('sources', (id) => api.verifyCustomCourseSources(id));
@@ -242,6 +261,14 @@
     step = next;
   }
 </script>
+
+{#snippet liveFeed(what: string)}
+  <!-- The runner answers only when it finishes, so the clock under its last line is what moves. -->
+  <div class="feed-wrap">
+    {#if logTail.length}<pre class="feed mono" aria-live="polite">{logTail.join('\n')}</pre>{/if}
+    <div class="feed-live mono"><span class="beacon" aria-hidden="true"></span><span class="feed-what">{what}</span><b>{elapsed}</b><span class="dots" aria-hidden="true"></span><span class="feed-hint">the Logs page shows every line</span></div>
+  </div>
+{/snippet}
 
 <div class="builder" bind:this={pane}>
   <header class="top">
@@ -313,12 +340,7 @@
         </button>
         <input bind:this={fileInput} type="file" accept=".json,application/json" hidden onchange={importFile} />
       </div>
-      {#if busy === 'draft'}
-        <div class="node working-node">
-          <div class="node-head mono"><span class="live"></span> the tutor is drafting · the Logs page shows every line</div>
-          <pre class="feed mono" aria-live="polite">{logTail.length ? logTail.join('\n') : 'waiting for the first line from the runner…'}</pre>
-        </div>
-      {/if}
+      {#if busy === 'draft'}{@render liveFeed(DOING.draft)}{/if}
       {#if drafted}<footer class="nav"><span class="hint mono">a draft exists · {draft?.topics.length} topics</span><button type="button" class="ghost mono-ghost" onclick={() => go('review')}>Open the draft <ArrowRight size={12} /></button></footer>{/if}
       <footer class="nav back"><button type="button" class="ghost mono-ghost" onclick={() => (step = 'brief')} disabled={!!busy}><ArrowLeft size={12} />Back to the brief</button></footer>
     </section>
@@ -339,8 +361,9 @@
     <section class="panel" aria-label="Verify">
       <div class="panel-head"><h3>Three checks before you enroll</h3><p>In order, each unlocking the next: the tutor reads the draft back and every finding is settled; every source is fetched and the unreachable ones replaced or kept knowingly; you confirm your own read-through. None of them changes the draft on its own.</p></div>
       <ol class="gates">
-        <li class="gate" class:done={reviewDone} class:current={!reviewDone}>
+        <li class="gate" class:done={reviewDone} class:current={!reviewDone} class:folded={isFolded('review', reviewDone)}>
           <div class="gate-head">
+            <button type="button" class="gate-fold" aria-expanded={!isFolded('review', reviewDone)} aria-label="Fold the review" onclick={() => toggleGate('review', reviewDone)}><ChevronDown size={14} /></button>
             <span class="gate-no mono" aria-hidden="true">{#if reviewDone}<Check size={13} strokeWidth={2.6} />{:else}01{/if}</span>
             <span class="check-tile"><Bot size={16} /></span>
             <div><strong>The tutor reads it back</strong><small>Looks for outcomes that cannot be observed, missing or wrong prerequisites, topics that are one, stages that jump, sources that do not support their topic. Every finding is then fixed by the tutor, fixed by you, or dismissed with a reason.</small></div>
@@ -350,8 +373,8 @@
             {#if !checks.reviewed}not read yet · required{:else if !view.review.length}read back with nothing to raise{:else}{view.review.length} finding{view.review.length === 1 ? '' : 's'} · {checks.open_findings ? `${checks.open_findings} open` : 'all settled'}{/if}
             {#if checks.reviewed && !checks.review_current} · reviewed before your last edits; read it again if they were large{/if}
           </p>
-          {#if (busy === 'review' || busy === 'fix') && logTail.length}<pre class="feed mono">{logTail.join('\n')}</pre>{/if}
-          {#if view.review.length}
+          {#if busy === 'review' || busy === 'fix'}{@render liveFeed(DOING[busy])}{/if}
+          {#if view.review.length && !isFolded('review', reviewDone)}
             <ol class="findings">
               {#each view.review as finding, i (i)}
                 <li class={finding.severity} class:settled={finding.status !== 'open'}>
@@ -378,8 +401,9 @@
           {/if}
         </li>
 
-        <li class="gate" class:locked={!reviewDone} class:done={sourcesDone} class:current={reviewDone && !sourcesDone}>
+        <li class="gate" class:locked={!reviewDone} class:done={sourcesDone} class:current={reviewDone && !sourcesDone} class:folded={isFolded('sources', sourcesDone)}>
           <div class="gate-head">
+            <button type="button" class="gate-fold" aria-expanded={!isFolded('sources', sourcesDone)} aria-label="Fold the source check" onclick={() => toggleGate('sources', sourcesDone)}><ChevronDown size={14} /></button>
             <span class="gate-no mono" aria-hidden="true">{#if sourcesDone}<Check size={13} strokeWidth={2.6} />{:else if !reviewDone}<Lock size={11} />{:else}02{/if}</span>
             <span class="check-tile"><Globe size={16} /></span>
             <div><strong>Fetch every source</strong><small>The desk requests each primary source the way a lesson would. One that does not answer is replaced in the editor or kept knowingly; a lesson that cannot fetch a source says so, as bundled lessons do.</small></div>
@@ -388,7 +412,8 @@
           <p class="gate-state mono">
             {#if !reviewDone}after the review{:else if !checks.fetched}not fetched yet · required{:else}<span class="ok"><CircleCheck size={11} /> {view.sources.filter((s) => s.state === 'reachable').length} reachable</span>{#if unreachable.length} · <span class:warn={checks.pending_sources > 0}><CircleDashed size={11} /> {unreachable.length} did not answer{checks.pending_sources ? `, ${checks.pending_sources} to settle` : ', all kept knowingly'}</span>{/if}{#if checks.unchecked_sources} · <span class="warn"><CircleAlert size={11} /> {checks.unchecked_sources} added since the last fetch; fetch again</span>{/if}{/if}
           </p>
-          {#if reviewDone && unreachable.length}
+          {#if busy === 'sources'}{@render liveFeed(DOING.sources)}{/if}
+          {#if reviewDone && unreachable.length && !isFolded('sources', sourcesDone)}
             <ul class="sources">
               {#each unreachable as check (check.url)}
                 <li class:kept={check.accepted}>
@@ -402,28 +427,30 @@
           {/if}
         </li>
 
-        <li class="gate" class:locked={!sourcesDone} class:done={readDone} class:current={sourcesDone && !readDone}>
+        <li class="gate" class:locked={!sourcesDone} class:done={readDone} class:current={sourcesDone && !readDone} class:folded={isFolded('read', readDone)}>
           <div class="gate-head">
+            <button type="button" class="gate-fold" aria-expanded={!isFolded('read', readDone)} aria-label="Fold the read-through" onclick={() => toggleGate('read', readDone)}><ChevronDown size={14} /></button>
             <span class="gate-no mono" aria-hidden="true">{#if readDone}<Check size={13} strokeWidth={2.6} />{:else if !sourcesDone}<Lock size={11} />{:else}03{/if}</span>
             <span class="check-tile"><BookOpenCheck size={16} /></span>
             <div><strong>Your own read-through</strong><small>Open every topic in the editor and read the course header as the tutor will. The tutor's review does not replace yours; an edit after you confirm asks for another look.</small></div>
           </div>
-          <label class="confirm-row" class:muted={!sourcesDone}>
+          <label class="confirm-row" class:muted={!sourcesDone} hidden={isFolded('read', readDone)}>
             <input type="checkbox" checked={readDone} disabled={!!busy || !sourcesDone} onchange={(e) => markRead(e.currentTarget.checked)} />
             <span>I have read every topic and the course header of this version</span>
           </label>
           <p class="gate-state mono">{#if !sourcesDone}after the sources{:else if readDone}confirmed for this version{:else}not confirmed · required{/if}</p>
         </li>
 
-        <li class="gate optional" class:locked={!readDone}>
+        <li class="gate optional" class:locked={!readDone} class:folded={isFolded('bank', false)}>
           <div class="gate-head">
+            <button type="button" class="gate-fold" aria-expanded={!isFolded('bank', false)} aria-label="Fold the question bank" onclick={() => toggleGate('bank', false)}><ChevronDown size={14} /></button>
             <span class="gate-no mono" aria-hidden="true">{#if !readDone}<Lock size={11} />{:else}04{/if}</span>
             <span class="check-tile"><ListChecks size={16} /></span>
             <div><strong>Write the question bank <em class="mono">optional</em></strong><small>Three cited four-choice questions per stage, on the course's core topics. They power the placement check and unit challenges; without them the class starts from scratch or a stage you choose. Held to the same shape as the bundled banks.</small></div>
             <button type="button" class="ghost mono-ghost" onclick={writeBank} disabled={!!busy || issues.length > 0 || !readDone} title={issues.length ? 'Fix the editor first' : ''}>{busy === 'bank' ? 'Writing…' : bankQuestions.length ? 'Write it again' : 'Write the bank'}</button>
           </div>
-          {#if busy === 'bank' && logTail.length}<pre class="feed mono">{logTail.join('\n')}</pre>{/if}
-          {#if bankQuestions.length}
+          {#if busy === 'bank'}{@render liveFeed(DOING.bank)}{/if}
+          {#if bankQuestions.length && !isFolded('bank', false)}
             <div class="source-summary mono"><span class="ok"><CircleCheck size={11} /> {bankQuestions.length - voided.length} usable</span>{#if voided.length}<span class="warn"><CircleAlert size={11} /> {voided.length} disputed</span>{/if}{#if bankStale}<span class="warn"><CircleAlert size={11} /> some questions point at topics no longer in the draft; write it again</span>{/if}</div>
             <ol class="bank-list">
               {#each bankQuestions as q (q.id)}
@@ -465,9 +492,15 @@
 <style>
   /* The builder is the scrolling pane inside the workspace's details column. */
   .builder { display: flex; flex-direction: column; gap: 16px; padding: 22px 26px 40px; min-width: 0; flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-gutter: stable; }
-  .working-node { overflow: hidden; }
-  .working-node .node-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--node-divider); font-size: 10px; letter-spacing: 0.6px; color: var(--muted); }
-  .live { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); animation: pulse 1.2s ease-in-out infinite; }
+  /* The tutor's last lines, and under them a clock that moves while the runner is silent. */
+  .feed-wrap { display: flex; flex-direction: column; border: 1px solid var(--node-border); border-radius: var(--radius-control); background: #0b0d10; overflow: hidden; }
+  .feed-wrap .feed { border: 0; border-radius: 0; }
+  .feed-live { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-top: 1px solid var(--node-divider); font-size: 10.5px; letter-spacing: 0.4px; color: var(--accent); }
+  .feed-live b { font-weight: 500; font-variant-numeric: tabular-nums; } .feed-hint { margin-left: auto; color: var(--faint); font-size: 9.5px; }
+  .beacon { position: relative; display: inline-block; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  .beacon::after { content: ''; position: absolute; inset: -4px; border-radius: 50%; border: 1px solid var(--accent); animation: ring 1.6s ease-out infinite; }
+  @keyframes ring { from { transform: scale(0.5); opacity: 0.9; } to { transform: scale(1.8); opacity: 0; } }
+  .dots::after { content: ''; animation: dots 1.5s steps(4, end) infinite; } @keyframes dots { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; } }
   .top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
   .top h2 { margin: 6px 0 0; font: 24px var(--font-display); }
   .top-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
@@ -512,13 +545,17 @@
   .way strong { font-size: 13.5px; font-weight: 500; } .way small { font-size: 11px; line-height: 1.5; color: var(--muted); }
   .working { font-size: 9.5px; letter-spacing: 0.5px; color: var(--accent); animation: pulse 1.2s ease-in-out infinite; } @keyframes pulse { 50% { opacity: 0.4; } }
   .feed { margin: 0; padding: 10px 12px; max-height: 140px; overflow: hidden; border: 1px solid var(--node-border); border-radius: var(--radius-control); background: #0b0d10; color: var(--muted); font-size: 10.5px; line-height: 1.6; white-space: pre-wrap; }
-  .working-node .feed { border: 0; border-radius: 0; }
   /* The three gates and the optional fourth, in the order they unlock. */
   .gates { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
   .gate { position: relative; display: flex; flex-direction: column; gap: 12px; padding: 14px 16px; border: 1px solid var(--node-border); border-radius: var(--radius-panel); background: var(--surface); transition: border-color 0.2s, opacity 0.2s; }
   .gate.current { border-color: color-mix(in srgb, var(--accent) 50%, var(--node-border)); }
   .gate.done { border-color: color-mix(in srgb, var(--led-ok) 45%, var(--node-border)); }
   .gate.locked { opacity: 0.55; }
+  /* Folded to its head and state line; done gates start that way. */
+  .gate-fold { flex: none; display: grid; place-items: center; width: 24px; height: 24px; margin: 6px 0 0 -4px; border: 0; border-radius: var(--radius-detail); background: transparent; color: var(--muted); cursor: pointer; transition: transform 0.18s ease; }
+  .gate-fold:hover { background: var(--node-bg); color: var(--fg); } .gate.folded .gate-fold { transform: rotate(-90deg); }
+  .gate.folded .gate-head small { display: none; }
+  .gate.folded > :not(.gate-head):not(.gate-state):not(.feed-wrap) { display: none; }
   .gate-head { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; } .gate-head > div { flex: 1; min-width: 200px; } .gate-head strong { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; } .gate-head strong em { font-style: normal; font-size: 8.5px; letter-spacing: 1px; text-transform: uppercase; color: var(--faint); } .gate-head small { display: block; margin-top: 4px; font-size: 11px; line-height: 1.5; color: var(--muted); max-width: 72ch; }
   .gate-no { flex: none; display: grid; place-items: center; width: 26px; height: 26px; margin-top: 5px; border: 1px solid var(--node-border); border-radius: 8px; background: var(--node-bg); color: var(--faint); font-size: 9.5px; letter-spacing: 0.5px; }
   .gate.current .gate-no { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent); }
