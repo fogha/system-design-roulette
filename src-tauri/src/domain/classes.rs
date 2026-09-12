@@ -290,9 +290,7 @@ fn apply_change(
 /// replayed with the same base revision and receives the same result.
 pub fn revise(conn: &Connection, input: &RevisePath, _today: &str) -> Result<AcceptedPath> {
     let tx = rusqlite::Transaction::new_unchecked(conn, TransactionBehavior::Immediate)?;
-    let course = catalog::COURSES
-        .iter()
-        .find(|c| c.course_id == input.course_id)
+    let course = catalog::course(&input.course_id)
         .ok_or_else(|| DbError::InvalidFocus(input.course_id.clone()))?;
     if course.kind != catalog::SubjectKind::Engineering {
         return Err(DbError::Invalid(
@@ -506,9 +504,7 @@ pub fn accept(conn: &Connection, input: &AcceptPath, today: &str) -> Result<Acce
             "The recommendation changed. Review the current path before accepting it.".into(),
         ));
     }
-    let course = catalog::COURSES
-        .iter()
-        .find(|c| c.course_id == draft.course.course_id)
+    let course = catalog::course(&draft.course.course_id)
         .ok_or_else(|| DbError::InvalidFocus(draft.course.course_id.clone()))?;
     if !crate::agents::valid_model(&draft.configuration.tutor.model) {
         return Err(DbError::Invalid(

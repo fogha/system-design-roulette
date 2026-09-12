@@ -31,7 +31,7 @@ fn seeded_db() -> rusqlite::Connection {
 fn golden_eval_covers_every_track_with_complete_curriculum_contracts() {
     let conn = seeded_db();
     let cases: Vec<GoldenCase> = serde_json::from_str(GOLDEN_CASES).unwrap();
-    for track in principia_desk_lib::focus::SELECTABLE {
+    for track in principia_desk_lib::focus::selectable() {
         let covered = cases
             .iter()
             .filter_map(|case| {

@@ -306,9 +306,8 @@ pub fn build_dossier(conn: &Connection, today: &str, focus: &str) -> Result<Stri
         .flat_map(|concept| concept.curriculum.related_concepts)
         .collect();
     let mut transferable = Vec::new();
-    for other_focus in crate::focus::SELECTABLE
-        .iter()
-        .copied()
+    for other_focus in crate::focus::selectable()
+        .into_iter()
         .filter(|candidate| *candidate != focus)
     {
         for entry in overview(conn, other_focus)? {

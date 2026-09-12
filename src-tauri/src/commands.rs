@@ -56,7 +56,7 @@ pub fn save_enrollment_draft(
 #[tauri::command]
 pub fn get_catalog() -> CmdResult<Vec<crate::catalog::CourseDefinition>> {
     crate::catalog::validate()?;
-    Ok(crate::catalog::COURSES.to_vec())
+    Ok(crate::catalog::all().into_iter().cloned().collect())
 }
 
 fn err<E: std::fmt::Display>(e: E) -> String {

@@ -3,6 +3,7 @@
 pub mod assessments;
 pub mod challenges;
 pub mod classes;
+pub mod custom;
 pub mod enrollment;
 pub mod placement;
 pub mod portability;

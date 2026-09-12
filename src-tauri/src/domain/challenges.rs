@@ -57,10 +57,8 @@ fn owner(class_id: &str) -> Owner {
     Owner::Class(class_id.into())
 }
 fn accepted(conn: &Connection, course_id: &str) -> Result<AcceptedPath> {
-    let course = catalog::COURSES
-        .iter()
-        .find(|c| c.course_id == course_id)
-        .ok_or_else(|| DbError::InvalidFocus(course_id.into()))?;
+    let course =
+        catalog::course(course_id).ok_or_else(|| DbError::InvalidFocus(course_id.into()))?;
     if course.kind != catalog::SubjectKind::Engineering {
         return Err(invalid(
             "Unit challenges are available for engineering classes.",

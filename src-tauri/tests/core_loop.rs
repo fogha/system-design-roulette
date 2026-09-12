@@ -196,7 +196,7 @@ fn migration_allows_deepseek_course_sources() {
 #[test]
 fn seed_focus_pools_are_isolated() {
     let conn = test_db();
-    for track in focus::SELECTABLE {
+    for track in focus::selectable() {
         let pool = db::roulette_pool(&conn, track).unwrap();
         // Lower bound only: tracks grow independently as curriculum content
         // is added (javascript in particular covers far more browser-facing
@@ -249,7 +249,7 @@ fn curriculum_seed_has_valid_focus_local_prerequisite_graphs() {
         }
     }
 
-    for track in focus::SELECTABLE {
+    for track in focus::selectable() {
         let track_entries: Vec<&serde_json::Value> = entries
             .iter()
             .filter(|entry| entry["focus"].as_str() == Some(track))
@@ -294,7 +294,7 @@ fn curriculum_seed_has_valid_focus_local_prerequisite_graphs() {
                     .get(related.as_str())
                     .unwrap_or_else(|| panic!("{slug} has unknown related concept {related}"));
                 assert_ne!(
-                    *related_focus, *track,
+                    *related_focus, track,
                     "{slug} related concept {related} must be cross-track"
                 );
             }

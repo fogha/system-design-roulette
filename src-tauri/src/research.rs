@@ -105,8 +105,8 @@ pub fn host_of(url: &str) -> Option<String> {
 /// as a primary source.
 pub fn is_credible_source(url: &str) -> bool {
     host_of(url).is_some_and(|host| {
-        crate::catalog::COURSES
-            .iter()
+        crate::catalog::all()
+            .into_iter()
             .flat_map(|course| course.source_hosts)
             .any(|allowed| host == *allowed || host.ends_with(&format!(".{allowed}")))
     })

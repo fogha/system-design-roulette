@@ -7,17 +7,83 @@ use std::collections::HashMap;
 
 type Result<T> = std::result::Result<T, String>;
 
-pub use crate::catalog::{CourseDefinition as SubjectSpec, SubjectKind, COURSES as SUBJECTS};
+pub use crate::catalog::{CourseDefinition as SubjectSpec, SubjectKind};
+
+/// Every subject the desk teaches: the bundled courses and the learner's own.
+pub fn subjects() -> Vec<&'static SubjectSpec> {
+    crate::catalog::all()
+}
 
 pub fn subject(subject_id: &str) -> Result<&'static SubjectSpec> {
-    SUBJECTS
-        .iter()
-        .find(|candidate| candidate.id == subject_id)
+    crate::catalog::course(subject_id)
         .ok_or_else(|| format!("unknown classroom subject: {subject_id}"))
+}
+
+/// A program row for a subject, with the tutor to start with; an existing
+/// row keeps its preferences and takes the catalog's metadata.
+pub fn ensure_program(
+    conn: &Connection,
+    spec: &SubjectSpec,
+    agent: &str,
+    model: &str,
+    custom_bin: &str,
+) -> Result<()> {
+    let (enabled, minutes) = if spec.kind == SubjectKind::Language {
+        conn.query_row(
+            "SELECT enabled, session_minutes FROM language_programs WHERE language = ?1",
+            [spec.id],
+            |row| Ok((row.get::<_, i64>(0)? != 0, row.get::<_, i64>(1)?)),
+        )
+        .optional()
+        .map_err(|error| error.to_string())?
+        .unwrap_or((false, 30))
+    } else {
+        (false, 30)
+    };
+    conn.execute(
+        "INSERT OR IGNORE INTO classroom_programs
+            (subject_id, kind, label, native_label, short_code, enabled, agent,
+             model, custom_agent_bin, prompt_profile, prompt_version,
+             session_minutes, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?13, ?11, ?12)",
+        params![
+            spec.id,
+            spec.kind.as_str(),
+            spec.label,
+            spec.native_label,
+            spec.short_code,
+            i64::from(enabled),
+            agent,
+            model,
+            custom_bin,
+            spec.prompt_profile,
+            minutes,
+            language::now_iso(),
+            spec.version,
+        ],
+    )
+    .map_err(|error| error.to_string())?;
+    // Refresh catalog metadata while retaining enrollment preferences.
+    conn.execute(
+        "UPDATE classroom_programs SET label = ?2, native_label = ?3,
+        short_code = ?4, prompt_profile = ?5, prompt_version = ?6 WHERE subject_id = ?1",
+        params![
+            spec.id,
+            spec.label,
+            spec.native_label,
+            spec.short_code,
+            spec.prompt_profile,
+            spec.version
+        ],
+    )
+    .map_err(|error| error.to_string())?;
+    Ok(())
 }
 
 pub fn initialize(conn: &Connection) -> Result<()> {
     crate::catalog::validate()?;
+    // The learner's own courses join the catalog before programs are read.
+    crate::domain::custom::load_published(conn).map_err(|error| error.to_string())?;
     let global_agent = db::get_config(conn, "agent")
         .map_err(|error| error.to_string())?
         .unwrap_or_else(|| "claude".into());
@@ -27,55 +93,8 @@ pub fn initialize(conn: &Connection) -> Result<()> {
     let global_custom = db::get_config(conn, "custom_agent_bin")
         .map_err(|error| error.to_string())?
         .unwrap_or_default();
-    for spec in SUBJECTS {
-        let (enabled, minutes) = if spec.kind == SubjectKind::Language {
-            conn.query_row(
-                "SELECT enabled, session_minutes FROM language_programs WHERE language = ?1",
-                [spec.id],
-                |row| Ok((row.get::<_, i64>(0)? != 0, row.get::<_, i64>(1)?)),
-            )
-            .optional()
-            .map_err(|error| error.to_string())?
-            .unwrap_or((false, 30))
-        } else {
-            (false, 30)
-        };
-        conn.execute(
-            "INSERT OR IGNORE INTO classroom_programs
-                (subject_id, kind, label, native_label, short_code, enabled, agent,
-                 model, custom_agent_bin, prompt_profile, prompt_version,
-                 session_minutes, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 'v1', ?11, ?12)",
-            params![
-                spec.id,
-                spec.kind.as_str(),
-                spec.label,
-                spec.native_label,
-                spec.short_code,
-                i64::from(enabled),
-                global_agent,
-                global_model,
-                global_custom,
-                spec.prompt_profile,
-                minutes,
-                language::now_iso(),
-            ],
-        )
-        .map_err(|error| error.to_string())?;
-        // Refresh catalog metadata while retaining enrollment preferences.
-        conn.execute(
-            "UPDATE classroom_programs SET label = ?2, native_label = ?3,
-            short_code = ?4, prompt_profile = ?5, prompt_version = ?6 WHERE subject_id = ?1",
-            params![
-                spec.id,
-                spec.label,
-                spec.native_label,
-                spec.short_code,
-                spec.prompt_profile,
-                spec.version
-            ],
-        )
-        .map_err(|error| error.to_string())?;
+    for spec in subjects() {
+        ensure_program(conn, spec, &global_agent, &global_model, &global_custom)?;
     }
     migrate_language_slots(conn)?;
     Ok(())
@@ -291,8 +310,20 @@ fn route_summary(conn: &Connection, subject_id: &str, kind: &str) -> Result<Opti
 }
 
 pub fn program_views(conn: &Connection, today: &str) -> Result<Vec<ClassroomProgramView>> {
-    SUBJECTS
-        .iter()
+    // Only subjects this profile has a program for: a custom course
+    // registered in the process but published from another profile (as
+    // happens in tests) is not this desk's class.
+    let mut statement = conn
+        .prepare("SELECT subject_id FROM classroom_programs")
+        .map_err(|error| error.to_string())?;
+    let known: std::collections::HashSet<String> = statement
+        .query_map([], |row| row.get::<_, String>(0))
+        .map_err(|error| error.to_string())?
+        .collect::<std::result::Result<_, _>>()
+        .map_err(|error| error.to_string())?;
+    subjects()
+        .into_iter()
+        .filter(|spec| known.contains(spec.id))
         .map(|spec| program_view(conn, spec.id, today))
         .collect()
 }
@@ -2729,10 +2760,10 @@ pub fn active_sessions(conn: &Connection) -> Result<Vec<ActiveClassroomSessionVi
 
 pub fn prompt_contracts_are_isolated() -> Result<()> {
     let mut seen = HashMap::new();
-    for spec in SUBJECTS {
+    for spec in subjects() {
         if !spec
             .prompt
-            .contains(&format!("PROMPT PROFILE: {}.v1", spec.prompt_profile))
+            .contains(&format!("PROMPT PROFILE: {}.v", spec.prompt_profile))
         {
             return Err(format!("{} prompt has the wrong version marker", spec.id));
         }

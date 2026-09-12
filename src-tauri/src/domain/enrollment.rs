@@ -122,16 +122,30 @@ pub struct SaveEnrollmentDraft {
 }
 
 fn definition(course_id: &str) -> Result<&'static catalog::CourseDefinition> {
-    catalog::COURSES
-        .iter()
-        .find(|course| course.course_id == course_id)
-        .ok_or_else(|| DbError::InvalidFocus(course_id.into()))
+    catalog::course(course_id).ok_or_else(|| DbError::InvalidFocus(course_id.into()))
 }
 
 /// Canonical snapshot: serde_json sorts object keys and retains authored array
 /// order. The frontend generator hashes the same content for preview requests.
 pub fn course_snapshot(course_id: &str) -> Result<(CourseReference, Value)> {
     let course = definition(course_id)?;
+    // A learner's own course: its definition and topics come from the
+    // registry, filled from the database at startup and on publish.
+    if catalog::is_custom(course_id) {
+        let curriculum = catalog::custom_curriculum(course_id)
+            .ok_or_else(|| DbError::InvalidFocus(course_id.into()))?;
+        let definition = serde_json::to_value(course)?;
+        let snapshot = serde_json::json!({"course": definition, "curriculum": curriculum, "prompt": course.prompt, "reference_lessons": []});
+        let fingerprint = format!("{:x}", Sha256::digest(serde_json::to_vec(&snapshot)?));
+        return Ok((
+            CourseReference {
+                course_id: course.course_id.into(),
+                version: course.version.into(),
+                fingerprint,
+            },
+            snapshot,
+        ));
+    }
     let manifest: Value = serde_json::from_str(include_str!("../../seed/catalog.json"))?;
     let definition = manifest["courses"]
         .as_array()

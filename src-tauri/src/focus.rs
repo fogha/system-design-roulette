@@ -3,7 +3,12 @@
 
 use crate::db::{DbError, Result};
 pub const LEGACY_FOCUS: &str = "system-design";
-pub use crate::catalog::ENGINEERING_IDS as SELECTABLE;
+
+/// The ids of every engineering course the desk teaches: bundled ones and
+/// the learner's own, as registered at the time of asking.
+pub fn selectable() -> Vec<&'static str> {
+    crate::catalog::engineering_ids()
+}
 
 pub fn label(focus: &str) -> &str {
     crate::catalog::course(focus)
@@ -26,7 +31,8 @@ pub fn month_outcome(focus: &str) -> &str {
 }
 
 pub fn is_selectable(focus: &str) -> bool {
-    SELECTABLE.contains(&focus)
+    crate::catalog::course(focus)
+        .is_some_and(|course| course.kind == crate::catalog::SubjectKind::Engineering)
 }
 
 pub fn validate_selectable(focus: &str) -> Result<()> {
@@ -42,7 +48,7 @@ mod tests {
     use super::*;
     #[test]
     fn every_selectable_track_has_a_concrete_project_outcome() {
-        for focus in SELECTABLE {
+        for focus in selectable() {
             assert!(
                 month_outcome(focus).len() > 180,
                 "{focus} has no concrete outcome"

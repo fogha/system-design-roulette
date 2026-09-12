@@ -1,0 +1,103 @@
+# Your own classes
+
+The desk ships nine courses. A learner can also make a class of their own: name what they want to be able to do, let the tutor draft a curriculum for it (or write one by hand), edit it until it reads right, have the tutor check it, verify that its sources exist, and enroll in it like any other class. A class made this way runs on the same machinery as a bundled one: the same lesson generation, the same session plans, blocks, retrieval, appointments and enforcement, the same starting-point flow, the same export of lessons. Nothing about it is a lesser mode.
+
+This document is the plan and the contract. Section 1 is the learner's process, step by step. Section 2 is what each step needs underneath. Section 3 is what stays out of scope for the first cut, and why.
+
+## 1. The learner's process
+
+### 1.1 Where it starts
+
+Two places, both labelled **New class**: the button beside "Browse courses" on the Classes page and the last card in the course browser. Either opens the class builder, a screen with a five-step rail like the setup wizard: **Brief → Draft → Review → Verify → Enroll**.
+
+### 1.2 Brief: what you want to be able to do
+
+The learner writes, in their own words:
+
+- a **title** ("Rust for command-line tools");
+- the **outcome** in one or two sentences ("build and ship a small CLI with clean error handling, tests and a release binary");
+- what they **already know** that bears on it (optional; "comfortable in Python, never touched a systems language");
+- **sources they trust** (optional; hostnames such as `doc.rust-lang.org`, `docs.rs`). The tutor adds the obvious ones; the learner can strike any.
+
+The active tutor is shown and can be changed here (it becomes the class's tutor). The brief is saved as a draft the moment it is typed, so leaving and coming back loses nothing.
+
+### 1.3 Draft: the tutor writes the curriculum, or you do
+
+Three ways forward, all always available:
+
+1. **Ask the tutor.** One call produces the whole course definition: a short code and native label, a one-line summary, the context (how the subject should be taught), the outcome (the bounded artefact the course ends in), the working environment, the source hosts, four stages, and 12 to 36 topics. Every topic carries what the bundled curricula carry: a title, a category, a stage, whether it is core, its prerequisites among the other topics, a learner outcome, at least two named mechanisms, a production scenario, misconceptions, the evidence a lesson must show, the artefact it leaves behind, and at least two primary-source URLs on the allowed hosts. The call streams to the execution feed like lesson preparation does, and a draft that fails the validator is sent back once with the reasons before the learner sees it.
+2. **Write it yourself.** An empty course with one stage and one topic, in the same editor as step 3.
+3. **Import a file.** A `.principia-class.json` exported from this or another desk (see 1.7).
+
+### 1.4 Review: edit until it reads right
+
+The editor shows the course header (title, summary, outcome, context, environment, hosts) and the topics grouped by stage. A topic is a card that opens to its fields. The learner can add, remove and reorder topics, move them between stages, mark them core or elective, edit any field, and pick prerequisites from the other topics. Validation runs as they type and is listed beside the rail:
+
+- at least two stages, each with at least one core topic;
+- 6 to 60 topics, titles unique, every prerequisite an earlier or same-stage topic, no cycles;
+- each topic's brief passes the same checks as the bundled seed (`CurriculumBrief::validate`);
+- every primary source is an absolute URL on one of the course's hosts (the editor offers to add a missing host);
+- the summary, outcome and context are non-trivial.
+
+Nothing can be saved as a course while a check fails; the draft itself is always saveable.
+
+### 1.5 Verify: the tutor reads it back, and the sources are fetched
+
+Two independent passes, each optional but recommended and each shown with its result:
+
+- **Tutor review.** A second call reads the finished draft and returns findings: a topic whose outcome is not measurable, a prerequisite that should exist and does not, two topics that are one, a stage that jumps, a source that does not support the topic it is attached to. Each finding has a severity and, when the tutor can say, a proposed fix; the learner applies findings one at a time or ignores them. The pass is repeatable.
+- **Source check.** The desk fetches every primary source through the research client (the same one lessons use, with the same host allowlist and the mirrors it knows). Each URL is marked reachable, redirected, or unreachable; unreachable ones are listed with their topics. The learner can replace a URL, ask the tutor for another, or keep it (a lesson that cannot fetch a source says so, as bundled lessons do).
+
+### 1.6 Enroll
+
+Saving publishes the course: it appears in the catalogue with a **custom** badge, gets a class record, and the ordinary starting-point flow opens. Foundations and a declared stage work at once. The placement check needs a question bank, which the tutor can write in a later pass (section 3); until then the flow says so and offers the other two.
+
+Everything after that is the same as any class: schedule, activation, lessons prepared ahead of each study time, blocks, retrieval, PDFs.
+
+### 1.7 Later: edit, export, import
+
+- **Edit curriculum** on the class's Curriculum tab reopens the builder on the published course. Saving publishes a new version; classes already enrolled keep their accepted path, and the class overview says the curriculum has a newer version with a one-click re-accept that keeps the entry point and marks the changed topics.
+- **Export** writes one file, `<class>.principia-class.json`, with the course definition, the topics, the prompt and the version, under `Documents/Principia Desk/classes/`. It contains no progress and no keys.
+- **Import** reads such a file into the builder at the Review step, with a new id if one already exists.
+
+## 2. What each step needs underneath
+
+### 2.1 A runtime course source
+
+The catalogue is compiled from `seed/catalog.json` into `&'static CourseDefinition`s and everything from enrollment to research to lesson generation looks courses up by id through `catalog::course`. A custom course has to answer the same lookups. The catalogue therefore grows a registry: custom definitions are read from the database at startup (and on every save), each leaked into a `'static` definition, and `catalog::course`, `catalog::all` and `catalog::engineering_ids` answer from the compiled list first and the registry second. The handful of places that iterate `COURSES` directly move to `catalog::all`. Leaking is deliberate: a definition is a few kilobytes, a learner makes a handful of courses, and a definition must outlive every reference the runtime holds.
+
+Custom courses are engineering-kind only. The language runtime is a different machine (scenarios, passes, CEFR bands) and is not what "my own class" means.
+
+### 2.2 Storage (migration v13)
+
+- `custom_courses`: `id` (the subject id, `custom-<slug>`), `version` (integer, `v<n>` outward), `status` (`draft` or `published`), `origin` (`tutor`, `manual`, `import`), `brief_json` (the learner's brief), `draft_json` (the editable draft: definition fields and topics), `definition_json` (the last published definition), `prompt` (the published teaching prompt), `review_json` (the last tutor review), `sources_json` (the last source check), `created_at`, `updated_at`, `published_at`.
+- Topics of a published course live in the existing `concepts` table with `focus = <course id>`, slugs prefixed with the course id so they can never collide with the bundled seed; `brief_json` carries the brief. Republishing refreshes metadata by slug and never touches progress columns, exactly as the bundled seed does on upgrade.
+- `classroom_programs` gets a row when a course is published, with the class's tutor from the brief.
+
+### 2.3 The teaching prompt
+
+Bundled courses have hand-written prompts. A custom course's prompt is rendered from one template (`prompts/classroom/custom.txt`) with the course's title, context, outcome, environment and hosts, carrying `PROMPT PROFILE: custom.<id>.v<n>` so the same version check applies. The generator's contract-with-goal wrapper, the session plan, the beginner contract and the lesson-shape rules apply unchanged.
+
+### 2.4 The tutor calls
+
+Three calls on the generator, each a bare-JSON exchange with the configured runner through the existing `run_exact_for` path (typed parse, one same-provider repair):
+
+- `draft_course(brief)` → the draft; validated; one correction round with the validator's reasons.
+- `review_course(draft)` → findings `{ severity, topic, message, fix? }`.
+- `write_course_questions(draft)` (later pass) → per-topic four-choice questions with a cited source, held to `validate_generated_quiz` plus a host check.
+
+Each call is announced in the execution feed with its own run so the Logs page shows it.
+
+### 2.5 The snapshot and the path
+
+`enrollment::course_snapshot` builds a custom course's snapshot from the database (definition, topics, prompt, no reference lessons) and hashes it as usual, so accepted paths and drift detection work unchanged. The frontend's `courseDefinition(id)` reads a registry filled from `get_catalog` on every state refresh, so class detail, the curriculum map and enrollment render a custom course like a bundled one.
+
+### 2.6 Commands
+
+`get_custom_course_draft`, `save_custom_course_draft`, `draft_custom_course` (tutor), `review_custom_course` (tutor), `verify_custom_course_sources`, `publish_custom_course`, `export_custom_course`, `import_custom_course`, `delete_custom_course` (draft only; a published course with history is retired, not deleted).
+
+## 3. Later passes
+
+- **Questions and the placement check.** The tutor writes three to five cited questions per topic; they feed retrieval, unit challenges and a generated diagnostic bank (three per stage). A learner who believes a generated key is wrong can **void** the question from the check result: it stops counting, is excluded from sampling, and appears in the class editor's Questions tab for correction. The bundled validator holds every generated question to the same shape.
+- **Re-accepting a path after a curriculum edit** with the changed topics marked.
+- **Sharing**: an import from a URL, and a catalogue of shared classes. Not now.

@@ -4189,7 +4189,7 @@ mod exercise_tests {
 
     #[test]
     fn bundled_fallback_courses_carry_a_structured_exercise_with_deliverable() {
-        for focus in crate::focus::SELECTABLE {
+        for focus in crate::focus::selectable() {
             let fb = pick_fallback(focus, "");
             let exercise = fb
                 .exercise
@@ -4212,7 +4212,7 @@ mod exercise_tests {
 
     #[test]
     fn every_selectable_fallback_has_sources_and_a_full_quiz() {
-        for focus in crate::focus::SELECTABLE {
+        for focus in crate::focus::selectable() {
             for source in fallback_sources(focus) {
                 let fallback: super::FallbackCourse =
                     serde_json::from_str(source).expect("fallback JSON must parse");

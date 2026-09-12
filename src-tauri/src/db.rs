@@ -34,7 +34,7 @@ impl From<&str> for DbError {
 
 pub type Result<T> = std::result::Result<T, DbError>;
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CurriculumBrief {
     #[serde(default)]
     pub phase: String,
