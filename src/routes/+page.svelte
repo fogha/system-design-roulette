@@ -18,7 +18,20 @@
   const showEscapeHatch = $derived(shouldShowEscapeHatch(app.state));
 
   $effect(() => {
-    if (!isBlanker) app.init();
+    if (!isBlanker) app.init().catch((cause) => (app.error = `The desk could not start: ${cause}`));
+  });
+
+  // A failure while the first screen renders would otherwise leave the
+  // loading dots with nothing to say; the toast says what broke instead.
+  function surface(message: string) {
+    if (!app.error) app.error = message;
+  }
+  $effect(() => {
+    const onError = (event: ErrorEvent) => surface(`Something broke in the desk: ${event.message}`);
+    const onRejection = (event: PromiseRejectionEvent) => surface(`Something broke in the desk: ${event.reason instanceof Error ? event.reason.message : String(event.reason)}`);
+    window.addEventListener('error', onError);
+    window.addEventListener('unhandledrejection', onRejection);
+    return () => { window.removeEventListener('error', onError); window.removeEventListener('unhandledrejection', onRejection); };
   });
 
   // Block common quit/close shortcuts while locked.
@@ -36,7 +49,7 @@
   {#if isBlanker}
     <div style="flex: 1; background: #000;"></div>
   {:else if app.screen === 'loading'}
-    <div class="screen"><p>…</p></div>
+    <div class="screen"><p>…</p>{#if app.error}<p class="boot-error">{app.error}</p>{/if}</div>
   {:else if app.screen === 'setup'}
     <SetupWizard />
   {:else if app.screen === 'idle' || app.screen === 'dashboard'}
@@ -75,6 +88,7 @@
 </div>
 
 <style>
+  .boot-error { max-width: 60ch; margin: 12px auto 0; padding: 10px 14px; border-left: 2px solid var(--led-err); background: var(--surface); color: var(--led-err); font-size: 12px; line-height: 1.5; text-align: left; overflow-wrap: anywhere; }
   .error-toast {
     position: fixed;
     bottom: 16px;
