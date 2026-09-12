@@ -32,6 +32,18 @@ Paths stay yours to revise. The Curriculum tab shows one status per topic agains
 
 ![Curriculum with route badges](docs/screenshots/13-curriculum-route.png)
 
+## Your own classes
+
+The nine courses are not the limit. **New class** on the Classes page opens the class builder, five steps on one rail:
+
+1. **Brief.** A title, what you want to be able to do at the end, what you already know, documentation hosts you trust, and the tutor that will draft and teach it.
+2. **Draft.** Ask the tutor, and it designs the whole course: four stages in the course's own words and 12 to 36 topics, each carrying what the bundled curricula carry (outcome, mechanisms, a production scenario, misconceptions, evidence, an artefact, two or more primary sources on the course's hosts). Or write it yourself from an empty course. Or import a `.principia-class.json` exported from any desk.
+3. **Review.** An editor with the course header, the stages and a card per topic. The desk validates as you type and lists what it would refuse to publish: fewer than six topics, a stage without a core topic, a prerequisite in a later stage or in a circle, a source off the course's hosts, an outcome too vague to teach to.
+4. **Verify.** The tutor reads the draft back and returns findings with proposed fixes; the desk fetches every primary source and reports which ones answered. Both optional, both repeatable.
+5. **Enroll.** Publishing registers the course, writes its topics into the curriculum under the class's id and opens the starting-point flow. From then on the class is any class: study times, lessons prepared ahead, blocks, retrieval on earlier topics, PDFs, enforcement, the custom badge the only difference.
+
+A published class can be edited into a new version (lessons already taught keep their topics) and exported as one file, under `Documents/Principia Desk/classes/`, that carries the course and nothing personal. Until its question bank is written, a custom class offers the two starting points that need none and no unit challenges; that pass, and disputing a generated answer key, are next. The design is in `docs/CUSTOM_CLASSES.md`.
+
 ## Lessons on one shared runtime
 
 Engineering and language lessons run on one study runtime: planned on the accepted path, prepared under a lease by the class's tutor, published as an immutable lesson version with a frozen knowledge check, and finished in one transaction that records evidence, mastery and the appointment. Answers, production work, reading position and stage are saved as you go and restored after a restart. Failed preparation keeps the request for an explicit retry or discard.
