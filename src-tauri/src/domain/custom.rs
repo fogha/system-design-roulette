@@ -101,7 +101,8 @@ pub struct DraftIssue {
     pub message: String,
 }
 
-/// What the tutor said about the draft when asked to read it back.
+/// What the tutor said about the draft when asked to read it back, and
+/// what the learner did about it.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ReviewFinding {
     /// `high`, `medium` or `low`.
@@ -114,6 +115,18 @@ pub struct ReviewFinding {
     pub message: String,
     #[serde(default)]
     pub fix: String,
+    /// `open`, `fixed` or `dismissed`. Every finding has to leave `open`
+    /// before the class can be published.
+    #[serde(default = "open")]
+    pub status: String,
+    /// How it was settled: what the tutor changed, "by hand", or why it
+    /// was dismissed.
+    #[serde(default)]
+    pub note: String,
+}
+
+fn open() -> String {
+    "open".into()
 }
 
 /// One primary source and whether the desk could fetch it.
@@ -123,6 +136,47 @@ pub struct SourceCheck {
     pub url: String,
     /// `reachable`, `unreachable` or `off-host`.
     pub state: String,
+    /// The learner keeps an unreachable source knowingly; a lesson that
+    /// cannot fetch it says so.
+    #[serde(default)]
+    pub accepted: bool,
+}
+
+/// The marks a class collects on its way to being published: hashes of
+/// the draft as it stood when each check was made.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Marks {
+    /// The draft the tutor last read back.
+    #[serde(default)]
+    pub review_hash: String,
+    /// The draft the learner confirmed having read themselves.
+    #[serde(default)]
+    pub read_hash: String,
+}
+
+/// Where a class stands against what publishing needs, worked out from the
+/// draft, the review, the source check and the marks. The interface draws
+/// the Verify step from it and `publish` refuses on the same blockers.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Checks {
+    /// The draft as it stands, so a mark can be compared to it.
+    pub draft_hash: String,
+    /// The tutor has read a draft back at least once.
+    pub reviewed: bool,
+    /// The review was made on the draft as it stands now.
+    pub review_current: bool,
+    pub open_findings: usize,
+    /// The sources have been fetched at least once.
+    pub fetched: bool,
+    /// Sources in the draft that the last fetch did not see.
+    pub unchecked_sources: usize,
+    /// Unreachable or off-host sources still in the draft and not accepted.
+    pub pending_sources: usize,
+    /// The learner confirmed reading the draft as it stands now.
+    pub read: bool,
+    /// Why publishing is refused, in the order the steps come; empty when
+    /// the class can be published.
+    pub blockers: Vec<String>,
 }
 
 /// The course as the builder sees it: everything stored, plus the issues
@@ -138,6 +192,7 @@ pub struct CustomCourseView {
     pub issues: Vec<DraftIssue>,
     pub review: Vec<ReviewFinding>,
     pub sources: Vec<SourceCheck>,
+    pub checks: Checks,
     /// The question bank the tutor wrote, if any: three cited questions
     /// per stage in the placement check's shape.
     pub bank: Option<crate::domain::placement::Bank>,
@@ -322,6 +377,16 @@ pub fn validate(draft: &CourseDraft) -> Vec<DraftIssue> {
     if words(&draft.environment) < 3 {
         issue("environment", "name the working environment".into());
     }
+    // The writing rules hold for a course's own words as for a lesson's.
+    for (field, text) in [
+        ("summary", &draft.summary),
+        ("outcome", &draft.outcome),
+        ("context", &draft.context),
+    ] {
+        if let Some(found) = crate::prose::report(text) {
+            issue(field, format!("{}{found}", crate::prose::OBJECTION));
+        }
+    }
     if draft.source_hosts.is_empty() {
         issue("source_hosts", "add at least one documentation host".into());
     }
@@ -390,6 +455,9 @@ pub fn validate(draft: &CourseDraft) -> Vec<DraftIssue> {
         }
         if let Err(reason) = topic.curriculum.validate() {
             issue(&at, reason.into());
+        }
+        if let Some(found) = crate::prose::report(&topic_prose(topic)) {
+            issue(&at, format!("{}{found}", crate::prose::OBJECTION));
         }
         for prerequisite in &topic.prereqs {
             match index.get(prerequisite.as_str()) {
@@ -471,6 +539,24 @@ pub fn validate(draft: &CourseDraft) -> Vec<DraftIssue> {
     issues
 }
 
+/// Every sentence of a topic the learner or the tutor wrote, for the
+/// writing check.
+fn topic_prose(topic: &DraftTopic) -> String {
+    let b = &topic.curriculum;
+    [
+        topic.title.as_str(),
+        b.learner_outcome.as_str(),
+        b.production_scenario.as_str(),
+        b.evidence.as_str(),
+        b.artifact.as_str(),
+    ]
+    .into_iter()
+    .chain(b.mechanisms.iter().map(String::as_str))
+    .chain(b.misconceptions.iter().map(String::as_str))
+    .collect::<Vec<_>>()
+    .join("\n")
+}
+
 /// An empty course for a learner who writes it themselves: the brief's
 /// title and outcome, the four stages, one topic to start from.
 pub fn blank_draft(id: &str, brief: &CourseBrief) -> CourseDraft {
@@ -503,7 +589,7 @@ pub fn blank_draft(id: &str, brief: &CourseBrief) -> CourseDraft {
 /// Tidy a draft as it comes from the tutor, a file or the editor: trim,
 /// slugify topic slugs, fix the stage ids, drop empty strings.
 pub fn normalize(mut draft: CourseDraft) -> CourseDraft {
-    let trim = |s: &mut String| *s = s.trim().to_string();
+    let trim = |s: &mut String| *s = crate::prose::scrub(s.trim());
     trim(&mut draft.label);
     trim(&mut draft.native_label);
     trim(&mut draft.short_code);
@@ -532,7 +618,7 @@ pub fn normalize(mut draft: CourseDraft) -> CourseDraft {
     let labels: HashMap<String, String> = draft
         .entry_points
         .iter()
-        .map(|entry| (entry.id.clone(), entry.label.trim().to_string()))
+        .map(|entry| (entry.id.clone(), crate::prose::scrub(entry.label.trim())))
         .collect();
     draft.entry_points = STAGES
         .iter()
@@ -572,13 +658,18 @@ pub fn normalize(mut draft: CourseDraft) -> CourseDraft {
         let clean = |items: &mut Vec<String>| {
             *items = items
                 .iter()
-                .map(|s| s.trim().to_string())
+                .map(|s| crate::prose::scrub(s.trim()))
                 .filter(|s| !s.is_empty())
                 .collect();
         };
         clean(&mut b.mechanisms);
         clean(&mut b.misconceptions);
-        clean(&mut b.primary_sources);
+        b.primary_sources = b
+            .primary_sources
+            .iter()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
         b.related_concepts.clear();
     }
     for topic in &mut draft.topics {
@@ -678,6 +769,7 @@ struct Row {
     review_json: Option<String>,
     sources_json: Option<String>,
     bank_json: Option<String>,
+    checks_json: Option<String>,
     created_at: String,
     updated_at: String,
     published_at: Option<String>,
@@ -687,7 +779,7 @@ fn row(conn: &Connection, id: &str) -> Result<Row> {
     conn.query_row(
         "SELECT id, version, status, origin, brief_json, draft_json, definition_json,
                 curriculum_json, review_json, sources_json, created_at, updated_at, published_at,
-                bank_json
+                bank_json, checks_json
          FROM custom_courses WHERE id=?1",
         [id],
         |r| {
@@ -706,6 +798,7 @@ fn row(conn: &Connection, id: &str) -> Result<Row> {
                 updated_at: r.get(11)?,
                 published_at: r.get(12)?,
                 bank_json: r.get(13)?,
+                checks_json: r.get(14)?,
             })
         },
     )
@@ -713,9 +806,140 @@ fn row(conn: &Connection, id: &str) -> Result<Row> {
     .ok_or_else(|| invalid("this class does not exist"))
 }
 
+/// The draft as stored, hashed, so a mark can say which draft it was made on.
+fn draft_hash(draft_json: &str) -> String {
+    use sha2::Digest;
+    format!("{:x}", sha2::Sha256::digest(draft_json.as_bytes()))
+}
+
+fn marks_of(row: &Row) -> Result<Marks> {
+    Ok(row
+        .checks_json
+        .as_deref()
+        .map(serde_json::from_str)
+        .transpose()?
+        .unwrap_or_default())
+}
+
+/// Where the class stands against what publishing needs.
+pub fn checks_of(
+    draft: &CourseDraft,
+    draft_hash: &str,
+    issues: &[DraftIssue],
+    review: Option<&[ReviewFinding]>,
+    sources: Option<&[SourceCheck]>,
+    marks: &Marks,
+) -> Checks {
+    let urls: HashSet<&str> = draft
+        .topics
+        .iter()
+        .flat_map(|topic| topic.curriculum.primary_sources.iter())
+        .map(String::as_str)
+        .collect();
+    let checked: HashSet<&str> = sources
+        .unwrap_or_default()
+        .iter()
+        .map(|check| check.url.as_str())
+        .collect();
+    let unchecked_sources = urls.iter().filter(|url| !checked.contains(*url)).count();
+    let pending_sources = sources
+        .unwrap_or_default()
+        .iter()
+        .filter(|check| {
+            check.state != "reachable" && !check.accepted && urls.contains(check.url.as_str())
+        })
+        .map(|check| check.url.as_str())
+        .collect::<HashSet<_>>()
+        .len();
+    let open_findings = review
+        .unwrap_or_default()
+        .iter()
+        .filter(|finding| finding.status == "open")
+        .count();
+    let mut checks = Checks {
+        draft_hash: draft_hash.to_string(),
+        reviewed: review.is_some(),
+        review_current: review.is_some() && marks.review_hash == draft_hash,
+        open_findings,
+        fetched: sources.is_some(),
+        unchecked_sources,
+        pending_sources,
+        read: marks.read_hash == draft_hash,
+        blockers: Vec::new(),
+    };
+    let plural = |n: usize, one: &str, many: &str| {
+        if n == 1 {
+            one.to_string()
+        } else {
+            many.to_string()
+        }
+    };
+    if !issues.is_empty() {
+        checks.blockers.push(format!(
+            "{} {} to fix in the editor",
+            issues.len(),
+            plural(issues.len(), "thing", "things")
+        ));
+    }
+    if !checks.reviewed {
+        checks
+            .blockers
+            .push("the tutor has not read the draft back".into());
+    } else if open_findings > 0 {
+        checks.blockers.push(format!(
+            "{open_findings} {} from the review still open",
+            plural(open_findings, "finding", "findings")
+        ));
+    }
+    if !checks.fetched {
+        checks
+            .blockers
+            .push("the sources have not been fetched".into());
+    } else {
+        if unchecked_sources > 0 {
+            checks.blockers.push(format!(
+                "{unchecked_sources} {} added since the last fetch",
+                plural(unchecked_sources, "source", "sources")
+            ));
+        }
+        if pending_sources > 0 {
+            checks.blockers.push(format!(
+                "{pending_sources} unreachable {} neither replaced nor accepted",
+                plural(pending_sources, "source", "sources")
+            ));
+        }
+    }
+    if !checks.read {
+        checks
+            .blockers
+            .push("your own read-through of this version is not confirmed".into());
+    }
+    checks
+}
+
 fn view_of(row: Row) -> Result<CustomCourseView> {
     let draft: CourseDraft = serde_json::from_str(&row.draft_json)?;
     let issues = validate(&draft);
+    let review: Option<Vec<ReviewFinding>> = row
+        .review_json
+        .as_deref()
+        .map(serde_json::from_str)
+        .transpose()?;
+    let sources: Option<Vec<SourceCheck>> = row
+        .sources_json
+        .as_deref()
+        .map(serde_json::from_str)
+        .transpose()?;
+    let marks = marks_of(&row)?;
+    let hash = draft_hash(&row.draft_json);
+    let checks = checks_of(
+        &draft,
+        &hash,
+        &issues,
+        review.as_deref(),
+        sources.as_deref(),
+        &marks,
+    );
     Ok(CustomCourseView {
         id: row.id,
         version: row.version,
@@ -724,16 +948,9 @@ fn view_of(row: Row) -> Result<CustomCourseView> {
         brief: serde_json::from_str(&row.brief_json)?,
         draft,
         issues,
-        review: row
-            .review_json
-            .map(|json| serde_json::from_str(&json))
-            .transpose()?
-            .unwrap_or_default(),
-        sources: row
-            .sources_json
-            .map(|json| serde_json::from_str(&json))
-            .transpose()?
-            .unwrap_or_default(),
+        review: review.unwrap_or_default(),
+        sources: sources.unwrap_or_default(),
+        checks,
         bank: row
             .bank_json
             .map(|json| serde_json::from_str(&json))
@@ -835,29 +1052,144 @@ pub fn save_brief(conn: &Connection, id: &str, brief: &CourseBrief) -> Result<Cu
     get(conn, id)
 }
 
+fn save_marks(conn: &Connection, id: &str, marks: &Marks) -> Result<()> {
+    conn.execute(
+        "UPDATE custom_courses SET checks_json=?2 WHERE id=?1",
+        params![id, serde_json::to_string(marks)?],
+    )?;
+    Ok(())
+}
+
+/// Keep what the tutor found. Every finding starts open; the mark says
+/// which draft was read.
 pub fn save_review(
     conn: &Connection,
     id: &str,
     review: &[ReviewFinding],
 ) -> Result<CustomCourseView> {
-    row(conn, id)?;
+    let existing = row(conn, id)?;
+    let review: Vec<ReviewFinding> = review
+        .iter()
+        .cloned()
+        .map(|mut finding| {
+            finding.status = "open".into();
+            finding.note.clear();
+            finding
+        })
+        .collect();
     conn.execute(
         "UPDATE custom_courses SET review_json=?2, updated_at=?3 WHERE id=?1",
-        params![id, serde_json::to_string(review)?, now()],
+        params![id, serde_json::to_string(&review)?, now()],
+    )?;
+    let mut marks = marks_of(&existing)?;
+    marks.review_hash = draft_hash(&existing.draft_json);
+    save_marks(conn, id, &marks)?;
+    get(conn, id)
+}
+
+/// Settle one finding: `fixed` or `dismissed` with a note, or back to
+/// `open`.
+pub fn resolve_finding(
+    conn: &Connection,
+    id: &str,
+    index: usize,
+    status: &str,
+    note: &str,
+) -> Result<CustomCourseView> {
+    if !matches!(status, "open" | "fixed" | "dismissed") {
+        return Err(invalid("a finding is open, fixed or dismissed"));
+    }
+    let existing = row(conn, id)?;
+    let mut review: Vec<ReviewFinding> = existing
+        .review_json
+        .as_deref()
+        .map(serde_json::from_str)
+        .transpose()?
+        .ok_or_else(|| invalid("the tutor has not read this class back"))?;
+    let finding = review
+        .get_mut(index)
+        .ok_or_else(|| invalid("that finding is not in the review"))?;
+    finding.status = status.into();
+    finding.note = note.trim().chars().take(400).collect();
+    conn.execute(
+        "UPDATE custom_courses SET review_json=?2, updated_at=?3 WHERE id=?1",
+        params![id, serde_json::to_string(&review)?, now()],
     )?;
     get(conn, id)
 }
 
+/// Keep the result of a fetch. A source the learner had accepted stays
+/// accepted while it is still unreachable at the same address.
 pub fn save_sources(
     conn: &Connection,
     id: &str,
     sources: &[SourceCheck],
 ) -> Result<CustomCourseView> {
-    row(conn, id)?;
+    let existing = row(conn, id)?;
+    let before: Vec<SourceCheck> = existing
+        .sources_json
+        .as_deref()
+        .map(serde_json::from_str)
+        .transpose()?
+        .unwrap_or_default();
+    let sources: Vec<SourceCheck> = sources
+        .iter()
+        .cloned()
+        .map(|mut check| {
+            check.accepted = check.state != "reachable"
+                && before
+                    .iter()
+                    .any(|old| old.url == check.url && old.accepted);
+            check
+        })
+        .collect();
     conn.execute(
         "UPDATE custom_courses SET sources_json=?2, updated_at=?3 WHERE id=?1",
-        params![id, serde_json::to_string(sources)?, now()],
+        params![id, serde_json::to_string(&sources)?, now()],
     )?;
+    get(conn, id)
+}
+
+/// The learner keeps an unreachable source knowingly, or withdraws that.
+pub fn accept_source(
+    conn: &Connection,
+    id: &str,
+    url: &str,
+    accepted: bool,
+) -> Result<CustomCourseView> {
+    let existing = row(conn, id)?;
+    let mut sources: Vec<SourceCheck> = existing
+        .sources_json
+        .as_deref()
+        .map(serde_json::from_str)
+        .transpose()?
+        .ok_or_else(|| invalid("the sources have not been fetched"))?;
+    let mut found = false;
+    for check in sources.iter_mut().filter(|check| check.url == url) {
+        check.accepted = accepted && check.state != "reachable";
+        found = true;
+    }
+    if !found {
+        return Err(invalid("that source was not in the last fetch"));
+    }
+    conn.execute(
+        "UPDATE custom_courses SET sources_json=?2, updated_at=?3 WHERE id=?1",
+        params![id, serde_json::to_string(&sources)?, now()],
+    )?;
+    get(conn, id)
+}
+
+/// The learner confirms having read the draft as it stands, or withdraws
+/// that. The mark is on this exact draft: an edit after it needs another.
+pub fn mark_read(conn: &Connection, id: &str, read: bool) -> Result<CustomCourseView> {
+    let existing = row(conn, id)?;
+    let mut marks = marks_of(&existing)?;
+    marks.read_hash = if read {
+        draft_hash(&existing.draft_json)
+    } else {
+        String::new()
+    };
+    save_marks(conn, id, &marks)?;
     get(conn, id)
 }
 
@@ -936,6 +1268,13 @@ pub fn publish(conn: &Connection, id: &str) -> Result<CustomCourseView> {
             first.message,
             first.at,
             issues.len().saturating_sub(1)
+        )));
+    }
+    let current = get(conn, id)?;
+    if !current.checks.blockers.is_empty() {
+        return Err(invalid(format!(
+            "the class is not ready to publish: {}",
+            current.checks.blockers.join("; ")
         )));
     }
     let brief: CourseBrief = serde_json::from_str(&existing.brief_json)?;

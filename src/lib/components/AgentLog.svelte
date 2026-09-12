@@ -13,7 +13,7 @@
 </script>
 
 <div class="alog mono" bind:this={el}>
-  <div class="alog-head">AGENT_LOG — tail -f</div>
+  <div class="alog-head">AGENT_LOG · tail -f</div>
   {#if lines.length === 0}
     <div class="aline dim">waiting for agent output…</div>
   {/if}

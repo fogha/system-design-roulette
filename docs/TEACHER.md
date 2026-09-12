@@ -1,4 +1,4 @@
-# The Teacher — continuous teaching agent
+# The Teacher, continuous teaching agent
 
 > Spec for evolving the generator from a **one-shot course author** into a
 > **persistent teacher** that knows what you've mastered, plans what you learn
@@ -12,10 +12,10 @@ else. The Teacher inverts this. Every invocation receives a **learner dossier**
 
 > *You are this student's long-term frontend engineering teacher. You have taught them
 > for N days. You know what they have mastered, what they struggle with, and
-> what comes next. Your job is to move them to staff-engineer-level judgment —
+> what comes next. Your job is to move them to staff-engineer-level judgment
 > not to cover topics, but to build durable understanding.*
 
-The Teacher decides — within guardrails — what kind of day today is, how hard
+The Teacher decides, within guardrails, what kind of day today is, how hard
 to push, and what to revisit. The app remains the authority on *enforcement*
 (lock, timer, streak); the Teacher becomes the authority on *pedagogy*.
 
@@ -152,8 +152,8 @@ misleading them. When retrieval fails outright the lesson still runs, without
 unverified links, and the reason is logged.
 
 **Prose is not requested as JSON.** DeepSeek's JSON mode returns roughly a
-third of the prose it writes in plain markdown, so the course body — and any
-per-section deepening pass for a section under its word floor — is requested as
+third of the prose it writes in plain markdown, so the course body, and any
+per-section deepening pass for a section under its word floor, is requested as
 markdown, while structured payloads keep the JSON contract.
 
 ## 2. Knowledge base (the learner model)
@@ -172,7 +172,7 @@ unseen → introduced → practicing → mastered → maintenance
 
 | State        | Meaning                                                | Transition rule (initial tuning)                       |
 | ------------ | ------------------------------------------------------ | ------------------------------------------------------ |
-| unseen       | never taught                                            | —                                                       |
+| unseen       | never taught                                            |,                                                      |
 | introduced   | course read, first quiz not yet taken                   | session completed                                       |
 | practicing   | quizzed at least once, not yet consistent               | first quiz on the topic                                 |
 | struggling   | a quiz exposed a serious misconception                  | topic quiz score < 50%                                   |
@@ -234,7 +234,7 @@ choice among eligible next lessons remains available behind "Choose for me".
   win before tier and debt-aware weighting.
 - Weighting within unlocked: struggling-adjacent and due-for-review-adjacent
   topics get higher weight; the Teacher can also pin tomorrow's topic during
-  pre-generation ("they just failed quorum questions twice — next lesson:
+  pre-generation ("they just failed quorum questions twice, next lesson:
   quorums revisited via a different angle") with a stated reason, surfaced in
   the UI as `scheduler override — reason: …`.
 - Pool exhausted ≠ done: tier-3 synthesis topics are generative (the Teacher
@@ -263,7 +263,7 @@ to reteach recorded misconceptions inside later lessons.
 ## 5. Extra topics: the classroom, not extensions
 
 The "one more topic" extension loop was retired: after Completion, extra
-learning happens in the **classroom** — any enabled subject starts a session
+learning happens in the **classroom**, any enabled subject starts a session
 any time, and a completed track is never re-served automatically. Completed
 modules stay out of the wheel (mastered/maintenance concepts are excluded),
 retrieval lives in pop-quiz and spaced-review days, and the only way back to a
@@ -272,7 +272,7 @@ finished module is an explicit **revisit**. The dossier no longer tracks
 
 ## 5a. Audio mode (NotebookLM-style listening days)
 
-Some days the student wants to *listen*, not read — hands busy, ears free.
+Some days the student wants to *listen*, not read, hands busy, ears free.
 Audio mode keeps the contract intact: the session still locks, the timer still
 runs, and the adaptive exit check still verifies same-day comprehension. The
 next session's quiz tests the course again after spacing. Only the medium changes.
@@ -282,11 +282,11 @@ next session's quiz tests the course again after spacing. Only the medium change
 1. User toggles **`audio: on`** for tomorrow (Completion screen or Idle), or at
    lock-in if the audio is already rendered.
 2. During nightly pre-generation the Teacher produces a **dialogue script**
-   instead of (or alongside) the markdown course: two hosts — a teacher voice
-   and a curious-student voice who asks exactly the questions a learner would —
+   instead of (or alongside) the markdown course: two hosts, a teacher voice
+   and a curious-student voice who asks exactly the questions a learner would
    covering the same outline and key takeaways. Dialogue beats monologue for
    retention while multitasking; this is the NotebookLM trick.
-3. The script is rendered to a WAV/M4A **offline, overnight** — generation
+3. The script is rendered to a WAV/M4A **offline, overnight**, generation
    latency is hidden in the same window that already hides course generation.
 4. Session day: the course-reader becomes an **audio player node**
    (`sdr://broadcast · 2 hosts · 28:40`): play/pause (pauses the TTL), ±15s,
@@ -296,14 +296,14 @@ next session's quiz tests the course again after spacing. Only the medium change
 
 ### Engine: VibeVoice on Apple Silicon
 
-**Yes — VibeVoice is a good fit, specifically because of our pre-generation
+**Yes, VibeVoice is a good fit, specifically because of our pre-generation
 architecture.** Assessment:
 
 | Engine | Role | Notes |
 | --- | --- | --- |
-| **VibeVoice 1.5B / Large** via [mlx-audio](https://github.com/Blaizzy/mlx-audio) | **primary** — overnight render | Purpose-built for exactly this: long-form (up to ~90 min), multi-speaker (up to 4), natural turn-taking podcast audio. MIT licensed, runs locally on M-series through MLX quantized conversions. Slow generation doesn't matter at 3am. |
-| **VibeVoice-RealTime 0.5B** | optional — live fallback | Microsoft's 2026 streaming variant (<300 ms latency); usable when the user requests audio at lock-in with nothing pre-rendered. Lower fidelity, single-speaker bias. |
-| **macOS `say` / AVSpeechSynthesizer** | guaranteed fallback | Zero dependencies, instant, offline. Robotic but never broken — the "bundled course" of audio. |
+| **VibeVoice 1.5B / Large** via [mlx-audio](https://github.com/Blaizzy/mlx-audio) | **primary**, overnight render | Purpose-built for exactly this: long-form (up to ~90 min), multi-speaker (up to 4), natural turn-taking podcast audio. MIT licensed, runs locally on M-series through MLX quantized conversions. Slow generation doesn't matter at 3am. |
+| **VibeVoice-RealTime 0.5B** | optional, live fallback | Microsoft's 2026 streaming variant (<300 ms latency); usable when the user requests audio at lock-in with nothing pre-rendered. Lower fidelity, single-speaker bias. |
+| **macOS `say` / AVSpeechSynthesizer** | guaranteed fallback | Zero dependencies, instant, offline. Robotic but never broken, the "bundled course" of audio. |
 
 Caveats to design around:
 - **Heavy optional dependency**: Python env + several-GB model weights. Ship as
@@ -334,7 +334,7 @@ SQLite + the dossier. No daemon-resident agent, no conversation state to lose.
 
 ## 7. UI vocabulary (topology language)
 
-- Knowledge base node: `mastery-store` — dashboard gets a per-category mastery
+- Knowledge base node: `mastery-store`dashboard gets a per-category mastery
   grid (unseen→maintenance as LED states) replacing/augmenting pool-coverage.
 - Pop-quiz day ClusterBar: `sdr://audit · surprise compliance check`.
 - Design-lab: `sdr://loadtest · scenario exercise`.
@@ -343,19 +343,19 @@ SQLite + the dossier. No daemon-resident agent, no conversation state to lose.
 
 ## 8. Build order
 
-1. **M1 — Knowledge base**: `mastery` + `profile` tables, transitions computed
+1. **M1, Knowledge base**: `mastery` + `profile` tables, transitions computed
    from existing attempts at grading time, dossier builder, dashboard mastery
    grid. (No prompt changes yet; pure substrate.)
-2. **M2 — Teacher voice**: `teacher_system.txt` + dossier injected into
+2. **M2, Teacher voice**: `teacher_system.txt` + dossier injected into
    course/quiz/grade prompts; grading emits `teacher_notes`; model → opus
    default with downgrade chain.
-3. **M3 — Curriculum**: tiers + prereqs in seed data, unlock logic, weighted
+3. **M3, Curriculum**: tiers + prereqs in seed data, unlock logic, weighted
    wheel, Teacher topic-override in nightly planning call.
-4. **M4 — Session types**: pop-quiz day first (cheapest, pure reuse), then
+4. **M4, Session types**: pop-quiz day first (cheapest, pure reuse), then
    remediation, then design-lab (needs free-text editor + rubric grading).
-5. **M5 — Classroom** (replaced the elastic-days loop): per-subject programs,
+5. **M5, Classroom** (replaced the elastic-days loop): per-subject programs,
    schedules, completion-aware rotation, and opt-in revisits.
-6. **M6 — Audio mode**: dialogue-script prompt + audio player UI on macOS
+6. **M6, Audio mode**: dialogue-script prompt + audio player UI on macOS
    `say` first (proves the flow with zero deps), then the VibeVoice/mlx-audio
    provisioned engine as the quality tier.
 

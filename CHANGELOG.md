@@ -2,7 +2,7 @@
 
 All notable changes to Principia Desk. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions are git tags.
 
-## [Unreleased] — Principia Desk
+## [Unreleased] · Principia Desk
 
 The product that System Design Roulette became. Same database, same visual character, a different shape: classes you schedule instead of one daily roulette.
 
@@ -19,19 +19,21 @@ The product that System Design Roulette became. Same database, same visual chara
 - **Home page**: a countdown ring, a study pulse (streaks, lessons, study days, checks passed, this week against the target) and a half-year contribution map.
 - **Exports**: a lesson as PDF or CSV, filed by class; a profile export and import.
 - **Execution logs**: every line a runner reports while preparing a lesson, kept thirty days, with a Logs page.
-- **Your own classes**: a class builder on a five-step rail (Brief, Draft, Review, Verify, Enroll). The tutor drafts a curriculum from what you want to be able to do, reads it back, writes a question bank; the desk validates every topic, fetches every source, publishes the class into the catalog and teaches it like a bundled one. Class files export and import.
+- **Your own classes**: a class builder on a five-step rail (Brief, Draft, Review, Verify, Enroll). The tutor drafts a curriculum from what you want to be able to do, reads it back, writes a question bank; the desk validates every topic, fetches every source, publishes the class into the catalog and teaches it like a bundled one. Class files export and import. Verify is three checks in order, all required before publishing: every review finding settled (fixed with the tutor, fixed by hand, or dismissed with a reason), every source fetched and the unreachable ones replaced or kept knowingly, and your own read-through confirmed.
+- **Writing rules**: every request to a runner carries the rules, every answer is scrubbed of em dashes outside code and read for the tells of machine writing (Wikipedia's documented signs, as a shared catalogue), and a lesson section, question, chat reply or class draft that fails is sent back with the reason. The bundled prompts and lessons were held to the same rules.
+- The desk's own confirm and prompt dialogs, and fields in the class editor that grow with their text.
 - **Onboarding** in four steps: tutor, search, recovery (with a walkthrough of the ways out), deploy.
 - A design system (DESIGN.md): one page frame, mono labels, three custom keys (call to action, bracket, ghost), route tabs on a rail.
 
 ### Changed
 - Renamed from System Design Roulette to Principia Desk. Identifiers are `com.darkmatter.principia-desk`; the first launch adopts the previous profile through SQLite's backup API and leaves the original in place.
-- The database is upgraded by numbered, checksummed migrations (v1–v14) with a backup before every upgrade; pace is no longer a setting, it follows the study times.
+- The database is upgraded by numbered, checksummed migrations (v1–v15) with a backup before every upgrade; pace is no longer a setting, it follows the study times.
 - The once-a-day routine, the roulette wheel and the legacy language management screens are retired; their data is kept.
 
 ### Contributors
 - Classroom subjects, CEFR language programmes, research grounding, in-course chat and exercises, the reproducible DMG bundle and the refactors that made one runtime possible came from [@fogha](https://github.com/fogha).
 
-## [0.1.0] — 2026-06-15 — System Design Roulette
+## [0.1.0] · 2026-06-15 · System Design Roulette
 
 The first stable release.
 

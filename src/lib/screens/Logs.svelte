@@ -46,7 +46,7 @@
 
 <div class="logs-page page-frame">
   <header>
-    <div class="meta-label">EXECUTION LOG — WHAT THE TUTOR DID</div>
+    <div class="meta-label">EXECUTION LOG · WHAT THE TUTOR DID</div>
     <h1>Logs</h1>
     <p>Every line the runner reported while preparing a lesson, kept for thirty days so a slow or failed preparation can be read back.</p>
   </header>

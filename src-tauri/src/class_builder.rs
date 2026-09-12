@@ -79,6 +79,7 @@ async fn with_heartbeat<T>(
 const DRAFT_TIMEOUT: Duration = Duration::from_secs(420);
 const REVIEW_TIMEOUT: Duration = Duration::from_secs(240);
 const BANK_TIMEOUT: Duration = Duration::from_secs(360);
+const FIX_TIMEOUT: Duration = Duration::from_secs(300);
 
 /// The shape the tutor is asked for, as a schema the prompt shows. It is the
 /// draft itself minus the id, which the desk assigns.
@@ -376,6 +377,273 @@ impl Generator {
     }
 }
 
+/// The change the tutor proposes for one finding: header fields to set,
+/// topics to add or replace (by slug), topics to remove, and the order the
+/// topics should take. The desk applies it; the tutor never rewrites the
+/// whole course for one finding.
+#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
+pub struct DraftPatch {
+    /// One sentence on what was changed, kept with the finding.
+    #[serde(default)]
+    pub note: String,
+    #[serde(default)]
+    pub header: HeaderPatch,
+    #[serde(default)]
+    pub topics: Vec<crate::domain::custom::DraftTopic>,
+    #[serde(default)]
+    pub remove: Vec<String>,
+    /// Every slug in the order the topics should take; missing slugs keep
+    /// their place after the listed ones, unknown ones are ignored.
+    #[serde(default)]
+    pub order: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
+pub struct HeaderPatch {
+    #[serde(default)]
+    pub label: Option<String>,
+    #[serde(default)]
+    pub native_label: Option<String>,
+    #[serde(default)]
+    pub short_code: Option<String>,
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub summary: Option<String>,
+    #[serde(default)]
+    pub context: Option<String>,
+    #[serde(default)]
+    pub outcome: Option<String>,
+    #[serde(default)]
+    pub environment: Option<String>,
+    #[serde(default)]
+    pub source_hosts: Option<Vec<String>>,
+    #[serde(default)]
+    pub entry_points: Option<Vec<crate::catalog::OwnedEntryPoint>>,
+}
+
+fn patch_schema() -> String {
+    serde_json::to_string_pretty(&serde_json::json!({
+        "note": "one sentence saying what you changed",
+        "header": {"summary": "only the header fields you change: label, native_label, short_code, title, summary, context, outcome, environment, source_hosts, entry_points; leave the rest out"},
+        "topics": [{"slug": "a topic to add, or an existing slug to replace in full", "title": "...", "category": "...", "prereqs": ["..."], "curriculum": {"phase": "foundations | mechanisms | production | synthesis | elective", "core": true, "learner_outcome": "...", "mechanisms": ["..."], "production_scenario": "...", "misconceptions": ["..."], "evidence": "...", "artifact": "...", "primary_sources": ["https://..."]}}],
+        "remove": ["slugs of topics to remove"],
+        "order": ["every slug in the order the topics should take, when the order changes; otherwise empty"]
+    }))
+    .unwrap()
+}
+
+/// Apply the tutor's change to the draft. A replaced topic keeps its
+/// place; a new one goes after the last topic it builds on, else after the
+/// last topic of its stage, else at the end; removed slugs leave every
+/// prerequisite list. The result is normalized, not yet validated.
+pub fn apply_patch(mut draft: CourseDraft, patch: DraftPatch) -> CourseDraft {
+    let h = patch.header;
+    let set = |field: &mut String, value: Option<String>| {
+        if let Some(value) = value.filter(|v| !v.trim().is_empty()) {
+            *field = value;
+        }
+    };
+    set(&mut draft.label, h.label);
+    set(&mut draft.native_label, h.native_label);
+    set(&mut draft.short_code, h.short_code);
+    set(&mut draft.title, h.title);
+    set(&mut draft.summary, h.summary);
+    set(&mut draft.context, h.context);
+    set(&mut draft.outcome, h.outcome);
+    set(&mut draft.environment, h.environment);
+    if let Some(hosts) = h.source_hosts.filter(|hosts| !hosts.is_empty()) {
+        draft.source_hosts = hosts;
+    }
+    if let Some(entries) = h.entry_points.filter(|entries| !entries.is_empty()) {
+        for entry in entries {
+            if let Some(existing) = draft.entry_points.iter_mut().find(|e| e.id == entry.id) {
+                if !entry.label.trim().is_empty() {
+                    existing.label = entry.label;
+                }
+            }
+        }
+    }
+    let removed: Vec<String> = patch
+        .remove
+        .iter()
+        .map(|slug| custom::slugify(slug))
+        .collect();
+    draft.topics.retain(|topic| !removed.contains(&topic.slug));
+    for mut topic in patch.topics {
+        topic.slug = custom::slugify(if topic.slug.trim().is_empty() {
+            &topic.title
+        } else {
+            &topic.slug
+        });
+        if topic.slug.is_empty() {
+            continue;
+        }
+        if let Some(index) = draft.topics.iter().position(|t| t.slug == topic.slug) {
+            draft.topics[index] = topic;
+            continue;
+        }
+        let after_prereq = draft
+            .topics
+            .iter()
+            .rposition(|t| topic.prereqs.iter().any(|p| custom::slugify(p) == t.slug));
+        let after_stage = draft
+            .topics
+            .iter()
+            .rposition(|t| t.curriculum.phase == topic.curriculum.phase);
+        let at = after_prereq
+            .or(after_stage)
+            .map(|i| i + 1)
+            .unwrap_or(draft.topics.len());
+        draft.topics.insert(at, topic);
+    }
+    for topic in &mut draft.topics {
+        topic
+            .prereqs
+            .retain(|p| !removed.contains(&custom::slugify(p)));
+    }
+    if !patch.order.is_empty() {
+        let wanted: Vec<String> = patch
+            .order
+            .iter()
+            .map(|slug| custom::slugify(slug))
+            .collect();
+        let mut ordered: Vec<crate::domain::custom::DraftTopic> = Vec::new();
+        for slug in &wanted {
+            if let Some(index) = draft.topics.iter().position(|t| &t.slug == slug) {
+                ordered.push(draft.topics.remove(index));
+            }
+        }
+        ordered.append(&mut draft.topics);
+        draft.topics = ordered;
+    }
+    custom::normalize(draft)
+}
+
+fn fix_prompt(brief: &CourseBrief, draft: &CourseDraft, finding: &ReviewFinding) -> String {
+    format!(
+        "You reviewed this self-study curriculum and raised the finding below. Now make the \
+         change. The learner wants to be able to: {outcome}.\n\n\
+         FINDING ({severity}{topic}): {message}\n\
+         PROPOSED FIX: {fix}\n\n\
+         Return ONLY a JSON patch with exactly this shape, no markdown fences, no commentary. \
+         Include only what changes: a replaced topic is given in full, a new topic in full with \
+         its prerequisites among existing slugs, header fields only when they change. Every \
+         topic keeps the shape of the ones in the draft: a learner outcome of at least eight \
+         words, at least two named mechanisms, a production scenario, at least one \
+         misconception, evidence, an artifact, and at least two primary-source URLs on the \
+         course's hosts ({hosts}).\n{schema}\n\nDRAFT:\n{draft}",
+        outcome = brief.outcome.trim(),
+        severity = finding.severity,
+        topic = if finding.topic.is_empty() {
+            String::new()
+        } else {
+            format!(", topic {}", finding.topic)
+        },
+        message = finding.message.trim(),
+        fix = if finding.fix.trim().is_empty() {
+            "none given; decide the smallest change that settles the finding"
+        } else {
+            finding.fix.trim()
+        },
+        hosts = draft.source_hosts.join(", "),
+        schema = patch_schema(),
+        draft = serde_json::to_string(draft).unwrap_or_default(),
+    )
+}
+
+impl Generator {
+    /// Ask the tutor to make the change one finding asks for. The patch is
+    /// applied here; one that leaves the draft worse against the validator
+    /// goes back once with the reasons, and is dropped if still worse.
+    pub async fn fix_custom_course_finding(
+        &self,
+        brief: &CourseBrief,
+        draft: &CourseDraft,
+        finding: &ReviewFinding,
+    ) -> Result<(CourseDraft, String, String)> {
+        let scoped = self.scoped("course-fix");
+        let agent = if brief.agent.is_empty() {
+            scoped.current_agent()
+        } else {
+            brief.agent.clone()
+        };
+        let model = if brief.model.is_empty() {
+            scoped.current_model()
+        } else {
+            brief.model.clone()
+        };
+        let custom_bin = if agent == "custom" {
+            brief.custom_agent_bin.clone()
+        } else {
+            scoped.current_custom_bin()
+        };
+        scoped.log(format!(
+            "class builder: asking {agent} ({model}) to settle a finding on \"{}\": {}",
+            draft.label,
+            finding.message.trim()
+        ));
+        let prompt = fix_prompt(brief, draft, finding);
+        let before = custom::validate(draft).len();
+        let (patch, source) = with_heartbeat(
+            &scoped.feed,
+            "changing the draft",
+            scoped.run_exact_for::<DraftPatch>(
+                &agent,
+                &custom_bin,
+                &prompt,
+                false,
+                FIX_TIMEOUT,
+                &model,
+            ),
+        )
+        .await?;
+        let note = patch.note.trim().to_string();
+        let changed = apply_patch(draft.clone(), patch);
+        let issues = custom::validate(&changed);
+        scoped.log(format!(
+            "class builder: the change applied; {} issue(s) against the validator (was {before})",
+            issues.len()
+        ));
+        if issues.len() <= before {
+            return Ok((changed, note, source));
+        }
+        let correction = format!(
+            "Your patch left the draft failing these deterministic checks:\n{}\n\n\
+             Return ONLY a corrected patch in the same shape that settles the finding without \
+             breaking them.\n\nORIGINAL_REQUEST:\n{prompt}",
+            issues_text(&issues)
+        );
+        let (again, _) = with_heartbeat(
+            &scoped.feed,
+            "correcting the change",
+            scoped.run_exact_for::<DraftPatch>(
+                &agent,
+                &custom_bin,
+                &correction,
+                false,
+                FIX_TIMEOUT,
+                &model,
+            ),
+        )
+        .await?;
+        let note = if again.note.trim().is_empty() {
+            note
+        } else {
+            again.note.trim().to_string()
+        };
+        let changed = apply_patch(draft.clone(), again);
+        let remaining = custom::validate(&changed);
+        if remaining.len() > before {
+            return Err(GenError::Quality(format!(
+                "the tutor's change left the draft worse ({} issue(s) where there were {before}); nothing was applied",
+                remaining.len()
+            )));
+        }
+        Ok((changed, note, source))
+    }
+}
+
 /// One question as the tutor writes it; the desk assigns ids and criteria.
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct WrittenQuestion {
@@ -526,7 +794,7 @@ fn bank_prompt(brief: &CourseBrief, draft: &CourseDraft) -> String {
         .filter(|t| t.curriculum.core && t.curriculum.phase != "elective")
         .map(|t| {
             format!(
-                "- {} [{}]: {} — outcome: {} — sources: {}",
+                "- {} [{}]: {}; outcome: {}; sources: {}",
                 t.slug,
                 t.curriculum.phase,
                 t.title,
@@ -700,6 +968,7 @@ pub async fn verify_sources(
                 topic: topic.slug.clone(),
                 url: url.clone(),
                 state: state.to_string(),
+                accepted: false,
             });
         }
     }
@@ -812,6 +1081,76 @@ mod tests {
             bank_from_written(&draft, extra).unwrap().questions.len(),
             12
         );
+    }
+
+    #[test]
+    fn a_patch_replaces_adds_removes_and_reorders_topics() {
+        let draft = draft_with_topics();
+        let mut added = draft.topics[1].clone();
+        added.slug = "b2".into();
+        added.title = "Topic b2".into();
+        added.prereqs = vec!["b".into()];
+        let mut replaced = draft.topics[0].clone();
+        replaced.title = "Topic a, renamed".into();
+        let patch = DraftPatch {
+            note: "split b".into(),
+            header: HeaderPatch {
+                summary: Some("A new summary.".into()),
+                label: Some("   ".into()),
+                ..Default::default()
+            },
+            topics: vec![added, replaced],
+            remove: vec!["d".into()],
+            order: vec![],
+        };
+        let changed = apply_patch(draft.clone(), patch);
+        let slugs: Vec<&str> = changed.topics.iter().map(|t| t.slug.as_str()).collect();
+        assert_eq!(slugs, vec!["a", "b", "b2", "c"]);
+        assert_eq!(changed.topics[0].title, "Topic a, renamed");
+        assert_eq!(changed.summary, "A new summary.");
+        assert_eq!(
+            changed.label, "Rust",
+            "a blank header value changes nothing"
+        );
+        // A removed topic leaves every prerequisite list; an order is honoured.
+        let mut needs_d = draft.clone();
+        needs_d.topics[2].prereqs = vec!["d".into()];
+        let patch = DraftPatch {
+            remove: vec!["d".into()],
+            order: vec!["c".into(), "a".into()],
+            ..Default::default()
+        };
+        let changed = apply_patch(needs_d, patch);
+        let slugs: Vec<&str> = changed.topics.iter().map(|t| t.slug.as_str()).collect();
+        assert_eq!(slugs, vec!["c", "a", "b"]);
+        assert!(changed.topics[0].prereqs.is_empty());
+        // A new topic without prerequisites lands after its stage.
+        let mut fresh = draft_with_topics().topics[0].clone();
+        fresh.slug = "a2".into();
+        fresh.title = "Topic a2".into();
+        let changed = apply_patch(
+            draft_with_topics(),
+            DraftPatch {
+                topics: vec![fresh],
+                ..Default::default()
+            },
+        );
+        let slugs: Vec<&str> = changed.topics.iter().map(|t| t.slug.as_str()).collect();
+        assert_eq!(slugs, vec!["a", "a2", "b", "c", "d"]);
+        let prompt = fix_prompt(
+            &CourseBrief::default(),
+            &draft,
+            &ReviewFinding {
+                severity: "high".into(),
+                topic: "b".into(),
+                message: "b is two topics".into(),
+                fix: String::new(),
+                status: "open".into(),
+                note: String::new(),
+            },
+        );
+        assert!(prompt.contains("FINDING (high, topic b): b is two topics"));
+        assert!(prompt.contains("\"remove\""));
     }
 
     #[test]

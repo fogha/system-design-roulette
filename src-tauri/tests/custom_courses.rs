@@ -83,6 +83,156 @@ fn complete(mut draft: CourseDraft) -> CourseDraft {
     draft
 }
 
+/// Walk the class through what publishing needs: the tutor has read it
+/// back with nothing open, every source fetched and reachable, and the
+/// learner's own read-through confirmed on the draft as it stands.
+fn checked(conn: &Connection, id: &str) -> custom::CustomCourseView {
+    let view = custom::get(conn, id).unwrap();
+    custom::save_review(conn, id, &[]).unwrap();
+    let sources: Vec<custom::SourceCheck> = view
+        .draft
+        .topics
+        .iter()
+        .flat_map(|topic| {
+            topic
+                .curriculum
+                .primary_sources
+                .iter()
+                .map(move |url| custom::SourceCheck {
+                    topic: topic.slug.clone(),
+                    url: url.clone(),
+                    state: "reachable".into(),
+                    accepted: false,
+                })
+        })
+        .collect();
+    custom::save_sources(conn, id, &sources).unwrap();
+    custom::mark_read(conn, id, true).unwrap()
+}
+
+#[test]
+fn publishing_needs_the_review_settled_the_sources_fetched_and_the_read_through_confirmed() {
+    let (_file, conn) = fixture();
+    let created = custom::create(&conn, &brief_titled("Rust checks"), "manual").unwrap();
+    let saved = custom::save_draft(&conn, &created.id, complete(created.draft.clone())).unwrap();
+    assert!(saved.issues.is_empty());
+    assert_eq!(
+        saved.checks.blockers,
+        vec![
+            "the tutor has not read the draft back",
+            "the sources have not been fetched",
+            "your own read-through of this version is not confirmed"
+        ]
+    );
+    assert!(custom::publish(&conn, &created.id)
+        .unwrap_err()
+        .to_string()
+        .contains("not read the draft back"));
+
+    // A review with findings: every finding has to be settled.
+    let finding = custom::ReviewFinding {
+        severity: "high".into(),
+        topic: "clap".into(),
+        message: "too broad".into(),
+        fix: "split it".into(),
+        status: "fixed".into(),
+        note: "stale".into(),
+    };
+    let view = custom::save_review(&conn, &created.id, &[finding.clone(), finding]).unwrap();
+    assert!(view.checks.reviewed && view.checks.review_current);
+    assert_eq!(view.review[0].status, "open", "a saved review starts open");
+    assert_eq!(view.checks.open_findings, 2);
+    assert!(view.checks.blockers[0].contains("2 findings from the review still open"));
+    let view = custom::resolve_finding(&conn, &created.id, 0, "fixed", "by hand").unwrap();
+    let view2 =
+        custom::resolve_finding(&conn, &created.id, 1, "dismissed", "not for this course").unwrap();
+    assert_eq!(view.review[0].status, "fixed");
+    assert_eq!(view2.review[1].note, "not for this course");
+    assert_eq!(view2.checks.open_findings, 0);
+    assert!(custom::resolve_finding(&conn, &created.id, 5, "fixed", "").is_err());
+    assert!(custom::resolve_finding(&conn, &created.id, 0, "gone", "").is_err());
+
+    // Sources: an unreachable one blocks until it is replaced or accepted;
+    // a URL added after the fetch blocks until fetched.
+    let mut sources: Vec<custom::SourceCheck> = view2
+        .draft
+        .topics
+        .iter()
+        .flat_map(|topic| {
+            topic
+                .curriculum
+                .primary_sources
+                .iter()
+                .map(move |url| custom::SourceCheck {
+                    topic: topic.slug.clone(),
+                    url: url.clone(),
+                    state: "reachable".into(),
+                    accepted: false,
+                })
+        })
+        .collect();
+    sources[0].state = "unreachable".into();
+    let view = custom::save_sources(&conn, &created.id, &sources).unwrap();
+    assert_eq!(view.checks.pending_sources, 1);
+    assert!(view
+        .checks
+        .blockers
+        .iter()
+        .any(|b| b.contains("1 unreachable source neither replaced nor accepted")));
+    let url = sources[0].url.clone();
+    let view = custom::accept_source(&conn, &created.id, &url, true).unwrap();
+    assert_eq!(view.checks.pending_sources, 0);
+    assert!(custom::accept_source(&conn, &created.id, "https://docs.rs/nothing", true).is_err());
+    // Fetching again keeps the acceptance while the address is the same.
+    let view = custom::save_sources(&conn, &created.id, &sources).unwrap();
+    assert!(view.sources[0].accepted);
+    let mut draft = view.draft.clone();
+    draft.topics[0]
+        .curriculum
+        .primary_sources
+        .push("https://docs.rs/anyhow/latest/anyhow/".into());
+    let view = custom::save_draft(&conn, &created.id, draft).unwrap();
+    assert_eq!(view.checks.unchecked_sources, 1);
+    assert!(
+        !view.checks.review_current,
+        "the review was made on an earlier draft"
+    );
+    assert!(view
+        .checks
+        .blockers
+        .iter()
+        .any(|b| b.contains("1 source added since the last fetch")));
+    let mut sources = sources.clone();
+    sources.push(custom::SourceCheck {
+        topic: "ownership".into(),
+        url: "https://docs.rs/anyhow/latest/anyhow/".into(),
+        state: "reachable".into(),
+        accepted: false,
+    });
+    let view = custom::save_sources(&conn, &created.id, &sources).unwrap();
+    assert_eq!(view.checks.unchecked_sources, 0);
+    assert_eq!(
+        view.checks.blockers,
+        vec!["your own read-through of this version is not confirmed"]
+    );
+
+    // The read-through is on this exact draft: an edit after it needs another.
+    let view = custom::mark_read(&conn, &created.id, true).unwrap();
+    assert!(view.checks.read && view.checks.blockers.is_empty());
+    let mut draft = view.draft.clone();
+    draft.summary = "Build small, fast and careful command-line tools in Rust.".into();
+    let view = custom::save_draft(&conn, &created.id, draft).unwrap();
+    assert!(!view.checks.read);
+    assert!(custom::publish(&conn, &created.id)
+        .unwrap_err()
+        .to_string()
+        .contains("read-through"));
+    let view = custom::mark_read(&conn, &created.id, true).unwrap();
+    assert!(view.checks.blockers.is_empty());
+    let published = custom::publish(&conn, &created.id).unwrap();
+    assert_eq!(published.status, "published");
+}
+
 #[test]
 fn a_brief_becomes_a_draft_that_publishes_into_the_catalog_and_teaches_like_any_course() {
     let (_file, conn) = fixture();
@@ -105,6 +255,7 @@ fn a_brief_becomes_a_draft_that_publishes_into_the_catalog_and_teaches_like_any_
 
     let saved = custom::save_draft(&conn, &created.id, complete(created.draft.clone())).unwrap();
     assert!(saved.issues.is_empty(), "{:?}", saved.issues);
+    checked(&conn, &created.id);
     let published = custom::publish(&conn, &created.id).unwrap();
     assert_eq!(
         (published.status.as_str(), published.version),
@@ -236,6 +387,7 @@ fn republishing_bumps_the_version_keeps_taught_topics_and_drops_untaught_ones() 
     let created = custom::create(&conn, &brief_titled("Rust again"), "tutor").unwrap();
     assert_eq!(created.id, "custom-rust-again");
     custom::save_draft(&conn, &created.id, complete(created.draft.clone())).unwrap();
+    checked(&conn, &created.id);
     custom::publish(&conn, &created.id).unwrap();
     let before = enrollment::course_snapshot(&created.id).unwrap().0;
     // One topic was taught; another is removed in the second version.
@@ -256,6 +408,7 @@ fn republishing_bumps_the_version_keeps_taught_topics_and_drops_untaught_ones() 
         .push(topic("profiling", "production", false, &["clap"]));
     second.entry_points[0].label = "Getting started".into();
     custom::save_draft(&conn, &created.id, second).unwrap();
+    checked(&conn, &created.id);
     let published = custom::publish(&conn, &created.id).unwrap();
     assert_eq!(published.version, 2);
     let course = catalog::course(&created.id).unwrap();
@@ -302,6 +455,7 @@ fn a_class_file_round_trips_and_a_draft_can_be_deleted_but_a_published_class_can
 
     custom::delete_draft(&conn, &imported.id).unwrap();
     assert_eq!(custom::list(&conn).unwrap().len(), 1);
+    checked(&conn, &created.id);
     custom::publish(&conn, &created.id).unwrap();
     assert!(custom::delete_draft(&conn, &created.id).is_err());
 }
@@ -314,6 +468,7 @@ fn a_written_bank_turns_on_the_placement_check_and_a_disputed_key_is_set_aside()
     let draft = complete(created.draft.clone());
     custom::save_draft(&conn, &created.id, draft.clone()).unwrap();
     // No bank: the check is unavailable, the two other routes work.
+    checked(&conn, &created.id);
     custom::publish(&conn, &created.id).unwrap();
     assert!(!placement::has_bank(&created.id));
     assert!(

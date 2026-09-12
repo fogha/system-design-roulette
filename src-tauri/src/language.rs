@@ -926,7 +926,7 @@ fn dialogue_reply_question(
         choices,
         correct_index,
         explanation: format!(
-            "{}: “{}” — {}",
+            "{}: “{}”: {}",
             reply.speaker, reply.target, reply.translation
         ),
         strand: "spoken_interaction".into(),
@@ -1110,7 +1110,7 @@ fn build_lesson(language: &str, level: &str, unit: &UnitSpec, phase: i64) -> Sto
             .phrases
             .iter()
             .take(3)
-            .map(|phrase| format!("- **{}** — {}", phrase.target, phrase.translation))
+            .map(|phrase| format!("- **{}**: {}", phrase.target, phrase.translation))
             .collect::<Vec<_>>()
             .join("\n");
         format!("{grammar_blocks}\n{chunk_blocks}")
@@ -1134,12 +1134,12 @@ fn build_lesson(language: &str, level: &str, unit: &UnitSpec, phase: i64) -> Sto
     let foundations = format!(
         "## First principles foundation\n\n\
          Start here before memorising the scenario. Build the smallest reliable pieces first, then combine them into useful language.\n\n\
-         **Outcome in plain terms:** {scenario} — {can_do}\n\n\
+         **Outcome in plain terms:** {scenario}: {can_do}\n\n\
          {authored_blocks}\
          **Smallest reliable pieces:**\n{building_blocks}\n\n\
          ### One analogy, and where it breaks\n\n\
          {analogy} **Where it breaks:** {breakage}\n\n\
-         **Derive it:** after the dialogue below, close the transcript and rebuild the exchange from these pieces in your own words. That reconstruction — not repeating the vocabulary — is the check that you understand the mechanism.",
+         **Derive it:** after the dialogue below, close the transcript and rebuild the exchange from these pieces in your own words. That reconstruction, not repeating the vocabulary, is the check that you understand the mechanism.",
         scenario = unit.scenario,
         can_do = unit.can_do,
         authored_blocks = authored_blocks,
@@ -1163,7 +1163,7 @@ fn build_lesson(language: &str, level: &str, unit: &UnitSpec, phase: i64) -> Sto
         .iter()
         .map(|phrase| {
             format!(
-                "- **{}** — {}  \n  _{}_",
+                "- **{}**: {}  \n  _{}_",
                 phrase.target, phrase.translation, phrase.note
             )
         })
@@ -1345,7 +1345,7 @@ fn select_unit(
         return Ok((weakest.clone(), max_phase + 1));
     }
     Err(format!(
-        "{} is complete — every {} unit is finished. Revisit to practice again.",
+        "{} is complete; every {} unit is finished. Revisit to practice again.",
         curriculum(language)?.label,
         level.level
     ))

@@ -6,6 +6,8 @@
    */
   import type { DraftIssue, DraftTopic } from '../../../ipc';
   import { slugify } from '../../../custom-preview';
+  import { autosize } from '../../../actions/autosize';
+  import Dropdown from '../../../components/Dropdown.svelte';
   import { ChevronDown, ChevronUp, Trash2, ArrowUp, ArrowDown, Plus, X, CircleAlert } from 'lucide-svelte';
 
   let {
@@ -15,6 +17,7 @@
     others,
     issues = [],
     open = $bindable(false),
+    flash = false,
     onremove,
     onmove,
     onchange,
@@ -26,6 +29,8 @@
     others: DraftTopic[];
     issues?: DraftIssue[];
     open?: boolean;
+    /** Lit for a moment after a jump, so the card that was meant is the one seen. */
+    flash?: boolean;
     onremove: () => void;
     onmove: (direction: -1 | 1) => void;
     onchange: () => void;
@@ -57,10 +62,10 @@
     topic.curriculum[field] = topic.curriculum[field].filter((_, j) => j !== i);
     onchange();
   }
-  const phases = $derived([...stages, { id: 'elective', label: 'Elective' }]);
+  const phases = $derived([...stages, { id: 'elective', label: 'Elective' }].map((stage) => ({ value: stage.id, label: stage.label, description: stage.id === 'elective' ? 'off the core route' : stage.id })));
 </script>
 
-<article class="topic" class:open class:flawed={issues.length > 0} id={`topic-${topic.slug || index}`}>
+<article class="topic" class:open class:flawed={issues.length > 0} class:flash id={`topic-${topic.slug || index}`}>
   <header class="topic-head">
     <button type="button" class="disclosure" aria-expanded={open} onclick={() => (open = !open)}>
       <span class="no mono">{String(index + 1).padStart(2, '0')}</span>
@@ -89,7 +94,7 @@
         <label class="field span-2"><span>Title</span><input value={topic.title} oninput={(e) => titled(e.currentTarget.value)} placeholder="What the lesson is called" /></label>
         <label class="field"><span>Slug <small>the topic's id</small></span><input class="mono" value={topic.slug} oninput={(e) => { slugTouched = true; topic.slug = slugify(e.currentTarget.value); onchange(); }} /></label>
         <label class="field"><span>Category <small>groups related topics</small></span><input value={topic.category} oninput={(e) => { topic.category = e.currentTarget.value; onchange(); }} placeholder="fundamentals" /></label>
-        <label class="field"><span>Stage</span><select value={topic.curriculum.phase} onchange={(e) => { topic.curriculum.phase = e.currentTarget.value as DraftTopic['curriculum']['phase']; onchange(); }}>{#each phases as stage (stage.id)}<option value={stage.id}>{stage.label}</option>{/each}</select></label>
+        <div class="field"><span>Stage</span><Dropdown label="Stage" hideLabel value={topic.curriculum.phase} options={phases} onchange={(value) => { topic.curriculum.phase = value as DraftTopic['curriculum']['phase']; onchange(); }} /></div>
         <label class="field check"><input type="checkbox" checked={topic.curriculum.core} onchange={(e) => { topic.curriculum.core = e.currentTarget.checked; onchange(); }} /><span>Core topic <small>on every route through this stage</small></span></label>
       </div>
 
@@ -104,7 +109,7 @@
         {:else}<p class="hint">No earlier topic yet.</p>{/if}
       </div>
 
-      <label class="field"><span>Learner outcome <small>what you can do after the lesson, observable, 8+ words</small></span><textarea rows="2" value={topic.curriculum.learner_outcome} oninput={(e) => { topic.curriculum.learner_outcome = e.currentTarget.value; onchange(); }}></textarea></label>
+      <label class="field"><span>Learner outcome <small>what you can do after the lesson, observable, 8+ words</small></span><textarea use:autosize={{ min: 2, max: 8, value: topic.curriculum.learner_outcome }} value={topic.curriculum.learner_outcome} oninput={(e) => { topic.curriculum.learner_outcome = e.currentTarget.value; onchange(); }}></textarea></label>
       <div class="field">
         <span>Mechanisms <small>at least two, named</small></span>
         {#each topic.curriculum.mechanisms as item, i (i)}
@@ -112,7 +117,7 @@
         {/each}
         <button type="button" class="text" onclick={() => addTo('mechanisms')}><Plus size={11} /> add a mechanism</button>
       </div>
-      <label class="field"><span>Production scenario <small>where this matters at work, 8+ words</small></span><textarea rows="2" value={topic.curriculum.production_scenario} oninput={(e) => { topic.curriculum.production_scenario = e.currentTarget.value; onchange(); }}></textarea></label>
+      <label class="field"><span>Production scenario <small>where this matters at work, 8+ words</small></span><textarea use:autosize={{ min: 2, max: 8, value: topic.curriculum.production_scenario }} value={topic.curriculum.production_scenario} oninput={(e) => { topic.curriculum.production_scenario = e.currentTarget.value; onchange(); }}></textarea></label>
       <div class="field">
         <span>Misconceptions <small>at least one</small></span>
         {#each topic.curriculum.misconceptions as item, i (i)}
@@ -121,8 +126,8 @@
         <button type="button" class="text" onclick={() => addTo('misconceptions')}><Plus size={11} /> add a misconception</button>
       </div>
       <div class="grid">
-        <label class="field"><span>Evidence <small>what proves it, 6+ words</small></span><textarea rows="2" value={topic.curriculum.evidence} oninput={(e) => { topic.curriculum.evidence = e.currentTarget.value; onchange(); }}></textarea></label>
-        <label class="field"><span>Artifact <small>what the lesson leaves behind, 6+ words</small></span><textarea rows="2" value={topic.curriculum.artifact} oninput={(e) => { topic.curriculum.artifact = e.currentTarget.value; onchange(); }}></textarea></label>
+        <label class="field"><span>Evidence <small>what proves it, 6+ words</small></span><textarea use:autosize={{ min: 2, max: 8, value: topic.curriculum.evidence }} value={topic.curriculum.evidence} oninput={(e) => { topic.curriculum.evidence = e.currentTarget.value; onchange(); }}></textarea></label>
+        <label class="field"><span>Artifact <small>what the lesson leaves behind, 6+ words</small></span><textarea use:autosize={{ min: 2, max: 8, value: topic.curriculum.artifact }} value={topic.curriculum.artifact} oninput={(e) => { topic.curriculum.artifact = e.currentTarget.value; onchange(); }}></textarea></label>
       </div>
       <div class="field">
         <span>Primary sources <small>at least two URLs on the course's hosts</small></span>
@@ -136,9 +141,12 @@
 </article>
 
 <style>
-  .topic { border: 1px solid var(--node-border); border-radius: var(--radius-control); background: var(--bg); transition: border-color 0.15s ease; }
+  .topic { border: 1px solid var(--node-border); border-radius: var(--radius-control); background: var(--bg); transition: border-color 0.15s ease; scroll-margin-top: 14px; }
   .topic.open { border-color: color-mix(in srgb, var(--accent) 45%, var(--node-border)); }
   .topic.flawed { border-left: 3px solid var(--warn-fg); }
+  /* The card a jump landed on blinks twice, then settles. */
+  .topic.flash { animation: flash 0.7s ease-in-out 3; }
+  @keyframes flash { 0%, 100% { box-shadow: 0 0 0 0 transparent; border-color: color-mix(in srgb, var(--accent) 45%, var(--node-border)); } 50% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent), 0 0 24px color-mix(in srgb, var(--accent) 30%, transparent); border-color: var(--accent); } }
   .topic-head { display: flex; align-items: center; gap: 6px; padding: 4px 6px 4px 4px; }
   .disclosure { flex: 1; display: flex; align-items: center; gap: 10px; min-width: 0; padding: 7px 8px; border: 0; background: transparent; color: var(--fg); text-align: left; cursor: pointer; border-radius: var(--radius-detail); }
   .disclosure:hover { background: var(--surface); }
@@ -159,10 +167,10 @@
   .field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
   .field > span { font-size: 11px; color: var(--muted); } .field > span small { margin-left: 6px; color: var(--faint); font-size: 10px; }
   .field.check { flex-direction: row; align-items: center; gap: 9px; padding-top: 18px; } .field.check input { width: auto; }
-  input, textarea, select { width: 100%; padding: 8px 10px; border: 1px solid var(--node-border); border-radius: var(--radius-control); background: var(--node-bg); color: var(--fg); font: 12px/1.5 var(--font-body); }
+  input, textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--node-border); border-radius: var(--radius-control); background: var(--node-bg); color: var(--fg); font: 12px/1.5 var(--font-body); }
   input.mono { font-family: var(--font-mono); font-size: 11px; }
-  textarea { resize: vertical; }
-  input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent); }
+  textarea { display: block; }
+  input:focus, textarea:focus { outline: none; border-color: var(--accent); }
   .row { display: flex; align-items: center; gap: 6px; }
   .text { align-self: flex-start; display: inline-flex; align-items: center; gap: 5px; padding: 2px 0; border: 0; background: transparent; color: var(--accent); font: 11px var(--font-body); cursor: pointer; }
   .chips { display: flex; flex-wrap: wrap; gap: 5px; }

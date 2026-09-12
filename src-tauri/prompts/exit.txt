@@ -6,7 +6,7 @@ Course markdown follows between the markers.
 ---COURSE END---
 
 Write exactly {{COUNT}} multiple-choice questions:
-- They must test the core mechanics and mental models of THIS course — what a skimmer would get wrong.
+- They must test the core mechanics and mental models of THIS course, what a skimmer would get wrong.
 {{TARGETING}}
 - 4 plausible choices each, exactly one correct. Distractors must reflect real misconceptions.
 - correct_answer is the exact text of the correct choice.
@@ -14,7 +14,7 @@ Write exactly {{COUNT}} multiple-choice questions:
 - Any multi-line code, configuration, log, trace, or file tree in a prompt or choice must be inside a Markdown fenced code block with an accurate language tag and a blank line before and after the fence. Use inline backticks only for short identifiers or expressions. Never indent code with spaces as a substitute for a fence.
 - Keep snippets focused (normally 4-12 lines) and include enough context to reason about them. Do not split one snippet across the prompt and choices.
 - Do not repeat or lightly rephrase any prior question listed below.
-- explanation: name the misconception a wrong answer reveals, then restate the correct mental model in plain language — an analogy is welcome when it clarifies faster than more prose. Keep it under 4 sentences.
+- explanation: name the misconception a wrong answer reveals, then restate the correct mental model in plain language, an analogy is welcome when it clarifies faster than more prose. Keep it under 4 sentences.
 - section: the course's ## heading this question is drawn from.
 - learning_objective: a short (under 12 words) phrase naming the specific thing this question checks, e.g. "microtasks drain before the next macrotask".
 

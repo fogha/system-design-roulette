@@ -103,11 +103,9 @@ mod imp {
     }
 
     pub fn set_secret(_name: &str, _value: &str) -> Result<(), String> {
-        Err(
-            "in-app key storage is only available on macOS — export the \
+        Err("in-app key storage is only available on macOS; export the \
              environment variable instead (see README)"
-                .into(),
-        )
+            .into())
     }
 }
 

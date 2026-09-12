@@ -1,4 +1,4 @@
-# Desktop design verification — 2026-09-09
+# Desktop design verification, 2026-09-09
 
 Tested the packaged macOS Tauri app from `tauri://localhost`, using the real Rust
 commands and SQLite storage. The QA build uses identifier
@@ -50,7 +50,7 @@ This pass does not certify hard enforcement, live provider generation, signing,
 notarization, or Windows/Linux runtime behavior. It verifies the packaged macOS
 UI, native persistence and the changed controls.
 
-## Schedule overlap verification — 2026-09-10
+## Schedule overlap verification, 2026-09-10
 
 Rebuilt the packaged debug app with the QA identifier and opened the existing
 isolated profile, which upgraded from schema v2 to v7 with a pre-upgrade backup;

@@ -4,8 +4,8 @@ You are deciding what kind of {{FOCUS_LABEL}} training session to run for your s
 {{MONTH_OUTCOME}}
 
 Session types:
-- "lesson" — the default: quiz on yesterday's course, then a new topic with a 30-minute course.
-- "pop_quiz" — no new topic. A surprise breadth check (10-14 questions) over everything they have studied in this focus track, weighted toward struggling topics and material due for spaced review.
+- "lesson": the default. Quiz on yesterday's course, then a new topic with a 30-minute course.
+- "pop_quiz": no new topic. A surprise breadth check (10-14 questions) over everything they have studied in this focus track, weighted toward struggling topics and material due for spaced review.
 
 Constraints the app enforces (your choice is overridden if violated):
 - pop_quiz only when eligible: {{ELIGIBLE}}

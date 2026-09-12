@@ -267,7 +267,7 @@
               : result.requirement
                 ? `Not counted yet: ${result.requirement} Your answers and practice are kept; this scenario will return.`
                 : 'This scenario will return. Review the explanations rather than memorising choice letters.',
-            extra: result.level_advanced_to ? `Level gate passed — now entering ${result.level_advanced_to}.` : null,
+            extra: result.level_advanced_to ? `Level gate passed; now entering ${result.level_advanced_to}.` : null,
           } : null}
           busy={submitting}
           disabled={!session.complete}

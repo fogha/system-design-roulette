@@ -41,12 +41,17 @@ The editor shows the course header (title, summary, outcome, context, environmen
 
 Nothing can be saved as a course while a check fails; the draft itself is always saveable.
 
-### 1.5 Verify: the tutor reads it back, and the sources are fetched
+### 1.5 Verify: three checks, in order, all required
 
-Two independent passes, each optional but recommended and each shown with its result:
+The Verify step is a sequence. Each check unlocks the next, and the class cannot be published until all three pass; `publish` refuses with the same reasons the step shows.
 
-- **Tutor review.** A second call reads the finished draft and returns findings: a topic whose outcome is not measurable, a prerequisite that should exist and does not, two topics that are one, a stage that jumps, a source that does not support the topic it is attached to. Each finding has a severity and, when the tutor can say, a proposed fix; the learner applies findings one at a time or ignores them. The pass is repeatable.
-- **Source check.** The desk fetches every primary source through the research client (the same one lessons use, with the same host allowlist and the mirrors it knows). Each URL is marked reachable, redirected, or unreachable; unreachable ones are listed with their topics. The learner can replace a URL, ask the tutor for another, or keep it (a lesson that cannot fetch a source says so, as bundled lessons do).
+1. **The tutor reads it back.** A second call reads the finished draft and returns findings: a topic whose outcome is not measurable, a prerequisite that should exist and does not, two topics that are one, a stage that jumps, a source that does not support the topic it is attached to. Each finding has a severity, a proposed fix and a status. Every finding has to leave *open* before the next check unlocks, in one of three ways: **Fix with the tutor** asks the tutor to make the change (a patch the desk applies: header fields, topics added or replaced by slug, topics removed, a new order); **Open the topic** jumps into the editor, where the card opens, scrolls into view and blinks, and **Fixed by hand** marks it once the edit is made; **Dismiss** records a reason and counts as settled. A settled finding can be reopened. The review can be run again at any time; a new review replaces the findings. The step says when the review was made on an earlier draft.
+2. **Fetch every source.** The desk fetches every primary source through the research client (the same one lessons use, with the same host allowlist and the mirrors it knows). Each URL is marked reachable, redirected, or unreachable. One that did not answer blocks publishing until it is replaced in the editor or **kept knowingly** (a lesson that cannot fetch a source says so, as bundled lessons do); a URL added after the last fetch blocks until the sources are fetched again. Acceptance survives a re-fetch while the address is the same.
+3. **Your own read-through.** A confirmation that the learner has read every topic and the course header of this version. It is tied to the draft as it stands: an edit after it asks for another confirmation.
+
+The question bank (section 2.7) comes fourth and stays optional; it unlocks after the read-through and can also be written after the class is published.
+
+The writing rules (`docs/WRITING_RULES.md`) apply to the draft as to everything else: em dashes are removed when it is saved, and a field or a topic that reads like a machine wrote it is listed in the editor's rail and blocks publishing until it is changed.
 
 ### 1.6 Enroll
 
@@ -70,7 +75,7 @@ Custom courses are engineering-kind only. The language runtime is a different ma
 
 ### 2.2 Storage (migration v13)
 
-- `custom_courses`: `id` (the subject id, `custom-<slug>`), `version` (integer, `v<n>` outward), `status` (`draft` or `published`), `origin` (`tutor`, `manual`, `import`), `brief_json` (the learner's brief), `draft_json` (the editable draft: definition fields and topics), `definition_json` (the last published definition), `prompt` (the published teaching prompt), `review_json` (the last tutor review), `sources_json` (the last source check), `created_at`, `updated_at`, `published_at`.
+- `custom_courses`: `id` (the subject id, `custom-<slug>`), `version` (integer, `v<n>` outward), `status` (`draft` or `published`), `origin` (`tutor`, `manual`, `import`), `brief_json` (the learner's brief), `draft_json` (the editable draft: definition fields and topics), `definition_json` (the last published definition), `prompt` (the published teaching prompt), `review_json` (the last tutor review, each finding with its status and note), `sources_json` (the last source check, each URL with whether it was accepted), `checks_json` (v15: the hashes of the draft the tutor last read and the draft the learner confirmed), `created_at`, `updated_at`, `published_at`.
 - Topics of a published course live in the existing `concepts` table with `focus = <course id>`, slugs prefixed with the course id so they can never collide with the bundled seed; `brief_json` carries the brief. Republishing refreshes metadata by slug and never touches progress columns, exactly as the bundled seed does on upgrade.
 - `classroom_programs` gets a row when a course is published, with the class's tutor from the brief.
 
@@ -83,8 +88,9 @@ Bundled courses have hand-written prompts. A custom course's prompt is rendered 
 Three calls on the generator, each a bare-JSON exchange with the configured runner through the existing `run_exact_for` path (typed parse, one same-provider repair):
 
 - `draft_course(brief)` → the draft; validated; one correction round with the validator's reasons.
-- `review_course(draft)` → findings `{ severity, topic, message, fix? }`.
-- `write_course_questions(draft)` (later pass) → per-topic four-choice questions with a cited source, held to `validate_generated_quiz` plus a host check.
+- `review_course(draft)` → findings `{ severity, topic, message, fix?, status, note }`.
+- `fix_custom_course_finding(brief, draft, finding)` → a `DraftPatch` (`note`, `header`, `topics`, `remove`, `order`) that `class_builder::apply_patch` folds into the draft; a patch that leaves the draft worse against the validator goes back once with the reasons and is dropped if still worse.
+- `write_course_questions(draft)` → per-topic four-choice questions with a cited source, held to `validate_generated_quiz` plus a host check.
 
 Each call is announced in the execution feed with its own run so the Logs page shows it.
 
@@ -94,7 +100,9 @@ Each call is announced in the execution feed with its own run so the Logs page s
 
 ### 2.6 Commands
 
-`get_custom_course_draft`, `save_custom_course_draft`, `draft_custom_course` (tutor), `review_custom_course` (tutor), `verify_custom_course_sources`, `publish_custom_course`, `export_custom_course`, `import_custom_course`, `delete_custom_course` (draft only; a published course with history is retired, not deleted).
+`get_custom_course_draft`, `save_custom_course_draft`, `draft_custom_course` (tutor), `review_custom_course` (tutor), `fix_custom_course_finding` (tutor), `resolve_custom_course_finding` (fixed by hand, dismissed with a reason, or reopened), `verify_custom_course_sources`, `accept_custom_course_source`, `mark_custom_course_read`, `publish_custom_course`, `export_custom_course`, `import_custom_course`, `delete_custom_course` (draft only; a published course with history is retired, not deleted).
+
+The view carries `checks`: whether the review exists and is current, how many findings are open, whether the sources were fetched, how many were added since or are unreachable and not accepted, whether the read-through is confirmed, and `blockers`, the ordered reasons publishing is refused. The marks behind it (the draft the tutor last read, the draft the learner confirmed) are in `custom_courses.checks_json` (migration v15).
 
 ### 2.7 The question bank (done)
 

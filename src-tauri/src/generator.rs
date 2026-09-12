@@ -288,7 +288,7 @@ impl FailedArea {
             ("", "") => "the missed question".to_string(),
             (section, "") => section.to_string(),
             ("", objective) => objective.to_string(),
-            (section, objective) => format!("{section} — {objective}"),
+            (section, objective) => format!("{section}: {objective}"),
         }
     }
 }
@@ -304,7 +304,7 @@ fn format_targeting(failed_areas: &[FailedArea]) -> String {
         .collect::<Vec<_>>()
         .join("\n");
     format!(
-        "- The student just missed these exact learning objectives from the previous round. EVERY question this round must test one of them, using a fresh scenario or example — never a reworded repeat of the missed question. Do not write questions about any other part of the course this round.\nMissed objectives to target:\n{list}"
+        "- The student just missed these exact learning objectives from the previous round. EVERY question this round must test one of them, using a fresh scenario or example, never a reworded repeat of the missed question. Do not write questions about any other part of the course this round.\nMissed objectives to target:\n{list}"
     )
 }
 
@@ -409,6 +409,18 @@ pub fn validate_generated_quiz(questions: &[GeneratedQuestion]) -> std::result::
             ));
         }
     }
+    let prose: String = questions
+        .iter()
+        .flat_map(|question| {
+            [question.prompt.as_str(), question.explanation.as_str()]
+                .into_iter()
+                .chain(question.choices.iter().flatten().map(String::as_str))
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    if let Some(reason) = crate::prose::objection(&prose) {
+        return Err(format!("quiz {reason}"));
+    }
     Ok(())
 }
 
@@ -488,7 +500,7 @@ impl LessonBudget {
         let depth = self.depth_minutes();
         let plan = self.plan();
         format!(
-            "LENGTH AND PACE FOR THIS SESSION (this overrides the general figures above): the learner has {depth} minutes in total — about {} to read, {} to practise and {} to answer the check. Write {low}-{high} words of point-form Markdown; a deterministic gate rejects anything below {} words or above {} words and scales every section minimum by {}%. The reading hints under the headings must add up to about {} minutes, and the practical exercise must fit inside {} minutes. Reach the length through substance — a further worked trace, a fuller practical, a production decision with its evidence — never through restatement, and never past the ceiling.",
+            "LENGTH AND PACE FOR THIS SESSION (this overrides the general figures above): the learner has {depth} minutes in total, about {} to read, {} to practise and {} to answer the check. Write {low}-{high} words of point-form Markdown; a deterministic gate rejects anything below {} words or above {} words and scales every section minimum by {}%. The reading hints under the headings must add up to about {} minutes, and the practical exercise must fit inside {} minutes. Reach the length through substance, a further worked trace, a fuller practical, a production decision with its evidence, never through restatement, and never past the ceiling.",
             plan.learn_minutes,
             plan.practice_minutes,
             plan.check_minutes,
@@ -842,7 +854,7 @@ fn course_depth_report(markdown: &str, budget: LessonBudget) -> String {
                     Some(shortfall) => format!("SHORT by about {shortfall} words"),
                 };
                 lines.push(format!(
-                    "- `## {}`: {count} words, needs {minimum} — {verdict}",
+                    "- `## {}`: {count} words, needs {minimum}, {verdict}",
                     REQUIRED_COURSE_SECTION_TITLES[index]
                 ));
             }
@@ -905,7 +917,7 @@ fn validate_course_body(
     let max_words = budget.max_words();
     if word_count > max_words {
         return Err(format!(
-            "course is too long: {word_count} words; at most {max_words} fit the reading time of a {}-minute session — condense to point form and cut restatement",
+            "course is too long: {word_count} words; at most {max_words} fit the reading time of a {}-minute session, condense to point form and cut restatement",
             budget.depth_minutes()
         ));
     }
@@ -921,8 +933,11 @@ fn validate_course_body(
     let diagrams = crate::lesson_shape::diagram_count(&course.markdown);
     if diagrams < MIN_COURSE_DIAGRAMS {
         return Err(format!(
-            "course has {diagrams} mermaid diagram(s); at least {MIN_COURSE_DIAGRAMS} are required — picture the mental model and the production scenario"
+            "course has {diagrams} mermaid diagram(s); at least {MIN_COURSE_DIAGRAMS} are required: picture the mental model and the production scenario"
         ));
+    }
+    if let Some(reason) = crate::prose::objection(&course.markdown) {
+        return Err(reason);
     }
     Ok(())
 }
@@ -939,7 +954,7 @@ fn is_hint_failure(reason: &str) -> bool {
 
 /// The gate-relevant conventions, restated for every correction prompt so a
 /// rewrite aimed at one defect does not undo another.
-const LESSON_SHAPE_CONTRACT: &str = "SHAPE CONTRACT (a deterministic gate checks all of it):\n- Point form: every section opens with a one-line lede, then bullets of one idea each (at most about 25 words a bullet, at most six bullets a list); no paragraph over three sentences.\n- Reading hint: the first line under every `##` heading is an italic hint like `*~2 min · What to look for, and whether to skim.*` — the time a careful reader needs and what the section is for.\n- Callouts: use `> **Key idea:**`, `> **Watch out:**`, `> **Try it:**`, `> **Example:**` and `> **Decision:**` blockquotes for the points that matter most; at least one Key idea in each of Core mechanics, Mental model and Production architecture lens.\n- Diagrams: at least two fenced ```mermaid blocks (flowchart, sequenceDiagram or stateDiagram-v2 only; quoted labels; under twelve nodes), each followed by a one-sentence caption.\n- The lesson stays inside its word window; the analogy sentence beginning `Where the analogy breaks:` stays in The simple version.";
+const LESSON_SHAPE_CONTRACT: &str = "SHAPE CONTRACT (a deterministic gate checks all of it):\n- Point form: every section opens with a one-line lede, then bullets of one idea each (at most about 25 words a bullet, at most six bullets a list); no paragraph over three sentences.\n- Reading hint: the first line under every `##` heading is an italic hint like `*~2 min · What to look for, and whether to skim.*`, the time a careful reader needs and what the section is for.\n- Callouts: use `> **Key idea:**`, `> **Watch out:**`, `> **Try it:**`, `> **Example:**` and `> **Decision:**` blockquotes for the points that matter most; at least one Key idea in each of Core mechanics, Mental model and Production architecture lens.\n- Diagrams: at least two fenced ```mermaid blocks (flowchart, sequenceDiagram or stateDiagram-v2 only; quoted labels; under twelve nodes), each followed by a one-sentence caption.\n- The lesson stays inside its word window; the analogy sentence beginning `Where the analogy breaks:` stays in The simple version.";
 
 fn validate_course_metadata(course: &GeneratedCourse) -> std::result::Result<(), String> {
     if course.title.trim().is_empty() {
@@ -1179,7 +1194,7 @@ const CHAT_HISTORY_TURNS: usize = 8;
 
 fn format_chat_history(history: &[ChatTurn]) -> String {
     if history.is_empty() {
-        return "(none yet — this is the first question)".to_string();
+        return "(none yet, this is the first question)".to_string();
     }
     history
         .iter()
@@ -1243,6 +1258,9 @@ fn validate_chat_reply(
         if !unique.insert(follow_up.to_lowercase()) {
             return Err("follow-up questions must be distinct".into());
         }
+    }
+    if let Some(reason) = crate::prose::objection(&reply.answer) {
+        return Err(reason);
     }
     Ok(())
 }
@@ -1458,6 +1476,9 @@ impl Generator {
             } else if is_hint_failure(&reason) {
                 self.write_section_hints(&course, agent, custom_bin, model, context, budget)
                     .await?
+            } else if crate::prose::is_objection(&reason) {
+                self.clean_course_prose(&course, agent, custom_bin, model, context)
+                    .await?
             } else {
                 let prompt = format!(
                     "Correct only this lesson's Markdown. Return plain Markdown, never JSON.\n\nCOURSE_CONTEXT: {context}\nQUALITY_GATE_FAILURE: {reason}\nREQUIRED_SECTION_ORDER (exact headings, no numbering or subtitles):\n{}\nDEPTH REQUIREMENTS:\n{}\n{LESSON_SHAPE_CONTRACT}\n\nPreserve the topic, worked examples, code, citations and section depth. Use the canonical section order. In The simple version include an explicit sentence beginning `Where the analogy breaks:`. Do not add assessment metadata.\n\nLESSON_BODY:\n{}",
@@ -1520,7 +1541,7 @@ impl Generator {
                 "You are deepening one section of a course you already wrote. Rewrite only this \
                  section.\n\nCOURSE_CONTEXT: {context}\nCOURSE_TITLE: {}\nSECTION: ## {title}\n\
                  CURRENT LENGTH: {words} words\nREQUIRED LENGTH: between {goal} and {ceiling} \
-                 words — the whole course is read in one {session_minutes}-minute session, so staying inside \
+                 words, the whole course is read in one {session_minutes}-minute session, so staying inside \
                  that range matters as much as reaching it.\n\n\
                  Rewrite this section so it reaches the required length through substance a reader \
                  could act on: the next step of the mechanism, a worked trace with the observation \
@@ -1529,7 +1550,7 @@ impl Generator {
                  shape: the italic reading-hint line first, then a lede and bullets of one idea each, \
                  with `> **Key idea:**`-style callouts and any mermaid diagram kept. Keep every inline \
                  source citation link that is already there and keep the code that earns its place. \
-                 Do not restate other sections, do not add a summary, and do not pad — padding is \
+                 Do not restate other sections, do not add a summary, and do not pad, padding is \
                  measured and rejected.{}\n\nDo not output the `## {title}` heading itself and do \
                  not write any other section.\n\nCURRENT_SECTION:\n{}\n\nCOURSE_BODY_FOR_CONTEXT:\n{}",
                 course.title,
@@ -1567,6 +1588,73 @@ impl Generator {
         Ok(rebuild_course_body(&preamble, &sections))
     }
 
+    /// Rewrite only the sections that read like a machine wrote them, one
+    /// prose call each, so the rest of the lesson stays word for word. The
+    /// call is told exactly which expressions to replace.
+    async fn clean_course_prose(
+        &self,
+        course: &GeneratedCourse,
+        agent: &str,
+        custom_bin: &str,
+        model: &str,
+        context: &str,
+    ) -> Result<String> {
+        let (preamble, mut sections) = split_course_sections(&course.markdown);
+        let mut cleaned = 0;
+        for index in 0..sections.len() {
+            let Some(reason) = crate::prose::objection(&sections[index]).or_else(|| {
+                // A soft tell or two in every section adds up to a failing
+                // lesson; each section with any tell is rewritten.
+                (!crate::prose::hits(&sections[index]).is_empty())
+                    .then(|| "stock words are spread through the section".to_string())
+            }) else {
+                continue;
+            };
+            let title = REQUIRED_COURSE_SECTION_TITLES[index];
+            let names = crate::prose::hits(&sections[index])
+                .iter()
+                .map(|hit| format!("\"{}\"", hit.name.trim_start_matches('^')))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let prompt = format!(
+                "You are editing one section of a lesson you already wrote so that it reads as a \
+                 person wrote it. Rewrite only this section.\n\nCOURSE_CONTEXT: {context}\n\
+                 SECTION: ## {title}\nWHAT THE CHECK FOUND: {reason}\nEXPRESSIONS TO REPLACE: {names}\n\n\
+                 {}\n\nReplace each listed expression with plain, specific words, or delete the \
+                 sentence when it says nothing. Change nothing else: keep every fact, number, \
+                 command, code block, citation link, callout, diagram and the italic reading-hint \
+                 line exactly as they are. Do not output the `## {title}` heading and do not write \
+                 any other section.\n\nCURRENT_SECTION:\n{}",
+                crate::prose::CONTRACT,
+                sections[index].trim()
+            );
+            let rewritten = crate::lesson_shape::keep_hint(
+                &sections[index],
+                &extract_single_section(
+                    &self
+                        .run_prose_for(agent, custom_bin, &prompt, Duration::from_secs(300), model)
+                        .await?,
+                ),
+            );
+            // A rewrite that lost most of the section is a regression, not a fix.
+            let before = sections[index].split_whitespace().count();
+            let after = rewritten.split_whitespace().count();
+            if after * 10 >= before * 7 {
+                sections[index] = rewritten;
+                cleaned += 1;
+            }
+        }
+        if cleaned == 0 {
+            return Err(GenError::Quality(format!(
+                "{context} still reads like a machine wrote it: no section came back rewritten"
+            )));
+        }
+        self.log(format!(
+            "{agent} rewrote {cleaned} section(s) in plain words"
+        ));
+        Ok(rebuild_course_body(&preamble, &sections))
+    }
+
     /// Bring a lesson that overran its session back inside its window, whole,
     /// so the cuts fall where the restatement is rather than section by
     /// section. Substance stays; the words it is said in go.
@@ -1585,14 +1673,14 @@ impl Generator {
         let prompt = format!(
             "Condense this lesson without losing substance. Return plain Markdown, never JSON.\n\n\
              COURSE_CONTEXT: {context}\nCURRENT LENGTH: {words} words\nREQUIRED LENGTH: between \
-             {low} and {high} words — the learner reads it in about {} minutes of a {}-minute \
+             {low} and {high} words, the learner reads it in about {} minutes of a {}-minute \
              session, so the ceiling matters as much as the floor.\nSECTION FLOORS:\n{}\n\
              {LESSON_SHAPE_CONTRACT}\n\nKeep every `##` heading in its order, every section's \
              opening hint line, every mermaid diagram with its caption, the code that earns its \
              place and every inline citation link. Turn paragraphs into bullets of one idea each, \
              delete transitions, restatements and summaries that repeat another section, and cut \
              worked examples to the step that carries the point. Do not drop a mechanism, a \
-             decision, a failure mode or its evidence — say it in fewer words. Keep the sentence \
+             decision, a failure mode or its evidence, say it in fewer words. Keep the sentence \
              beginning exactly `Where the analogy breaks:` in The simple version. Do not add \
              assessment metadata.\n\nLESSON_BODY:\n{}",
             plan.learn_minutes,
@@ -1855,10 +1943,10 @@ impl Generator {
             ));
         }
         if let Some(reason) = &gathered.search_error {
-            self.log(format!("research: web search failed — {reason}"));
+            self.log(format!("research: web search failed, {reason}"));
         }
         for (url, reason) in &gathered.skipped {
-            self.log(format!("research: skipped {url} — {reason}"));
+            self.log(format!("research: skipped {url}, {reason}"));
         }
         for (seed, mirror) in &gathered.substituted {
             self.log(format!(
@@ -1868,12 +1956,12 @@ impl Generator {
         if gathered.sources.is_empty() {
             self.log(
                 "research: no primary sources could be retrieved; teaching without a verified \
-                 reading list — the lesson will carry a note saying so"
+                 reading list, the lesson will carry a note saying so"
                     .to_string(),
             );
         } else {
             self.log(format!(
-                "research: retrieved {} primary source(s) — {}",
+                "research: retrieved {} primary source(s), {}",
                 gathered.sources.len(),
                 gathered
                     .sources
@@ -2712,10 +2800,11 @@ CURATED_LESSON:
         let fallback = self.runner.fallback(custom_bin)?;
         let result = self.runner.run(&request, fallback.as_ref()).await?;
         let actual = result.runner.legacy_id();
-        let parsed = match parse_json_payload::<T>(&result.text) {
+        let text = crate::prose::scrub(&result.text);
+        let parsed = match parse_json_payload::<T>(&text) {
             Ok(parsed) => parsed,
             Err(_) => {
-                self.repair_json_for(actual, custom_bin, &result.text, &result.model, prompt)
+                self.repair_json_for(actual, custom_bin, &text, &result.model, prompt)
                     .await?
             }
         };
@@ -2771,12 +2860,15 @@ CURATED_LESSON:
         Ok(strip_markdown_fence(&raw))
     }
 
+    /// Every answer is scrubbed of the dashes a model reaches for before
+    /// anything reads it, outside code; the rest of the writing rules are
+    /// held by the gates that check each kind of text.
     async fn run_wire_for(&self, prompt: &str, call: ProviderCall<'_>) -> Result<String> {
         let request = self.provider_request(prompt, call)?;
         self.runner
             .run(&request, None)
             .await
-            .map(|result| result.text)
+            .map(|result| crate::prose::scrub(&result.text))
     }
 
     fn provider_request(
@@ -2792,12 +2884,17 @@ CURATED_LESSON:
             custom_command: call.custom_bin.into(),
         };
         let mut request = crate::agents::RunRequest::new(route, prompt);
+        // The writing rules ride on every call the desk makes, after the
+        // purpose's own instructions where it has them.
+        let mut system = String::new();
         if matches!(
             self.purpose.as_str(),
             "lesson" | "quality-review" | "json-repair"
         ) {
-            request.system = Some("You are writing teaching material for an application. Return only the requested text or JSON. Use the source excerpts supplied in the request; qualify claims they do not support. Describe experiments and exercises for the learner to perform, but do not execute them, create files, delegate tasks, or start another research workflow.".into());
+            system.push_str("You are writing teaching material for an application. Return only the requested text or JSON. Use the source excerpts supplied in the request; qualify claims they do not support. Describe experiments and exercises for the learner to perform, but do not execute them, create files, delegate tasks, or start another research workflow.\n\n");
         }
+        system.push_str(crate::prose::CONTRACT);
+        request.system = Some(system);
         request.json = matches!(call.wire, Wire::Json);
         if request.json {
             request.output_schema = self.output_schema.clone();
@@ -2955,7 +3052,7 @@ mod targeting_tests {
         };
         assert_eq!(
             area.label(),
-            "Core mechanics — microtasks drain before the next macrotask"
+            "Core mechanics: microtasks drain before the next macrotask"
         );
     }
 
@@ -4055,7 +4152,7 @@ mod chat_tests {
     fn empty_history_reads_as_first_question() {
         assert_eq!(
             format_chat_history(&[]),
-            "(none yet — this is the first question)"
+            "(none yet, this is the first question)"
         );
     }
 

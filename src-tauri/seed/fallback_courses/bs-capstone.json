@@ -101,7 +101,7 @@
       "prompt": "Describe the five tests test.sh must run and what each one proves about scheduled operation.",
       "kind": "free",
       "choices": null,
-      "correct_answer": "Success on the fixtures proves the report format and totals; --input missing exiting 2 proves usage errors are reported; an unwritable output directory exiting 1 with no partial file proves runtime failures are clean; a second identical run exiting 0 with an unchanged report proves idempotence; killing the tool mid-run and finding no temporary file proves the cleanup trap works. Together they cover failure paths, repeat runs and interruption, not only the happy path.",
+      "correct_answer": "Success on the fixtures proves the report format and totals; --input missing exiting 2 proves usage errors are reported; an unwritable output directory exiting 1 with no partial file proves runtime failures are clean; a second identical run exiting 0 with an unchanged report proves idempotence; killing the tool mid-run and finding no temporary file proves the cleanup trap works. Together they cover failure paths, repeat runs and interruption as well as the happy path.",
       "explanation": "Scheduled automation is judged by its failure and repeat behavior.",
       "section": "Tests first",
       "learning_objective": "Design a test suite for operational behavior"

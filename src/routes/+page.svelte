@@ -11,6 +11,7 @@
   import ClassroomLesson from '../lib/screens/ClassroomLesson.svelte';
   import Dashboard from '../lib/screens/Dashboard.svelte';
   import EscapeHatch from '../lib/components/EscapeHatch.svelte';
+  import DialogHost from '../lib/components/DialogHost.svelte';
 
   const isBlanker =
     typeof location !== 'undefined' && new URLSearchParams(location.search).has('blanker');
@@ -55,6 +56,7 @@
   {#if showEscapeHatch}
     <EscapeHatch />
   {/if}
+  <DialogHost />
 
   {#if app.notice}
     <div class="notice-toast" role="status">

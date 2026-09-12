@@ -274,7 +274,7 @@
             : saveStatus === 'saved'
               ? 'saved'
               : saveStatus === 'error'
-                ? 'save failed — recovery copy retained'
+                ? 'save failed; recovery copy retained'
                 : draftWords > 0 ? `${draftWords} words` : ''}
         </span>
         {#if saveStatus === 'error'}

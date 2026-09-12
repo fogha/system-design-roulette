@@ -29,11 +29,19 @@ for (const course of manifest.courses) {
   fingerprints[course.course_id] = createHash('sha256').update(JSON.stringify(canonical({ course, curriculum, prompt, reference_lessons: references }))).digest('hex');
 }
 generated += `export const COURSE_FINGERPRINTS: Record<FocusArea | LanguageId, string> = ${JSON.stringify(fingerprints, null, 2)};\n`;
-const destination = new URL('../src/lib/catalog.generated.ts', import.meta.url);
-if (process.argv.includes('--check')) {
-  if (await readFile(destination, 'utf8').catch(() => '') !== generated) {
-    throw new Error(`Catalog types or curriculum fingerprints are stale: run npm run catalog:generate (${fileURLToPath(destination)})`);
+// The writing check's catalogue, so the editor's mirror reads for the same tells the desk does.
+const prose = JSON.parse(await readFile(new URL('../src-tauri/seed/prose-tells.json', import.meta.url), 'utf8'));
+const proseGenerated = `// Generated from src-tauri/seed/prose-tells.json. Run npm run catalog:generate.\nexport const PROSE_SOFT_LIMIT = ${prose.soft_limit};\nexport const PROSE_TELLS: readonly { pattern: string; hard: boolean }[] = ${JSON.stringify(prose.tells)};\n`;
+const outputs = [
+  [new URL('../src/lib/catalog.generated.ts', import.meta.url), generated, 'Catalog types or curriculum fingerprints'],
+  [new URL('../src/lib/prose.generated.ts', import.meta.url), proseGenerated, 'The writing check catalogue'],
+];
+for (const [destination, content, what] of outputs) {
+  if (process.argv.includes('--check')) {
+    if (await readFile(destination, 'utf8').catch(() => '') !== content) {
+      throw new Error(`${what} are stale: run npm run catalog:generate (${fileURLToPath(destination)})`);
+    }
+  } else {
+    await writeFile(destination, content);
   }
-} else {
-  await writeFile(destination, generated);
 }

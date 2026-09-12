@@ -144,7 +144,7 @@ export function mockListen(name: string, handler: Handler): () => void {
 
 const COURSE_MD = `## Why this matters
 
-Every async API in JavaScript — \`fetch\`, \`setTimeout\`, DOM events, promises — funnels through the same scheduling machinery. Misunderstanding which queue runs when is how you ship subtle ordering bugs, starvation under load, and "it works in the test but hangs in prod" failures. The event loop is the mental model that ties runtime, browser, and Node together.
+Every async API in JavaScript, \`fetch\`, \`setTimeout\`, DOM events, promises, funnels through the same scheduling machinery. Misunderstanding which queue runs when is how you ship subtle ordering bugs, starvation under load, and "it works in the test but hangs in prod" failures. The event loop is the mental model that ties runtime, browser, and Node together.
 
 ## The simple version
 
@@ -159,13 +159,13 @@ flowchart LR
   D --> E[Take next macrotask]
 \`\`\`
 
-Where this breaks down: a real chef eventually moves on regardless. The event loop does not — a microtask that keeps enqueueing more microtasks can starve macrotasks (and rendering) indefinitely.
+Where this breaks down: a real chef eventually moves on regardless. The event loop does not, a microtask that keeps enqueueing more microtasks can starve macrotasks (and rendering) indefinitely.
 
 ## Core mechanics
 
 ### Macrotasks vs microtasks
 
-The event loop drains **one macrotask** (timer callback, I/O completion, user event), then **all pending microtasks** (promise reactions, \`queueMicrotask\`), then may render. Microtasks always run before the next macrotask — so a chain of \`Promise.then\` can starve timers if you recurse without yielding.
+The event loop drains **one macrotask** (timer callback, I/O completion, user event), then **all pending microtasks** (promise reactions, \`queueMicrotask\`), then may render. Microtasks always run before the next macrotask, so a chain of \`Promise.then\` can starve timers if you recurse without yielding.
 
 \`\`\`js
 console.log('sync');
@@ -176,7 +176,7 @@ Promise.resolve().then(() => console.log('micro'));
 
 ### The call stack and host APIs
 
-JS runs on a single call stack per agent. Host environments enqueue work: the timer thread schedules macrotasks; the network layer resolves fetch promises as microtasks. Your code never "blocks the loop" with promises — it blocks with **synchronous** CPU work on the stack.
+JS runs on a single call stack per agent. Host environments enqueue work: the timer thread schedules macrotasks; the network layer resolves fetch promises as microtasks. Your code never "blocks the loop" with promises, it blocks with **synchronous** CPU work on the stack.
 
 ### \`await\` and continuation scheduling
 
@@ -185,12 +185,12 @@ JS runs on a single call stack per agent. Host environments enqueue work: the ti
 ## Trade-offs and failure modes
 
 - Microtask storms: unbounded \`queueMicrotask\` recursion prevents paint and timer delivery.
-- \`setTimeout(fn, 0)\` is not "run next" — it is "run after current macrotask **and** all microtasks."
+- \`setTimeout(fn, 0)\` is not "run next", it is "run after current macrotask **and** all microtasks."
 - In browsers, \`requestAnimationFrame\` runs before paint; confusing it with microtasks breaks frame-aligned work.
 
 ## Interview framing
 
-State the loop as: run script → macrotask → microtask checkpoint (repeat). Give the sync/micro/macro log ordering example, then explain starvation. Close with where \`await\` schedules — microtask, same turn as the resolving promise.`;
+State the loop as: run script → macrotask → microtask checkpoint (repeat). Give the sync/micro/macro log ordering example, then explain starvation. Close with where \`await\` schedules, microtask, same turn as the resolving promise.`;
 
 const MOCK_COURSE_ID = 42;
 
@@ -206,8 +206,8 @@ const MOCK_EXERCISE: Omit<ExerciseView, 'draft'> = {
   deliverable:
     'A numbered console log with your own annotation (macrotask/microtask) next to each line, plus one sentence on where the nested .then() landed.',
   hints: [
-    'Run the sync lines first on paper — what fires before any callback gets a chance to run at all?',
-    'Both microtask callbacks are on the SAME queue as any other promise reaction — they drain completely before the timer fires.',
+    'Run the sync lines first on paper, what fires before any callback gets a chance to run at all?',
+    'Both microtask callbacks are on the SAME queue as any other promise reaction, they drain completely before the timer fires.',
     'The second .then() is only enqueued once the first one runs, so it lands in a later microtask checkpoint, not the same one.',
   ],
   completed: false,
@@ -793,6 +793,10 @@ export const mockApi = {
   verifyCustomCourseSources: previewCustom.verify,
   writeCustomCourseBank: previewCustom.writeBank,
   voidCustomQuestion: previewCustom.voidQuestion,
+  fixCustomCourseFinding: previewCustom.fixFinding,
+  resolveCustomCourseFinding: previewCustom.resolveFinding,
+  acceptCustomCourseSource: previewCustom.acceptSource,
+  markCustomCourseRead: previewCustom.markRead,
   publishCustomCourse: previewCustom.publish,
   deleteCustomCourseDraft: previewCustom.remove,
   exportCustomCourse: previewCustom.export,
@@ -1256,7 +1260,7 @@ export const mockApi = {
     thread.push({
       role: 'assistant',
       content:
-        "The course's mental model: the loop drains every pending microtask completely before it ever looks at the next macrotask. Think of it like a chef who finishes every add-on ticket for the current dish before glancing at the next order — that ordering is what the diagram in \"The simple version\" is showing.",
+        "The course's mental model: the loop drains every pending microtask completely before it ever looks at the next macrotask. Think of it like a chef who finishes every add-on ticket for the current dish before glancing at the next order, that ordering is what the diagram in \"The simple version\" is showing.",
       section: 'The precise model',
       follow_ups: [
         'Can you trace one complete event-loop turn?',

@@ -140,7 +140,7 @@ pub fn plan(
             format!("no completed modules to revisit in {}", program.label)
         } else {
             format!(
-                "every module in {} is completed — use revisit or pick another subject",
+                "every module in {} is completed; use revisit or pick another subject",
                 program.label
             )
         }

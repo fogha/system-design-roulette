@@ -13,7 +13,7 @@
       name: 'ADVISORY',
       tag: 'honor system',
       tone: 'teal',
-      desc: 'The window comes to front and stays on top, but nothing is blocked — you can switch apps, the session just stays owed and waits. For people who only need a nudge.',
+      desc: 'The window comes to front and stays on top, but nothing is blocked: you can switch apps, the session just stays owed and waits. For people who only need a nudge.',
       blocks: 'blocks: nothing',
     },
     {
@@ -21,7 +21,7 @@
       name: 'FIRM',
       tag: 'level 1000 · escapable',
       tone: 'amber',
-      desc: 'Full-screen above the menu bar, focus snaps back every 300ms, other displays sealed by the chaos lab, media paused and muted. Switching away is useless — but Force Quit and ⌘⌥⎋ still work if something goes wrong.',
+      desc: 'Full-screen above the menu bar, focus snaps back every 300ms, other displays sealed by the chaos lab, media paused and muted. Switching away is useless, but Force Quit and ⌘⌥⎋ still work if something goes wrong.',
       blocks: 'blocks: Dock, menu bar · keeps: Force Quit',
     },
     {

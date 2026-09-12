@@ -43,7 +43,7 @@
       <div class="hatch-head mono">
         <span class="bg-tag">BREAK GLASS</span>
         <span class="hatch-warn">
-          circuit breaker — releases the lock: a focused class lesson is paused with its work
+          circuit breaker: releases the lock: a focused class lesson is paused with its work
           kept, an in-progress daily session is marked skipped
         </span>
       </div>
@@ -53,7 +53,7 @@
       <input
         class="mono"
         type="text"
-        placeholder="type the phrase above exactly — paste disabled"
+        placeholder="type the phrase above exactly; paste disabled"
         bind:value={typed}
         onpaste={noPaste}
         onkeydown={(e) => e.key === 'Enter' && attempt()}

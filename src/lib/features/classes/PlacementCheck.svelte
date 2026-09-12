@@ -7,6 +7,7 @@
   import NodeCard from '../../components/NodeCard.svelte';
   import ChoiceList from '../../components/ChoiceList.svelte';
   import Markdown from '../../components/Markdown.svelte';
+  import { promptDialog } from '../../components/dialog.svelte';
   import { ArrowLeft, Compass, Check, ArrowRight } from 'lucide-svelte';
   let { draft, onclose, onrecommend, embedded = false }: { draft: EnrollmentDraft; onclose: () => void; onrecommend: () => void; embedded?: boolean } = $props();
   let check = $state<DiagnosticView | null>(null);
@@ -24,7 +25,8 @@
   const custom = $derived(draft.course.course_id.startsWith('custom-'));
   let disputed = $state<string[]>([]);
   async function dispute(questionId: string) {
-    const reason = prompt('What is wrong with this key? (optional, kept with the question)') ?? '';
+    const reason = await promptDialog('This key is wrong?', { label: 'What is wrong with it', placeholder: 'kept with the question' }, { message: 'The question is set aside and left out of every check until the bank is written again.', confirm: 'Set it aside' });
+    if (reason === null) return;
     try { await api.voidCustomQuestion(draft.course.course_id, questionId, reason); disputed = [...disputed, questionId]; }
     catch (cause) { error = String(cause); }
   }

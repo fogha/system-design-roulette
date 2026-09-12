@@ -4,8 +4,9 @@
  * validator rules the native side holds a draft to, so the editor behaves
  * the same way before the desktop app is attached.
  */
-import type { ClassExport, CourseBrief, CourseDraft, CustomCourseSummary, CustomCourseView, DraftIssue, DraftTopic, QuestionBank, ReviewFinding, SourceCheck } from './ipc';
+import type { ClassExport, CourseBrief, CourseChecks, CourseDraft, CustomCourseSummary, CustomCourseView, DraftIssue, DraftTopic, QuestionBank, ReviewFinding, SourceCheck } from './ipc';
 import { registerCourses, type CourseDefinition } from './catalog';
+import { OBJECTION, proseReport } from './prose';
 
 export const STAGES: { id: DraftTopic['curriculum']['phase']; label: string }[] = [
   { id: 'foundations', label: 'Foundations' },
@@ -35,6 +36,7 @@ export function validateDraft(draft: CourseDraft): DraftIssue[] {
   if (words(draft.outcome) < 15) issue('outcome', 'the outcome names what you will be able to make or do at the end; say it in at least fifteen words');
   if (words(draft.context) < 15) issue('context', 'the context tells the tutor how this subject should be taught; at least fifteen words');
   if (words(draft.environment) < 3) issue('environment', 'name the working environment');
+  for (const field of ['summary', 'outcome', 'context'] as const) { const found = proseReport(draft[field]); if (found) issue(field, `${OBJECTION}${found}`); }
   if (!draft.source_hosts.length) issue('source_hosts', 'add at least one documentation host');
   for (const host of draft.source_hosts) if (!host.trim() || /[\/ ]/.test(host) || !host.includes('.')) issue('source_hosts', `${JSON.stringify(host)} is not a hostname`);
   if (draft.entry_points.map((e) => e.id).join(',') !== STAGES.map((s) => s.id).join(',')) issue('entry_points', 'the four stages must be foundations, mechanisms, production and synthesis, in that order');
@@ -59,6 +61,8 @@ export function validateDraft(draft: CourseDraft): DraftIssue[] {
     if (words(b.evidence) < 6) issue(at, 'observable evidence is too vague');
     if (words(b.artifact) < 6) issue(at, 'cumulative artifact is too vague');
     if (b.primary_sources.length < 2 || b.primary_sources.some((s) => !/^https?:\/\//.test(s))) issue(at, 'at least two absolute primary-source URLs are required');
+    const found = proseReport([topic.title, b.learner_outcome, b.production_scenario, b.evidence, b.artifact, ...b.mechanisms, ...b.misconceptions].join('\n'));
+    if (found) issue(at, `${OBJECTION}${found}`);
     for (const p of topic.prereqs) {
       const earlier = index.get(p);
       if (!earlier) issue(at, `prerequisite ${p} is not a topic`);
@@ -125,18 +129,52 @@ export function cannedDraft(id: string, brief: CourseBrief): CourseDraft {
   };
 }
 
-interface Stored extends CustomCourseView { text?: string }
+/** What the desk stores: the review and the fetch are absent until run. */
+interface Stored extends CustomCourseView { reviewed: boolean; fetched: boolean; marks: { review_hash: string; read_hash: string } }
 const stored = new Map<string, Stored>();
+
+/** The stored draft, hashed the cheap way; only equality matters here. */
+function draftHash(draft: CourseDraft): string {
+  const text = JSON.stringify(draft);
+  let h = 0;
+  for (let i = 0; i < text.length; i++) h = (Math.imul(h, 31) + text.charCodeAt(i)) | 0;
+  return `${text.length}-${h >>> 0}`;
+}
+
+/** Mirror of `domain::custom::checks_of`: what publishing still needs, in order. */
+export function checksOf(item: { draft: CourseDraft; review: ReviewFinding[] | null; sources: SourceCheck[] | null; marks: Stored['marks'] }, issues: DraftIssue[]): CourseChecks {
+  const hash = draftHash(item.draft);
+  const urls = new Set(item.draft.topics.flatMap((t) => t.curriculum.primary_sources));
+  const checked = new Set((item.sources ?? []).map((s) => s.url));
+  const unchecked = [...urls].filter((u) => !checked.has(u)).length;
+  const pending = new Set((item.sources ?? []).filter((s) => s.state !== 'reachable' && !s.accepted && urls.has(s.url)).map((s) => s.url)).size;
+  const open = (item.review ?? []).filter((f) => f.status === 'open').length;
+  const checks: CourseChecks = { draft_hash: hash, reviewed: item.review !== null, review_current: item.review !== null && item.marks.review_hash === hash, open_findings: open, fetched: item.sources !== null, unchecked_sources: unchecked, pending_sources: pending, read: item.marks.read_hash === hash, blockers: [] };
+  const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
+  if (issues.length) checks.blockers.push(`${issues.length} ${plural(issues.length, 'thing', 'things')} to fix in the editor`);
+  if (!checks.reviewed) checks.blockers.push('the tutor has not read the draft back');
+  else if (open) checks.blockers.push(`${open} ${plural(open, 'finding', 'findings')} from the review still open`);
+  if (!checks.fetched) checks.blockers.push('the sources have not been fetched');
+  else {
+    if (unchecked) checks.blockers.push(`${unchecked} ${plural(unchecked, 'source', 'sources')} added since the last fetch`);
+    if (pending) checks.blockers.push(`${pending} unreachable ${plural(pending, 'source', 'sources')} neither replaced nor accepted`);
+  }
+  if (!checks.read) checks.blockers.push('your own read-through of this version is not confirmed');
+  return checks;
+}
 
 /** The mock desk registers a program for a published class through this. */
 let publishHook: ((course: CourseDefinition) => void) | null = null;
 export function onPreviewPublish(hook: (course: CourseDefinition) => void) { publishHook = hook; }
 
 function now() { return new Date().toISOString(); }
+/** Reviews and fetches not yet run are kept as `null` in the store; the view shows them as empty lists. */
 function view(id: string): CustomCourseView {
   const item = stored.get(id);
   if (!item) throw new Error('this class does not exist');
-  return { ...item, issues: validateDraft(item.draft), draft: structuredClone(item.draft), brief: { ...item.brief }, review: [...item.review], sources: [...item.sources], bank: item.bank ? structuredClone(item.bank) : null, working: item.working ?? null };
+  const issues = validateDraft(item.draft);
+  const { marks: _marks, reviewed: _reviewed, fetched: _fetched, ...rest } = item;
+  return { ...rest, issues, checks: checksOf({ draft: item.draft, review: item.reviewed ? item.review : null, sources: item.fetched ? item.sources : null, marks: item.marks }, issues), draft: structuredClone(item.draft), brief: { ...item.brief }, review: item.review.map((f) => ({ ...f })), sources: item.sources.map((s) => ({ ...s })), bank: item.bank ? structuredClone(item.bank) : null, working: item.working ?? null };
 }
 
 function newId(title: string): string {
@@ -153,7 +191,7 @@ export const previewCustom = {
     if (!brief.title.trim()) throw new Error('give the class a title');
     if (words(brief.outcome) < 5) throw new Error('say what you want to be able to do, in a sentence at least');
     const id = newId(brief.title);
-    stored.set(id, { id, version: 0, status: 'draft', origin, brief: { ...brief }, draft: blankDraft(id, brief), issues: [], review: [], sources: [], bank: null, created_at: now(), updated_at: now(), published_at: null });
+    stored.set(id, { id, version: 0, status: 'draft', origin, brief: { ...brief }, draft: blankDraft(id, brief), issues: [], review: [], sources: [], checks: checksOf({ draft: blankDraft(id, brief), review: null, sources: null, marks: { review_hash: '', read_hash: '' } }, []), bank: null, created_at: now(), updated_at: now(), published_at: null, reviewed: false, fetched: false, marks: { review_hash: '', read_hash: '' } });
     return view(id);
   },
   saveBrief: async (id: string, brief: CourseBrief) => { const item = stored.get(id); if (!item) throw new Error('this class does not exist'); item.brief = { ...brief }; item.updated_at = now(); return view(id); },
@@ -168,17 +206,52 @@ export const previewCustom = {
     await new Promise((r) => setTimeout(r, 1200));
     const first = item.draft.topics[0]?.slug ?? '';
     const findings: ReviewFinding[] = [
-      { severity: 'medium', topic: first, message: 'The first topic assumes a toolchain is installed; a learner starting from nothing has no step for that.', fix: 'Add an installation-and-first-run step before it, or fold one into its lesson outcome.' },
-      { severity: 'low', topic: '', message: 'The capstone stage has no elective; a learner who finishes early has nowhere to go.', fix: 'Add one elective topic that extends the capstone.' },
+      { severity: 'medium', topic: first, message: 'The first topic assumes a toolchain is installed; a learner starting from nothing has no step for that.', fix: 'Add an installation-and-first-run step before it, or fold one into its lesson outcome.', status: 'open', note: '' },
+      { severity: 'low', topic: '', message: 'The capstone stage has no elective; a learner who finishes early has nowhere to go.', fix: 'Add one elective topic that extends the capstone.', status: 'open', note: '' },
     ];
-    item.review = findings; item.updated_at = now(); return view(id);
+    item.review = findings; item.marks.review_hash = draftHash(item.draft); item.reviewed = true; item.updated_at = now(); return view(id);
+  },
+  fixFinding: async (id: string, index: number) => {
+    const item = stored.get(id); if (!item) throw new Error('this class does not exist');
+    const finding = item.review[index]; if (!finding) throw new Error('that finding is not in the review');
+    item.working = 'fix';
+    await new Promise((r) => setTimeout(r, 1400));
+    // The preview's tutor makes the smallest change: a prerequisite topic, or an elective.
+    if (finding.topic) {
+      const at = item.draft.topics.findIndex((t) => t.slug === finding.topic);
+      const fresh = { ...blankTopic(item.draft.topics[at]?.curriculum.phase ?? 'foundations'), slug: `${finding.topic}-setup`, title: `Installing the toolchain and running the first program`, category: 'fundamentals' };
+      fresh.curriculum = { ...fresh.curriculum, learner_outcome: 'Install the toolchain, run one program and read the version it prints', mechanisms: ['the toolchain on the path', 'what the first run does'], production_scenario: 'A new machine at work needs the toolchain before anything else can be tried today', misconceptions: ['it is installed already'], evidence: 'The version printed by the tool in a terminal', artifact: 'A note with the install steps that worked', primary_sources: [...(item.draft.topics[at]?.curriculum.primary_sources ?? [])] };
+      item.draft.topics.splice(Math.max(at, 0), 0, fresh);
+      if (at >= 0) item.draft.topics[at + 1].prereqs = [...new Set([...item.draft.topics[at + 1].prereqs, fresh.slug])];
+      finding.note = 'by the tutor: added a setup topic before it';
+    } else {
+      const last = item.draft.topics[item.draft.topics.length - 1];
+      item.draft.topics.push({ ...structuredClone(last), slug: `${last.slug}-extended`, title: `${last.title}, extended`, curriculum: { ...structuredClone(last.curriculum), phase: 'elective', core: false } });
+      finding.note = 'by the tutor: added an elective that extends the capstone';
+    }
+    finding.status = 'fixed'; item.working = null; item.updated_at = now(); return view(id);
+  },
+  resolveFinding: async (id: string, index: number, status: ReviewFinding['status'], note: string) => {
+    const item = stored.get(id); if (!item) throw new Error('this class does not exist');
+    const finding = item.review[index]; if (!finding) throw new Error('that finding is not in the review');
+    finding.status = status; finding.note = note.trim().slice(0, 400); item.updated_at = now(); return view(id);
+  },
+  acceptSource: async (id: string, url: string, accepted: boolean) => {
+    const item = stored.get(id); if (!item) throw new Error('this class does not exist');
+    const hits = item.sources.filter((s) => s.url === url); if (!hits.length) throw new Error('that source was not in the last fetch');
+    for (const s of hits) s.accepted = accepted && s.state !== 'reachable';
+    item.updated_at = now(); return view(id);
+  },
+  markRead: async (id: string, read: boolean) => {
+    const item = stored.get(id); if (!item) throw new Error('this class does not exist');
+    item.marks.read_hash = read ? draftHash(item.draft) : ''; return view(id);
   },
   verify: async (id: string) => {
     const item = stored.get(id); if (!item) throw new Error('this class does not exist');
     await new Promise((r) => setTimeout(r, 900));
     const checks: SourceCheck[] = [];
-    for (const topic of item.draft.topics) for (const url of topic.curriculum.primary_sources) checks.push({ topic: topic.slug, url, state: !onHost(item.draft.source_hosts, url) ? 'off-host' : /example\.com|invalid/.test(url) ? 'unreachable' : 'reachable' });
-    item.sources = checks; item.updated_at = now(); return view(id);
+    for (const topic of item.draft.topics) for (const url of topic.curriculum.primary_sources) { const state = !onHost(item.draft.source_hosts, url) ? 'off-host' : /example\.com|invalid/.test(url) ? 'unreachable' : 'reachable'; checks.push({ topic: topic.slug, url, state, accepted: state !== 'reachable' && item.sources.some((s) => s.url === url && s.accepted) }); }
+    item.sources = checks; item.fetched = true; item.updated_at = now(); return view(id);
   },
   writeBank: async (id: string) => {
     const item = stored.get(id); if (!item) throw new Error('this class does not exist');
@@ -207,6 +280,8 @@ export const previewCustom = {
     const item = stored.get(id); if (!item) throw new Error('this class does not exist');
     const issues = validateDraft(item.draft);
     if (issues.length) throw new Error(`the draft is not ready to publish: ${issues[0].message} (${issues[0].at} and ${issues.length - 1} more)`);
+    const { blockers } = view(id).checks;
+    if (blockers.length) throw new Error(`the class is not ready to publish: ${blockers.join('; ')}`);
     item.version += 1; item.status = 'published'; item.published_at = now(); item.updated_at = now();
     const definition = definitionOf(item);
     registerCourses([definition]);

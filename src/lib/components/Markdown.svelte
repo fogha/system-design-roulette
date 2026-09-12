@@ -117,7 +117,7 @@
         block.innerHTML = svg;
         block.setAttribute('aria-label', 'diagram');
       } catch {
-        showSource(block, 'diagram could not be rendered — showing source');
+        showSource(block, 'diagram could not be rendered; showing source');
       }
     }
   }

@@ -18,7 +18,7 @@ Required subject lens:
 - Use 2026 platform and framework capabilities while distinguishing durable web
   architecture from framework-specific implementation details.
 - Practical work must produce an ADR, boundary contract, measurable acceptance
-  criteria, and an incremental change—not a greenfield diagram only.
+  criteria, and an incremental change, not a greenfield diagram only.
 
 Do not turn the lesson into backend distributed-systems material. Server
 concerns belong only where they alter frontend rendering, caching, contracts,

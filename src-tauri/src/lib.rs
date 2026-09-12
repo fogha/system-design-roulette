@@ -18,6 +18,7 @@ pub mod lesson_export;
 pub mod lesson_shape;
 pub mod mastery;
 pub mod progress;
+pub mod prose;
 pub mod readiness;
 pub mod recovery;
 pub mod research;
@@ -366,6 +367,10 @@ pub fn run() {
             commands::custom::verify_custom_course_sources,
             commands::custom::write_custom_course_bank,
             commands::custom::void_custom_question,
+            commands::custom::fix_custom_course_finding,
+            commands::custom::resolve_custom_course_finding,
+            commands::custom::accept_custom_course_source,
+            commands::custom::mark_custom_course_read,
             commands::custom::publish_custom_course,
             commands::custom::delete_custom_course_draft,
             commands::custom::export_custom_course,

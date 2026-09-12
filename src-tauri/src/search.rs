@@ -525,7 +525,7 @@ mod tests {
         .await
         .unwrap();
         for result in &results {
-            println!("{} — {} ({})", result.title, result.url, result.engine);
+            println!("{}: {} ({})", result.title, result.url, result.engine);
         }
         assert!(!results.is_empty());
         assert!(results.iter().all(|result| result.url.starts_with("http")));

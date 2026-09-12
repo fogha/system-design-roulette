@@ -15,11 +15,11 @@ export const CAPABILITY_LABEL: Record<OllamaCapability, string> = {
 };
 
 export const CAPABILITY_BLURB: Record<OllamaCapability, string> = {
-  tools: "Emits structured function calls — when the calling application supplies tools.",
+  tools: "Emits structured function calls, when the calling application supplies tools.",
   vision: "Reads images. Useful for diagrams or a PDF page.",
   reasoning: "Thinks step by step before answering. Slower, better on judgement calls.",
   code: "Tuned on source. Sharper when the course includes code.",
-  embedding: "Turns text into vectors. Not a chat model — it cannot answer prompts.",
+  embedding: "Turns text into vectors. Not a chat model; it cannot answer prompts.",
 };
 
 export interface OllamaModel {
@@ -155,7 +155,7 @@ export const OLLAMA_MODELS: OllamaModel[] = [
     sizeGb: 0.3,
     ramGb: 1,
     caps: ["embedding"],
-    blurb: "Cheap semantic search over your knowledge base. Cannot chat — pair it with one above.",
+    blurb: "Cheap semantic search over your knowledge base. Cannot chat; pair it with one above.",
   },
 ];
 

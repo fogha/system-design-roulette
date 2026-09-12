@@ -32,7 +32,7 @@
     {#if prerequisites.length}
       <p>{prerequisites.join(' · ')}</p>
     {:else}
-      <p>Entry point — no prior concept is assumed.</p>
+      <p>Entry point: no prior concept is assumed.</p>
     {/if}
     <span class="advance mono">exercise <ArrowRight size={10} /> portfolio evidence</span>
   </div>

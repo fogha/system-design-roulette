@@ -11,10 +11,12 @@
   import type { RunnerInfo } from '../../../contracts/agents';
   import { app } from '../../../stores.svelte';
   import { validateDraft } from '../../../custom-preview';
+  import { autosize } from '../../../actions/autosize';
   import Dropdown from '../../../components/Dropdown.svelte';
   import ModelPicker from '../../../components/ModelPicker.svelte';
+  import { confirmDialog, promptDialog } from '../../../components/dialog.svelte';
   import CurriculumEditor from './CurriculumEditor.svelte';
-  import { ArrowLeft, ArrowRight, Bot, Check, FileJson, FileUp, PenLine, Rocket, ShieldCheck, Sparkles, Trash2, Globe, CircleAlert, CircleCheck, CircleDashed, X, Save, ListChecks } from 'lucide-svelte';
+  import { ArrowLeft, ArrowRight, Bot, Check, FileJson, FileUp, PenLine, Rocket, ShieldCheck, Sparkles, Trash2, Globe, CircleAlert, CircleCheck, CircleDashed, X, Save, ListChecks, Wand2, BookOpenCheck, Lock, RotateCcw } from 'lucide-svelte';
 
   let { id = null, onclose, onpublished }: { id?: string | null; onclose: () => void; onpublished: (id: string) => void } = $props();
 
@@ -22,7 +24,7 @@
     { key: 'brief', title: 'Brief', Icon: Sparkles, ahead: 'what you want' },
     { key: 'draft', title: 'Draft', Icon: Bot, ahead: 'tutor, hand or file' },
     { key: 'review', title: 'Review', Icon: PenLine, ahead: 'edit the topics' },
-    { key: 'verify', title: 'Verify', Icon: ShieldCheck, ahead: 'read back, fetch' },
+    { key: 'verify', title: 'Verify', Icon: ShieldCheck, ahead: 'read back, fetch, confirm' },
     { key: 'enroll', title: 'Enroll', Icon: Rocket, ahead: 'publish' },
   ] as const;
   type StepKey = (typeof STEPS)[number]['key'];
@@ -34,19 +36,35 @@
   let draft = $state<CourseDraft | null>(null);
   let hostInput = $state('');
   let runners = $state<RunnerInfo[]>([]);
-  let busy = $state<'' | 'create' | 'draft' | 'review' | 'sources' | 'bank' | 'publish' | 'save' | 'import' | 'delete' | 'export'>('');
+  let busy = $state<'' | 'create' | 'draft' | 'review' | 'sources' | 'bank' | 'fix' | 'publish' | 'save' | 'import' | 'delete' | 'export' | 'settle'>('');
   let error = $state('');
   let saved = $state<'idle' | 'saving' | 'saved'>('idle');
   let fileInput = $state<HTMLInputElement | undefined>(undefined);
-  let dismissed = $state<number[]>([]);
+  /** The topic the editor is asked to open and light up after a jump. */
+  let focus = $state<{ slug: string; at: number } | null>(null);
+  /** The finding the tutor is working on, so its row says so. */
+  let fixing = $state<number | null>(null);
   let logTail = $derived(app.genLog.slice(-6));
+  /** The scrolling pane; a new step starts at its top. */
+  let pane = $state<HTMLDivElement | undefined>(undefined);
+  $effect(() => { void step; pane?.scrollTo({ top: 0 }); });
 
   const runnerOptions = $derived([...runners].sort((a, b) => Number(b.available) - Number(a.available)).map((r) => ({ value: r.provider, label: r.label, description: `${r.kind === 'local' ? 'Local' : r.kind.toUpperCase()} · ${r.available ? 'configured' : 'setup needed'}` })));
   const briefReady = $derived(brief.title.trim().length > 0 && brief.outcome.trim().split(/\s+/).filter(Boolean).length >= 5);
   const issues = $derived(draft ? validateDraft(draft) : []);
   const drafted = $derived(!!draft && (draft.topics.length > 1 || draft.topics[0]?.slug !== 'first-topic' || !!draft.summary));
-  const unreachable = $derived((view?.sources ?? []).filter((s) => s.state !== 'reachable'));
-  const highFindings = $derived((view?.review ?? []).filter((f) => f.severity === 'high').length);
+  /** Sources that did not answer and are still in the draft, one row per address. */
+  const unreachable = $derived.by(() => {
+    const urls = new Set((draft?.topics ?? []).flatMap((t) => t.curriculum.primary_sources));
+    const seen = new Set<string>();
+    return (view?.sources ?? []).filter((s) => s.state !== 'reachable' && urls.has(s.url) && !seen.has(s.url) && seen.add(s.url));
+  });
+  const checks = $derived(view?.checks);
+  const reviewDone = $derived(!!checks && checks.reviewed && checks.open_findings === 0);
+  const sourcesDone = $derived(!!checks && checks.fetched && checks.unchecked_sources === 0 && checks.pending_sources === 0);
+  const readDone = $derived(!!checks?.read);
+  const canEnroll = $derived(!!checks && checks.blockers.length === 0);
+  const settled = $derived((view?.review ?? []).filter((f) => f.status !== 'open').length);
   const bankQuestions = $derived(view?.bank?.questions ?? []);
   const voided = $derived(bankQuestions.filter((q) => q.voided));
   const bankStale = $derived.by(() => { const d = draft; return !!d && bankQuestions.some((q) => !d.topics.some((t) => `${d.id}-${t.slug}` === q.competency)); });
@@ -71,7 +89,7 @@
     // A call the desk is still running (started here or before the page was
     // left) shows as such, and the view is fetched again until it ends.
     if (next.working) { busy = next.working; watch(next.id); }
-    else if (busy === 'draft' || busy === 'review' || busy === 'sources' || busy === 'bank') { busy = ''; }
+    else if (busy === 'draft' || busy === 'review' || busy === 'sources' || busy === 'bank' || busy === 'fix') { busy = ''; fixing = null; }
   }
 
   /** While the desk works, ask again every few seconds; the desk also says when it is done. */
@@ -151,17 +169,36 @@
   }
   async function flush() { if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; } await save(); }
 
-  async function tutorCall(kind: 'review' | 'sources' | 'bank', call: (id: string) => Promise<CustomCourseView>) {
+  async function tutorCall(kind: 'review' | 'sources' | 'bank' | 'fix', call: (id: string) => Promise<CustomCourseView>) {
     if (!view || busy) return;
     await flush();
-    busy = kind; error = ''; if (kind === 'review') dismissed = [];
+    busy = kind; error = '';
     watch(view.id);
     try { adopt(await call(view.id)); } catch (cause) { error = String(cause); busy = ''; }
-    finally { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } if (!view?.working) busy = ''; }
+    finally { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } if (!view?.working) { busy = ''; fixing = null; } }
   }
   const review = () => tutorCall('review', (id) => api.reviewCustomCourse(id));
   const verifySources = () => tutorCall('sources', (id) => api.verifyCustomCourseSources(id));
   const writeBank = () => tutorCall('bank', (id) => api.writeCustomCourseBank(id));
+  /** The tutor makes the change a finding asks for; the draft in the editor follows. */
+  function fixWithTutor(index: number) { fixing = index; return tutorCall('fix', (id) => api.fixCustomCourseFinding(id, index)); }
+  /** A quick change of the class's record, without the tutor. */
+  async function quick(call: (id: string) => Promise<CustomCourseView>) {
+    if (!view || busy) return;
+    busy = 'settle'; error = '';
+    try { adopt(await call(view.id)); } catch (cause) { error = String(cause); } finally { busy = ''; }
+  }
+  async function settle(index: number, status: 'fixed' | 'dismissed' | 'open') {
+    let note = status === 'fixed' ? 'by hand' : '';
+    if (status === 'dismissed') {
+      const reason = await promptDialog('Dismiss this finding?', { label: 'Why it does not apply', placeholder: 'kept with the finding' }, { message: 'A dismissed finding counts as settled. The reason stays with the class so you can see later why it was left.', confirm: 'Dismiss' });
+      if (reason === null) return;
+      note = reason;
+    }
+    await quick((id) => api.resolveCustomCourseFinding(id, index, status, note));
+  }
+  const acceptSource = (url: string, accepted: boolean) => quick((id) => api.acceptCustomCourseSource(id, url, accepted));
+  const markRead = (read: boolean) => quick((id) => api.markCustomCourseRead(id, read));
   async function publish() {
     if (!view || busy) return;
     await flush();
@@ -185,24 +222,28 @@
   }
   async function discard() {
     if (!view || busy) return;
-    if (!confirm(`Delete the draft "${view.draft.label || view.brief.title}"? This cannot be undone.`)) return;
+    if (!(await confirmDialog(`Delete the draft "${view.draft.label || view.brief.title}"?`, 'The brief, the draft and every check go with it. This cannot be undone.', { confirm: 'Delete draft', danger: true }))) return;
     busy = 'delete'; error = '';
     try { await api.deleteCustomCourseDraft(view.id); await app.refresh(); onclose(); }
     catch (cause) { error = String(cause); } finally { busy = ''; }
   }
+  /** Open the editor on a topic: the card opens, scrolls into view and blinks. */
   function jumpTo(topic: string) {
     step = 'review';
-    setTimeout(() => document.getElementById(`topic-${topic}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 60);
+    focus = { slug: topic, at: Date.now() };
   }
   function go(next: StepKey) {
+    // Coming back to the editor by the rail starts at the top, not on the last jump.
+    focus = null;
     if (next === 'brief') { step = 'brief'; return; }
     if (!view) return;
     if ((next === 'verify' || next === 'enroll') && !drafted) return;
+    if (next === 'enroll' && !canEnroll) { step = 'verify'; return; }
     step = next;
   }
 </script>
 
-<div class="builder">
+<div class="builder" bind:this={pane}>
   <header class="top">
     <div>
       <span class="meta-label">{view?.status === 'published' ? `YOUR CLASS · VERSION ${view.version}` : 'NEW CLASS'}</span>
@@ -234,8 +275,8 @@
       <div class="panel-head"><h3>What do you want to be able to do?</h3><p>The tutor designs the whole course from this, so say it the way you would to a friend who teaches. Everything here can be changed later.</p></div>
       <div class="brief-grid">
         <label class="field span-2"><span>Title</span><input bind:value={brief.title} placeholder="Rust for command-line tools" /></label>
-        <label class="field span-2"><span>The outcome <small>what you will have made or be able to do at the end</small></span><textarea rows="3" bind:value={brief.outcome} placeholder="Build and ship a small CLI with clean error handling, tests and a release binary."></textarea></label>
-        <label class="field span-2"><span>What you already know <small>optional; it decides where foundations start</small></span><textarea rows="2" bind:value={brief.background} placeholder="Comfortable in Python; never touched a systems language."></textarea></label>
+        <label class="field span-2"><span>The outcome <small>what you will have made or be able to do at the end</small></span><textarea use:autosize={{ min: 3, max: 8, value: brief.outcome }} bind:value={brief.outcome} placeholder="Build and ship a small CLI with clean error handling, tests and a release binary."></textarea></label>
+        <label class="field span-2"><span>What you already know <small>optional; it decides where foundations start</small></span><textarea use:autosize={{ min: 2, max: 6, value: brief.background }} bind:value={brief.background} placeholder="Comfortable in Python; never touched a systems language."></textarea></label>
         <div class="field span-2">
           <span>Documentation you trust <small>optional hostnames; the tutor adds the obvious ones</small></span>
           <div class="hosts">
@@ -278,14 +319,14 @@
           <pre class="feed mono" aria-live="polite">{logTail.length ? logTail.join('\n') : 'waiting for the first line from the runner…'}</pre>
         </div>
       {/if}
-      {#if drafted}<footer class="nav"><span class="hint mono">a draft exists · {draft?.topics.length} topics</span><button type="button" class="ghost mono-ghost" onclick={() => (step = 'review')}>Open the draft <ArrowRight size={12} /></button></footer>{/if}
+      {#if drafted}<footer class="nav"><span class="hint mono">a draft exists · {draft?.topics.length} topics</span><button type="button" class="ghost mono-ghost" onclick={() => go('review')}>Open the draft <ArrowRight size={12} /></button></footer>{/if}
       <footer class="nav back"><button type="button" class="ghost mono-ghost" onclick={() => (step = 'brief')} disabled={!!busy}><ArrowLeft size={12} />Back to the brief</button></footer>
     </section>
 
   {:else if step === 'review' && draft}
     <section class="panel bare" aria-label="Review">
       <div class="panel-head"><h3>Edit until it reads right</h3><p>The rail lists what the desk would refuse to publish. Cards open to every field the tutor teaches from.</p></div>
-      <CurriculumEditor bind:draft nativeIssues={view?.issues ?? []} onchange={changed} />
+      <CurriculumEditor bind:draft nativeIssues={view?.issues ?? []} {focus} onchange={changed} />
       <footer class="nav">
         <button type="button" class="ghost mono-ghost" onclick={() => (step = 'draft')}><ArrowLeft size={12} />Back</button>
         <span class="hint mono">{issues.length ? `${issues.length} to fix before publishing` : 'ready'}</span>
@@ -294,66 +335,110 @@
       </footer>
     </section>
 
-  {:else if step === 'verify' && draft}
+  {:else if step === 'verify' && draft && view && checks}
     <section class="panel" aria-label="Verify">
-      <div class="panel-head"><h3>Two checks before you enroll</h3><p>Both are optional and both can be run again after edits. Neither changes the draft on its own.</p></div>
-      <div class="checks">
-        <div class="check-card">
-          <div class="check-head"><span class="check-tile"><Bot size={16} /></span><div><strong>The tutor reads it back</strong><small>Looks for outcomes that cannot be observed, missing or wrong prerequisites, topics that are one, stages that jump, sources that do not support their topic.</small></div><button type="button" class="ghost mono-ghost" onclick={review} disabled={!!busy}>{busy === 'review' ? 'Reading…' : view?.review.length ? 'Read it again' : 'Ask for a review'}</button></div>
-          {#if busy === 'review' && logTail.length}<pre class="feed mono">{logTail.join('\n')}</pre>{/if}
-          {#if view?.review.length}
+      <div class="panel-head"><h3>Three checks before you enroll</h3><p>In order, each unlocking the next: the tutor reads the draft back and every finding is settled; every source is fetched and the unreachable ones replaced or kept knowingly; you confirm your own read-through. None of them changes the draft on its own.</p></div>
+      <ol class="gates">
+        <li class="gate" class:done={reviewDone} class:current={!reviewDone}>
+          <div class="gate-head">
+            <span class="gate-no mono" aria-hidden="true">{#if reviewDone}<Check size={13} strokeWidth={2.6} />{:else}01{/if}</span>
+            <span class="check-tile"><Bot size={16} /></span>
+            <div><strong>The tutor reads it back</strong><small>Looks for outcomes that cannot be observed, missing or wrong prerequisites, topics that are one, stages that jump, sources that do not support their topic. Every finding is then fixed by the tutor, fixed by you, or dismissed with a reason.</small></div>
+            <button type="button" class="ghost mono-ghost" onclick={review} disabled={!!busy}>{busy === 'review' ? 'Reading…' : checks.reviewed ? 'Read it again' : 'Read it back'}</button>
+          </div>
+          <p class="gate-state mono">
+            {#if !checks.reviewed}not read yet · required{:else if !view.review.length}read back with nothing to raise{:else}{view.review.length} finding{view.review.length === 1 ? '' : 's'} · {checks.open_findings ? `${checks.open_findings} open` : 'all settled'}{/if}
+            {#if checks.reviewed && !checks.review_current} · reviewed before your last edits; read it again if they were large{/if}
+          </p>
+          {#if (busy === 'review' || busy === 'fix') && logTail.length}<pre class="feed mono">{logTail.join('\n')}</pre>{/if}
+          {#if view.review.length}
             <ol class="findings">
               {#each view.review as finding, i (i)}
-                {#if !dismissed.includes(i)}
-                  <li class={finding.severity}>
-                    <span class="sev mono">{finding.severity}</span>
-                    <div class="finding-body">
-                      <p>{finding.message}</p>
-                      {#if finding.fix}<p class="fix"><b>Proposed:</b> {finding.fix}</p>{/if}
-                      <div class="finding-actions">{#if finding.topic}<button type="button" class="text" onclick={() => jumpTo(finding.topic)}>Open {finding.topic} <ArrowRight size={11} /></button>{/if}<button type="button" class="text quiet" onclick={() => (dismissed = [...dismissed, i])}>Dismiss</button></div>
+                <li class={finding.severity} class:settled={finding.status !== 'open'}>
+                  <span class="sev-col"><span class="sev mono">{finding.severity}</span><span class="pill mono {finding.status}">{finding.status}</span></span>
+                  <div class="finding-body">
+                    <p>{finding.message}</p>
+                    {#if finding.fix}<p class="fix"><b>Proposed:</b> {finding.fix}</p>{/if}
+                    {#if finding.status !== 'open' && finding.note}<p class="note mono">{finding.status === 'dismissed' ? 'dismissed: ' : 'fixed '}{finding.note}</p>{/if}
+                    <div class="finding-actions">
+                      {#if finding.status === 'open'}
+                        <button type="button" class="ghost mono-ghost small" onclick={() => fixWithTutor(i)} disabled={!!busy}><Wand2 size={11} />{busy === 'fix' && fixing === i ? 'the tutor is changing it…' : 'Fix with the tutor'}</button>
+                        {#if finding.topic}<button type="button" class="text" onclick={() => jumpTo(finding.topic)}>Open {finding.topic} <ArrowRight size={11} /></button>{/if}
+                        <button type="button" class="text" onclick={() => settle(i, 'fixed')} disabled={!!busy}><Check size={11} /> Fixed by hand</button>
+                        <button type="button" class="text quiet" onclick={() => settle(i, 'dismissed')} disabled={!!busy}>Dismiss</button>
+                      {:else}
+                        {#if finding.topic}<button type="button" class="text" onclick={() => jumpTo(finding.topic)}>Open {finding.topic} <ArrowRight size={11} /></button>{/if}
+                        <button type="button" class="text quiet" onclick={() => settle(i, 'open')} disabled={!!busy}><RotateCcw size={11} /> Reopen</button>
+                      {/if}
                     </div>
-                  </li>
-                {/if}
+                  </div>
+                </li>
               {/each}
             </ol>
-          {:else if view && view.review.length === 0 && busy !== 'review'}
-            <p class="hint">Not read back yet.</p>
           {/if}
-        </div>
-        <div class="check-card">
-          <div class="check-head"><span class="check-tile"><Globe size={16} /></span><div><strong>Fetch every source</strong><small>The desk requests each primary source the way a lesson would. Unreachable ones are listed with their topic; a lesson that cannot fetch a source says so, as bundled lessons do.</small></div><button type="button" class="ghost mono-ghost" onclick={verifySources} disabled={!!busy}>{busy === 'sources' ? 'Fetching…' : view?.sources.length ? 'Fetch again' : 'Fetch sources'}</button></div>
-          {#if view?.sources.length}
-            <div class="source-summary mono"><span class="ok"><CircleCheck size={11} /> {view.sources.filter((s) => s.state === 'reachable').length} reachable</span><span class:warn={unreachable.length > 0}><CircleDashed size={11} /> {unreachable.length} to look at</span></div>
-            {#if unreachable.length}
-              <ul class="sources">
-                {#each unreachable as check (check.url + check.topic)}
-                  <li><span class="state mono" class:off={check.state === 'off-host'}>{check.state}</span><span class="url mono">{check.url}</span><button type="button" class="text" onclick={() => jumpTo(check.topic)}>{check.topic} <ArrowRight size={11} /></button></li>
-                {/each}
-              </ul>
-            {/if}
-          {:else if busy !== 'sources'}
-            <p class="hint">Not fetched yet.</p>
+        </li>
+
+        <li class="gate" class:locked={!reviewDone} class:done={sourcesDone} class:current={reviewDone && !sourcesDone}>
+          <div class="gate-head">
+            <span class="gate-no mono" aria-hidden="true">{#if sourcesDone}<Check size={13} strokeWidth={2.6} />{:else if !reviewDone}<Lock size={11} />{:else}02{/if}</span>
+            <span class="check-tile"><Globe size={16} /></span>
+            <div><strong>Fetch every source</strong><small>The desk requests each primary source the way a lesson would. One that does not answer is replaced in the editor or kept knowingly; a lesson that cannot fetch a source says so, as bundled lessons do.</small></div>
+            <button type="button" class="ghost mono-ghost" onclick={verifySources} disabled={!!busy || !reviewDone}>{busy === 'sources' ? 'Fetching…' : checks.fetched ? 'Fetch again' : 'Fetch sources'}</button>
+          </div>
+          <p class="gate-state mono">
+            {#if !reviewDone}after the review{:else if !checks.fetched}not fetched yet · required{:else}<span class="ok"><CircleCheck size={11} /> {view.sources.filter((s) => s.state === 'reachable').length} reachable</span>{#if unreachable.length} · <span class:warn={checks.pending_sources > 0}><CircleDashed size={11} /> {unreachable.length} did not answer{checks.pending_sources ? `, ${checks.pending_sources} to settle` : ', all kept knowingly'}</span>{/if}{#if checks.unchecked_sources} · <span class="warn"><CircleAlert size={11} /> {checks.unchecked_sources} added since the last fetch; fetch again</span>{/if}{/if}
+          </p>
+          {#if reviewDone && unreachable.length}
+            <ul class="sources">
+              {#each unreachable as check (check.url)}
+                <li class:kept={check.accepted}>
+                  <span class="state mono" class:off={check.state === 'off-host'}>{check.state}</span>
+                  <span class="url mono" title={check.url}>{check.url}</span>
+                  <button type="button" class="text" onclick={() => jumpTo(check.topic)}>{check.topic} <ArrowRight size={11} /></button>
+                  <button type="button" class="text" class:quiet={check.accepted} onclick={() => acceptSource(check.url, !check.accepted)} disabled={!!busy}>{check.accepted ? 'Kept · undo' : 'Keep anyway'}</button>
+                </li>
+              {/each}
+            </ul>
           {/if}
-        </div>
-      </div>
-      <div class="check-card bank-card">
-        <div class="check-head"><span class="check-tile"><ListChecks size={16} /></span><div><strong>Write the question bank</strong><small>Three cited four-choice questions per stage, on the course's core topics. They power the placement check and unit challenges; without them the class starts from scratch or a stage you choose. Held to the same shape as the bundled banks.</small></div><button type="button" class="ghost mono-ghost" onclick={writeBank} disabled={!!busy || issues.length > 0} title={issues.length ? 'Fix the editor first' : ''}>{busy === 'bank' ? 'Writing…' : bankQuestions.length ? 'Write it again' : 'Write the bank'}</button></div>
-        {#if busy === 'bank' && logTail.length}<pre class="feed mono">{logTail.join('\n')}</pre>{/if}
-        {#if bankQuestions.length}
-          <div class="source-summary mono"><span class="ok"><CircleCheck size={11} /> {bankQuestions.length - voided.length} usable</span>{#if voided.length}<span class="warn"><CircleAlert size={11} /> {voided.length} disputed</span>{/if}{#if bankStale}<span class="warn"><CircleAlert size={11} /> some questions point at topics no longer in the draft; write it again</span>{/if}</div>
-          <ol class="bank-list">
-            {#each bankQuestions as q (q.id)}
-              <li class:voided={q.voided}><span class="stage mono">{q.entry_point}</span><div class="q"><p>{q.prompt}</p><small>key: {q.choices.find((c) => c.id === q.answer)?.text ?? q.answer}{#if q.source} · <span class="mono">{q.source}</span>{/if}{#if q.voided} · <b>disputed:</b> {q.void_reason || 'no reason given'}{/if}</small></div></li>
-            {/each}
-          </ol>
-        {:else if busy !== 'bank'}
-          <p class="hint">Not written yet. Optional; it can be written after the class is published, from its Curriculum tab.</p>
-        {/if}
-      </div>
+        </li>
+
+        <li class="gate" class:locked={!sourcesDone} class:done={readDone} class:current={sourcesDone && !readDone}>
+          <div class="gate-head">
+            <span class="gate-no mono" aria-hidden="true">{#if readDone}<Check size={13} strokeWidth={2.6} />{:else if !sourcesDone}<Lock size={11} />{:else}03{/if}</span>
+            <span class="check-tile"><BookOpenCheck size={16} /></span>
+            <div><strong>Your own read-through</strong><small>Open every topic in the editor and read the course header as the tutor will. The tutor's review does not replace yours; an edit after you confirm asks for another look.</small></div>
+          </div>
+          <label class="confirm-row" class:muted={!sourcesDone}>
+            <input type="checkbox" checked={readDone} disabled={!!busy || !sourcesDone} onchange={(e) => markRead(e.currentTarget.checked)} />
+            <span>I have read every topic and the course header of this version</span>
+          </label>
+          <p class="gate-state mono">{#if !sourcesDone}after the sources{:else if readDone}confirmed for this version{:else}not confirmed · required{/if}</p>
+        </li>
+
+        <li class="gate optional" class:locked={!readDone}>
+          <div class="gate-head">
+            <span class="gate-no mono" aria-hidden="true">{#if !readDone}<Lock size={11} />{:else}04{/if}</span>
+            <span class="check-tile"><ListChecks size={16} /></span>
+            <div><strong>Write the question bank <em class="mono">optional</em></strong><small>Three cited four-choice questions per stage, on the course's core topics. They power the placement check and unit challenges; without them the class starts from scratch or a stage you choose. Held to the same shape as the bundled banks.</small></div>
+            <button type="button" class="ghost mono-ghost" onclick={writeBank} disabled={!!busy || issues.length > 0 || !readDone} title={issues.length ? 'Fix the editor first' : ''}>{busy === 'bank' ? 'Writing…' : bankQuestions.length ? 'Write it again' : 'Write the bank'}</button>
+          </div>
+          {#if busy === 'bank' && logTail.length}<pre class="feed mono">{logTail.join('\n')}</pre>{/if}
+          {#if bankQuestions.length}
+            <div class="source-summary mono"><span class="ok"><CircleCheck size={11} /> {bankQuestions.length - voided.length} usable</span>{#if voided.length}<span class="warn"><CircleAlert size={11} /> {voided.length} disputed</span>{/if}{#if bankStale}<span class="warn"><CircleAlert size={11} /> some questions point at topics no longer in the draft; write it again</span>{/if}</div>
+            <ol class="bank-list">
+              {#each bankQuestions as q (q.id)}
+                <li class:voided={q.voided}><span class="stage mono">{q.entry_point}</span><div class="q"><p>{q.prompt}</p><small>key: {q.choices.find((c) => c.id === q.answer)?.text ?? q.answer}{#if q.source} · <span class="mono">{q.source}</span>{/if}{#if q.voided} · <b>disputed:</b> {q.void_reason || 'no reason given'}{/if}</small></div></li>
+              {/each}
+            </ol>
+          {:else}
+            <p class="gate-state mono">{#if !readDone}after your read-through{:else}not written yet · it can also be written after the class is published, from its Curriculum tab{/if}</p>
+          {/if}
+        </li>
+      </ol>
       <footer class="nav">
-        <button type="button" class="ghost mono-ghost" onclick={() => (step = 'review')}><ArrowLeft size={12} />Back to the editor</button>
-        <span class="hint mono">{highFindings ? `${highFindings} high-severity finding${highFindings === 1 ? '' : 's'} open` : issues.length ? `${issues.length} to fix in the editor` : 'ready'}</span>
-        <button type="button" class="cta mono-cta" onclick={() => (step = 'enroll')}>Continue <ArrowRight size={13} /></button>
+        <button type="button" class="ghost mono-ghost" onclick={() => go('review')}><ArrowLeft size={12} />Back to the editor</button>
+        <span class="hint mono" class:warn-text={!canEnroll}>{canEnroll ? 'ready to enroll' : checks.blockers[0]}</span>
+        <button type="button" class="cta mono-cta" disabled={!canEnroll} onclick={() => (step = 'enroll')}>Continue <ArrowRight size={13} /></button>
       </footer>
     </section>
 
@@ -364,14 +449,14 @@
         <li><span class="mf-label mono">CLASS</span><strong>{draft.label}</strong><small>{draft.short_code} · {draft.native_label || 'your own course'}</small></li>
         <li><span class="mf-label mono">TOPICS</span><strong>{draft.topics.length}</strong><small>{draft.topics.filter((t) => t.curriculum.core).length} core · {draft.entry_points.map((e) => e.label).join(' → ')}</small></li>
         <li><span class="mf-label mono">TUTOR</span><strong>{brief.agent} / {brief.model || 'runner default'}</strong><small>from the brief; changeable in the class's Settings tab</small></li>
-        <li><span class="mf-label mono">CHECKS</span><strong class:warn={issues.length > 0}>{issues.length ? `${issues.length} to fix` : 'all pass'}</strong><small>{view.review.length ? `${view.review.length} review finding${view.review.length === 1 ? '' : 's'}` : 'not read back'} · {view.sources.length ? `${unreachable.length} source${unreachable.length === 1 ? '' : 's'} to look at` : 'sources not fetched'} · {bankQuestions.length ? `${bankQuestions.length - voided.length} questions` : 'no question bank'}</small></li>
+        <li><span class="mf-label mono">CHECKS</span><strong class:warn={!canEnroll}>{canEnroll ? 'all pass' : view.checks.blockers[0]}</strong><small>{view.review.length ? `${settled} of ${view.review.length} finding${view.review.length === 1 ? '' : 's'} settled` : 'read back, nothing raised'} · {view.sources.length ? `${unreachable.length} source${unreachable.length === 1 ? '' : 's'} kept unreachable` : 'sources fetched'} · read-through {view.checks.read ? 'confirmed' : 'pending'} · {bankQuestions.length ? `${bankQuestions.length - voided.length} questions` : 'no question bank'}</small></li>
       </ul>
       <p class="after mono">after publishing: choose a starting point ({bankQuestions.length ? 'from scratch, a stage, or the placement check' : 'from scratch or a stage; the placement check needs the question bank'}) → add study times → the class activates</p>
       <footer class="nav">
         <button type="button" class="ghost mono-ghost" onclick={() => (step = 'verify')}><ArrowLeft size={12} />Back</button>
-        <span class="hint mono">{issues.length ? 'the desk will refuse until the editor is clean' : 'ready'}</span>
+        <span class="hint mono">{canEnroll ? 'ready' : 'the desk will refuse until every check passes'}</span>
         <button type="button" class="ghost mono-ghost" onclick={exportFile} disabled={!!busy}><Save size={12} />Export class file</button>
-        <button type="button" class="cta mono-cta" onclick={publish} disabled={!!busy || issues.length > 0}><Rocket size={13} />{busy === 'publish' ? 'Publishing…' : view.status === 'published' ? `Publish v${view.version + 1}` : 'Publish and enroll'}</button>
+        <button type="button" class="cta mono-cta" onclick={publish} disabled={!!busy || !canEnroll}><Rocket size={13} />{busy === 'publish' ? 'Publishing…' : view.status === 'published' ? `Publish v${view.version + 1}` : 'Publish and enroll'}</button>
       </footer>
     </section>
   {/if}
@@ -411,8 +496,8 @@
   .brief-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 18px; } .span-2 { grid-column: 1 / -1; }
   .field { display: flex; flex-direction: column; gap: 6px; min-width: 0; } .field > span { font-size: 12px; color: var(--muted); } .field > span small { margin-left: 6px; color: var(--faint); font-size: 10px; }
   .pick-label { font-size: 9px; letter-spacing: 1.2px; color: var(--faint); }
-  input, textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--node-border); border-radius: var(--radius-control); background: var(--bg); color: var(--fg); font: 13px/1.5 var(--font-body); } textarea { resize: vertical; }
-  input:focus, textarea:focus { outline: none; border-color: var(--accent); }
+  input:not([type='checkbox']), textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--node-border); border-radius: var(--radius-control); background: var(--bg); color: var(--fg); font: 13px/1.5 var(--font-body); } textarea { display: block; }
+  input:not([type='checkbox']):focus, textarea:focus { outline: none; border-color: var(--accent); }
   .hosts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px; border: 1px solid var(--node-border); border-radius: var(--radius-control); background: var(--bg); }
   .host { display: inline-flex; align-items: center; gap: 5px; padding: 4px 6px 4px 9px; border: 1px solid var(--node-border); border-radius: 6px; background: var(--surface); font-size: 10.5px; color: var(--fg); }
   .host button { display: grid; place-items: center; width: 16px; height: 16px; border: 0; border-radius: 3px; background: transparent; color: var(--faint); cursor: pointer; } .host button:hover { color: var(--led-err); }
@@ -428,21 +513,34 @@
   .working { font-size: 9.5px; letter-spacing: 0.5px; color: var(--accent); animation: pulse 1.2s ease-in-out infinite; } @keyframes pulse { 50% { opacity: 0.4; } }
   .feed { margin: 0; padding: 10px 12px; max-height: 140px; overflow: hidden; border: 1px solid var(--node-border); border-radius: var(--radius-control); background: #0b0d10; color: var(--muted); font-size: 10.5px; line-height: 1.6; white-space: pre-wrap; }
   .working-node .feed { border: 0; border-radius: 0; }
-  .checks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-  .check-card { display: flex; flex-direction: column; gap: 12px; padding: 14px; border: 1px solid var(--node-border); border-radius: var(--radius-panel); background: var(--surface); }
-  .check-head { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; } .check-head > div { flex: 1; min-width: 180px; } .check-head strong { display: block; font-size: 13px; font-weight: 500; } .check-head small { display: block; margin-top: 4px; font-size: 11px; line-height: 1.5; color: var(--muted); }
+  /* The three gates and the optional fourth, in the order they unlock. */
+  .gates { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
+  .gate { position: relative; display: flex; flex-direction: column; gap: 12px; padding: 14px 16px; border: 1px solid var(--node-border); border-radius: var(--radius-panel); background: var(--surface); transition: border-color 0.2s, opacity 0.2s; }
+  .gate.current { border-color: color-mix(in srgb, var(--accent) 50%, var(--node-border)); }
+  .gate.done { border-color: color-mix(in srgb, var(--led-ok) 45%, var(--node-border)); }
+  .gate.locked { opacity: 0.55; }
+  .gate-head { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; } .gate-head > div { flex: 1; min-width: 200px; } .gate-head strong { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; } .gate-head strong em { font-style: normal; font-size: 8.5px; letter-spacing: 1px; text-transform: uppercase; color: var(--faint); } .gate-head small { display: block; margin-top: 4px; font-size: 11px; line-height: 1.5; color: var(--muted); max-width: 72ch; }
+  .gate-no { flex: none; display: grid; place-items: center; width: 26px; height: 26px; margin-top: 5px; border: 1px solid var(--node-border); border-radius: 8px; background: var(--node-bg); color: var(--faint); font-size: 9.5px; letter-spacing: 0.5px; }
+  .gate.current .gate-no { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent); }
+  .gate.done .gate-no { border-color: color-mix(in srgb, var(--led-ok) 55%, var(--node-border)); background: var(--ok-bg); color: var(--ok-fg); }
   .check-tile { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: var(--surface-2); color: var(--accent); }
+  .gate-state { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 0; font-size: 10px; letter-spacing: 0.5px; color: var(--muted); } .gate-state span { display: inline-flex; align-items: center; gap: 5px; } .gate-state .ok { color: var(--ok-fg); } .gate-state .warn { color: var(--warn-fg); }
+  .confirm-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px dashed var(--node-border); border-radius: var(--radius-control); background: var(--node-bg); font-size: 12.5px; cursor: pointer; } .confirm-row.muted { cursor: default; color: var(--faint); }
   .findings { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
   .findings li { display: flex; gap: 10px; padding: 10px 12px; border: 1px solid var(--node-border); border-left-width: 3px; border-radius: var(--radius-control); background: var(--node-bg); }
   .findings li.high { border-left-color: var(--led-err); } .findings li.medium { border-left-color: var(--warn-fg); } .findings li.low { border-left-color: var(--node-border); }
-  .sev { flex: none; font-size: 9px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); padding-top: 3px; width: 52px; }
-  .finding-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; } .finding-body p { margin: 0; font-size: 12px; line-height: 1.5; } .fix { color: var(--muted); font-size: 11.5px !important; } .fix b { color: var(--fg); font-weight: 500; }
-  .finding-actions { display: flex; gap: 12px; margin-top: 2px; }
-  .text { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: transparent; color: var(--accent); font: 11px var(--font-body); cursor: pointer; } .text.quiet { color: var(--faint); }
+  .findings li.settled { border-left-color: color-mix(in srgb, var(--led-ok) 55%, var(--node-border)); } .findings li.settled .finding-body > p:first-child { color: var(--muted); }
+  .sev-col { flex: none; display: flex; flex-direction: column; gap: 5px; width: 64px; padding-top: 3px; }
+  .sev { font-size: 9px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); }
+  .pill { align-self: flex-start; padding: 1px 6px; border-radius: 999px; font-size: 8.5px; letter-spacing: 0.6px; text-transform: uppercase; } .pill.open { background: var(--warn-bg); color: var(--warn-fg); } .pill.fixed { background: var(--ok-bg); color: var(--ok-fg); } .pill.dismissed { background: var(--surface-2); color: var(--faint); }
+  .finding-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; } .finding-body p { margin: 0; font-size: 12px; line-height: 1.5; } .fix { color: var(--muted); font-size: 11.5px !important; } .fix b { color: var(--fg); font-weight: 500; }
+  .note { font-size: 10px !important; letter-spacing: 0.3px; color: var(--ok-fg); } .findings li.settled .note { color: var(--muted); }
+  .finding-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-top: 4px; }
+  .text { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: transparent; color: var(--accent); font: 11px var(--font-body); cursor: pointer; } .text.quiet { color: var(--faint); } .text:disabled { opacity: 0.5; cursor: default; }
   .source-summary { display: flex; gap: 14px; font-size: 10px; letter-spacing: 0.5px; color: var(--muted); } .source-summary span { display: inline-flex; align-items: center; gap: 5px; } .source-summary .ok { color: var(--ok-fg); } .source-summary .warn { color: var(--warn-fg); }
   .sources { display: flex; flex-direction: column; gap: 5px; margin: 0; padding: 0; list-style: none; max-height: 260px; overflow-y: auto; }
-  .sources li { display: flex; align-items: center; gap: 10px; font-size: 11px; } .state { flex: none; width: 76px; font-size: 9px; letter-spacing: 0.6px; color: var(--warn-fg); } .state.off { color: var(--led-err); } .url { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 10.5px; }
-  .bank-card { grid-column: 1 / -1; }
+  .sources li { display: flex; align-items: center; gap: 10px; font-size: 11px; } .sources li.kept { opacity: 0.7; } .state { flex: none; width: 76px; font-size: 9px; letter-spacing: 0.6px; color: var(--warn-fg); } .state.off { color: var(--led-err); } .url { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 10.5px; }
+  .warn-text { color: var(--warn-fg); }
   .bank-list { display: flex; flex-direction: column; gap: 5px; margin: 0; padding: 0; list-style: none; max-height: 320px; overflow-y: auto; }
   .bank-list li { display: flex; gap: 10px; padding: 8px 10px; border: 1px solid var(--node-border); border-radius: var(--radius-control); background: var(--node-bg); } .bank-list li.voided { opacity: 0.6; border-style: dashed; }
   .bank-list .stage { flex: none; width: 82px; font-size: 9px; letter-spacing: 0.6px; color: var(--accent); padding-top: 2px; }
@@ -452,5 +550,5 @@
   .mf-label { font-size: 9px; letter-spacing: 1.2px; color: var(--faint); } .manifest strong { font-size: 13px; font-weight: 500; } .manifest strong.warn { color: var(--warn-fg); } .manifest small { font-size: 11px; color: var(--muted); line-height: 1.45; }
   .after { margin: 0; font-size: 9.5px; letter-spacing: 0.4px; color: var(--faint); line-height: 1.6; }
   .danger { --key: var(--led-err); }
-  @media (max-width: 900px) { .ways, .checks, .manifest, .brief-grid { grid-template-columns: 1fr; } .step-text { display: none; } .steps button { justify-content: center; padding: 0; } }
+  @media (max-width: 900px) { .ways, .manifest, .brief-grid { grid-template-columns: 1fr; } .step-text { display: none; } .steps button { justify-content: center; padding: 0; } }
 </style>

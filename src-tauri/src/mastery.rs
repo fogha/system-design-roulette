@@ -405,7 +405,7 @@ pub fn build_dossier(conn: &Connection, today: &str, focus: &str) -> Result<Stri
             ("", "") => "unspecified learning objective".to_string(),
             ("", objective) => objective.to_string(),
             (section, "") => section.to_string(),
-            (section, objective) => format!("{section} — {objective}"),
+            (section, objective) => format!("{section}: {objective}"),
         };
         let misconception = misconception.trim();
         let detail = if misconception.is_empty() {
@@ -479,7 +479,7 @@ pub fn build_dossier(conn: &Connection, today: &str, focus: &str) -> Result<Stri
     let recent: Vec<String> = stmt
         .query_map(params![focus], |r| {
             Ok(format!(
-                "{} — {}",
+                "{}: {}",
                 r.get::<_, String>(0)?,
                 r.get::<_, String>(1)?
             ))

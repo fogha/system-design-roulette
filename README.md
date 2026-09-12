@@ -46,7 +46,7 @@ The nine courses are not the limit. **New class** on the Classes page opens the 
 
 The tutor can also **write the question bank**: three cited four-choice questions per stage on the course's core topics, held to the same shape as the bundled banks (the key among four distinct choices, a source on the course's hosts, every stage sampled three times). With it, the placement check and unit challenges work for the class; without it, the class offers the two starting points that need none. A learner who believes a written key is wrong disputes it from the check's result: the question stops counting, is left out of every sample, and is listed as disputed in the builder until the bank is written again.
 
-A published class can be edited into a new version (lessons already taught keep their topics) and exported as one file, under `Documents/Principia Desk/classes/`, that carries the course and nothing personal. The design is in `docs/CUSTOM_CLASSES.md`.
+Before a class is published it passes three checks in order: the tutor reads the draft back and every finding is settled (fixed by the tutor, fixed by hand, or dismissed with a reason), every source is fetched and the unreachable ones replaced or kept knowingly, and you confirm your own read-through. A published class can be edited into a new version (lessons already taught keep their topics) and exported as one file, under `Documents/Principia Desk/classes/`, that carries the course and nothing personal. The design is in `docs/CUSTOM_CLASSES.md`.
 
 ## Lessons on one shared runtime
 
@@ -97,7 +97,7 @@ Strict mode blocks Cmd+Tab, Force Quit and logout, so it must never be the only 
 4. **A release token.** Create a file or folder named `principia-unlock` in any of these places and the lock releases within a second:
    - your home directory (`touch ~/principia-unlock`),
    - the temporary directory (`/tmp` on macOS and Linux),
-   - **the root of any mounted volume** — a USB stick, an external disk, a mounted share.
+   - **the root of any mounted volume**: a USB stick, an external disk, a mounted share.
 
    The volume rule is the one that needs no terminal and no second machine: prepare a stick once, keep it near the desk, and plug it in. While a token exists the kiosk also refuses to engage at all, so a machine that boots with the stick in stays free. Delete the token to re-arm.
 5. **The dead man's switch.** A lock releases itself after three hours regardless of what the app believes. No lesson runs that long; a lock still standing is a stuck process, and it lets go.
@@ -128,7 +128,7 @@ Settings separates **Runners & models** from the **Active tutor**. Three runner 
 - **My own API key:** Anthropic, OpenAI, Google Gemini, OpenRouter, Groq, Mistral or DeepSeek. Keys are shared by the desk and its classes; on macOS, save them in Keychain from Settings. Environment keys take priority.
 - **On this machine:** Ollama installation, detection and start, installed models, a model shelf with approximate download and RAM sizes, background downloads, testing and removal. Local models answer locally; the teaching backend still fetches source documentation from the web.
 
-Each class keeps its own tutor choice and prompt contract. Lesson generation uses exactly the configured provider and model and must pass the full course, five-check, exercise, source and first-principles quality gate; a missed gate gets one same-provider correction pass and a same-provider senior-editor review, otherwise the real error is shown. Bundled reference lessons exist for every engineering course in five roles (beginner, advanced, remediation, retrieval, capstone); they feed retrieval sessions and offline checks and are never substituted for a generated lesson. See [the runner implementation record](docs/AGENT_BACKEND_PORT.md).
+Each class keeps its own tutor choice and prompt contract. Every request carries the desk's writing rules and every answer is read for the tells of machine writing (the signs Wikipedia's editors document: stock vocabulary, empty constructions, chat openers, em dashes) and sent back when it fails them; see [docs/WRITING_RULES.md](docs/WRITING_RULES.md). Lesson generation uses exactly the configured provider and model and must pass the full course, five-check, exercise, source and first-principles quality gate; a missed gate gets one same-provider correction pass and a same-provider senior-editor review, otherwise the real error is shown. Bundled reference lessons exist for every engineering course in five roles (beginner, advanced, remediation, retrieval, capstone); they feed retrieval sessions and offline checks and are never substituted for a generated lesson. See [the runner implementation record](docs/AGENT_BACKEND_PORT.md).
 
 ## Sourcing: what lessons are taught from
 
@@ -225,6 +225,7 @@ Design principle: **Rust owns all authority.** Lifecycles, locks, grading and se
 | [docs/STORAGE.md](docs/STORAGE.md) | The database, migrations and enrollment contracts |
 | [docs/SHARED_SESSION_RUNTIME.md](docs/SHARED_SESSION_RUNTIME.md) | Sessions, stages, preparation and grading |
 | [docs/CUSTOM_CLASSES.md](docs/CUSTOM_CLASSES.md) | Your own classes: the process and what is underneath |
+| [docs/WRITING_RULES.md](docs/WRITING_RULES.md) | The writing rules every generated text is held to |
 | [docs/TEACHER.md](docs/TEACHER.md) | The teacher agent and the mastery ledger |
 | [docs/CATALOG.md](docs/CATALOG.md) | The course catalogue and how a course is authored |
 | [docs/PRODUCT_EVOLUTION_PLAN.md](docs/PRODUCT_EVOLUTION_PLAN.md) | The plan and its record, increment by increment |

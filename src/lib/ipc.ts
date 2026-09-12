@@ -273,11 +273,29 @@ export interface ReviewFinding {
   topic: string;
   message: string;
   fix: string;
+  /** Every finding leaves `open` before the class can be published. */
+  status: 'open' | 'fixed' | 'dismissed';
+  /** What the tutor changed, "by hand", or why it was dismissed. */
+  note: string;
 }
 export interface SourceCheck {
   topic: string;
   url: string;
   state: 'reachable' | 'unreachable' | 'off-host';
+  /** The learner keeps an unreachable source knowingly. */
+  accepted: boolean;
+}
+/** Where a class stands against what publishing needs; `blockers` is empty when it can be published. */
+export interface CourseChecks {
+  draft_hash: string;
+  reviewed: boolean;
+  review_current: boolean;
+  open_findings: number;
+  fetched: boolean;
+  unchecked_sources: number;
+  pending_sources: number;
+  read: boolean;
+  blockers: string[];
 }
 /** One question of a written bank, in the placement check's shape. */
 export interface BankQuestion {
@@ -312,13 +330,14 @@ export interface CustomCourseView {
   issues: DraftIssue[];
   review: ReviewFinding[];
   sources: SourceCheck[];
+  checks: CourseChecks;
   /** The question bank the tutor wrote, once it has. */
   bank: QuestionBank | null;
   created_at: string;
   updated_at: string;
   published_at: string | null;
   /** A tutor call in flight for this class, so leaving and coming back shows it. */
-  working?: 'draft' | 'review' | 'sources' | 'bank' | null;
+  working?: 'draft' | 'review' | 'sources' | 'bank' | 'fix' | null;
 }
 export interface CustomCourseSummary {
   id: string;
@@ -328,7 +347,7 @@ export interface CustomCourseSummary {
   origin: 'tutor' | 'manual' | 'import';
   topics: number;
   updated_at: string;
-  working?: 'draft' | 'review' | 'sources' | 'bank' | null;
+  working?: 'draft' | 'review' | 'sources' | 'bank' | 'fix' | null;
 }
 export interface ClassExport {
   path: string;
@@ -949,6 +968,10 @@ const realApi = {
   verifyCustomCourseSources: (id: string) => invoke<CustomCourseView>('verify_custom_course_sources', { id }),
   writeCustomCourseBank: (id: string) => invoke<CustomCourseView>('write_custom_course_bank', { id }),
   voidCustomQuestion: (id: string, questionId: string, reason: string) => invoke<CustomCourseView>('void_custom_question', { id, questionId, reason }),
+  fixCustomCourseFinding: (id: string, index: number) => invoke<CustomCourseView>('fix_custom_course_finding', { id, index }),
+  resolveCustomCourseFinding: (id: string, index: number, status: ReviewFinding['status'], note: string) => invoke<CustomCourseView>('resolve_custom_course_finding', { id, index, status, note }),
+  acceptCustomCourseSource: (id: string, url: string, accepted: boolean) => invoke<CustomCourseView>('accept_custom_course_source', { id, url, accepted }),
+  markCustomCourseRead: (id: string, read: boolean) => invoke<CustomCourseView>('mark_custom_course_read', { id, read }),
   publishCustomCourse: (id: string) => invoke<CustomCourseView>('publish_custom_course', { id }),
   deleteCustomCourseDraft: (id: string) => invoke<void>('delete_custom_course_draft', { id }),
   exportCustomCourse: (id: string) => invoke<ClassExport>('export_custom_course', { id }),

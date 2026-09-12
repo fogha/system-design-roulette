@@ -18,7 +18,7 @@
 </script>
 
 <div class="settings-page page-frame">
-  <header><div class="meta-label">CONFIGURATION — TUTOR · SEARCH · RECOVERY</div><h1>Configure your desk</h1><p>Each service has its own controls. Class-specific tutor preferences live with the class.</p></header>
+  <header><div class="meta-label">CONFIGURATION · TUTOR · SEARCH · RECOVERY</div><h1>Configure your desk</h1><p>Each service has its own controls. Class-specific tutor preferences live with the class.</p></header>
   <FlowStage number="01"><section aria-label="Tutor configuration">
     <RunnerSetup bind:agent bind:model bind:customBin onUse={saveTutor} onKeyChanged={() => app.refresh()} />
     <RunnerFallback />

@@ -137,6 +137,97 @@ pub async fn review_custom_course(
     saved
 }
 
+/// Ask the tutor to make the change one finding asks for. The draft is
+/// replaced by the patched one and the finding is marked fixed with the
+/// tutor's note; the other findings stay as they were.
+#[tauri::command]
+pub async fn fix_custom_course_finding(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    jobs: State<'_, BuilderJobs>,
+    id: String,
+    index: usize,
+) -> CmdResult<CustomCourseView> {
+    let (brief, draft, finding) = {
+        let conn = state.db.0.lock().unwrap();
+        let view = custom::get(&conn, &id).map_err(err)?;
+        let finding = view
+            .review
+            .get(index)
+            .cloned()
+            .ok_or_else(|| "that finding is not in the review".to_string())?;
+        (view.brief, view.draft, finding)
+    };
+    if jobs.working(&id).is_some() {
+        return Err("the tutor is already working on this class".into());
+    }
+    let job = jobs.begin(&id, "fix");
+    let _run = state.generator.feed.begin(&format!("fix:{id}"), &id);
+    let fixed = state
+        .generator
+        .fix_custom_course_finding(&brief, &draft, &finding)
+        .await
+        .map_err(|error| format!("the tutor could not make the change: {error}"));
+    let saved = fixed.and_then(|(changed, note, _)| {
+        let conn = state.db.0.lock().unwrap();
+        custom::save_draft(&conn, &id, changed).map_err(err)?;
+        let note = if note.is_empty() {
+            "by the tutor".to_string()
+        } else {
+            format!("by the tutor: {note}")
+        };
+        custom::resolve_finding(&conn, &id, index, "fixed", &note).map_err(err)
+    });
+    drop(job);
+    tell(&app);
+    saved
+}
+
+/// Settle a finding by hand: `fixed` after editing, `dismissed` with a
+/// reason, or `open` again.
+#[tauri::command]
+pub fn resolve_custom_course_finding(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+    index: usize,
+    status: String,
+    note: String,
+) -> CmdResult<CustomCourseView> {
+    let view = custom::resolve_finding(&state.db.0.lock().unwrap(), &id, index, &status, &note)
+        .map_err(err)?;
+    tell(&app);
+    Ok(view)
+}
+
+/// Keep an unreachable source knowingly, or withdraw that.
+#[tauri::command]
+pub fn accept_custom_course_source(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+    url: String,
+    accepted: bool,
+) -> CmdResult<CustomCourseView> {
+    let view =
+        custom::accept_source(&state.db.0.lock().unwrap(), &id, &url, accepted).map_err(err)?;
+    tell(&app);
+    Ok(view)
+}
+
+/// The learner confirms their own read-through of the draft as it stands.
+#[tauri::command]
+pub fn mark_custom_course_read(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+    read: bool,
+) -> CmdResult<CustomCourseView> {
+    let view = custom::mark_read(&state.db.0.lock().unwrap(), &id, read).map_err(err)?;
+    tell(&app);
+    Ok(view)
+}
+
 /// Fetch every primary source and keep the result with the class.
 #[tauri::command]
 pub async fn verify_custom_course_sources(

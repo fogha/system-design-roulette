@@ -1,4 +1,4 @@
-# Native assessment verification — 2026-09-09
+# Native assessment verification, 2026-09-09
 
 The packaged macOS app was tested through its native window at `tauri://localhost`,
 using Rust IPC and SQLite. The isolated identifier was
@@ -197,7 +197,7 @@ Evidence: `/tmp/principia-primary-final-before.json`,
 `/tmp/principia-primary-final-quit.json` and
 `/tmp/principia-primary-final-completed.json`.
 
-## Shared-runtime engineering lesson — 2026-09-10
+## Shared-runtime engineering lesson, 2026-09-10
 
 Isolated profile `com.darkmatter.principia-desk.qa`, upgraded v7→v8 on launch with
 a pre-upgrade backup and `integrity_check` = `ok`; `--debug-day`; the tutor
@@ -264,7 +264,7 @@ session under its original `primary-…` ID with a `primary_import` crosswalk ro
 and a skipped result recording its last step; `integrity_check` returned `ok`
 and Progress listed the same six sessions as before (screenshot 40).
 
-## Durable appointments — 2026-09-10
+## Durable appointments, 2026-09-10
 
 Same isolated profile, upgraded to schema v9 on launch. With TypeScript (09:00),
 JavaScript & Browser (09:30) and German (10:00) active on weekdays:
@@ -287,7 +287,7 @@ JavaScript & Browser (09:30) and German (10:00) active on weekdays:
   refreshed to no missed rows; both TypeScript and German runtime sessions
   stayed listed as resumable (screenshot 46). SQLite: two skipped, one started.
 
-## Per-class focus ownership — 2026-09-10
+## Per-class focus ownership, 2026-09-10
 
 Same isolated profile (schema v9 unchanged), launched with `--debug-day` so the
 kiosk records the lock without seizing the display. TypeScript held a paused
@@ -323,7 +323,7 @@ advisory lesson and German an active one from the appointment checks:
   skip release paths are covered by `tests/enforcement.rs` and the command-level
   release calls rather than by a native capture in this pass.
 
-## Shared lesson shell — 2026-09-10
+## Shared lesson shell, 2026-09-10
 
 Same isolated profile, rebuilt app with `features/lessons/` (LessonShell,
 LessonSession, KnowledgeCheck, LessonOutcome). The driver now refuses to act
@@ -356,7 +356,7 @@ unless the Mac has been idle, and ignores its own synthetic input.
   on the scholar paper and the writing badge restored in the header
   (screenshot 66).
 
-## Path revisions and unit challenges — 2026-09-10
+## Path revisions and unit challenges, 2026-09-10
 
 Same isolated profile. The desktop pass for this increment ran only while the
 learner was away from the Mac; the driver's presence guard refused the first
@@ -364,25 +364,25 @@ attempt (the learner had returned), so the native record below covers what
 could be captured. Behaviour is otherwise covered by `tests/classes.rs`,
 `tests/challenges.rs` and the preview-parity tests.
 
-## Delayed retrieval sessions — 2026-09-10
+## Delayed retrieval sessions, 2026-09-10
 
 Verified through `tests/engineering_runtime.rs` (fresh and repeated material,
 review count, mastery projection). The desktop pass is pending the learner's
 absence: the driver refuses to launch while the Mac is in use.
 
-## Language passes by phase — 2026-09-10
+## Language passes by phase, 2026-09-10
 
 Verified through `tests/language_phases.rs`; the lesson's "This pass counts
 when" line and the failed-pass explanation are rendered by the language
 screen. Desktop pass pending the learner's absence.
 
-## Bash reference lessons — 2026-09-10
+## Bash reference lessons, 2026-09-10
 
 Validated offline by `tests/fixtures.rs`; retrieval sets feed
 `engineering::prepare_review` for the two Bash courses. No desktop pass is
 needed for content; the Bash classes are not enrolled on the QA profile.
 
-## Route revisions, badges and unit challenge — 2026-09-11
+## Route revisions, badges and unit challenge, 2026-09-11
 
 Same isolated profile on the bundle built from the Bash-fixture commit, driven
 only while the Mac had been idle for over five minutes:
@@ -404,7 +404,7 @@ only while the Mac had been idle for over five minutes:
   a capture. The route card on the overview sits below the metrics and was not
   scrolled into the capture.
 
-## Changed curriculum and path review — 2026-09-11
+## Changed curriculum and path review, 2026-09-11
 
 Rebuilding the QA bundle with the new reference lessons changed every
 engineering course's fingerprint, so the profile's accepted paths were stale:
@@ -422,7 +422,7 @@ engineering course's fingerprint, so the profile's accepted paths were stale:
   (screenshot 86). The class row now points at the new revision, the overview
   shows "Next:" again and no curriculum-changed notice remains.
 
-## Moving an appointment — 2026-09-11
+## Moving an appointment, 2026-09-11
 
 On the rebuilt bundle, the TypeScript Schedule tab listed today's appointment
 (`2026-09-11 09:00 · scheduled`) with a time input and Move beside it
@@ -435,7 +435,7 @@ capture. The rule row above it reads "Due now" because the QA app runs under
 the appointment row shows the real disposition, and a normal launch shows the
 rule as due only when its appointment is due.
 
-## After removing the retired daily routine — 2026-09-11
+## After removing the retired daily routine, 2026-09-11
 
 Rebuilt the QA bundle at the removal commits and reran the desk on the
 isolated profile. Today opens on "Your study desk is waiting" with the next

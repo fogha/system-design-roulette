@@ -38,10 +38,10 @@ Instances of abusive, harassing or otherwise unacceptable behaviour may be repor
 
 ## Enforcement guidelines
 
-1. **Correction** — a private, written warning with clarity around the nature of the violation. A public apology may be requested.
-2. **Warning** — a warning with consequences for continued behaviour: no interaction with the people involved for a specified period.
-3. **Temporary ban** — a temporary ban from any sort of interaction or public communication with the community for a specified period.
-4. **Permanent ban** — a permanent ban from any sort of public interaction within the community.
+1. **Correction**: a private, written warning with clarity around the nature of the violation. A public apology may be requested.
+2. **Warning**: a warning with consequences for continued behaviour: no interaction with the people involved for a specified period.
+3. **Temporary ban**: a temporary ban from any sort of interaction or public communication with the community for a specified period.
+4. **Permanent ban**: a permanent ban from any sort of public interaction within the community.
 
 ## Attribution
 

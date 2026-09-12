@@ -66,7 +66,7 @@
         {#each drafts as item (item.id)}
           <button onkeydown={move} data-course class="class-row draft" class:selected={building === item.id} aria-current={building === item.id ? 'true' : undefined} onclick={() => app.openBuilder(item.id)}>
             <span class="draft-glyph"><PenLine size={15} /></span>
-            <span class="row-copy"><strong>{item.label || 'Untitled class'}</strong><small><i class="pen" class:live={!!item.working}></i>{item.working ? `tutor ${item.working === 'draft' ? 'drafting' : item.working === 'review' ? 'reviewing' : item.working === 'bank' ? 'writing questions' : 'fetching sources'}…` : `${item.topics} ${item.topics === 1 ? 'topic' : 'topics'} · ${item.origin}`}<span class="progress mono">draft</span></small></span>
+            <span class="row-copy"><strong>{item.label || 'Untitled class'}</strong><small><i class="pen" class:live={!!item.working}></i>{item.working ? `tutor ${item.working === 'draft' ? 'drafting' : item.working === 'review' ? 'reviewing' : item.working === 'bank' ? 'writing questions' : item.working === 'fix' ? 'changing the draft' : 'fetching sources'}…` : `${item.topics} ${item.topics === 1 ? 'topic' : 'topics'} · ${item.origin}`}<span class="progress mono">draft</span></small></span>
           </button>
         {/each}
         <div class="drafts-heading mono">CLASSES</div>

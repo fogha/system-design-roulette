@@ -7,17 +7,21 @@
    */
   import type { CourseDraft, DraftIssue, DraftTopic } from '../../../ipc';
   import { blankTopic, STAGES, validateDraft } from '../../../custom-preview';
+  import { autosize } from '../../../actions/autosize';
   import TopicCard from './TopicCard.svelte';
   import { Plus, X, CircleAlert, CircleCheck } from 'lucide-svelte';
 
   let {
     draft = $bindable(),
     nativeIssues = [],
+    focus = null,
     onchange,
   }: {
     draft: CourseDraft;
     /** What the desk said after the last save; the local mirror runs between saves. */
     nativeIssues?: DraftIssue[];
+    /** A topic to open, scroll to and light up; `at` makes the same slug jump again. */
+    focus?: { slug: string; at: number } | null;
     onchange: () => void;
   } = $props();
 
@@ -32,6 +36,14 @@
   );
   let openSlug = $state<string | null>(null);
   let hostInput = $state('');
+  /** The card a jump landed on, lit until the blink ends. */
+  let flashSlug = $state<string | null>(null);
+  let flashTimer: ReturnType<typeof setTimeout> | null = null;
+
+  $effect(() => {
+    const target = focus;
+    if (target) jump(`topics/${target.slug}`);
+  });
 
   function addHost() {
     const host = hostInput.trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '').toLowerCase();
@@ -63,7 +75,14 @@
   function jump(at: string) {
     const slug = at.replace(/^topics\//, '');
     openSlug = slug;
-    document.getElementById(`topic-${slug}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    flashSlug = null;
+    if (flashTimer) clearTimeout(flashTimer);
+    // The card opens first, then the scroll and the blink land on it.
+    setTimeout(() => {
+      document.getElementById(`topic-${slug}`)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      flashSlug = slug;
+      flashTimer = setTimeout(() => (flashSlug = null), 2300);
+    }, 40);
   }
 </script>
 
@@ -100,10 +119,10 @@
         <label class="field" id="field-short_code"><span>Short code <small>1–4 letters</small></span><input class="mono" maxlength="4" value={draft.short_code} oninput={(e) => { draft.short_code = e.currentTarget.value.toUpperCase(); onchange(); }} /></label>
         <label class="field" id="field-native_label"><span>Field <small>two or three words, lowercase</small></span><input value={draft.native_label} oninput={(e) => { draft.native_label = e.currentTarget.value; onchange(); }} placeholder="systems programming" /></label>
         <label class="field span-2" id="field-title"><span>Full title</span><input value={draft.title} oninput={(e) => { draft.title = e.currentTarget.value; onchange(); }} /></label>
-        <label class="field span-2" id="field-summary"><span>Summary <small>one sentence</small></span><input value={draft.summary} oninput={(e) => { draft.summary = e.currentTarget.value; onchange(); }} /></label>
-        <label class="field span-2" id="field-outcome"><span>Outcome <small>what you will have made and can defend at the end</small></span><textarea rows="3" value={draft.outcome} oninput={(e) => { draft.outcome = e.currentTarget.value; onchange(); }}></textarea></label>
-        <label class="field span-2" id="field-context"><span>How it should be taught <small>the tutor reads this before every lesson</small></span><textarea rows="3" value={draft.context} oninput={(e) => { draft.context = e.currentTarget.value; onchange(); }}></textarea></label>
-        <label class="field span-2" id="field-environment"><span>Working environment</span><input value={draft.environment} oninput={(e) => { draft.environment = e.currentTarget.value; onchange(); }} placeholder="A terminal, a text editor and …" /></label>
+        <label class="field span-2" id="field-summary"><span>Summary <small>one sentence</small></span><textarea use:autosize={{ min: 1, max: 4, value: draft.summary }} value={draft.summary} oninput={(e) => { draft.summary = e.currentTarget.value; onchange(); }}></textarea></label>
+        <label class="field span-2" id="field-outcome"><span>Outcome <small>what you will have made and can defend at the end</small></span><textarea use:autosize={{ min: 3, max: 10, value: draft.outcome }} value={draft.outcome} oninput={(e) => { draft.outcome = e.currentTarget.value; onchange(); }}></textarea></label>
+        <label class="field span-2" id="field-context"><span>How it should be taught <small>the tutor reads this before every lesson</small></span><textarea use:autosize={{ min: 3, max: 10, value: draft.context }} value={draft.context} oninput={(e) => { draft.context = e.currentTarget.value; onchange(); }}></textarea></label>
+        <label class="field span-2" id="field-environment"><span>Working environment</span><textarea use:autosize={{ min: 1, max: 4, value: draft.environment }} value={draft.environment} oninput={(e) => { draft.environment = e.currentTarget.value; onchange(); }} placeholder="A terminal, a text editor and …"></textarea></label>
       </div>
       <div class="field" id="field-source_hosts">
         <span>Documentation hosts <small>every lesson is taught from and cites these</small></span>
@@ -140,6 +159,7 @@
                 others={draft.topics}
                 issues={topicIssues(topic.slug)}
                 open={openSlug === topic.slug}
+                flash={flashSlug === topic.slug}
                 onremove={() => removeTopic(index)}
                 onmove={(direction) => moveTopic(index, direction)}
                 onchange={() => { openSlug = draft.topics[index]?.slug ?? openSlug; onchange(); }}
@@ -173,7 +193,7 @@
   .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; } .span-2 { grid-column: 1 / -1; }
   .field { display: flex; flex-direction: column; gap: 6px; min-width: 0; } .field > span { font-size: 11px; color: var(--muted); } .field > span small { margin-left: 6px; color: var(--faint); font-size: 10px; }
   input, textarea { width: 100%; padding: 9px 11px; border: 1px solid var(--node-border); border-radius: var(--radius-control); background: var(--bg); color: var(--fg); font: 12.5px/1.5 var(--font-body); }
-  input.mono { font-family: var(--font-mono); font-size: 11.5px; } textarea { resize: vertical; }
+  input.mono { font-family: var(--font-mono); font-size: 11.5px; } textarea { display: block; }
   input:focus, textarea:focus { outline: none; border-color: var(--accent); }
   .hosts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px; border: 1px solid var(--node-border); border-radius: var(--radius-control); background: var(--bg); }
   .host { display: inline-flex; align-items: center; gap: 5px; padding: 4px 6px 4px 9px; border: 1px solid var(--node-border); border-radius: 6px; background: var(--surface); font-size: 10.5px; color: var(--fg); }
