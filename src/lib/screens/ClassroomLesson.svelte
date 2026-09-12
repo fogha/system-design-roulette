@@ -316,9 +316,10 @@
   .reading-grid { display: grid; grid-template-columns: minmax(0, 1fr); }
   .map-rail { display: none; }
   @media (min-width: 1180px) {
-    .reading-grid.with-rail { grid-template-columns: 236px minmax(0, 1fr); gap: 8px; padding-left: 20px; }
+    /* The rail sits against the reading column and the two are centred together. */
+    .reading-grid.with-rail { grid-template-columns: 236px minmax(0, 1080px); justify-content: center; gap: 8px; padding: 0 20px; }
     .reading-grid.with-rail .map-rail { display: block; position: sticky; top: 14px; align-self: start; max-height: calc(100vh - 210px); overflow-y: auto; padding-top: 28px; scrollbar-width: thin; }
-    .reading-grid.with-rail .reading-pane { margin: 0 auto; }
+    .reading-grid.with-rail .reading-pane { margin: 0; width: 100%; }
   }
   .exercise-end { margin-top: 40px; border-top: 1px solid var(--node-border); }
   .practice-pane { margin-top: 12px; border-top: 1px solid var(--node-border); border-radius: var(--radius-panel); padding: 24px; background: var(--surface); font-size: 15px; }
