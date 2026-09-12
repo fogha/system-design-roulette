@@ -54,20 +54,43 @@
   onMount(() => {
     api.listAgentRunners().then((list) => (runners = list)).catch(() => {});
     if (id) void load(id);
+    return () => { if (pollTimer) clearInterval(pollTimer); };
   });
 
   async function load(courseId: string) {
     try {
       const loaded = await api.getCustomCourse(courseId);
       adopt(loaded);
-      step = untrack(() => (drafted ? 'review' : 'draft'));
+      step = untrack(() => (loaded.working === 'draft' ? 'draft' : loaded.working ? 'verify' : drafted ? 'review' : 'draft'));
     } catch (cause) { error = String(cause); }
   }
   function adopt(next: CustomCourseView) {
     view = next;
     brief = { ...next.brief };
     draft = structuredClone(next.draft);
+    // A call the desk is still running (started here or before the page was
+    // left) shows as such, and the view is fetched again until it ends.
+    if (next.working) { busy = next.working; watch(next.id); }
+    else if (busy === 'draft' || busy === 'review' || busy === 'sources' || busy === 'bank') { busy = ''; }
   }
+
+  /** While the desk works, ask again every few seconds; the desk also says when it is done. */
+  let pollTimer: ReturnType<typeof setInterval> | null = null;
+  function watch(courseId: string) {
+    if (pollTimer) return;
+    pollTimer = setInterval(async () => {
+      try {
+        const fresh = await api.getCustomCourse(courseId);
+        if (!fresh.working) {
+          if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+          adopt(fresh);
+          if (drafted && step === 'draft') step = 'review';
+        }
+      } catch { /* the next tick asks again */ }
+    }, 4000);
+  }
+  // The desk announces a finished call with a state refresh; read the class again then.
+  $effect(() => { void app.state; const current = view?.id; if (current && busy && pollTimer) untrack(() => api.getCustomCourse(current).then((fresh) => { if (!fresh.working) { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } adopt(fresh); if (drafted && step === 'draft') step = 'review'; } }).catch(() => {})); });
 
   function addHost() {
     const host = hostInput.trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '').toLowerCase();
@@ -90,8 +113,10 @@
   async function askTutor() {
     if (!view || busy) return;
     busy = 'draft'; error = '';
+    watch(view.id);
     try { adopt(await api.draftCustomCourse(view.id)); step = 'review'; }
-    catch (cause) { error = String(cause); } finally { busy = ''; }
+    catch (cause) { error = String(cause); busy = ''; }
+    finally { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } if (!view?.working) busy = ''; }
   }
   function writeByHand() { step = 'review'; }
   async function importFile(event: Event) {
@@ -126,24 +151,17 @@
   }
   async function flush() { if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; } await save(); }
 
-  async function review() {
+  async function tutorCall(kind: 'review' | 'sources' | 'bank', call: (id: string) => Promise<CustomCourseView>) {
     if (!view || busy) return;
     await flush();
-    busy = 'review'; error = ''; dismissed = [];
-    try { adopt(await api.reviewCustomCourse(view.id)); } catch (cause) { error = String(cause); } finally { busy = ''; }
+    busy = kind; error = ''; if (kind === 'review') dismissed = [];
+    watch(view.id);
+    try { adopt(await call(view.id)); } catch (cause) { error = String(cause); busy = ''; }
+    finally { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } if (!view?.working) busy = ''; }
   }
-  async function verifySources() {
-    if (!view || busy) return;
-    await flush();
-    busy = 'sources'; error = '';
-    try { adopt(await api.verifyCustomCourseSources(view.id)); } catch (cause) { error = String(cause); } finally { busy = ''; }
-  }
-  async function writeBank() {
-    if (!view || busy) return;
-    await flush();
-    busy = 'bank'; error = '';
-    try { adopt(await api.writeCustomCourseBank(view.id)); } catch (cause) { error = String(cause); } finally { busy = ''; }
-  }
+  const review = () => tutorCall('review', (id) => api.reviewCustomCourse(id));
+  const verifySources = () => tutorCall('sources', (id) => api.verifyCustomCourseSources(id));
+  const writeBank = () => tutorCall('bank', (id) => api.writeCustomCourseBank(id));
   async function publish() {
     if (!view || busy) return;
     await flush();
@@ -239,7 +257,7 @@
           <span class="way-tile"><Bot size={20} /></span>
           <strong>Ask the tutor</strong>
           <small>{brief.agent} · {brief.model || 'runner default'} designs the stages and 12 to 36 topics with sources, held to the desk's checks.</small>
-          {#if busy === 'draft'}<span class="working mono">drafting… this takes a minute or two</span>{/if}
+          {#if busy === 'draft'}<span class="working mono">drafting… a whole course takes three to six minutes; you can leave this page and come back</span>{/if}
         </button>
         <button type="button" class="way" disabled={!!busy} onclick={writeByHand}>
           <span class="way-tile"><PenLine size={20} /></span>
@@ -254,8 +272,11 @@
         </button>
         <input bind:this={fileInput} type="file" accept=".json,application/json" hidden onchange={importFile} />
       </div>
-      {#if busy === 'draft' && logTail.length}
-        <pre class="feed mono" aria-live="polite">{logTail.join('\n')}</pre>
+      {#if busy === 'draft'}
+        <div class="node working-node">
+          <div class="node-head mono"><span class="live"></span> the tutor is drafting · the Logs page shows every line</div>
+          <pre class="feed mono" aria-live="polite">{logTail.length ? logTail.join('\n') : 'waiting for the first line from the runner…'}</pre>
+        </div>
       {/if}
       {#if drafted}<footer class="nav"><span class="hint mono">a draft exists · {draft?.topics.length} topics</span><button type="button" class="ghost mono-ghost" onclick={() => (step = 'review')}>Open the draft <ArrowRight size={12} /></button></footer>{/if}
       <footer class="nav back"><button type="button" class="ghost mono-ghost" onclick={() => (step = 'brief')} disabled={!!busy}><ArrowLeft size={12} />Back to the brief</button></footer>
@@ -357,7 +378,11 @@
 </div>
 
 <style>
-  .builder { display: flex; flex-direction: column; gap: 16px; padding: 22px 26px 40px; min-width: 0; }
+  /* The builder is the scrolling pane inside the workspace's details column. */
+  .builder { display: flex; flex-direction: column; gap: 16px; padding: 22px 26px 40px; min-width: 0; flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-gutter: stable; }
+  .working-node { overflow: hidden; }
+  .working-node .node-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--node-divider); font-size: 10px; letter-spacing: 0.6px; color: var(--muted); }
+  .live { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); animation: pulse 1.2s ease-in-out infinite; }
   .top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
   .top h2 { margin: 6px 0 0; font: 24px var(--font-display); }
   .top-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
@@ -402,6 +427,7 @@
   .way strong { font-size: 13.5px; font-weight: 500; } .way small { font-size: 11px; line-height: 1.5; color: var(--muted); }
   .working { font-size: 9.5px; letter-spacing: 0.5px; color: var(--accent); animation: pulse 1.2s ease-in-out infinite; } @keyframes pulse { 50% { opacity: 0.4; } }
   .feed { margin: 0; padding: 10px 12px; max-height: 140px; overflow: hidden; border: 1px solid var(--node-border); border-radius: var(--radius-control); background: #0b0d10; color: var(--muted); font-size: 10.5px; line-height: 1.6; white-space: pre-wrap; }
+  .working-node .feed { border: 0; border-radius: 0; }
   .checks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
   .check-card { display: flex; flex-direction: column; gap: 12px; padding: 14px; border: 1px solid var(--node-border); border-radius: var(--radius-panel); background: var(--surface); }
   .check-head { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; } .check-head > div { flex: 1; min-width: 180px; } .check-head strong { display: block; font-size: 13px; font-weight: 500; } .check-head small { display: block; margin-top: 4px; font-size: 11px; line-height: 1.5; color: var(--muted); }

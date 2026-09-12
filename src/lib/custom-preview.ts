@@ -136,7 +136,7 @@ function now() { return new Date().toISOString(); }
 function view(id: string): CustomCourseView {
   const item = stored.get(id);
   if (!item) throw new Error('this class does not exist');
-  return { ...item, issues: validateDraft(item.draft), draft: structuredClone(item.draft), brief: { ...item.brief }, review: [...item.review], sources: [...item.sources], bank: item.bank ? structuredClone(item.bank) : null };
+  return { ...item, issues: validateDraft(item.draft), draft: structuredClone(item.draft), brief: { ...item.brief }, review: [...item.review], sources: [...item.sources], bank: item.bank ? structuredClone(item.bank) : null, working: item.working ?? null };
 }
 
 function newId(title: string): string {
@@ -162,7 +162,7 @@ export const previewCustom = {
     item.draft = structuredClone({ ...draft, id, topics: draft.topics.map((t) => ({ ...t, slug: slugify(t.slug || t.title) })) });
     item.updated_at = now(); return view(id);
   },
-  draft: async (id: string) => { const item = stored.get(id); if (!item) throw new Error('this class does not exist'); await new Promise((r) => setTimeout(r, 1800)); item.draft = cannedDraft(id, item.brief); item.updated_at = now(); return view(id); },
+  draft: async (id: string) => { const item = stored.get(id); if (!item) throw new Error('this class does not exist'); item.working = 'draft'; await new Promise((r) => setTimeout(r, 1800)); item.draft = cannedDraft(id, item.brief); item.working = null; item.updated_at = now(); return view(id); },
   review: async (id: string) => {
     const item = stored.get(id); if (!item) throw new Error('this class does not exist');
     await new Promise((r) => setTimeout(r, 1200));

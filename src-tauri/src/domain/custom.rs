@@ -144,6 +144,10 @@ pub struct CustomCourseView {
     pub created_at: String,
     pub updated_at: String,
     pub published_at: Option<String>,
+    /// A tutor call in flight for this class (`draft`, `review`, `sources`,
+    /// `bank`), filled in by the command layer.
+    #[serde(default)]
+    pub working: Option<String>,
 }
 
 /// A row of the list the Classes page shows.
@@ -156,6 +160,8 @@ pub struct CustomCourseSummary {
     pub origin: String,
     pub topics: usize,
     pub updated_at: String,
+    #[serde(default)]
+    pub working: Option<String>,
 }
 
 fn invalid(message: impl Into<String>) -> DbError {
@@ -735,6 +741,7 @@ fn view_of(row: Row) -> Result<CustomCourseView> {
         created_at: row.created_at,
         updated_at: row.updated_at,
         published_at: row.published_at,
+        working: None,
     })
 }
 
@@ -769,6 +776,7 @@ pub fn list(conn: &Connection) -> Result<Vec<CustomCourseSummary>> {
                 origin,
                 topics: draft.topics.len(),
                 updated_at,
+                working: None,
             })
         })
         .collect()

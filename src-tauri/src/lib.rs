@@ -209,6 +209,7 @@ pub fn run() {
             generator.runner.database = Some(data_dir.join("principia.db"));
             generator.researcher.set_search(search::load(&conn));
             app.manage(recovery::RecoveryState::default());
+            app.manage(class_builder::BuilderJobs::default());
             recovery::install(app.handle());
             app.manage(AppState {
                 db: db::Db(Mutex::new(conn)),

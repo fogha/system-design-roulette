@@ -4,7 +4,7 @@
 
 use super::{err, CmdResult};
 use crate::{
-    class_builder,
+    class_builder::{self, BuilderJobs},
     domain::custom::{
         self, ClassFile, CourseBrief, CourseDraft, CustomCourseSummary, CustomCourseView,
     },
@@ -19,13 +19,26 @@ fn tell(app: &AppHandle) {
 }
 
 #[tauri::command]
-pub fn list_custom_courses(state: State<'_, AppState>) -> CmdResult<Vec<CustomCourseSummary>> {
-    custom::list(&state.db.0.lock().unwrap()).map_err(err)
+pub fn list_custom_courses(
+    state: State<'_, AppState>,
+    jobs: State<'_, BuilderJobs>,
+) -> CmdResult<Vec<CustomCourseSummary>> {
+    let mut list = custom::list(&state.db.0.lock().unwrap()).map_err(err)?;
+    for item in &mut list {
+        item.working = jobs.working(&item.id);
+    }
+    Ok(list)
 }
 
 #[tauri::command]
-pub fn get_custom_course(state: State<'_, AppState>, id: String) -> CmdResult<CustomCourseView> {
-    custom::get(&state.db.0.lock().unwrap(), &id).map_err(err)
+pub fn get_custom_course(
+    state: State<'_, AppState>,
+    jobs: State<'_, BuilderJobs>,
+    id: String,
+) -> CmdResult<CustomCourseView> {
+    let mut view = custom::get(&state.db.0.lock().unwrap(), &id).map_err(err)?;
+    view.working = jobs.working(&id);
+    Ok(view)
 }
 
 /// Start a class from a brief. `origin` says how the draft will be made:
@@ -61,7 +74,9 @@ pub fn save_custom_course_draft(
 /// draft; the issues that remain come back with the view.
 #[tauri::command]
 pub async fn draft_custom_course(
+    app: AppHandle,
     state: State<'_, AppState>,
+    jobs: State<'_, BuilderJobs>,
     id: String,
 ) -> CmdResult<CustomCourseView> {
     let (brief, _) = {
@@ -69,20 +84,33 @@ pub async fn draft_custom_course(
         let view = custom::get(&conn, &id).map_err(err)?;
         (view.brief, view.draft)
     };
+    if jobs.working(&id).is_some() {
+        return Err("the tutor is already working on this class".into());
+    }
+    let job = jobs.begin(&id, "draft");
     let _run = state.generator.feed.begin(&format!("draft:{id}"), &id);
-    let (draft, _issues, _source) = state
+    let drafted = state
         .generator
         .draft_custom_course(&id, &brief)
         .await
-        .map_err(|error| format!("the tutor could not draft the course: {error}"))?;
-    let conn = state.db.0.lock().unwrap();
-    custom::save_draft(&conn, &id, draft).map_err(err)
+        .map_err(|error| format!("the tutor could not draft the course: {error}"));
+    // Save while the job is still marked, then tell the desk: a refresh that
+    // arrives between the two would show the old draft as finished.
+    let saved = drafted.and_then(|(draft, _issues, _source)| {
+        let conn = state.db.0.lock().unwrap();
+        custom::save_draft(&conn, &id, draft).map_err(err)
+    });
+    drop(job);
+    tell(&app);
+    saved
 }
 
 /// Ask the tutor to read the draft back. Findings are kept with the class.
 #[tauri::command]
 pub async fn review_custom_course(
+    app: AppHandle,
     state: State<'_, AppState>,
+    jobs: State<'_, BuilderJobs>,
     id: String,
 ) -> CmdResult<CustomCourseView> {
     let (brief, draft) = {
@@ -90,32 +118,52 @@ pub async fn review_custom_course(
         let view = custom::get(&conn, &id).map_err(err)?;
         (view.brief, view.draft)
     };
+    if jobs.working(&id).is_some() {
+        return Err("the tutor is already working on this class".into());
+    }
+    let job = jobs.begin(&id, "review");
     let _run = state.generator.feed.begin(&format!("review:{id}"), &id);
-    let (findings, _) = state
+    let reviewed = state
         .generator
         .review_custom_course(&brief, &draft)
         .await
-        .map_err(|error| format!("the tutor could not review the course: {error}"))?;
-    let conn = state.db.0.lock().unwrap();
-    custom::save_review(&conn, &id, &findings).map_err(err)
+        .map_err(|error| format!("the tutor could not review the course: {error}"));
+    let saved = reviewed.and_then(|(findings, _)| {
+        let conn = state.db.0.lock().unwrap();
+        custom::save_review(&conn, &id, &findings).map_err(err)
+    });
+    drop(job);
+    tell(&app);
+    saved
 }
 
 /// Fetch every primary source and keep the result with the class.
 #[tauri::command]
 pub async fn verify_custom_course_sources(
+    app: AppHandle,
     state: State<'_, AppState>,
+    jobs: State<'_, BuilderJobs>,
     id: String,
 ) -> CmdResult<CustomCourseView> {
     let draft = {
         let conn = state.db.0.lock().unwrap();
         custom::get(&conn, &id).map_err(err)?.draft
     };
+    if jobs.working(&id).is_some() {
+        return Err("the tutor is already working on this class".into());
+    }
+    let job = jobs.begin(&id, "sources");
     let _run = state.generator.feed.begin(&format!("sources:{id}"), &id);
     let checks =
         class_builder::verify_sources(&state.generator.researcher, &state.generator.feed, &draft)
             .await;
-    let conn = state.db.0.lock().unwrap();
-    custom::save_sources(&conn, &id, &checks).map_err(err)
+    let saved = {
+        let conn = state.db.0.lock().unwrap();
+        custom::save_sources(&conn, &id, &checks).map_err(err)
+    };
+    drop(job);
+    tell(&app);
+    saved
 }
 
 /// Ask the tutor to write the question bank: three cited questions per
@@ -125,6 +173,7 @@ pub async fn verify_custom_course_sources(
 pub async fn write_custom_course_bank(
     app: AppHandle,
     state: State<'_, AppState>,
+    jobs: State<'_, BuilderJobs>,
     id: String,
 ) -> CmdResult<CustomCourseView> {
     let (brief, draft) = {
@@ -138,16 +187,23 @@ pub async fn write_custom_course_bank(
         }
         (view.brief, view.draft)
     };
+    if jobs.working(&id).is_some() {
+        return Err("the tutor is already working on this class".into());
+    }
+    let job = jobs.begin(&id, "bank");
     let _run = state.generator.feed.begin(&format!("bank:{id}"), &id);
-    let (bank, _) = state
+    let written = state
         .generator
         .write_custom_course_bank(&brief, &draft)
         .await
-        .map_err(|error| format!("the tutor could not write the question bank: {error}"))?;
-    let conn = state.db.0.lock().unwrap();
-    let view = custom::save_bank(&conn, &id, &bank).map_err(err)?;
+        .map_err(|error| format!("the tutor could not write the question bank: {error}"));
+    let saved = written.and_then(|(bank, _)| {
+        let conn = state.db.0.lock().unwrap();
+        custom::save_bank(&conn, &id, &bank).map_err(err)
+    });
+    drop(job);
     tell(&app);
-    Ok(view)
+    saved
 }
 
 /// A learner disputes a written key. The question stops counting and is

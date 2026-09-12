@@ -66,7 +66,7 @@
         {#each drafts as item (item.id)}
           <button onkeydown={move} data-course class="class-row draft" class:selected={building === item.id} aria-current={building === item.id ? 'true' : undefined} onclick={() => app.openBuilder(item.id)}>
             <span class="draft-glyph"><PenLine size={15} /></span>
-            <span class="row-copy"><strong>{item.label || 'Untitled class'}</strong><small><i class="pen"></i>{item.topics} {item.topics === 1 ? 'topic' : 'topics'} · {item.origin}<span class="progress mono">draft</span></small></span>
+            <span class="row-copy"><strong>{item.label || 'Untitled class'}</strong><small><i class="pen" class:live={!!item.working}></i>{item.working ? `tutor ${item.working === 'draft' ? 'drafting' : item.working === 'review' ? 'reviewing' : item.working === 'bank' ? 'writing questions' : 'fetching sources'}…` : `${item.topics} ${item.topics === 1 ? 'topic' : 'topics'} · ${item.origin}`}<span class="progress mono">draft</span></small></span>
           </button>
         {/each}
         <div class="drafts-heading mono">CLASSES</div>
@@ -112,7 +112,7 @@
   .new-class { width: 100%; justify-content: center; } .new-class.on { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); color: var(--fg); }
   .drafts-heading { display: flex; justify-content: space-between; padding: 8px 9px 4px; font-size: 9px; letter-spacing: 1px; color: var(--faint); } .drafts-heading span { color: var(--accent); }
   .draft-glyph { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border: 1px dashed color-mix(in srgb, var(--accent) 45%, var(--node-border)); border-radius: 6px; color: var(--accent); background: var(--bg); }
-  .row-copy small i.pen { background: var(--accent); }
+  .row-copy small i.pen { background: var(--accent); } .row-copy small i.pen.live { animation: pulse 1.2s ease-in-out infinite; } @keyframes pulse { 50% { opacity: 0.3; } }
   .row-copy { min-width: 0; flex: 1; }
   strong { display: block; font-size: 12px; line-height: 1.45; font-weight: 500; }
   small { display: flex; gap: 5px; align-items: center; color: var(--muted); font-size: 10px; margin-top: 5px; }

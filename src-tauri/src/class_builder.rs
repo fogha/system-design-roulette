@@ -11,7 +11,69 @@ use crate::domain::custom::{
 use crate::domain::placement::{Bank, Choice, Question, CRITERIA_PER_ENTRY_POINT};
 use crate::generator::{GenError, Generator, Result};
 use serde::Deserialize;
+use std::collections::HashMap;
+use std::sync::Mutex;
 use std::time::Duration;
+
+/// The builder's calls in flight, by course id: `draft`, `review`, `sources`
+/// or `bank`. The interface asks for it when it opens a class, so leaving
+/// the page and coming back still shows what the tutor is doing.
+#[derive(Default)]
+pub struct BuilderJobs(pub Mutex<HashMap<String, String>>);
+
+impl BuilderJobs {
+    pub fn working(&self, id: &str) -> Option<String> {
+        self.0.lock().unwrap().get(id).cloned()
+    }
+
+    /// Mark a job in flight until the guard drops, however the call ends.
+    pub fn begin(&self, id: &str, kind: &str) -> JobGuard<'_> {
+        self.0
+            .lock()
+            .unwrap()
+            .insert(id.to_string(), kind.to_string());
+        JobGuard {
+            jobs: self,
+            id: id.to_string(),
+        }
+    }
+}
+
+pub struct JobGuard<'a> {
+    jobs: &'a BuilderJobs,
+    id: String,
+}
+
+impl Drop for JobGuard<'_> {
+    fn drop(&mut self) {
+        self.jobs.0.lock().unwrap().remove(&self.id);
+    }
+}
+
+/// A long call says so while it runs. The CLI runners answer only when they
+/// finish, and a whole curriculum takes minutes, so without this the feed
+/// falls silent and looks stuck.
+async fn with_heartbeat<T>(
+    feed: &crate::execution_log::Feed,
+    what: &str,
+    call: impl std::future::Future<Output = T>,
+) -> T {
+    let started = std::time::Instant::now();
+    let mut tick = tokio::time::interval(Duration::from_secs(45));
+    tick.tick().await; // the first tick fires at once
+    tokio::pin!(call);
+    loop {
+        tokio::select! {
+            result = &mut call => return result,
+            _ = tick.tick() => {
+                feed.say(format!(
+                    "class builder: still {what} ({}s); a whole course takes a few minutes",
+                    started.elapsed().as_secs()
+                ));
+            }
+        }
+    }
+}
 
 /// How long a drafting call may take. A whole curriculum is a long answer.
 const DRAFT_TIMEOUT: Duration = Duration::from_secs(420);
@@ -149,16 +211,19 @@ impl Generator {
             brief.title.trim()
         ));
         let prompt = draft_prompt(brief);
-        let (raw, source) = scoped
-            .run_exact_for::<CourseDraft>(
+        let (raw, source) = with_heartbeat(
+            &scoped.feed,
+            "drafting",
+            scoped.run_exact_for::<CourseDraft>(
                 &agent,
                 &custom_bin,
                 &prompt,
                 false,
                 DRAFT_TIMEOUT,
                 &model,
-            )
-            .await?;
+            ),
+        )
+        .await?;
         let mut draft = custom::normalize(with_id(raw, id, brief));
         let mut issues = custom::validate(&draft);
         scoped.log(format!(
@@ -179,16 +244,19 @@ impl Generator {
                     "could not serialize draft: {error}"
                 )))?
             );
-            match scoped
-                .run_exact_for::<CourseDraft>(
+            match with_heartbeat(
+                &scoped.feed,
+                "correcting the draft",
+                scoped.run_exact_for::<CourseDraft>(
                     &agent,
                     &custom_bin,
                     &correction,
                     false,
                     DRAFT_TIMEOUT,
                     &model,
-                )
-                .await
+                ),
+            )
+            .await
             {
                 Ok((corrected, _)) => {
                     let corrected = custom::normalize(with_id(corrected, id, brief));
@@ -262,9 +330,19 @@ impl Generator {
             draft = serde_json::to_string(draft)
                 .map_err(|error| GenError::Parse(format!("could not serialize draft: {error}")))?
         );
-        let (review, source) = scoped
-            .run_exact_for::<Review>(&agent, &custom_bin, &prompt, false, REVIEW_TIMEOUT, &model)
-            .await?;
+        let (review, source) = with_heartbeat(
+            &scoped.feed,
+            "reviewing",
+            scoped.run_exact_for::<Review>(
+                &agent,
+                &custom_bin,
+                &prompt,
+                false,
+                REVIEW_TIMEOUT,
+                &model,
+            ),
+        )
+        .await?;
         let slugs: Vec<&str> = draft.topics.iter().map(|t| t.slug.as_str()).collect();
         let mut findings: Vec<ReviewFinding> = review
             .findings
@@ -518,9 +596,19 @@ impl Generator {
             draft.label
         ));
         let prompt = bank_prompt(brief, draft);
-        let (written, source) = scoped
-            .run_exact_for::<WrittenBank>(&agent, &custom_bin, &prompt, false, BANK_TIMEOUT, &model)
-            .await?;
+        let (written, source) = with_heartbeat(
+            &scoped.feed,
+            "writing the question bank",
+            scoped.run_exact_for::<WrittenBank>(
+                &agent,
+                &custom_bin,
+                &prompt,
+                false,
+                BANK_TIMEOUT,
+                &model,
+            ),
+        )
+        .await?;
         let first = bank_from_written(draft, written.questions);
         let bank = match first {
             Ok(bank) => bank,

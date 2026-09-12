@@ -317,6 +317,8 @@ export interface CustomCourseView {
   created_at: string;
   updated_at: string;
   published_at: string | null;
+  /** A tutor call in flight for this class, so leaving and coming back shows it. */
+  working?: 'draft' | 'review' | 'sources' | 'bank' | null;
 }
 export interface CustomCourseSummary {
   id: string;
@@ -326,6 +328,7 @@ export interface CustomCourseSummary {
   origin: 'tutor' | 'manual' | 'import';
   topics: number;
   updated_at: string;
+  working?: 'draft' | 'review' | 'sources' | 'bank' | null;
 }
 export interface ClassExport {
   path: string;
