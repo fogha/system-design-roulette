@@ -213,6 +213,7 @@ fn frontend_completion_does_not_consume_or_mutate_language_practice() {
             weekdays: vec![1, 2, 3, 4, 5, 6, 7],
             enabled: true,
             durations: Default::default(),
+            starts: Default::default(),
         },
     )
     .unwrap();

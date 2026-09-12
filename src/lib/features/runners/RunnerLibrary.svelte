@@ -1,6 +1,6 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import { Terminal, KeyRound, HardDrive, Check } from 'lucide-svelte';
+  import { Terminal, KeyRound, HardDrive, Check, Save } from 'lucide-svelte';
   import { api } from '$lib/ipc';
   import type { RunnerInfo, RunnerConfiguration } from '$lib/contracts/agents';
   import ModelLibrary from './ModelLibrary.svelte';
@@ -67,14 +67,14 @@
           {#if picked && !picked.available && docs[selected]}<a href={docs[selected]} target="_blank" rel="noreferrer" onclick={e => openRunnerLink(e).catch(e => error = String(e))}>Installation instructions →</a>{/if}
           {#if selected === 'custom' && draft}<label class="command">Custom command<input aria-label="Saved custom runner command" bind:value={draft.custom_command} placeholder={"'/path/to/agent' --print {prompt}"} /></label><p>Use {'{model}'} for the selected model and {'{prompt}'} for the prompt. Without {'{prompt}'}, the prompt is appended as the final argument.</p>{/if}
         {:else}
-          {#if allowKeyEditing}<div class="key-row">{#if keyOpen}<input type="password" aria-label={`${picked?.label} API key`} autocomplete="off" placeholder="Paste provider key" bind:value={keyInput} /><button type="button" class="small-action" disabled={!!busy || !keyInput.trim()} onclick={() => saveKey()}>Save key</button>{:else}<button type="button" class="small-action" onclick={() => keyOpen = true}>{picked?.available ? 'Replace key' : 'Add API key'}</button>{/if}{#if picked?.available}<button type="button" class="text-action" disabled={!!busy} onclick={() => saveKey(true)}>Clear saved key</button>{/if}</div><p>macOS keys use Keychain. Environment keys take priority.</p>{:else}<p>Manage shared API keys in Settings.</p>{/if}
+          {#if allowKeyEditing}<div class="key-row">{#if keyOpen}<input type="password" aria-label={`${picked?.label} API key`} autocomplete="off" placeholder="Paste provider key" bind:value={keyInput} /><button type="button" class="ghost mono-ghost small" disabled={!!busy || !keyInput.trim()} onclick={() => saveKey()}>Save key</button>{:else}<button type="button" class="ghost mono-ghost small" onclick={() => keyOpen = true}>{picked?.available ? 'Replace key' : 'Add API key'}</button>{/if}{#if picked?.available}<button type="button" class="text-action" disabled={!!busy} onclick={() => saveKey(true)}>Clear saved key</button>{/if}</div><p>macOS keys use Keychain. Environment keys take priority.</p>{:else}<p>Manage shared API keys in Settings.</p>{/if}
           {#if selected === 'openrouter'}<button type="button" class="free-toggle" aria-pressed={freeOnly} onclick={toggleFree}><span>{#if freeOnly}<Check size={11} />{/if}</span>Free models only</button>{/if}
         {/if}
         {#if loading}<p role="status">Loading runner setup…</p>{:else if draft}<ModelLibrary runner={selected} bind:models={draft.models} freeOnly={selected === 'openrouter' && freeOnly} revision={catalogueRevision} />{/if}
       </div>
     </div>
   {/if}
-  <div class="save-row"><button type="button" class="save mono" disabled={!!busy || !draft || loading} onclick={save}>{busy === 'setup' ? 'Saving…' : 'Save runner setup'}</button><span>Configuration stays separate from the active tutor.</span></div>
+  <div class="save-row"><button type="button" class="cta mono-cta" disabled={!!busy || !draft || loading} onclick={save}><Save size={13} />{busy === 'setup' ? 'Saving…' : 'Save runner setup'}</button><span>Configuration stays separate from the active tutor.</span></div>
   {#if message}<p class="notice" role="status">{message}</p>{/if}{#if error}<p class="error" role="alert">{error}</p>{/if}
 </div>
 
@@ -100,9 +100,9 @@
   header { display: flex; justify-content: space-between; align-items: center; gap: 8px; } strong { font-size: 13px; font-weight: 500; } .status { font: 8px var(--font-mono); color: var(--muted); }
   p { font-size: 10px; line-height: 1.6; color: var(--muted); margin: 0; } a { color: var(--accent); font-size: 11px; }
   .key-row { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; } input { min-width: 0; flex: 1; border: 1px solid var(--node-border); padding: 8px; color: var(--text); background: var(--bg); font-size: 11px; } .command { display: grid; gap: 7px; font: 10px var(--font-mono); color: var(--muted); }
-  .small-action { background: var(--bg); border: 1px solid var(--node-border); color: var(--text); padding: 6px 8px; font-size: 10px; cursor: pointer; } .text-action { border: 0; background: transparent; color: var(--muted); font-size: 10px; cursor: pointer; }
+  .text-action { border: 0; background: transparent; color: var(--muted); font-size: 10px; cursor: pointer; }
   .free-toggle { justify-self: start; display: flex; align-items: center; gap: 7px; background: transparent; border: 0; color: var(--text); font-size: 11px; padding: 0; cursor: pointer; } .free-toggle span { border-radius: var(--radius-detail); display: grid; place-items: center; width: 16px; height: 16px; border: 1px solid var(--node-border); color: var(--accent); }
-  .save-row { border-top: 1px dashed var(--node-border); padding-top: 13px; display: flex; align-items: center; gap: 12px; } .save-row > span { font-size: 10px; color: var(--muted); line-height: 1.5; } .save { padding: 9px 11px; border: 1px solid var(--accent); background: var(--bg); color: var(--accent); font-size: 10px; cursor: pointer; white-space: nowrap; } button:disabled { opacity: .4; cursor: default; }
+  .save-row { border-top: 1px dashed var(--node-border); padding-top: 13px; display: flex; align-items: center; gap: 12px; } .save-row > span { font-size: 10px; color: var(--muted); line-height: 1.5; } .save-row .cta { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; } button:disabled { opacity: .4; cursor: default; }
   .notice { color: var(--led-ok); } .error { color: var(--led-err); overflow-wrap: anywhere; }
   @media(max-width:620px) { .workspace { grid-template-columns: 1fr; } .providers { grid-template-columns: repeat(2,1fr); } .providers button.refresh { margin-top: 0; } .editor { border-left: 0; padding-left: 0; border-top: 1px dashed var(--node-border); padding-top: 12px; } .routes { grid-template-columns: 1fr; } .routes small { display: none; } .route-hint { display: none; } .routes button { min-height: 48px; } .save-row { flex-wrap: wrap; } }
 </style>

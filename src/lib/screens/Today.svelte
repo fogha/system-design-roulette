@@ -7,6 +7,7 @@
   import ProgressRing from '../features/today/ProgressRing.svelte';
   import StudyPulse from '../features/today/StudyPulse.svelte';
   import { ArrowRight, BookOpen, Clock, Play, Pause, Activity, ScrollText, Sparkles } from 'lucide-svelte';
+  import { dayStart } from '../features/classes/schedule-conflicts';
   let now = $state(new Date()), busy = $state(false);
   /** The habit view; loaded once per visit and again after anything that completes a lesson. */
   let pulse = $state<StudyPulseView | null>(null);
@@ -92,9 +93,16 @@
     if (busy) return; busy = true;
     try { await api.skipAppointment(appointment.id); await app.refresh(); } catch (cause) { app.error = String(cause); } finally { busy = false; }
   }
+  /** When a due rule started today: the day's own time when it has one. */
+  function todayStart(slot: ClassroomSlotView) {
+    const weekday = now.getDay() === 0 ? 7 : now.getDay();
+    const [hour, minute] = dayStart(slot.starts, weekday, slot.hour, slot.minute);
+    return `${String(hour).padStart(2,'0')}:${String(minute).padStart(2,'0')}`;
+  }
   function appointment(slot: ClassroomSlotView) {
+    // The next firing carries the day's own start time, which may differ from the rule's.
     const date = new Date(slot.next_fire_at);
-    return Number.isNaN(date.getTime()) ? 'Time unavailable' : date.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'}) + ' · ' + `${String(slot.hour).padStart(2,'0')}:${String(slot.minute).padStart(2,'0')}`;
+    return Number.isNaN(date.getTime()) ? 'Time unavailable' : date.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'}) + ' · ' + `${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
   }
 </script>
 <div class="today page-frame">
@@ -199,7 +207,7 @@
   {/if}
   <div class="overview">
     <section aria-label="Class agenda"><NodeCard Icon={Clock} name="class-agenda" badge={dueSlots.length ? dueSlots.length+' due' : missed.length ? missed.length+' missed' : 'upcoming'} badgeTone={dueSlots.length || missed.length ? 'amber' : 'teal'}>
-      {#each dueSlots as slot}<div class="study-row"><div><strong>{slot.label}</strong><p class="mono">{String(slot.hour).padStart(2,'0')}:{String(slot.minute).padStart(2,'0')} · due</p></div><button class="ghost mono-ghost" disabled={busy || !!app.preparingClass || resumable.some(s => s.subject_id === slot.subject_id) || heldElsewhere(slot.subject_id)} onclick={() => start(slot)}>Start class</button></div>{/each}
+      {#each dueSlots as slot}<div class="study-row"><div><strong>{slot.label}</strong><p class="mono">{todayStart(slot)} · due</p></div><button class="ghost mono-ghost" disabled={busy || !!app.preparingClass || resumable.some(s => s.subject_id === slot.subject_id) || heldElsewhere(slot.subject_id)} onclick={() => start(slot)}>Start class</button></div>{/each}
       {#each reviews as program (program.subject_id)}<div class="study-row"><div><strong>{program.label}</strong><p class="mono">{program.review_due} {program.review_due === 1 ? 'topic' : 'topics'} · review due</p></div><button class="ghost mono-ghost" disabled={busy || !!app.preparingClass || heldElsewhere(program.subject_id)} onclick={() => app.startReview(program.subject_id)}>Start review<ArrowRight size={12} /></button></div>{/each}
       {#each missed as appointment (appointment.id)}<div class="study-row"><div><strong>{appointment.label}</strong><p class="mono">{appointment.local_date} · {appointment.local_time} · missed</p></div><div class="row-actions"><button class="ghost mono-ghost" disabled={busy || !!app.preparingClass || resumable.some(s => s.subject_id === appointment.course_id) || !activeClasses.some(p => p.subject_id === appointment.course_id) || heldElsewhere(appointment.course_id)} onclick={() => makeUp(appointment)}>Make up</button><button class="ghost mono-ghost" disabled={busy} onclick={() => skipAppointment(appointment)}>Skip</button></div></div>{/each}
       {#if !app.state?.schedule_paused}{#each upcoming as slot}<button class="agenda-link" onclick={() => app.openClass(slot.subject_id,'schedule')}><span><strong>{slot.label}</strong><small>{appointment(slot)}</small></span><ArrowRight size={13} /></button>{/each}{/if}

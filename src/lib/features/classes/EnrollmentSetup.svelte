@@ -13,7 +13,7 @@
   import PlacementCheck from './PlacementCheck.svelte';
   import PathPreview from './PathPreview.svelte';
   import FlowStage from '../../components/FlowStage.svelte';
-  import { ArrowLeft, Check, Compass, ListStart, Layers, BookOpen, Clock, Save } from 'lucide-svelte';
+  import { ArrowLeft, Check, Compass, ListStart, Layers, BookOpen, Save, Target } from 'lucide-svelte';
 
   let { courseId, onclose, embedded = false }: { courseId: ClassroomSubjectId; onclose: () => void; embedded?: boolean } = $props();
   const uid = $props.id();
@@ -149,20 +149,20 @@
 
     </NodeCard></FlowStage>
 
-    <FlowStage number="03" last><NodeCard Icon={Clock} name="study-plan" badge={configuration.pace.session_minutes + ' min'} badgeTone="teal">
-    <div class="form-grid">
+    <FlowStage number="03" last><NodeCard Icon={Target} name="your-goal" badge={configuration.goal.note.trim() ? 'noted' : 'optional'} badgeTone={configuration.goal.note.trim() ? 'teal' : 'muted'}>
+    <div class="form-grid goal-grid">
       <fieldset>
         <legend>Your goal</legend>
         {#if configuration.goal.kind === 'language_level'}
           <div class="field"><Dropdown label="Target band" bind:value={configuration.goal.target_level} options={entryOptions} onchange={changed} /></div>
         {/if}
-        <label class="field"><span>What would you like to do with this knowledge? <small>Optional</small></span><textarea rows="3" maxlength="4000" bind:value={configuration.goal.note} oninput={changed} placeholder="For example, automate a repeatable task at work."></textarea></label>
+        <label class="field"><span>What would you like to do with this knowledge? <small>Optional</small></span><textarea rows="4" maxlength="4000" bind:value={configuration.goal.note} oninput={changed} placeholder="For example, automate a repeatable task at work."></textarea></label>
       </fieldset>
-      <fieldset>
-        <legend>Your pace</legend>
-        <label class="field"><span>Minutes per session</span><input type="number" min="10" max="120" bind:value={configuration.pace.session_minutes} oninput={changed} /></label>
-        <label class="field"><span>Minutes per week <small>Optional</small></span><input type="number" min={configuration.pace.session_minutes} max="10080" value={configuration.pace.weekly_minutes ?? ''} oninput={(event) => { if (configuration) { configuration.pace.weekly_minutes = event.currentTarget.value === '' ? null : Number(event.currentTarget.value); changed(); } }} /></label>
-      </fieldset>
+      <aside class="goal-aside">
+        <span class="goal-aside-label">WHY IT MATTERS</span>
+        <p>The tutor reads this before writing every lesson, and leans the examples, the practice and the checks towards it. A sentence is enough; a paragraph is better.</p>
+        <p class="goal-aside-pace">Pace is not asked for here. How long each session runs, and how much of the week you study, follow the study times you set on the class's Schedule tab.</p>
+      </aside>
     </div>
     </NodeCard></FlowStage>
   {/if}
@@ -224,6 +224,11 @@
   textarea { resize: vertical; }
   .manual-entry > .field { max-width: 430px; }
   .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  .goal-grid { grid-template-columns: minmax(0, 3fr) minmax(220px, 2fr); align-items: start; }
+  .goal-aside { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border: 1px dashed var(--node-border); border-radius: var(--radius-control); }
+  .goal-aside-label { font: 9px var(--font-mono); letter-spacing: 1.2px; color: var(--accent); }
+  .goal-aside p { margin: 0; font-size: 12px; line-height: 1.55; color: var(--muted); }
+  .goal-aside-pace { padding-top: 10px; border-top: 1px dashed var(--node-border); }
   summary { cursor: pointer; font-size: 13px; font-weight: 500; }
   summary span { color: var(--muted); font-weight: 400; margin-left: 8px; }
   .search { margin-top: 15px; }
@@ -235,6 +240,6 @@
   .error-actions { display: flex; flex-wrap: wrap; gap: 10px; }
   :is(button, input, textarea, summary):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
   @media (max-width: 620px) { .route-grid { grid-template-columns: 1fr; } .route-grid label { gap: 5px; } }
-  @media (max-width: 620px) { .enrollment { padding: 22px 18px; } .form-grid, .familiar-list { grid-template-columns: 1fr; } footer button { width: 100%; } }
+  @media (max-width: 620px) { .enrollment { padding: 22px 18px; } .form-grid, .goal-grid, .familiar-list { grid-template-columns: 1fr; } footer button { width: 100%; } }
   .enrollment.embedded { width: 100%; max-width: 1000px; padding: 0; } .embedded header { margin-top: 0; }
 </style>

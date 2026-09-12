@@ -90,6 +90,7 @@ fn desk_with_due_class() -> (std::path::PathBuf, AppState) {
             weekdays: vec![1, 2, 3, 4, 5, 6, 7],
             enabled: true,
             durations: Default::default(),
+            starts: Default::default(),
         },
     )
     .unwrap();

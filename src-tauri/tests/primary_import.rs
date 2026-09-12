@@ -650,6 +650,7 @@ fn apply_keeps_the_active_class_session_in_the_foreground() {
             weekdays: vec![1, 2, 3, 4, 5, 6, 7],
             enabled: true,
             durations: Default::default(),
+            starts: Default::default(),
         },
     )
     .unwrap();

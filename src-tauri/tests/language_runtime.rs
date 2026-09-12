@@ -41,6 +41,7 @@ fn activate(conn: &Connection, language: &str, hour: u32) -> i64 {
             weekdays: vec![1, 2, 3, 4, 5, 6, 7],
             enabled: true,
             durations: Default::default(),
+            starts: Default::default(),
         },
     )
     .unwrap();

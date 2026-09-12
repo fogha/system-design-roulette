@@ -209,23 +209,22 @@ pub fn pulse(conn: &Connection, today: &str) -> Result<StudyPulse, String> {
             .fold((0, 0), |(minutes, sessions), day| {
                 (minutes + day.minutes, sessions + day.completed)
             });
+        // A class with a target of its own counts that; otherwise what its
+        // study times add up to, each day at its own length.
         let mut statement = conn.prepare(
-            "SELECT p.subject_id, p.session_minutes, p.target_weekly_minutes,
-                    (SELECT COALESCE(SUM(json_array_length(weekdays_json)),0) FROM classroom_schedule_slots s WHERE s.subject_id=p.subject_id AND s.enabled=1)
-             FROM classroom_programs p WHERE p.enabled=1",
+            "SELECT p.subject_id, p.target_weekly_minutes FROM classroom_programs p WHERE p.enabled=1",
         )?;
-        let week_target_minutes: i64 = statement
-            .query_map([], |r| {
-                Ok((
-                    r.get::<_, i64>(1)?,
-                    r.get::<_, i64>(2)?,
-                    r.get::<_, i64>(3)?,
-                ))
-            })?
-            .collect::<rusqlite::Result<Vec<_>>>()?
-            .into_iter()
-            .map(|(session, target, slots)| if target > 0 { target } else { session * slots })
-            .sum();
+        let targets = statement
+            .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)))?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        let mut week_target_minutes = 0;
+        for (subject_id, target) in targets {
+            week_target_minutes += if target > 0 {
+                target
+            } else {
+                crate::classroom::weekly_minutes_scheduled(conn, &subject_id).unwrap_or(0)
+            };
+        }
 
         let (passed, submitted): (i64, i64) = conn.query_row(
             &format!(

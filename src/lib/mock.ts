@@ -323,7 +323,7 @@ let mockClassroomSlots: ClassroomSlotView[] = requestedClass
           CLASSROOM_CATALOG.find((item) => item.id === requestedClass)?.kind ?? 'engineering',
         hour: 7,
         minute: 30,
-        weekdays: [1, 2, 3, 4, 5, 6], durations: {},
+        weekdays: [1, 2, 3, 4, 5, 6], durations: {}, starts: {},
         enabled: true,
         owed: params.has('classDue') || params.has('languageDue'),
         next_fire_at: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString().slice(0, 19),
@@ -726,6 +726,18 @@ function rejectMockConflicts(candidates: ScheduleCandidate[], scope: ConflictSco
   const conflicts = scheduleConflicts(candidates, mockClassroomSlots, mockPrograms(), scope);
   if (conflicts.length) throw new Error(conflictMessage(conflicts));
 }
+/** The class's session length follows its study times: the most common day length, the shorter on a tie. */
+function followMockScheduleLength(subjectId: ClassroomSubjectId) {
+  const tally = new Map<number, number>();
+  for (const slot of mockClassroomSlots.filter((slot) => slot.subject_id === subjectId && slot.enabled)) {
+    for (const day of slot.weekdays) {
+      const minutes = slot.durations[String(day)] ?? mockClassroomSettings[subjectId].sessionMinutes;
+      tally.set(minutes, (tally.get(minutes) ?? 0) + 1);
+    }
+  }
+  const usual = [...tally.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0];
+  if (usual) mockClassroomSettings[subjectId].sessionMinutes = usual[0];
+}
 function pauseMockClassWithoutSchedule(subjectId: ClassroomSubjectId) {
   if (mockClassroomSlots.some(slot => slot.subject_id === subjectId && slot.enabled)) return;
   mockClassroomSettings[subjectId].enabled = false;
@@ -906,16 +918,22 @@ export const mockApi = {
     weekdays: number[];
     enabled: boolean;
     durations?: Record<string, number>;
+    starts?: Record<string, string>;
   }) => {
     const id = input.id ?? Math.max(800, ...mockClassroomSlots.map((slot) => slot.id)) + 1;
     const catalog = CLASSROOM_CATALOG.find((item) => item.id === input.subject_id)!;
+    const base = `${String(input.hour).padStart(2, '0')}:${String(input.minute).padStart(2, '0')}`;
+    const settings = mockClassroomSettings[input.subject_id];
+    // Every day the rule fires on gets its minutes written down, as the desk does.
+    const durations = Object.fromEntries(input.weekdays.map((day) => [String(day), input.durations?.[String(day)] ?? settings.sessionMinutes]));
     const slot: ClassroomSlotView = {
       id,
       subject_id: input.subject_id,
       label: catalog.label,
       short_code: catalog.short,
       kind: catalog.kind,
-      durations: Object.fromEntries(Object.entries(input.durations ?? {}).filter(([day]) => input.weekdays.includes(Number(day)))),
+      durations,
+      starts: Object.fromEntries(Object.entries(input.starts ?? {}).filter(([day, time]) => input.weekdays.includes(Number(day)) && time !== base)),
       hour: input.hour,
       minute: input.minute,
       weekdays: input.weekdays,
@@ -929,10 +947,11 @@ export const mockApi = {
     };
     const existing = mockClassroomSlots.findIndex((candidate) => candidate.id === id);
     if (input.id != null && (existing < 0 || mockClassroomSlots[existing].subject_id !== input.subject_id)) throw new Error('classroom slot was not found');
-    if (input.enabled) rejectMockConflicts([{ subject_id: input.subject_id, hour: input.hour, minute: input.minute, weekdays: input.weekdays, session_minutes: mockClassroomSettings[input.subject_id].sessionMinutes }], { excludedSlotIds: input.id != null ? [input.id] : [] });
+    if (input.enabled) rejectMockConflicts([{ subject_id: input.subject_id, hour: input.hour, minute: input.minute, weekdays: input.weekdays, session_minutes: settings.sessionMinutes, durations, starts: slot.starts }], { excludedSlotIds: input.id != null ? [input.id] : [] });
     if (existing >= 0) mockClassroomSlots[existing] = slot;
     else mockClassroomSlots = [...mockClassroomSlots, slot];
     pauseMockClassWithoutSchedule(input.subject_id);
+    followMockScheduleLength(input.subject_id);
     return mockClassroomSlots;
   },
   planClassroomSchedule: async (input: {
@@ -1010,6 +1029,7 @@ export const mockApi = {
         short_code: catalog.short,
         kind: catalog.kind,
         durations: {},
+        starts: {},
         hour: slot.hour,
         minute: slot.minute,
         weekdays: slot.weekdays,
@@ -1035,7 +1055,7 @@ export const mockApi = {
   deleteClassroomSlot: async (id: number) => {
     const removed = mockClassroomSlots.find(slot => slot.id === id);
     mockClassroomSlots = mockClassroomSlots.filter((slot) => slot.id !== id);
-    if (removed) pauseMockClassWithoutSchedule(removed.subject_id);
+    if (removed) { pauseMockClassWithoutSchedule(removed.subject_id); followMockScheduleLength(removed.subject_id); }
     return mockClassroomSlots;
   },
   startClassroomSession: async (

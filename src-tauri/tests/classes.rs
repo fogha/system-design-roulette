@@ -218,6 +218,7 @@ fn a_new_language_path_changes_future_entry_without_rewriting_an_active_lesson()
             weekdays: vec![1, 3, 5],
             enabled: true,
             durations: Default::default(),
+            starts: Default::default(),
         },
     )
     .unwrap();
@@ -681,6 +682,7 @@ fn a_failed_check_with_a_set_aside_prerequisite_proposes_a_bridge_served_first()
             weekdays: vec![1, 2, 3, 4, 5, 6, 7],
             enabled: true,
             durations: Default::default(),
+            starts: Default::default(),
         },
     )
     .unwrap();

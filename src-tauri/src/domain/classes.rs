@@ -558,6 +558,8 @@ pub fn accept(conn: &Connection, input: &AcceptPath, today: &str) -> Result<Acce
         ));
     }
     if let LearningGoal::LanguageLevel { target_level, .. } = &draft.configuration.goal {
+        // The draft's session length is a placeholder; the study times already
+        // saved for this class decide it below.
         // Existing lesson/assessment rows and the original progress baseline are
         // retained. An explicit new path changes the cursor for subsequent work.
         let changed = tx.execute("UPDATE language_programs SET enabled=?8, current_level=?2, target_level=?3, start_level=CASE WHEN EXISTS(SELECT 1 FROM language_sessions WHERE language=?1) THEN start_level ELSE ?2 END, start_date=CASE WHEN EXISTS(SELECT 1 FROM language_sessions WHERE language=?1) THEN start_date ELSE ?7 END, weekly_minutes=COALESCE(?4,weekly_minutes), session_minutes=?5, updated_at=?6 WHERE language=?1",
@@ -568,6 +570,8 @@ pub fn accept(conn: &Connection, input: &AcceptPath, today: &str) -> Result<Acce
             ));
         }
     }
+    // The session length is not asked for: it follows the study times.
+    crate::classroom::follow_schedule_length(&tx, course.id).map_err(DbError::Invalid)?;
     tx.execute("INSERT INTO classes(id,course_id,course_snapshot_fingerprint,status,configuration_json,active_path_revision_id,created_at,updated_at) VALUES(?1,?2,?3,?7,?4,?5,?6,?6) ON CONFLICT(course_id) DO UPDATE SET course_snapshot_fingerprint=excluded.course_snapshot_fingerprint, configuration_json=excluded.configuration_json,active_path_revision_id=excluded.active_path_revision_id,status=excluded.status,updated_at=excluded.updated_at",
         params![class_id,course.course_id,draft.course.fingerprint,configuration_json,path_id,now,status])?;
     tx.execute("INSERT INTO path_revisions(id,class_id,revision,course_snapshot_fingerprint,entry_profile_json,plan_json,accepted_at) VALUES(?1,?2,?3,?4,?5,?6,?7)",

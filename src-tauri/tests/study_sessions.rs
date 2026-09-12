@@ -47,6 +47,7 @@ fn request(conn: &Connection, course: &str, entry: &str) -> PlanSession {
                 weekdays: vec![1, 3, 5],
                 enabled: true,
                 durations: Default::default(),
+                starts: Default::default(),
             },
         )
         .unwrap();

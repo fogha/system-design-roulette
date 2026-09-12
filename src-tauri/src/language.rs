@@ -463,7 +463,13 @@ fn capitalize(value: &str) -> String {
 }
 
 pub fn program_view(conn: &Connection, language: &str, today: &str) -> Result<LanguageProgramView> {
-    let row = program_row(conn, language)?;
+    let mut row = program_row(conn, language)?;
+    // The weekly commitment is what the study times add up to; the stored
+    // figure only stands in while nothing is scheduled.
+    let scheduled = crate::classroom::weekly_minutes_scheduled(conn, language).unwrap_or(0);
+    if scheduled > 0 {
+        row.weekly_minutes = scheduled;
+    }
     let curriculum = curriculum(language)?;
     let current = level_spec(curriculum, &row.current_level)?;
     let (completed_steps, required_steps) = level_progress(conn, language, current)?;
@@ -598,8 +604,8 @@ pub fn configure_program(
     if !(10..=10_080).contains(&input.weekly_minutes) {
         return Err("weekly practice must be between 10 and 10080 minutes".into());
     }
-    if !(10..=120).contains(&input.session_minutes) {
-        return Err("session length must be between 10 and 120 minutes".into());
+    if !crate::classroom::DAY_MINUTES.contains(&input.session_minutes) {
+        return Err("session length must be between 10 and 480 minutes".into());
     }
     let active: i64 = conn
         .query_row(

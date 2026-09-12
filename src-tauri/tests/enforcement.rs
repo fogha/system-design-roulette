@@ -44,6 +44,7 @@ fn activate_class(conn: &Connection, subject: &str, hour: u32) {
             weekdays: vec![1, 2, 3, 4, 5, 6, 7],
             enabled: true,
             durations: Default::default(),
+            starts: Default::default(),
         },
     )
     .unwrap();

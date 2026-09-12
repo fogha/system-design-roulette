@@ -445,8 +445,12 @@ pub fn configure_program(
             return Err(format!("custom class agent binary not found: {}", words[0]));
         }
     }
-    if !(10..=120).contains(&input.session_minutes) {
-        return Err("class session length must be between 10 and 120 minutes".into());
+    if !DAY_MINUTES.contains(&input.session_minutes) {
+        return Err(format!(
+            "class session length must be between {} and {} minutes",
+            DAY_MINUTES.start(),
+            DAY_MINUTES.end()
+        ));
     }
     if !input.enabled && has_active_session(conn, &input.subject_id)? {
         return Err("finish the active class session before disabling it".into());
@@ -496,6 +500,8 @@ pub fn configure_program(
             today,
         )?;
     }
+    // With study times saved, the session length is theirs to set.
+    follow_schedule_length(conn, spec.id)?;
     crate::domain::classes::sync_configuration(conn, spec.id, today).map_err(|e| e.to_string())?;
     transaction.commit().map_err(|e| e.to_string())?;
     Ok(())
@@ -509,10 +515,15 @@ pub struct UpsertClassroomSlotInput {
     pub minute: u32,
     pub weekdays: Vec<u8>,
     pub enabled: bool,
-    /// Minutes for particular weekdays. A day not listed uses the class's
-    /// default session length, so an older caller changes nothing.
+    /// Minutes for particular weekdays. A day not listed takes the class's
+    /// session length as it stands when the rule is saved, so an older
+    /// caller changes nothing.
     #[serde(default)]
     pub durations: std::collections::BTreeMap<u8, i64>,
+    /// "HH:MM" for particular weekdays. A day not listed starts at the
+    /// rule's own hour and minute.
+    #[serde(default)]
+    pub starts: std::collections::BTreeMap<u8, String>,
 }
 
 /// Shortest and longest a single day's study time may be, in minutes.
@@ -531,6 +542,40 @@ pub fn day_minutes(
 fn parse_durations(raw: Option<String>) -> std::collections::BTreeMap<u8, i64> {
     raw.and_then(|json| serde_json::from_str(&json).ok())
         .unwrap_or_default()
+}
+
+/// When a rule starts on particular weekdays, as (hour, minute).
+pub type DayStarts = std::collections::BTreeMap<u8, (u32, u32)>;
+
+/// The time a rule starts on `weekday`: its own time for that day if it has
+/// one, otherwise the rule's hour and minute.
+pub fn day_start(starts: &DayStarts, weekday: u8, hour: u32, minute: u32) -> (u32, u32) {
+    starts.get(&weekday).copied().unwrap_or((hour, minute))
+}
+
+/// "HH:MM" as (hour, minute), if it is a time of day.
+pub fn parse_clock(value: &str) -> Option<(u32, u32)> {
+    let (hour, minute) = value.trim().split_once(':')?;
+    let hour: u32 = hour.parse().ok()?;
+    let minute: u32 = minute.parse().ok()?;
+    (hour <= 23 && minute <= 59).then_some((hour, minute))
+}
+
+pub fn parse_starts(raw: Option<String>) -> DayStarts {
+    raw.and_then(|json| serde_json::from_str::<std::collections::BTreeMap<u8, String>>(&json).ok())
+        .map(|map| {
+            map.into_iter()
+                .filter_map(|(day, time)| parse_clock(&time).map(|at| (day, at)))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn clock_text(starts: &DayStarts) -> std::collections::BTreeMap<u8, String> {
+    starts
+        .iter()
+        .map(|(day, (hour, minute))| (*day, format!("{hour:02}:{minute:02}")))
+        .collect()
 }
 
 /// Minutes in one recurring week. Study times occupy a circular interval, so a
@@ -573,6 +618,8 @@ pub struct ScheduleCandidate {
     pub session_minutes: i64,
     /// Minutes for particular weekdays; others use `session_minutes`.
     pub durations: std::collections::BTreeMap<u8, i64>,
+    /// Start times for particular weekdays; others use `hour` and `minute`.
+    pub starts: DayStarts,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -617,7 +664,7 @@ fn occupancies(
     let mut stmt = conn
         .prepare(
             "SELECT s.id, s.subject_id, p.label, s.hour, s.minute, s.weekdays_json,
-                    p.session_minutes, p.enabled, s.source, s.durations_json
+                    p.session_minutes, p.enabled, s.source, s.durations_json, s.starts_json
              FROM classroom_schedule_slots s
              JOIN classroom_programs p ON p.subject_id = s.subject_id
              WHERE s.enabled = 1
@@ -637,6 +684,7 @@ fn occupancies(
                 row.get::<_, i64>(7)? != 0,
                 row.get::<_, String>(8)?,
                 row.get::<_, Option<String>>(9)?,
+                row.get::<_, Option<String>>(10)?,
             ))
         })
         .map_err(|error| error.to_string())?;
@@ -653,8 +701,10 @@ fn occupancies(
             program_enabled,
             source,
             durations_json,
+            starts_json,
         ) = row.map_err(|error| error.to_string())?;
         let durations = parse_durations(durations_json);
+        let starts = parse_starts(starts_json);
         let own = owner == subject_id;
         if (!program_enabled && !own)
             || scope.excluded_slot_ids.contains(&id)
@@ -667,6 +717,7 @@ fn occupancies(
         let weekdays: Vec<u8> = serde_json::from_str(&weekdays_json).unwrap_or_default();
         for weekday in weekdays {
             let minutes = day_minutes(&durations, weekday, session_minutes);
+            let (hour, minute) = day_start(&starts, weekday, hour, minute);
             occupied.push(Occupancy {
                 slot_id: id,
                 subject_id: owner.clone(),
@@ -701,18 +752,24 @@ pub fn schedule_conflicts(
     let mut conflicts = Vec::new();
     for candidate in candidates {
         for weekday in &candidate.weekdays {
-            let interval = week_interval(
+            let (hour, minute) = day_start(
+                &candidate.starts,
                 *weekday,
                 candidate.hour,
                 candidate.minute,
+            );
+            let interval = week_interval(
+                *weekday,
+                hour,
+                minute,
                 day_minutes(&candidate.durations, *weekday, candidate.session_minutes),
             );
             for other in &existing {
                 if week_intervals_overlap(interval, other.interval) {
                     conflicts.push(ScheduleConflict {
                         weekday: *weekday,
-                        hour: candidate.hour,
-                        minute: candidate.minute,
+                        hour,
+                        minute,
                         subject_id: candidate.subject_id.clone(),
                         label: label.clone(),
                         with_slot_id: other.slot_id,
@@ -752,6 +809,7 @@ pub fn activation_conflicts(
             weekdays: slot.weekdays.clone(),
             session_minutes,
             durations: slot.durations.clone(),
+            starts: slot.starts.clone(),
         })
         .collect();
     schedule_conflicts(
@@ -813,11 +871,22 @@ pub fn upsert_slot(conn: &Connection, input: &UpsertClassroomSlotInput) -> Resul
         return Err("select at least one valid weekday".into());
     }
     let weekdays_json = serde_json::to_string(&weekdays).map_err(|error| error.to_string())?;
-    let durations: std::collections::BTreeMap<u8, i64> = input
-        .durations
+    let program = program_row(conn, &input.subject_id)?;
+    // Every day the rule fires on gets its minutes written down, so the
+    // class's session length can follow the schedule without moving a day
+    // that was left at the old default.
+    let durations: std::collections::BTreeMap<u8, i64> = weekdays
         .iter()
-        .filter(|(day, _)| weekdays.contains(day))
-        .map(|(day, minutes)| (*day, *minutes))
+        .map(|day| {
+            (
+                *day,
+                input
+                    .durations
+                    .get(day)
+                    .copied()
+                    .unwrap_or(program.session_minutes),
+            )
+        })
         .collect();
     if durations
         .values()
@@ -829,13 +898,26 @@ pub fn upsert_slot(conn: &Connection, input: &UpsertClassroomSlotInput) -> Resul
             DAY_MINUTES.end()
         ));
     }
-    let durations_json = if durations.is_empty() {
+    let durations_json =
+        Some(serde_json::to_string(&durations).map_err(|error| error.to_string())?);
+    // A day's own start is kept only when it differs from the rule's.
+    let mut starts = DayStarts::new();
+    for (day, time) in &input.starts {
+        if !weekdays.contains(day) {
+            continue;
+        }
+        let at =
+            parse_clock(time).ok_or_else(|| format!("{time} is not a time of day (use HH:MM)"))?;
+        if at != (input.hour, input.minute) {
+            starts.insert(*day, at);
+        }
+    }
+    let starts_json = if starts.is_empty() {
         None
     } else {
-        Some(serde_json::to_string(&durations).map_err(|error| error.to_string())?)
+        Some(serde_json::to_string(&clock_text(&starts)).map_err(|error| error.to_string())?)
     };
     if input.enabled {
-        let program = program_row(conn, &input.subject_id)?;
         let conflicts = schedule_conflicts(
             conn,
             &[ScheduleCandidate {
@@ -845,6 +927,7 @@ pub fn upsert_slot(conn: &Connection, input: &UpsertClassroomSlotInput) -> Resul
                 weekdays: weekdays.clone(),
                 session_minutes: program.session_minutes,
                 durations: durations.clone(),
+                starts: starts.clone(),
             }],
             &ConflictScope {
                 excluded_slot_ids: input.id.into_iter().collect(),
@@ -863,7 +946,7 @@ pub fn upsert_slot(conn: &Connection, input: &UpsertClassroomSlotInput) -> Resul
                 "UPDATE classroom_schedule_slots
                  SET hour = ?3, minute = ?4,
                      weekdays_json = ?5, enabled = ?6, source = 'manual',
-                     durations_json = ?7,
+                     durations_json = ?7, starts_json = ?8,
                      revision = revision + 1
                  WHERE id = ?1 AND subject_id = ?2",
                 params![
@@ -874,6 +957,7 @@ pub fn upsert_slot(conn: &Connection, input: &UpsertClassroomSlotInput) -> Resul
                     weekdays_json,
                     i64::from(input.enabled),
                     durations_json,
+                    starts_json,
                 ],
             )
             .map_err(|error| {
@@ -890,8 +974,8 @@ pub fn upsert_slot(conn: &Connection, input: &UpsertClassroomSlotInput) -> Resul
     } else {
         conn.execute(
             "INSERT INTO classroom_schedule_slots
-                (subject_id, hour, minute, weekdays_json, enabled, source, created_at, durations_json)
-             VALUES (?1, ?2, ?3, ?4, ?5, 'manual', ?6, ?7)",
+                (subject_id, hour, minute, weekdays_json, enabled, source, created_at, durations_json, starts_json)
+             VALUES (?1, ?2, ?3, ?4, ?5, 'manual', ?6, ?7, ?8)",
             params![
                 input.subject_id,
                 input.hour,
@@ -900,6 +984,7 @@ pub fn upsert_slot(conn: &Connection, input: &UpsertClassroomSlotInput) -> Resul
                 i64::from(input.enabled),
                 language::now_iso(),
                 durations_json,
+                starts_json,
             ],
         )
         .map_err(|error| {
@@ -912,8 +997,70 @@ pub fn upsert_slot(conn: &Connection, input: &UpsertClassroomSlotInput) -> Resul
         conn.last_insert_rowid()
     };
     pause_without_schedule(conn, &input.subject_id)?;
+    follow_schedule_length(conn, &input.subject_id)?;
     transaction.commit().map_err(|e| e.to_string())?;
     Ok(id)
+}
+
+/// Minutes the class's enabled study times add up to in one recurring week,
+/// each day counted at its own length.
+pub fn weekly_minutes_scheduled(conn: &Connection, subject_id: &str) -> Result<i64> {
+    let default = program_row(conn, subject_id)
+        .map(|program| program.session_minutes)
+        .unwrap_or(30);
+    Ok(slot_rows(conn)?
+        .into_iter()
+        .filter(|slot| slot.subject_id == subject_id && slot.enabled)
+        .map(|slot| {
+            slot.weekdays
+                .iter()
+                .map(|day| day_minutes(&slot.durations, *day, default))
+                .sum::<i64>()
+        })
+        .sum())
+}
+
+/// The length the class's study times mostly have, in minutes: the most
+/// common day length across its enabled rules, the shorter one on a tie.
+/// None without a scheduled day.
+pub fn usual_day_minutes(conn: &Connection, subject_id: &str) -> Result<Option<i64>> {
+    let program = program_row(conn, subject_id)?;
+    let mut tally = std::collections::BTreeMap::<i64, usize>::new();
+    for slot in slot_rows(conn)?
+        .into_iter()
+        .filter(|slot| slot.subject_id == subject_id && slot.enabled)
+    {
+        for day in &slot.weekdays {
+            *tally
+                .entry(day_minutes(&slot.durations, *day, program.session_minutes))
+                .or_default() += 1;
+        }
+    }
+    Ok(tally
+        .into_iter()
+        .max_by(|a, b| a.1.cmp(&b.1).then(b.0.cmp(&a.0)))
+        .map(|(minutes, _)| minutes))
+}
+
+/// The class's session length is not asked for: it follows the schedule, so
+/// a lesson started by hand is sized like the ones the week is made of.
+/// Every saved rule carries each day's minutes, so this changes nothing
+/// already scheduled.
+pub fn follow_schedule_length(conn: &Connection, subject_id: &str) -> Result<()> {
+    let Some(minutes) = usual_day_minutes(conn, subject_id)? else {
+        return Ok(());
+    };
+    conn.execute(
+        "UPDATE classroom_programs SET session_minutes=?2 WHERE subject_id=?1 AND session_minutes<>?2",
+        params![subject_id, minutes],
+    )
+    .map_err(|e| e.to_string())?;
+    conn.execute(
+        "UPDATE language_programs SET session_minutes=?2 WHERE language=?1 AND session_minutes<>?2",
+        params![subject_id, minutes],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 fn pause_without_schedule(conn: &Connection, subject_id: &str) -> Result<()> {
@@ -992,6 +1139,7 @@ pub fn delete_slot(conn: &Connection, id: i64) -> Result<()> {
         .map_err(|error| error.to_string())?;
     if let Some(subject_id) = subject_id {
         pause_without_schedule(conn, &subject_id)?;
+        follow_schedule_length(conn, &subject_id)?;
     }
     transaction.commit().map_err(|e| e.to_string())?;
     Ok(())
@@ -1132,6 +1280,7 @@ pub fn plan_schedule(
             weekdays: slot.weekdays.clone(),
             session_minutes: program.session_minutes,
             durations: Default::default(),
+            starts: Default::default(),
         })
         .collect();
     let conflicts = schedule_conflicts(
@@ -1236,14 +1385,22 @@ struct SlotRow {
     enabled: bool,
     program_enabled: bool,
     durations: std::collections::BTreeMap<u8, i64>,
+    starts: DayStarts,
     source: String,
+}
+
+impl SlotRow {
+    fn start_on(&self, weekday: u8) -> (u32, u32) {
+        day_start(&self.starts, weekday, self.hour, self.minute)
+    }
 }
 
 fn slot_rows(conn: &Connection) -> Result<Vec<SlotRow>> {
     let mut stmt = conn
         .prepare(
             "SELECT s.id, s.subject_id, p.label, p.short_code, p.kind,
-                    s.hour, s.minute, s.weekdays_json, s.enabled, p.enabled, s.source, s.durations_json
+                    s.hour, s.minute, s.weekdays_json, s.enabled, p.enabled, s.source, s.durations_json,
+                    s.starts_json
              FROM classroom_schedule_slots s
              JOIN classroom_programs p ON p.subject_id = s.subject_id
              ORDER BY s.hour, s.minute, s.id",
@@ -1265,6 +1422,7 @@ fn slot_rows(conn: &Connection) -> Result<Vec<SlotRow>> {
                 program_enabled: row.get::<_, i64>(9)? != 0,
                 source: row.get(10)?,
                 durations: parse_durations(row.get::<_, Option<String>>(11)?),
+                starts: parse_starts(row.get::<_, Option<String>>(12)?),
             })
         })
         .map_err(|error| error.to_string())?;
@@ -1328,10 +1486,12 @@ fn slot_state(conn: &Connection, slot: &SlotRow, today: &str) -> Result<(bool, b
 fn next_fire_at(slot: &SlotRow, now: NaiveDateTime, consumed_today: bool) -> String {
     for offset in 0..=8 {
         let date = now.date() + Duration::days(offset);
-        if !slot.weekdays.contains(&weekday_number(date.weekday())) {
+        let weekday = weekday_number(date.weekday());
+        if !slot.weekdays.contains(&weekday) {
             continue;
         }
-        let Some(candidate) = date.and_hms_opt(slot.hour, slot.minute, 0) else {
+        let (hour, minute) = slot.start_on(weekday);
+        let Some(candidate) = date.and_hms_opt(hour, minute, 0) else {
             continue;
         };
         if (offset == 0 && consumed_today) || candidate <= now {
@@ -1544,6 +1704,8 @@ pub struct ClassroomSlotView {
     pub subject_id: String,
     /// Minutes on particular weekdays; a day not listed uses the class default.
     pub durations: std::collections::BTreeMap<u8, i64>,
+    /// "HH:MM" on particular weekdays; a day not listed starts at `hour:minute`.
+    pub starts: std::collections::BTreeMap<u8, String>,
     pub label: String,
     pub short_code: String,
     pub kind: String,
@@ -1660,7 +1822,8 @@ pub fn slot_views(
                             || (debug_day && occurrence.disposition == "scheduled")
                     }
                     None => {
-                        debug_day || slot_due_at(slot.hour, slot.minute, &slot.weekdays, now, false)
+                        let (hour, minute) = slot.start_on(weekday_number(now.weekday()));
+                        debug_day || slot_due_at(hour, minute, &slot.weekdays, now, false)
                     }
                 };
             let next_fire = next_fire_at(&slot, now, consumed);
@@ -1669,6 +1832,7 @@ pub fn slot_views(
                 disposition: occurrence.as_ref().map(|o| o.disposition.clone()),
                 id: slot.id,
                 durations: slot.durations,
+                starts: clock_text(&slot.starts),
                 subject_id: slot.subject_id,
                 label: slot.label,
                 short_code: slot.short_code,
@@ -1692,7 +1856,12 @@ pub fn all_schedule_times(conn: &Connection) -> Result<Vec<(u32, u32)>> {
     let mut times = slot_rows(conn)?
         .into_iter()
         .filter(|slot| slot.enabled && slot.program_enabled)
-        .map(|slot| (slot.hour, slot.minute))
+        .flat_map(|slot| {
+            slot.weekdays
+                .iter()
+                .map(|day| slot.start_on(*day))
+                .collect::<Vec<_>>()
+        })
         .collect::<Vec<_>>();
     times.sort_unstable();
     times.dedup();

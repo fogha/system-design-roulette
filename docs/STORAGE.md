@@ -14,6 +14,7 @@ Principia Desk stores its profile under `com.darkmatter.principia-desk` in a dat
 - v9 adds rule revisions and `schedule_occurrences`: one durable appointment per rule per local service date with its resolved instant and a disposition consumed exactly once.
 - v10 lets a study-time rule last a different number of minutes on each weekday it fires on (`durations_json`, keyed by ISO weekday); a day not listed uses the class default, and appointments snapshot the day's minutes.
 - v11 adds `execution_log_lines`: every line the tutor's runner reports while preparing a lesson, tagged with the session being prepared, kept thirty days and capped per run.
+- v12 lets a study-time rule start at a different time on each weekday it fires on (`starts_json`, keyed by ISO weekday, holding `HH:MM`); a day not listed uses the rule's own hour and minute.
 
 Migration SQL and the frozen `legacy_v1.rs` implementation contribute to their checksums. Once committed, do not edit these sources, even for formatting. Add a new migration for later changes. The runner itself may evolve without changing an already-applied migration's meaning.
 

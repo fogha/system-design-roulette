@@ -77,6 +77,7 @@ fn rule(conn: &Connection, subject: &str, hour: u32, minute: u32, weekdays: Vec<
             weekdays,
             enabled: true,
             durations: Default::default(),
+            starts: Default::default(),
         },
     )
     .unwrap()
@@ -317,6 +318,7 @@ fn editing_a_rule_refreshes_unfired_appointments_and_deleting_keeps_history() {
             weekdays: vec![1, 2, 3, 4, 5, 6, 7],
             enabled: true,
             durations: Default::default(),
+            starts: Default::default(),
         },
     )
     .unwrap();
@@ -350,6 +352,7 @@ fn editing_a_rule_refreshes_unfired_appointments_and_deleting_keeps_history() {
             weekdays: vec![1, 2, 3, 4, 5, 6, 7],
             enabled: true,
             durations: Default::default(),
+            starts: Default::default(),
         },
     )
     .unwrap();
@@ -498,6 +501,7 @@ fn a_rule_can_last_a_different_time_on_each_day_and_appointments_snapshot_it() {
             weekdays: vec![1, 2, 3, 4],
             enabled: true,
             durations: durations.clone(),
+            starts: Default::default(),
         },
     )
     .unwrap();
@@ -508,8 +512,9 @@ fn a_rule_can_last_a_different_time_on_each_day_and_appointments_snapshot_it() {
         .find(|s| s.id == id)
         .unwrap();
     assert_eq!(
-        view.durations, durations,
-        "the view carries each day's minutes"
+        view.durations,
+        std::collections::BTreeMap::from([(1u8, 30i64), (2, 60), (3, 240), (4, 30)]),
+        "the view carries each day's minutes, the default written down for Thursday"
     );
 
     // 2026-09-14 is a Monday, the 15th a Tuesday, the 16th a Wednesday, the 17th a Thursday.
@@ -541,6 +546,7 @@ fn a_rule_can_last_a_different_time_on_each_day_and_appointments_snapshot_it() {
                 weekdays: vec![1],
                 enabled: true,
                 durations: std::collections::BTreeMap::from([(1u8, bad)]),
+                starts: Default::default(),
             },
         )
         .is_err());
@@ -558,6 +564,7 @@ fn a_rule_can_last_a_different_time_on_each_day_and_appointments_snapshot_it() {
             weekdays: vec![3],
             enabled: true,
             durations: Default::default(),
+            starts: Default::default(),
         },
     );
     assert!(
@@ -574,6 +581,7 @@ fn a_rule_can_last_a_different_time_on_each_day_and_appointments_snapshot_it() {
             weekdays: vec![1],
             enabled: true,
             durations: Default::default(),
+            starts: Default::default(),
         },
     )
     .is_ok());
@@ -594,6 +602,7 @@ fn a_long_appointment_is_a_block_of_whole_topics_then_retrieval_then_done() {
             weekdays: vec![1, 2, 3, 4, 5, 6, 7],
             enabled: true,
             durations: (1..=7).map(|d| (d, 240)).collect(),
+            starts: Default::default(),
         },
     )
     .unwrap();
@@ -759,4 +768,46 @@ fn an_appointment_of_an_hour_or_less_is_one_lesson_and_resolves_with_it() {
         schedule::get(&conn, &due.id).unwrap().disposition,
         "completed"
     );
+}
+
+#[test]
+fn a_rule_can_start_at_a_different_time_on_each_day_and_appointments_take_it() {
+    let conn = fixture();
+    // 07:30 as a rule; Tuesday at 06:45 and Wednesday at 18:00.
+    let id = classroom::upsert_slot(
+        &conn,
+        &UpsertClassroomSlotInput {
+            id: None,
+            subject_id: "typescript".into(),
+            hour: 7,
+            minute: 30,
+            weekdays: vec![1, 2, 3],
+            enabled: true,
+            durations: Default::default(),
+            starts: [(2u8, "06:45".to_string()), (3, "18:00".to_string())]
+                .into_iter()
+                .collect(),
+        },
+    )
+    .unwrap();
+    activate(&conn, "typescript");
+    // 2026-09-14 is a Monday, the 15th a Tuesday, the 16th a Wednesday.
+    let expect = |date: &str, time: &str| {
+        let made = schedule::materialize(&conn, &at(&ZONE, date, "06:00"), false).unwrap();
+        let mine = made
+            .iter()
+            .find(|o| o.rule_id == Some(id) && o.local_date == date)
+            .expect("an appointment for the rule on that date");
+        assert_eq!(mine.local_time, time, "{date} starts at {time}");
+    };
+    expect("2026-09-14", "07:30");
+    expect("2026-09-15", "06:45");
+    // Tuesday is due at its own time, before the rule's.
+    let tuesday = schedule::materialize(&conn, &at(&ZONE, "2026-09-15", "07:00"), false)
+        .unwrap()
+        .into_iter()
+        .find(|o| o.rule_id == Some(id) && o.local_date == "2026-09-15")
+        .unwrap();
+    assert_eq!(tuesday.disposition, "due");
+    expect("2026-09-16", "18:00");
 }

@@ -254,10 +254,11 @@ pub fn inspect(conn: &Connection) -> Result<PrimaryImport> {
         return Ok(result);
     }
     let version: u32 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
-    // v8 only rebuilt classroom check evidence, v9 added appointments and v10
-    // per-day study lengths; the primary tables have kept the v7 shape since.
+    // v8 only rebuilt classroom check evidence, v9 added appointments, v10
+    // per-day study lengths, v11 the execution log and v12 per-day start
+    // times; the primary tables have kept the v7 shape since.
     const EARLIEST: u32 = 7;
-    const LATEST: u32 = 11;
+    const LATEST: u32 = 12;
     if !(EARLIEST..=LATEST).contains(&version) {
         return Err(invalid(format!(
             "Primary import requires schema v{EARLIEST} to v{LATEST}, found v{version}."

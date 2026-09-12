@@ -12,11 +12,21 @@ export interface ScheduleCandidate {
   session_minutes: number;
   /** Minutes for particular weekdays; others use `session_minutes`. */
   durations?: Record<string, number>;
+  /** "HH:MM" for particular weekdays; others start at `hour:minute`. */
+  starts?: Record<string, string>;
 }
 
 /** The minutes a study time lasts on a weekday: its own figure, or the class default. */
 export function dayMinutes(durations: Record<string, number> | undefined, weekday: number, fallback: number): number {
   return durations?.[String(weekday)] ?? fallback;
+}
+
+/** When a study time starts on a weekday: its own time, or the rule's. */
+export function dayStart(starts: Record<string, string> | undefined, weekday: number, hour: number, minute: number): [number, number] {
+  const own = starts?.[String(weekday)];
+  if (!own) return [hour, minute];
+  const [h, m] = own.split(':').map(Number);
+  return Number.isInteger(h) && Number.isInteger(m) && h >= 0 && h <= 23 && m >= 0 && m <= 59 ? [h, m] : [hour, minute];
 }
 
 export interface ConflictScope {
@@ -61,16 +71,18 @@ export function scheduleConflicts(
   const conflicts: ScheduleConflict[] = [];
   for (const candidate of candidates) {
     for (const weekday of candidate.weekdays) {
-      const mine = interval(weekday, candidate.hour, candidate.minute, dayMinutes(candidate.durations, weekday, candidate.session_minutes));
+      const [hour, minute] = dayStart(candidate.starts, weekday, candidate.hour, candidate.minute);
+      const mine = interval(weekday, hour, minute, dayMinutes(candidate.durations, weekday, candidate.session_minutes));
       for (const slot of existing) {
         const fallback = program(slot.subject_id)?.session_minutes ?? 30;
         for (const theirs of slot.weekdays) {
           const minutes = dayMinutes(slot.durations, theirs, fallback);
-          if (!overlaps(mine, interval(theirs, slot.hour, slot.minute, minutes))) continue;
+          const [theirHour, theirMinute] = dayStart(slot.starts, theirs, slot.hour, slot.minute);
+          if (!overlaps(mine, interval(theirs, theirHour, theirMinute, minutes))) continue;
           conflicts.push({
-            weekday, hour: candidate.hour, minute: candidate.minute, subject_id: candidate.subject_id, label,
+            weekday, hour, minute, subject_id: candidate.subject_id, label,
             with_slot_id: slot.id, with_subject_id: slot.subject_id, with_label: slot.label,
-            with_weekday: theirs, with_hour: slot.hour, with_minute: slot.minute, with_session_minutes: minutes,
+            with_weekday: theirs, with_hour: theirHour, with_minute: theirMinute, with_session_minutes: minutes,
           });
         }
       }

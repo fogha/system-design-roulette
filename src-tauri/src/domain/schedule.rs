@@ -192,17 +192,22 @@ struct RuleRow {
     session_minutes: i64,
     /// Minutes for particular weekdays; the class default covers the rest.
     durations: std::collections::BTreeMap<u8, i64>,
+    /// Start times for particular weekdays; `hour:minute` covers the rest.
+    starts: crate::classroom::DayStarts,
 }
 
 impl RuleRow {
     fn minutes_on(&self, weekday: u8) -> i64 {
         crate::classroom::day_minutes(&self.durations, weekday, self.session_minutes)
     }
+    fn start_on(&self, weekday: u8) -> (u32, u32) {
+        crate::classroom::day_start(&self.starts, weekday, self.hour, self.minute)
+    }
 }
 
 fn active_rules(conn: &Connection) -> Result<Vec<RuleRow>> {
     let mut statement = conn.prepare(
-        "SELECT s.id, s.subject_id, s.hour, s.minute, s.weekdays_json, s.revision, p.session_minutes, s.durations_json
+        "SELECT s.id, s.subject_id, s.hour, s.minute, s.weekdays_json, s.revision, p.session_minutes, s.durations_json, s.starts_json
          FROM classroom_schedule_slots s JOIN classroom_programs p ON p.subject_id = s.subject_id
          WHERE s.enabled = 1 AND p.enabled = 1 ORDER BY s.id",
     )?;
@@ -220,6 +225,7 @@ fn active_rules(conn: &Connection) -> Result<Vec<RuleRow>> {
                     .get::<_, Option<String>>(7)?
                     .and_then(|json| serde_json::from_str(&json).ok())
                     .unwrap_or_default(),
+                starts: crate::classroom::parse_starts(r.get::<_, Option<String>>(8)?),
             })
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -281,10 +287,11 @@ pub fn materialize(conn: &Connection, clock: &Clock<'_>, paused: bool) -> Result
                 }
                 continue;
             }
-            let time = NaiveTime::from_hms_opt(rule.hour, rule.minute, 0)
+            let (hour, minute) = rule.start_on(weekday);
+            let time = NaiveTime::from_hms_opt(hour, minute, 0)
                 .ok_or_else(|| invalid("invalid rule time"))?;
             let fires_at = resolve_local(clock.zone, clock.today, time)?;
-            let local_time = format!("{:02}:{:02}", rule.hour, rule.minute);
+            let local_time = format!("{hour:02}:{minute:02}");
             match existing {
                 None => {
                     let id = format!("occurrence-{:032x}", rand::random::<u128>());

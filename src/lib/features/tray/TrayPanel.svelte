@@ -86,7 +86,7 @@
       <div class="alarm-top"><Bell size={15} /><strong>{alarm.label}</strong><span class="mono">{alarm.snoozed_until ? `until ${clock(alarm.snoozed_until)}` : alarm.readiness === 'ready' ? 'ringing' : alarm.readiness === 'preparing' ? 'preparing…' : 'failed'}</span></div>
       <p>{alarm.readiness === 'preparing' ? 'The tutor is writing the lesson. The alarm rings when it is ready.' : alarm.readiness === 'failed' ? 'Preparation failed. Retry prepares it again.' : alarm.queued ? `${alarm.queued} more ${alarm.queued === 1 ? 'appointment is' : 'appointments are'} waiting behind it.` : 'Only starting the lesson ends this.'}</p>
       <div class="alarm-actions">
-        {#if alarm.readiness !== 'preparing'}<button class="primary" disabled={busy} onclick={start}><Play size={13} /> {alarm.readiness === 'failed' ? 'Retry' : 'Start'} {alarm.label}</button>{/if}
+        {#if alarm.readiness !== 'preparing'}<button class="cta mono-cta primary" disabled={busy} onclick={start}><Play size={13} /> {alarm.readiness === 'failed' ? 'Retry' : 'Start'} {alarm.label}</button>{/if}
         {#if !alarm.snoozed_until && alarm.readiness === 'ready'}<div class="snoozes">{#each [5, 10, 15] as minutes (minutes)}<button disabled={busy} onclick={() => snooze(minutes)}>{minutes}m</button>{/each}</div>{/if}
       </div>
     </section>
@@ -130,8 +130,8 @@
   {#if error}<p class="error" role="alert">{error}</p>{/if}
 
   <footer class="foot">
-    <button class="foot-btn" disabled={busy} onclick={open}><ChevronRight size={14} /> Open desk</button>
-    <button class="foot-btn" disabled={busy} onclick={togglePause}>{#if paused}<Play size={13} /> Resume{:else}<Pause size={13} /> Pause{/if}</button>
+    <button class="ghost mono-ghost small foot-btn" disabled={busy} onclick={open}><ChevronRight size={14} /> Open desk</button>
+    <button class="ghost mono-ghost small foot-btn" disabled={busy} onclick={togglePause}>{#if paused}<Play size={13} /> Resume{:else}<Pause size={13} /> Pause{/if}</button>
     <button class="foot-btn icon" title={alarm && !alarm.snoozed_until && alarm.readiness === 'ready' ? 'The alarm is ringing' : locked ? 'A focused session holds the desk' : 'Quit'} aria-label="Quit Principia Desk" disabled={busy || (!!alarm && !alarm.snoozed_until && alarm.readiness === 'ready') || locked} onclick={quit}><Power size={14} /></button>
     <button class="foot-btn icon" title="Open settings" aria-label="Open settings" disabled={busy} onclick={open}><Settings2 size={14} /></button>
   </footer>
@@ -154,7 +154,7 @@
   .alarm-top { display: flex; align-items: center; gap: 8px; } .alarm-top strong { font-size: 14px; } .alarm-top .mono { margin-left: auto; font-size: 10px; color: var(--accent); } .alarm.snoozed .alarm-top .mono { color: var(--muted); }
   .alarm p { margin: 0; font-size: 11px; color: var(--muted); line-height: 1.5; }
   .alarm-actions { display: flex; align-items: center; gap: 8px; }
-  .primary { flex: 1; display: flex; align-items: center; justify-content: center; gap: 7px; padding: 9px 12px; border: 0; border-radius: 10px; background: var(--accent); color: var(--bg); font: 600 12px var(--font-mono); cursor: pointer; }
+  .primary { flex: 1; display: flex; align-items: center; justify-content: center; gap: 7px; }
   .snoozes { display: flex; gap: 4px; } .snoozes button { padding: 8px 9px; border: 1px solid var(--node-border); border-radius: 9px; background: var(--bg); color: var(--fg); font: 11px var(--font-mono); cursor: pointer; }
 
   .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -172,8 +172,7 @@
 
   .error { margin: 0; font-size: 11px; color: var(--led-err); }
   .foot { display: flex; align-items: center; gap: 8px; padding-top: 4px; border-top: 1px solid var(--node-border); }
-  .foot-btn { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border: 1px solid transparent; border-radius: 10px; background: transparent; color: var(--fg); font-size: 12px; cursor: pointer; }
-  .foot-btn:hover:not(:disabled) { background: var(--surface); border-color: var(--node-border); }
-  .foot-btn:disabled { opacity: .35; cursor: default; }
-  .foot-btn.icon { margin-left: auto; padding: 8px; } .foot-btn.icon + .foot-btn.icon { margin-left: 0; }
+  .foot-btn { display: flex; align-items: center; gap: 6px; }
+  .foot-btn.icon { margin-left: auto; padding: 8px; border: 1px solid transparent; border-radius: 10px; background: transparent; color: var(--fg); cursor: pointer; } .foot-btn.icon + .foot-btn.icon { margin-left: 0; }
+  .foot-btn.icon:hover:not(:disabled) { background: var(--surface); border-color: var(--node-border); } .foot-btn.icon:disabled { opacity: .35; cursor: default; }
 </style>

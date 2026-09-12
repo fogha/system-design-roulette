@@ -14,7 +14,13 @@ Principia Desk keeps the visual character of its predecessor and its database, a
 
 **Today** combines your classes' appointments. Each class has recurring study times; every enabled time produces one durable appointment per day that is due at its time, missed once the day passes, and consumed exactly once by the session that serves it. Missed appointments can be made up or skipped. Topics whose spaced review is due appear with a Start review action.
 
-**Classes** hold the nine subjects: Linux Bash, Bash Scripting, JavaScript & Browser, TypeScript, Frontend Architecture, Developer Tooling, System Design, German and Italian. Each class has its own tutor, pace, study times, enforcement policy, accepted personal path and curriculum map.
+**Classes** hold the nine subjects: Linux Bash, Bash Scripting, JavaScript & Browser, TypeScript, Frontend Architecture, Developer Tooling, System Design, German and Italian. Each class has its own tutor, study times, enforcement policy, accepted personal path and curriculum map.
+
+### Study times set the pace
+
+A study time is a rule: a start time, the weekdays it repeats on, and for each of those days its own length and, when you want it, its own start. Monday can be an hour at 07:30 and Wednesday ninety minutes at 18:00 on one rule; the presets run 30 min, 1 h, 1 h 30, 2 h and 4 h, and any length from 10 minutes to 8 hours can be typed. Appointments take the day's own time and length, the overlap check compares each day at its own time, and the launch agent wakes the desk for every day's time.
+
+Pace is not a setting. The class's session length follows the days its schedule is made of (the most common length, the shorter on a tie), so a lesson started by hand runs like the scheduled ones; the weekly commitment a language plan is measured against is what the study times add up to; and the week target on Today is the same sum. Enrollment asks for your goal, which the tutor reads before writing every lesson, and nothing about minutes.
 
 ![Class overview](docs/screenshots/12-class-overview.png)
 

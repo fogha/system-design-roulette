@@ -309,7 +309,9 @@ fn resolve_context(conn: &Connection, input: &PlanSession, now: DateTime<Utc>) -
             "Choose a valid runner and model before preparing a lesson.",
         ));
     }
-    if !(10..=120).contains(&pace.session_minutes)
+    // A session may run as long as a study day does; the lesson itself is
+    // capped and a long day becomes a block of lessons.
+    if !(10..=480).contains(&pace.session_minutes)
         || pace
             .weekly_minutes
             .is_some_and(|minutes| !(10..=10080).contains(&minutes))

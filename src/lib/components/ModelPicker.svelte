@@ -3,7 +3,7 @@
   import { api } from '$lib/ipc';
   import { shortlistOptions } from '$lib/features/runners/model-list';
   import Dropdown from './Dropdown.svelte';
-  let { value = $bindable('default'), agent = 'claude', revision = 0, disabled = false, onconfigure, onchange }: { value?: string; agent?: string; revision?: number; disabled?: boolean; onconfigure?: () => void; onchange?: () => void } = $props();
+  let { value = $bindable('default'), agent = 'claude', revision = 0, disabled = false, onconfigure, onchange, hideLabel = false }: { value?: string; agent?: string; revision?: number; disabled?: boolean; onconfigure?: () => void; onchange?: () => void; hideLabel?: boolean } = $props();
   let models = $state<string[]>([]); let query = $state(''); let loading = $state(false); let error = $state('');
   let sequence = 0;
   const options = $derived(shortlistOptions(models, value).filter(m => m.label.toLowerCase().includes(query.toLowerCase())));
@@ -18,7 +18,7 @@
 
 <div class="model-picker">
   {#if models.length > 8}<input {disabled} aria-label="Search saved models" placeholder="Find a saved model…" bind:value={query} />{/if}
-  <Dropdown label="Model" {value} {options} disabled={loading || disabled} onchange={selected => { value = selected; onchange?.(); }} placeholder={loading ? 'Loading saved models…' : value} />
+  <Dropdown label="Model" {hideLabel} {value} {options} disabled={loading || disabled} onchange={selected => { value = selected; onchange?.(); }} placeholder={loading ? 'Loading saved models…' : value} />
   <div class="foot"><span>{models.length} saved {models.length === 1 ? 'model' : 'models'}</span>{#if onconfigure}<button type="button" onclick={onconfigure}>Manage models ↗</button>{/if}</div>
   {#if query && !options.length}<p role="status">No saved models match.</p>{/if}
   {#if error}<p class="error" role="status">{error}</p>{/if}

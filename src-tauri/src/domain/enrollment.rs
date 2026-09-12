@@ -296,14 +296,14 @@ fn validate(input: &SaveEnrollmentDraft, options: &EnrollmentOptions) -> Result<
             }
         }
     }
-    if !(10..=120).contains(&config.pace.session_minutes)
+    if !(10..=480).contains(&config.pace.session_minutes)
         || config
             .pace
             .weekly_minutes
             .is_some_and(|minutes| minutes < config.pace.session_minutes || minutes > 10080)
     {
         return Err(DbError::Invalid(
-            "choose sessions of 10–120 minutes and a weekly pace that can contain a session".into(),
+            "choose sessions of 10–480 minutes and a weekly pace that can contain a session".into(),
         ));
     }
     if crate::agents::RunnerId::parse(&config.tutor.provider).is_none()

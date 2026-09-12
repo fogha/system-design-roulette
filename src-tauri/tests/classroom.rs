@@ -72,6 +72,7 @@ fn planned_time_collision_never_changes_a_manual_slot_or_program() {
             weekdays: vec![7],
             enabled: true,
             durations: Default::default(),
+            starts: Default::default(),
         },
     )
     .unwrap();
@@ -314,6 +315,7 @@ fn only_enabled_class_slots_supply_os_wakeup_times() {
             weekdays: vec![1, 2, 3, 4, 5],
             enabled: true,
             durations: Default::default(),
+            starts: Default::default(),
         },
     )
     .unwrap();
@@ -327,6 +329,7 @@ fn only_enabled_class_slots_supply_os_wakeup_times() {
             weekdays: vec![2, 4],
             enabled: true,
             durations: Default::default(),
+            starts: Default::default(),
         },
     )
     .unwrap();
@@ -351,6 +354,7 @@ fn multiple_subject_slots_can_complete_on_the_same_day_without_touching_primary(
             weekdays: vec![2],
             enabled: true,
             durations: Default::default(),
+            starts: Default::default(),
         },
     )
     .unwrap();
@@ -364,6 +368,7 @@ fn multiple_subject_slots_can_complete_on_the_same_day_without_touching_primary(
             weekdays: vec![2],
             enabled: true,
             durations: Default::default(),
+            starts: Default::default(),
         },
     )
     .unwrap();
@@ -423,6 +428,7 @@ fn generic_language_slot_routes_to_cefr_engine_without_consuming_primary() {
             weekdays: vec![2],
             enabled: true,
             durations: Default::default(),
+            starts: Default::default(),
         },
     )
     .unwrap();
@@ -461,6 +467,7 @@ fn deleting_a_slot_cuts_the_link_on_history_without_losing_it() {
             weekdays: vec![3],
             enabled: true,
             durations: Default::default(),
+            starts: Default::default(),
         },
     )
     .unwrap();
@@ -521,6 +528,7 @@ fn editing_a_class_slot_changes_its_fire_time_in_place() {
             weekdays: vec![1, 2, 3, 4, 5],
             enabled: true,
             durations: Default::default(),
+            starts: Default::default(),
         },
     )
     .unwrap();
@@ -536,6 +544,7 @@ fn editing_a_class_slot_changes_its_fire_time_in_place() {
             weekdays: vec![6, 7],
             enabled: true,
             durations: Default::default(),
+            starts: Default::default(),
         },
     )
     .unwrap();
@@ -562,6 +571,7 @@ fn editing_a_class_slot_onto_another_slots_time_is_rejected_clearly() {
             weekdays: vec![1, 2, 3, 4, 5],
             enabled: true,
             durations: Default::default(),
+            starts: Default::default(),
         },
     )
     .unwrap();
@@ -575,6 +585,7 @@ fn editing_a_class_slot_onto_another_slots_time_is_rejected_clearly() {
             weekdays: vec![6],
             enabled: true,
             durations: Default::default(),
+            starts: Default::default(),
         },
     )
     .unwrap();
@@ -588,6 +599,7 @@ fn editing_a_class_slot_onto_another_slots_time_is_rejected_clearly() {
             weekdays: vec![6],
             enabled: true,
             durations: Default::default(),
+            starts: Default::default(),
         },
     );
     assert_eq!(
@@ -651,6 +663,7 @@ fn committing_a_plan_preserves_manual_slots_and_replaces_only_planned_ones() {
             weekdays: vec![7],
             enabled: true,
             durations: Default::default(),
+            starts: Default::default(),
         },
     )
     .unwrap();
@@ -704,8 +717,10 @@ fn committing_a_plan_preserves_manual_slots_and_replaces_only_planned_ones() {
     let program = classroom::program_row(&conn, "german").unwrap();
     assert_eq!(program.learning_goal, "conversational travel German");
     assert_eq!(program.target_weekly_minutes, 60);
+    // The weekly commitment is what the study times add up to: the two
+    // planned half hours and the hand-placed one, not the target typed in.
     let language_view = language::program_view(&conn, "german", "2026-07-21").unwrap();
-    assert_eq!(language_view.weekly_minutes, 60);
+    assert_eq!(language_view.weekly_minutes, 90);
 }
 
 #[test]
@@ -742,6 +757,7 @@ fn hand_editing_a_planned_slot_claims_it_so_replanning_leaves_it_alone() {
             weekdays: vec![1],
             enabled: true,
             durations: Default::default(),
+            starts: Default::default(),
         },
     )
     .unwrap();
@@ -958,6 +974,7 @@ fn activation_requires_a_saved_enabled_rule_and_keeps_configuration_atomic() {
             weekdays: vec![1, 3, 5],
             enabled: false,
             durations: Default::default(),
+            starts: Default::default(),
         },
     )
     .unwrap();
@@ -972,6 +989,7 @@ fn activation_requires_a_saved_enabled_rule_and_keeps_configuration_atomic() {
             weekdays: vec![1, 3, 5],
             enabled: true,
             durations: Default::default(),
+            starts: Default::default(),
         },
     )
     .unwrap();
@@ -1004,6 +1022,7 @@ fn activation_requires_a_saved_enabled_rule_and_keeps_configuration_atomic() {
             weekdays: vec![1, 3, 5],
             enabled: true,
             durations: Default::default(),
+            starts: Default::default(),
         },
     )
     .unwrap();
@@ -1022,6 +1041,7 @@ fn editing_a_schedule_cannot_transfer_it_to_another_class() {
         weekdays: vec![1, 3, 5],
         enabled: true,
         durations: Default::default(),
+        starts: Default::default(),
     };
     let id = classroom::upsert_slot(&conn, &input).unwrap();
     input.id = Some(id);
@@ -1113,6 +1133,7 @@ fn study_time(
             weekdays,
             enabled: true,
             durations: Default::default(),
+            starts: Default::default(),
         },
     )
 }
@@ -1222,6 +1243,7 @@ fn paused_classes_do_not_block_others_but_cannot_activate_into_an_overlap() {
             weekdays: vec![1, 3, 5],
             enabled: true,
             durations: Default::default(),
+            starts: Default::default(),
         },
     )
     .unwrap();
@@ -1238,27 +1260,174 @@ fn paused_classes_do_not_block_others_but_cannot_activate_into_an_overlap() {
 }
 
 #[test]
-fn lengthening_a_session_into_another_active_class_is_rejected() {
+fn lengthening_a_day_into_another_active_class_is_rejected() {
     let conn = test_db();
-    study_time(&conn, "linux-bash", 9, 0, vec![1]).unwrap();
+    let id = study_time(&conn, "linux-bash", 9, 0, vec![1]).unwrap();
     set_class(&conn, "linux-bash", true, 30).unwrap();
     study_time(&conn, "typescript", 9, 30, vec![1]).unwrap();
     set_class(&conn, "typescript", true, 30).unwrap();
-    let error = set_class(&conn, "linux-bash", true, 45).unwrap_err();
+    // Monday's own minutes are written down with the rule, so stretching
+    // them runs into TypeScript and is refused.
+    let error = classroom::upsert_slot(
+        &conn,
+        &UpsertClassroomSlotInput {
+            id: Some(id),
+            subject_id: "linux-bash".into(),
+            hour: 9,
+            minute: 0,
+            weekdays: vec![1],
+            enabled: true,
+            durations: [(1u8, 45i64)].into_iter().collect(),
+            starts: Default::default(),
+        },
+    )
+    .unwrap_err();
     assert!(
         error.contains("TypeScript") && error.contains("09:30"),
         "{error}"
     );
-    let minutes: i64 = conn
-        .query_row(
-            "SELECT session_minutes FROM classroom_programs WHERE subject_id='linux-bash'",
+    let view = classroom::slot_views(&conn, "2026-07-21", false)
+        .unwrap()
+        .into_iter()
+        .find(|slot| slot.id == id)
+        .unwrap();
+    assert_eq!(
+        view.durations.get(&1),
+        Some(&30),
+        "a rejected change writes nothing"
+    );
+    // The class's own session length follows the schedule and never
+    // stretches a day that is already written down.
+    set_class(&conn, "linux-bash", true, 45).unwrap();
+    let view = classroom::slot_views(&conn, "2026-07-21", false)
+        .unwrap()
+        .into_iter()
+        .find(|slot| slot.id == id)
+        .unwrap();
+    assert_eq!(view.durations.get(&1), Some(&30));
+}
+
+#[test]
+fn the_session_length_follows_the_days_the_schedule_is_made_of() {
+    let conn = test_db();
+    let id = classroom::upsert_slot(
+        &conn,
+        &UpsertClassroomSlotInput {
+            id: None,
+            subject_id: "typescript".into(),
+            hour: 9,
+            minute: 0,
+            weekdays: vec![1, 2, 3],
+            enabled: true,
+            durations: [(1u8, 60i64), (2, 60), (3, 30)].into_iter().collect(),
+            starts: Default::default(),
+        },
+    )
+    .unwrap();
+    let minutes = |conn: &rusqlite::Connection| -> i64 {
+        conn.query_row(
+            "SELECT session_minutes FROM classroom_programs WHERE subject_id='typescript'",
             [],
             |r| r.get(0),
         )
-        .unwrap();
-    assert_eq!(minutes, 30, "a rejected change writes nothing");
-    set_class(&conn, "linux-bash", true, 20).unwrap();
+        .unwrap()
+    };
+    assert_eq!(
+        minutes(&conn),
+        60,
+        "two days of an hour outweigh one of half"
+    );
+    assert_eq!(
+        classroom::weekly_minutes_scheduled(&conn, "typescript").unwrap(),
+        150
+    );
+    // A tie goes to the shorter day; no schedule leaves the length alone.
+    classroom::upsert_slot(
+        &conn,
+        &UpsertClassroomSlotInput {
+            id: Some(id),
+            subject_id: "typescript".into(),
+            hour: 9,
+            minute: 0,
+            weekdays: vec![1, 2],
+            enabled: true,
+            durations: [(1u8, 60i64), (2, 30)].into_iter().collect(),
+            starts: Default::default(),
+        },
+    )
+    .unwrap();
+    assert_eq!(minutes(&conn), 30);
+    classroom::delete_slot(&conn, id).unwrap();
+    assert_eq!(minutes(&conn), 30);
+    assert_eq!(
+        classroom::weekly_minutes_scheduled(&conn, "typescript").unwrap(),
+        0
+    );
+}
+
+#[test]
+fn a_rule_can_start_at_a_different_time_on_each_day() {
+    let conn = test_db();
+    study_time(&conn, "linux-bash", 8, 0, vec![2]).unwrap();
     set_class(&conn, "linux-bash", true, 30).unwrap();
+    // Monday and Wednesday at 07:30, Tuesday at 08:00: Tuesday runs into
+    // Linux Bash, and the refusal names Tuesday's own time.
+    let tuesday_late = UpsertClassroomSlotInput {
+        id: None,
+        subject_id: "typescript".into(),
+        hour: 7,
+        minute: 30,
+        weekdays: vec![1, 2, 3],
+        enabled: true,
+        durations: Default::default(),
+        starts: [(2u8, "08:00".to_string())].into_iter().collect(),
+    };
+    let error = classroom::upsert_slot(&conn, &tuesday_late).unwrap_err();
+    assert!(
+        error.contains("Tuesday") && error.contains("08:00") && error.contains("Linux Bash"),
+        "{error}"
+    );
+    let bad_clock = UpsertClassroomSlotInput {
+        starts: [(2u8, "25:00".to_string())].into_iter().collect(),
+        ..tuesday_late.clone()
+    };
+    assert!(classroom::upsert_slot(&conn, &bad_clock)
+        .unwrap_err()
+        .contains("HH:MM"));
+    // Tuesday at 06:45 is free. A day at the rule's own time is not kept
+    // as its own entry.
+    let id = classroom::upsert_slot(
+        &conn,
+        &UpsertClassroomSlotInput {
+            starts: [(2u8, "06:45".to_string()), (3, "07:30".to_string())]
+                .into_iter()
+                .collect(),
+            ..tuesday_late
+        },
+    )
+    .unwrap();
+    let view = classroom::slot_views(&conn, "2026-07-21", false)
+        .unwrap()
+        .into_iter()
+        .find(|slot| slot.id == id)
+        .unwrap();
+    assert_eq!(view.starts.get(&2).map(String::as_str), Some("06:45"));
+    assert_eq!(view.starts.get(&3), None);
+    assert_eq!((view.hour, view.minute), (7, 30));
+    // 2026-07-21 is a Tuesday: the next firing is Tuesday's own time.
+    assert!(
+        view.next_fire_at.ends_with("06:45:00") || view.next_fire_at.ends_with("07:30:00"),
+        "{}",
+        view.next_fire_at
+    );
+    set_class(&conn, "typescript", true, 30).unwrap();
+    let mut times = classroom::all_schedule_times(&conn).unwrap();
+    times.sort_unstable();
+    assert_eq!(
+        times,
+        vec![(6, 45), (7, 30), (8, 0)],
+        "the app wakes for every day's own time"
+    );
 }
 
 #[test]

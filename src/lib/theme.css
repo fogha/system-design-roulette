@@ -531,6 +531,17 @@ button.cta.mono-cta {
   gap: 8px;
 }
 
+/* The same key, smaller, for toolbars and rows. */
+button.ghost.small {
+  min-height: 28px;
+  padding: 4px 10px 4px 12px;
+  font-size: 10px;
+}
+button.ghost.small::after {
+  width: 5px;
+  height: 5px;
+}
+
 button.ghost.mono-ghost {
   font-family: var(--font-mono);
   font-size: 11px;

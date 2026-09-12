@@ -34,9 +34,9 @@
       {#if result.extra}<p class="extra">{result.extra}</p>{/if}
     </div>
   </section>
-  <button class="submit-button" type="button" onclick={onreturn}>{returnLabel}</button>
+  <button class="cta mono-cta submit" type="button" onclick={onreturn}>{returnLabel}</button>
 {:else}
-  <button class="submit-button" type="button" disabled={disabled || busy} onclick={onsubmit}>
+  <button class="cta mono-cta submit" type="button" disabled={disabled || busy} onclick={onsubmit}>
     <Send size={13} /> {busy ? busyLabel : submitLabel}
   </button>
   {#if hint && disabled && !busy}<p class="hint">{hint}</p>{/if}
@@ -47,11 +47,6 @@
   .result-card.passed { border-color: var(--green); color: var(--green); }
   .result-card p { margin: 3px 0 0; color: var(--muted); font-size: 9px; line-height: 1.5; }
   .result-card .extra { color: var(--text); }
-  .submit-button {
-    width: 100%; min-height: 38px; margin-top: 12px; border: 1px solid var(--accent); border-radius: var(--radius-control);
-    background: var(--accent); color: var(--bg); display: flex; justify-content: center; align-items: center; gap: 6px; cursor: pointer;
-  }
-  .submit-button:disabled { opacity: 0.4; cursor: not-allowed; }
-  .submit-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .submit { width: 100%; margin-top: 12px; display: flex; justify-content: center; align-items: center; gap: 6px; }
   .hint { color: var(--faint); font-size: 9px; margin: 8px 0 0; line-height: 1.5; }
 </style>
