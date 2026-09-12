@@ -9,12 +9,19 @@
 
 use crate::alarm::{self, AlarmView};
 use crate::state::AppState;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{
     menu::{Menu, MenuBuilder, MenuItemBuilder},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, WebviewUrl, WebviewWindowBuilder,
+    AppHandle, Emitter, LogicalSize, Manager, WebviewUrl, WebviewWindowBuilder,
 };
+
+/// The card is playing its exit; the window goes once it has.
+static LEAVING: AtomicBool = AtomicBool::new(false);
+/// How long the card takes to leave (`TrayPanel.svelte` matches it).
+const LEAVE_MS: u64 = 170;
+/// Where the panel's top-left corner sits, so a resize keeps it under the icon.
+static ORIGIN: std::sync::Mutex<(f64, f64)> = std::sync::Mutex::new((0.0, 0.0));
 
 pub const TRAY_ID: &str = "desk";
 /// The popover under the icon. A left click toggles it; the native menu stays
@@ -256,79 +263,102 @@ fn panel(app: &AppHandle) -> tauri::Result<tauri::WebviewWindow> {
 }
 
 /// Show the panel centred under the icon, or hide it if it is showing.
+///
+/// The window appears in place, at once; the card inside it plays the
+/// entrance (a drop from under the menu bar), which is what a person sees
+/// and what stays smooth. On macOS the window is a non-activating panel,
+/// so it shows over whatever is frontmost, on whatever space, without the
+/// desk coming forward or the space changing.
 fn toggle_panel(app: &AppHandle, rect: tauri::Rect) {
     let Ok(window) = panel(app) else {
         return;
     };
     if window.is_visible().unwrap_or(false) {
-        let _ = window.hide();
+        hide_panel(app);
         return;
     }
+    LEAVING.store(false, Ordering::SeqCst);
     let scale = window.scale_factor().unwrap_or(1.0);
     let position = rect.position.to_logical::<f64>(scale);
     let size = rect.size.to_logical::<f64>(scale);
     let height = *app.state::<AppState>().panel_height.lock().unwrap();
     let x = (position.x + size.width / 2.0 - PANEL_WIDTH / 2.0).max(8.0);
     let y = position.y + size.height + 4.0;
-    // Slide in from the screen's right edge, the way a menu bar panel should.
-    let edge = window
-        .current_monitor()
-        .ok()
-        .flatten()
-        .map(|m| {
-            let s = m.scale_factor();
-            let p = m.position().to_logical::<f64>(s);
-            let z = m.size().to_logical::<f64>(s);
-            p.x + z.width
-        })
-        .unwrap_or(x + PANEL_WIDTH);
-    let _ = window.set_size(LogicalSize::new(PANEL_WIDTH, height));
-    let _ = window.set_position(LogicalPosition::new(edge, y));
-    let _ = window.show();
+    *ORIGIN.lock().unwrap() = (x, y);
+    // The card starts its entrance before the window is on screen, so the
+    // first frame is already in motion.
+    let _ = app.emit("tray:refresh", ());
     #[cfg(target_os = "macos")]
     {
-        // A tray click does not activate the app, so raise the panel above
-        // whatever is frontmost and on whichever space the person is on.
         let w = window.clone();
         let _ = window.run_on_main_thread(move || {
             let _ = objc2::exception::catch(std::panic::AssertUnwindSafe(|| unsafe {
-                crate::kiosk::mac::activate_self();
                 if let Ok(ptr) = w.ns_window() {
-                    crate::kiosk::mac::raise_window(ptr as *mut objc2::runtime::AnyObject);
+                    let ptr = ptr as *mut objc2::runtime::AnyObject;
+                    crate::menu_panel::adopt(ptr);
+                    crate::menu_panel::present(ptr, x, y, PANEL_WIDTH, height);
                 }
             }));
         });
     }
-    let _ = window.set_focus();
-    let _ = app.emit("tray:refresh", ());
-    let slide = window.clone();
-    tauri::async_runtime::spawn(async move {
-        const STEPS: u32 = 14;
-        for step in 1..=STEPS {
-            let t = step as f64 / STEPS as f64;
-            let eased = 1.0 - (1.0 - t).powi(3);
-            let current = edge + (x - edge) * eased;
-            let _ = slide.set_position(LogicalPosition::new(current, y));
-            tokio::time::sleep(std::time::Duration::from_millis(11)).await;
-        }
-        let _ = slide.set_position(LogicalPosition::new(x, y));
-    });
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = window.set_size(LogicalSize::new(PANEL_WIDTH, height));
+        let _ = window.set_position(tauri::LogicalPosition::new(x, y));
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
 }
 
-/// The panel reports the height of its card so the window carries no dead space.
+/// The panel reports the height of its card so the window carries no dead
+/// space. The top edge stays put: the card grows downward from the icon.
 pub fn size_panel(app: &AppHandle, height: f64) {
     let bounded = height.clamp(160.0, 900.0);
     *app.state::<AppState>().panel_height.lock().unwrap() = bounded;
-    if let Some(window) = app.get_webview_window(PANEL_LABEL) {
-        let _ = window.set_size(LogicalSize::new(PANEL_WIDTH, bounded));
+    let Some(window) = app.get_webview_window(PANEL_LABEL) else {
+        return;
+    };
+    #[cfg(target_os = "macos")]
+    {
+        if window.is_visible().unwrap_or(false) {
+            let (x, y) = *ORIGIN.lock().unwrap();
+            let w = window.clone();
+            let _ = window.run_on_main_thread(move || {
+                let _ = objc2::exception::catch(std::panic::AssertUnwindSafe(|| unsafe {
+                    if let Ok(ptr) = w.ns_window() {
+                        crate::menu_panel::place(
+                            ptr as *mut objc2::runtime::AnyObject,
+                            x,
+                            y,
+                            PANEL_WIDTH,
+                            bounded,
+                        );
+                    }
+                }));
+            });
+            return;
+        }
     }
+    let _ = window.set_size(LogicalSize::new(PANEL_WIDTH, bounded));
 }
 
-/// Hide the panel, for instance when it loses focus or after an action.
+/// Hide the panel, for instance when it loses focus or after an action:
+/// the card plays its exit first, then the window goes.
 pub fn hide_panel(app: &AppHandle) {
-    if let Some(window) = app.get_webview_window(PANEL_LABEL) {
-        let _ = window.hide();
+    let Some(window) = app.get_webview_window(PANEL_LABEL) else {
+        return;
+    };
+    if !window.is_visible().unwrap_or(false) || LEAVING.swap(true, Ordering::SeqCst) {
+        return;
     }
+    let _ = app.emit("tray:leave", ());
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(LEAVE_MS)).await;
+        if LEAVING.load(Ordering::SeqCst) {
+            let _ = window.hide();
+            LEAVING.store(false, Ordering::SeqCst);
+        }
+    });
 }
 
 /// Install the icon once at startup. Later state changes go through `refresh`.

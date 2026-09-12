@@ -17,6 +17,8 @@ pub mod language;
 pub mod lesson_export;
 pub mod lesson_shape;
 pub mod mastery;
+#[cfg(target_os = "macos")]
+pub mod menu_panel;
 pub mod progress;
 pub mod prose;
 pub mod readiness;
@@ -327,7 +329,7 @@ pub fn run() {
             }
             tauri::WindowEvent::Focused(false) => {
                 if window.label() == tray::PANEL_LABEL {
-                    let _ = window.hide();
+                    tray::hide_panel(window.app_handle());
                     return;
                 }
                 let state = window.app_handle().state::<AppState>();

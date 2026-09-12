@@ -11,7 +11,21 @@
   let busy = $state(false);
   let error = $state('');
   let card = $state<HTMLDivElement | null>(null);
-  let entering = $state(true);
+  /** The card's motion: it drops in from under the menu bar and lifts away when the panel closes. */
+  let phase = $state<'in' | 'shown' | 'out'>('in');
+  let phaseTimer: ReturnType<typeof setTimeout> | null = null;
+  function enter() {
+    if (phaseTimer) clearTimeout(phaseTimer);
+    phase = 'in';
+    // Two frames so the start state is painted before the transition runs.
+    requestAnimationFrame(() => requestAnimationFrame(() => (phase = 'shown')));
+  }
+  function leave() {
+    if (phaseTimer) clearTimeout(phaseTimer);
+    phase = 'out';
+    // Back to the start state once the window is hidden, ready for the next entrance.
+    phaseTimer = setTimeout(() => (phase = 'in'), 400);
+  }
 
   async function load() {
     try {
@@ -23,12 +37,13 @@
     void load();
     const tick = setInterval(() => (now = new Date()), 15_000);
     const subscriptions = ['alarm:state', 'classroom:state', 'classroom:owed'].map((name) => onEvent(name, () => void load()));
-    // Each time the panel is shown it slides in; replay the enter motion.
-    subscriptions.push(onEvent('tray:refresh', () => { entering = true; void load(); setTimeout(() => (entering = false), 260); }));
+    // Each time the panel is shown the card drops in; when it closes, it lifts away first.
+    subscriptions.push(onEvent('tray:refresh', () => { enter(); void load(); }));
+    subscriptions.push(onEvent('tray:leave', () => leave()));
     // The window carries no dead space: report the card's height as it changes.
     const observer = new ResizeObserver(() => { if (card) void api.sizeTrayPanel(card.offsetHeight + 24); });
     if (card) observer.observe(card);
-    setTimeout(() => (entering = false), 260);
+    enter();
     return () => { clearInterval(tick); observer.disconnect(); void Promise.all(subscriptions).then((offs) => offs.forEach((off) => off())); };
   });
 
@@ -71,7 +86,7 @@
   const quit = () => run(() => api.quitDesk());
 </script>
 
-<div class="panel" class:due={health.tone === 'due'} class:entering bind:this={card}>
+<div class="panel" class:due={health.tone === 'due'} class:entering={phase === 'in'} class:leaving={phase === 'out'} bind:this={card}>
   <header class="head">
     <div>
       <p class="eyebrow mono">PRINCIPIA DESK</p>
@@ -138,9 +153,11 @@
 </div>
 
 <style>
-  .panel { box-sizing: border-box; width: 356px; margin: 12px; display: grid; gap: 14px; align-content: start; padding: 18px 18px 14px; border-radius: 18px; border: 1px solid var(--node-border); background: color-mix(in srgb, var(--bg) 96%, black); color: var(--fg); font-family: var(--font-body); box-shadow: 0 14px 40px rgba(0, 0, 0, .5); opacity: 1; transform: translateY(0); transition: opacity .22s ease, transform .26s cubic-bezier(.2,.8,.2,1); }
-  .panel.entering { opacity: 0; transform: translateY(-6px); }
-  @media (prefers-reduced-motion: reduce) { .panel, .panel.entering { transition: none; opacity: 1; transform: none; } }
+  /* The card drops from under the menu bar and settles; on the way out it lifts and fades, quicker. */
+  .panel { box-sizing: border-box; width: 356px; margin: 12px; display: grid; gap: 14px; align-content: start; padding: 18px 18px 14px; border-radius: 18px; border: 1px solid var(--node-border); background: color-mix(in srgb, var(--bg) 96%, black); color: var(--fg); font-family: var(--font-body); box-shadow: 0 14px 40px rgba(0, 0, 0, .5); opacity: 1; transform: translateY(0) scale(1); transform-origin: 50% 0; transition: opacity .2s ease-out, transform .3s cubic-bezier(.16, 1, .3, 1); will-change: opacity, transform; }
+  .panel.entering { opacity: 0; transform: translateY(-18px) scale(.97); transition: none; }
+  .panel.leaving { opacity: 0; transform: translateY(-10px) scale(.985); transition: opacity .15s ease-in, transform .17s ease-in; }
+  @media (prefers-reduced-motion: reduce) { .panel, .panel.entering, .panel.leaving { transition: none; opacity: 1; transform: none; } }
   .panel.due { border-color: var(--accent); }
   .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
   .eyebrow { font-size: 9px; letter-spacing: .8px; color: var(--faint); margin: 0 0 4px; }
