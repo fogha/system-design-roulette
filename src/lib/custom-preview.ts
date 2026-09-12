@@ -355,6 +355,8 @@ export const previewCustom = {
     const created = await previewCustom.create(brief, 'import');
     return previewCustom.saveDraft(created.id, { ...file.draft, id: created.id });
   },
+  /** The questions a class holds, for the bank strip. */
+  bankOf: (id: string) => stored.get(id)?.bank?.questions ?? [],
   /** The published courses, for the preview's catalogue. */
   published: (): CourseDefinition[] => [...stored.values()].filter((c) => c.status === 'published').map(definitionOf),
 };

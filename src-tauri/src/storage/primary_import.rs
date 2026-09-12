@@ -256,10 +256,11 @@ pub fn inspect(conn: &Connection) -> Result<PrimaryImport> {
     let version: u32 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
     // v8 only rebuilt classroom check evidence, v9 added appointments, v10
     // per-day study lengths, v11 the execution log, v12 per-day start times,
-    // v13 custom courses, v14 their question banks, v15 their checks; the primary tables
+    // v13 custom courses, v14 their question banks, v15 their checks, v16 written
+    // banks for bundled classes; the primary tables
     // have kept the v7 shape since.
     const EARLIEST: u32 = 7;
-    const LATEST: u32 = 15;
+    const LATEST: u32 = 16;
     if !(EARLIEST..=LATEST).contains(&version) {
         return Err(invalid(format!(
             "Primary import requires schema v{EARLIEST} to v{LATEST}, found v{version}."

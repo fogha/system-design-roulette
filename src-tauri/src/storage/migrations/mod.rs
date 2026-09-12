@@ -165,6 +165,15 @@ const MIGRATIONS: &[Migration] = &[
             Ok(())
         },
     },
+    Migration {
+        version: 16,
+        name: "course_banks",
+        sources: &[include_str!("016_course_banks.sql")],
+        apply: |conn| {
+            conn.execute_batch(include_str!("016_course_banks.sql"))?;
+            Ok(())
+        },
+    },
 ];
 
 pub fn enable_foreign_keys(conn: &Connection) -> Result<()> {

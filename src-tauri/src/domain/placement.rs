@@ -66,53 +66,58 @@ fn digest(value: &impl Serialize) -> Result<String> {
 /// Whether a diagnostic bank exists for the course, authored or written
 /// for a learner's own class, without validating it (that happens when it
 /// is used).
-pub fn has_bank(course_id: &str) -> bool {
-    if catalog::is_custom(course_id) {
-        // A written bank counts only while it still samples every stage
-        // three times; a disputed question can take it below that. This
-        // is the structural part of the check only: the full validation
-        // reads the enrollment options, which ask this question.
-        return catalog::custom_bank(course_id)
-            .and_then(|value| serde_json::from_value::<Bank>(value).ok())
-            .is_some_and(|bank| {
-                ["foundations", "mechanisms", "production", "synthesis"]
-                    .iter()
-                    .all(|stage| {
-                        bank.questions
-                            .iter()
-                            .filter(|q| {
-                                !q.voided && q.followup_for.is_none() && q.entry_point == *stage
-                            })
-                            .count()
-                            >= CRITERIA_PER_ENTRY_POINT
-                    })
-            });
+/// A written bank counts only while it still samples every stage three
+/// times; a disputed question can take it below that. This is the
+/// structural part of the check only: the full validation reads the
+/// enrollment options, which ask this question.
+fn written_bank_stands(bank: &Bank) -> bool {
+    ["foundations", "mechanisms", "production", "synthesis"]
+        .iter()
+        .all(|stage| {
+            bank.questions
+                .iter()
+                .filter(|q| !q.voided && q.followup_for.is_none() && q.entry_point == *stage)
+                .count()
+                >= CRITERIA_PER_ENTRY_POINT
+        })
+}
+
+/// The bank the tutor wrote and the desk registered for a learner's own
+/// class.
+fn written_bank(course_id: &str) -> Option<Bank> {
+    if !catalog::is_custom(course_id) {
+        return None;
     }
-    serde_json::from_str::<Banks>(include_str!("../../seed/diagnostics.json"))
-        .map(|banks| banks.courses.iter().any(|b| b.course_id == course_id))
-        .unwrap_or(false)
+    catalog::custom_bank(course_id).and_then(|value| serde_json::from_value::<Bank>(value).ok())
+}
+
+/// The bank a bundled class ships with, unvalidated.
+pub fn authored_bank(course_id: &str) -> Option<Bank> {
+    let banks: Banks = serde_json::from_str(include_str!("../../seed/diagnostics.json")).ok()?;
+    if banks.schema_version != 1 {
+        return None;
+    }
+    banks.courses.into_iter().find(|b| b.course_id == course_id)
+}
+
+pub fn has_bank(course_id: &str) -> bool {
+    if let Some(bank) = written_bank(course_id) {
+        return written_bank_stands(&bank);
+    }
+    !catalog::is_custom(course_id) && authored_bank(course_id).is_some()
 }
 
 pub fn bank(course_id: &str) -> Result<Bank> {
-    let bank = if catalog::is_custom(course_id) {
-        // A learner's own class: the bank the tutor wrote, registered with
-        // the course. Voided questions are left out of every sample.
-        let mut bank: Bank = serde_json::from_value(
-            catalog::custom_bank(course_id)
-                .ok_or_else(|| invalid("this class has no question bank yet"))?,
-        )?;
+    // A learner's own class samples the bank the tutor wrote for it, voided
+    // questions left out; a bundled class samples its authored bank. The
+    // practice questions (`domain::banks`) are never sampled here.
+    let bank = if let Some(mut bank) = written_bank(course_id) {
         bank.questions.retain(|q| !q.voided);
         bank
+    } else if catalog::is_custom(course_id) {
+        return Err(invalid("this class has no question bank yet"));
     } else {
-        let banks: Banks = serde_json::from_str(include_str!("../../seed/diagnostics.json"))?;
-        if banks.schema_version != 1 {
-            return Err(invalid("unsupported diagnostic bank version"));
-        }
-        banks
-            .courses
-            .into_iter()
-            .find(|b| b.course_id == course_id)
-            .ok_or_else(|| invalid("diagnostic unavailable for this course"))?
+        authored_bank(course_id).ok_or_else(|| invalid("diagnostic unavailable for this course"))?
     };
     validate_bank(course_id, bank)
 }

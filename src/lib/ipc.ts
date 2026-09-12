@@ -343,6 +343,19 @@ export interface CustomCourseView {
   /** The finding a fix in flight is on. */
   working_at?: number | null;
 }
+/** The practice questions of a class, kept apart from the bank the checks draw on. */
+export interface PracticeBankView {
+  course_id: string;
+  /** Every question, disputed ones included and marked. */
+  questions: BankQuestion[];
+  per_stage: { stage: string; label: string; count: number }[];
+  usable: number;
+  written_at: string | null;
+  /** What the placement check and unit challenges draw on, never shown. */
+  checks_bank: { source: 'bundled' | 'written' | 'none'; questions: number };
+  /** The tutor is writing more right now. */
+  working: boolean;
+}
 export interface CustomCourseSummary {
   id: string;
   label: string;
@@ -974,6 +987,10 @@ const realApi = {
   verifyCustomCourseSources: (id: string) => invoke<CustomCourseView>('verify_custom_course_sources', { id }),
   writeCustomCourseBank: (id: string) => invoke<CustomCourseView>('write_custom_course_bank', { id }),
   voidCustomQuestion: (id: string, questionId: string, reason: string) => invoke<CustomCourseView>('void_custom_question', { id, questionId, reason }),
+  getPracticeBank: (courseId: ClassroomSubjectId) => invoke<PracticeBankView>('get_practice_bank', { courseId }),
+  writePracticeQuestions: (courseId: ClassroomSubjectId, stage: string) => invoke<PracticeBankView>('write_practice_questions', { courseId, stage }),
+  voidPracticeQuestion: (courseId: ClassroomSubjectId, questionId: string, reason: string) => invoke<PracticeBankView>('void_practice_question', { courseId, questionId, reason }),
+  clearPracticeBank: (courseId: ClassroomSubjectId) => invoke<PracticeBankView>('clear_practice_bank', { courseId }),
   fixCustomCourseFinding: (id: string, index: number) => invoke<CustomCourseView>('fix_custom_course_finding', { id, index }),
   fixAllCustomCourseFindings: (id: string) => invoke<CustomCourseView>('fix_all_custom_course_findings', { id }),
   resolveCustomCourseFinding: (id: string, index: number, status: ReviewFinding['status'], note: string) => invoke<CustomCourseView>('resolve_custom_course_finding', { id, index, status, note }),

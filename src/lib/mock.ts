@@ -1,5 +1,5 @@
 import { previewConfiguration, savePreviewConfiguration, previewRunners, previewModels, previewLocal, rememberPreviewModel, desktopRequired } from './features/runners/preview';
-import type { FocusPolicy, CurriculumConceptView, RouteSummary, ExecutionRun, ExecutionLogLine } from './ipc';
+import type { FocusPolicy, CurriculumConceptView, RouteSummary, ExecutionRun, ExecutionLogLine, PracticeBankView, BankQuestion } from './ipc';
 import type { RevisePath } from './contracts/classes';
 import type { AgentPolicy, RunnerId } from './contracts/agents';
 import { previewEnrollmentOptions, previewEnrollmentDraft, savePreviewEnrollmentDraft } from './enrollment-preview';
@@ -753,6 +753,16 @@ function pauseMockClassWithoutSchedule(subjectId: ClassroomSubjectId) {
   if (subjectId === 'german' || subjectId === 'italian') mockLanguageSettings[subjectId].enabled = false;
 }
 
+/** Practice questions in the preview, per class; the checks' bank is described, never shown. */
+const mockPractice = new Map<string, BankQuestion[]>();
+function previewPractice(courseId: ClassroomSubjectId): PracticeBankView {
+  const questions = mockPractice.get(courseId) ?? [];
+  const stages = courseDefinition(courseId)?.entry_points ?? [];
+  const custom = courseId.startsWith('custom-');
+  const checks = custom ? previewCustom.bankOf(courseId).filter((q) => !q.voided).length : 14;
+  return { course_id: courseId, questions: questions.map((q) => ({ ...q })), per_stage: stages.map((s) => ({ stage: s.id, label: s.label, count: questions.filter((q) => !q.voided && q.entry_point === s.id).length })), usable: questions.filter((q) => !q.voided).length, written_at: questions.length ? new Date().toISOString() : null, checks_bank: { source: custom ? (checks ? 'written' : 'none') : 'bundled', questions: checks }, working: false };
+}
+
 /** The Logs page in the preview: a finished lesson and a curriculum being drafted right now. */
 const PREVIEW_RUN_STARTED = Date.now() - 154_000;
 function previewRuns(): ExecutionRun[] {
@@ -816,6 +826,17 @@ export const mockApi = {
   verifyCustomCourseSources: previewCustom.verify,
   writeCustomCourseBank: previewCustom.writeBank,
   voidCustomQuestion: previewCustom.voidQuestion,
+  getPracticeBank: async (courseId: ClassroomSubjectId) => previewPractice(courseId),
+  writePracticeQuestions: async (courseId: ClassroomSubjectId, stage: string) => {
+    await new Promise((r) => setTimeout(r, 1500));
+    const held = mockPractice.get(courseId) ?? [];
+    const batch = Date.now();
+    const fresh: BankQuestion[] = Array.from({ length: 8 }, (_, i) => ({ id: `${courseId}-practice-${batch}-${i + 1}`, criterion: `${courseId}-practice-${batch}-${i + 1}`, competency: '', entry_point: stage, label: `Practice ${held.length + i + 1}`, prompt: `Practice question ${held.length + i + 1} for the ${stage} stage: which statement holds?`, choices: [{ id: '1', text: 'A plausible mistake' }, { id: '2', text: 'The mechanism as the source describes it' }, { id: '3', text: 'A common misconception' }, { id: '4', text: 'An unrelated fact' }], answer: '2', explanation: 'The source names the mechanism; the first and third are the misconceptions the lesson warns about, the fourth is unrelated.', followup_for: null, source: 'https://docs.example.org/' }));
+    mockPractice.set(courseId, [...held, ...fresh]);
+    return previewPractice(courseId);
+  },
+  voidPracticeQuestion: async (courseId: ClassroomSubjectId, questionId: string, reason: string) => { const q = (mockPractice.get(courseId) ?? []).find((q) => q.id === questionId); if (q) { q.voided = true; q.void_reason = reason; } return previewPractice(courseId); },
+  clearPracticeBank: async (courseId: ClassroomSubjectId) => { mockPractice.delete(courseId); return previewPractice(courseId); },
   fixCustomCourseFinding: previewCustom.fixFinding,
   fixAllCustomCourseFindings: previewCustom.fixAll,
   resolveCustomCourseFinding: previewCustom.resolveFinding,

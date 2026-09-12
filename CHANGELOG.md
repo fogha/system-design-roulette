@@ -23,12 +23,13 @@ The product that System Design Roulette became. Same database, same visual chara
 - **Writing rules**: every request to a runner carries the rules, every answer is scrubbed of em dashes outside code and read for the tells of machine writing (Wikipedia's documented signs, as a shared catalogue), and a lesson section, question, chat reply or class draft that fails is sent back with the reason. The bundled prompts and lessons were held to the same rules.
 - The desk's own confirm and prompt dialogs, and fields in the class editor that grow with their text. Topic cards drag into a new order or another stage; stage sections fold; the four stages are square tiles with their own marks that jump to their topics.
 - The Logs page keeps time while a run is in flight: a beacon, a running duration on the run and in the tail, and the class builder's runs read as running, done or failed.
+- **Practice questions** on every class's Curriculum tab: the tutor writes eight cited questions at a time for a stage; pick an answer, see the key, the explanation and the source, dispute a key. Kept apart from the bank the placement check and unit challenges draw on, which is never shown beforehand.
 - **Onboarding** in four steps: tutor, search, recovery (with a walkthrough of the ways out), deploy.
 - A design system (DESIGN.md): one page frame, mono labels, three custom keys (call to action, bracket, ghost), route tabs on a rail.
 
 ### Changed
 - Renamed from System Design Roulette to Principia Desk. Identifiers are `com.darkmatter.principia-desk`; the first launch adopts the previous profile through SQLite's backup API and leaves the original in place.
-- The database is upgraded by numbered, checksummed migrations (v1–v15) with a backup before every upgrade; pace is no longer a setting, it follows the study times.
+- The database is upgraded by numbered, checksummed migrations (v1–v16) with a backup before every upgrade; pace is no longer a setting, it follows the study times.
 - The once-a-day routine, the roulette wheel and the legacy language management screens are retired; their data is kept.
 
 ### Contributors

@@ -522,6 +522,147 @@ pub async fn write_custom_course_bank(
     saved
 }
 
+/// The practice questions of a class, with which bank the checks draw on.
+#[tauri::command]
+pub fn get_practice_bank(
+    state: State<'_, AppState>,
+    jobs: State<'_, BuilderJobs>,
+    course_id: String,
+) -> CmdResult<PracticeBankView> {
+    let view = crate::domain::banks::view(&state.db.0.lock().unwrap(), &course_id).map_err(err)?;
+    Ok(PracticeBankView {
+        working: jobs
+            .working(&course_id)
+            .is_some_and(|kind| kind == "practice"),
+        bank: view,
+    })
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PracticeBankView {
+    #[serde(flatten)]
+    pub bank: crate::domain::banks::PracticeView,
+    /// The tutor is writing more right now.
+    pub working: bool,
+}
+
+/// How many practice questions one call asks for.
+const PRACTICE_BATCH: usize = 8;
+
+/// Ask the tutor for a batch of practice questions on one stage of any
+/// class, kept apart from the bank the checks sample. Prompts already held
+/// are not repeated, so asking again adds to the set.
+#[tauri::command]
+pub async fn write_practice_questions(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    jobs: State<'_, BuilderJobs>,
+    course_id: String,
+    stage: String,
+) -> CmdResult<PracticeBankView> {
+    let (brief, draft, held) = {
+        let conn = state.db.0.lock().unwrap();
+        let held: Vec<String> = crate::domain::banks::view(&conn, &course_id)
+            .map_err(err)?
+            .questions
+            .iter()
+            .filter(|q| q.entry_point == stage)
+            .map(|q| q.prompt.clone())
+            .collect();
+        if custom::is_custom_id(&course_id) {
+            let view = custom::get(&conn, &course_id).map_err(err)?;
+            if view.status != "published" {
+                return Err(
+                    "publish the class first; practice questions follow its published topics"
+                        .into(),
+                );
+            }
+            (view.brief, view.draft, held)
+        } else {
+            let program =
+                crate::classroom::program_row(&conn, &course_id).map_err(|e| e.to_string())?;
+            let draft = class_builder::draft_of_bundled(&conn, &course_id)?;
+            let brief = CourseBrief {
+                title: draft.label.clone(),
+                outcome: draft.outcome.clone(),
+                background: String::new(),
+                trusted_hosts: draft.source_hosts.clone(),
+                agent: program.agent,
+                model: program.model,
+                custom_agent_bin: program.custom_agent_bin,
+            };
+            (brief, draft, held)
+        }
+    };
+    if jobs.working(&course_id).is_some() {
+        return Err("the tutor is already working on this class".into());
+    }
+    let job = jobs.begin(&course_id, "practice");
+    let _run = state
+        .generator
+        .feed
+        .begin(&format!("practice:{course_id}"), &course_id);
+    let written = state
+        .generator
+        .write_practice_questions(&brief, &draft, &stage, PRACTICE_BATCH, &held)
+        .await
+        .map_err(|error| format!("the tutor could not write practice questions: {error}"))
+        .inspect_err(|error| {
+            state
+                .generator
+                .feed
+                .say(format!("class builder: practice questions failed: {error}"))
+        });
+    let saved = written.and_then(|(questions, _)| {
+        let conn = state.db.0.lock().unwrap();
+        crate::domain::banks::add(&conn, &course_id, questions).map_err(err)
+    });
+    drop(job);
+    tell(&app);
+    saved.map(|bank| PracticeBankView {
+        bank,
+        working: false,
+    })
+}
+
+/// A learner disputes the key of a practice question.
+#[tauri::command]
+pub fn void_practice_question(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    course_id: String,
+    question_id: String,
+    reason: String,
+) -> CmdResult<PracticeBankView> {
+    let view = crate::domain::banks::void_question(
+        &state.db.0.lock().unwrap(),
+        &course_id,
+        &question_id,
+        &reason,
+    )
+    .map_err(err)?;
+    tell(&app);
+    Ok(PracticeBankView {
+        bank: view,
+        working: false,
+    })
+}
+
+/// Drop every practice question of a class.
+#[tauri::command]
+pub fn clear_practice_bank(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    course_id: String,
+) -> CmdResult<PracticeBankView> {
+    let view = crate::domain::banks::clear(&state.db.0.lock().unwrap(), &course_id).map_err(err)?;
+    tell(&app);
+    Ok(PracticeBankView {
+        bank: view,
+        working: false,
+    })
+}
+
 /// A learner disputes a written key. The question stops counting and is
 /// left out of every sample until it is corrected.
 #[tauri::command]

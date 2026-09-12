@@ -292,6 +292,11 @@ fn invalid(message: impl Into<String>) -> DbError {
     DbError::Invalid(message.into())
 }
 
+/// Whether an id names a learner's own class.
+pub fn is_custom_id(id: &str) -> bool {
+    catalog::is_custom(id)
+}
+
 fn now() -> String {
     chrono::Utc::now().to_rfc3339()
 }
