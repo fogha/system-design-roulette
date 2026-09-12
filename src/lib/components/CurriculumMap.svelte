@@ -1,7 +1,7 @@
 <script lang="ts">
   import { courseDefinition } from '../catalog';
   import type { CurriculumConceptView, CurriculumMapView, CurriculumPhase } from '../ipc';
-  import { CheckCircle2, Circle, Clock3, Link2, X, Search } from 'lucide-svelte';
+  import { CheckCircle2, Circle, Clock3, Link2, X, Search, ChevronDown } from 'lucide-svelte';
 
   import type { PathChange } from '../contracts/classes';
 
@@ -59,6 +59,19 @@
   function complete(state: string) {
     return state === 'mastered' || state === 'maintenance';
   }
+
+  /** Stages folded to their head, remembered per course; a search unfolds the ones with matches. */
+  const foldKey = $derived(`principia-map-folds:${map.focus}`);
+  let folded = $state<Record<string, boolean>>({});
+  $effect(() => {
+    const key = foldKey;
+    try { folded = JSON.parse(localStorage.getItem(key) ?? '{}'); } catch { folded = {}; }
+  });
+  function toggle(phase: string) {
+    folded = { ...folded, [phase]: !folded[phase] };
+    try { localStorage.setItem(foldKey, JSON.stringify(folded)); } catch { /* memory only */ }
+  }
+  const isFolded = (phase: string) => !!folded[phase] && !query.trim();
 </script>
 
 <section class="curriculum-map" class:embedded aria-labelledby={`${uid}-title`}>
@@ -103,20 +116,23 @@
 
   <label class="search"><Search size={15} /><input type="search" aria-label="Search curriculum topics" placeholder="Find a topic or outcome…" bind:value={query} /><span class="mono">{matches.length} topics</span></label>
   {#if !matches.length}<p class="empty" role="status">No topics match your search.</p>{/if}
-  <div class="phase-grid">
-    {#each phases.filter(p => conceptsFor(p.id).length) as phase}
+  <div class="phase-stack">
+    {#each phases.filter(p => conceptsFor(p.id).length) as phase (phase.id)}
       {@const concepts = conceptsFor(phase.id)}
-      <section class:current={map.current_phase === phase.id} class="phase">
+      {@const done = concepts.filter((concept) => complete(concept.mastery_state)).length}
+      <section class:current={map.current_phase === phase.id} class:folded={isFolded(phase.id)} class="phase" aria-label={phase.label}>
         <div class="phase-head">
-          <strong>{phase.label}</strong>
-          <span class="mono">
-            {concepts.filter((concept) => complete(concept.mastery_state)).length}/{concepts.length}
-          </span>
+          <button type="button" class="phase-fold" aria-expanded={!isFolded(phase.id)} aria-controls={`${uid}-${phase.id}`} onclick={() => toggle(phase.id)}>
+            <span class="chevron" aria-hidden="true"><ChevronDown size={15} /></span>
+            <strong>{phase.label}</strong>
+            <span class="count mono">{done}/{concepts.length}</span>
+            {#if map.current_phase === phase.id}<small class="you-are-here">current phase</small>{/if}
+            {#if isFolded(phase.id)}<small class="folded-note mono">{concepts.length} {concepts.length === 1 ? 'topic' : 'topics'} folded away</small>{/if}
+          </button>
+          {#if onchallenge && map.path && (map.challenges_available ?? true) && phase.id !== 'elective' && concepts.some((concept) => concept.required)}<button type="button" class="ghost mono-ghost challenge-button" disabled={revising} onclick={() => onchallenge?.(phase.id, phase.label)}>Unit challenge</button>{/if}
         </div>
-        {#if map.current_phase === phase.id}<small class="you-are-here">current phase</small>{/if}
-        {#if onchallenge && map.path && (map.challenges_available ?? true) && phase.id !== 'elective' && concepts.some((concept) => concept.required)}<button type="button" class="ghost mono-ghost challenge-button" disabled={revising} onclick={() => onchallenge?.(phase.id, phase.label)}>Unit challenge</button>{/if}
-        <ol>
-          {#each concepts as concept}
+        <ol id={`${uid}-${phase.id}`} hidden={isFolded(phase.id)}>
+          {#each concepts as concept (concept.slug)}
             <li class:complete={complete(concept.mastery_state)} class:elective={!concept.core}>
               <span class="state">
                 {#if complete(concept.mastery_state)}
@@ -165,9 +181,9 @@
   .badge.tone-ok { color: var(--green); border-color: var(--green); } .badge.tone-teal { color: var(--teal-fg); border-color: var(--teal-fg); } .badge.tone-warn { color: var(--led-warn); border-color: var(--led-warn); }
   .badge.tone-accent { color: var(--accent); border-color: var(--accent); } .badge.tone-muted { color: var(--muted); } .badge.tone-faint { color: var(--faint); }
   .route-actions { display: flex; gap: 6px; margin-top: 6px; } .route-actions button { padding: 3px 8px; font-size: 9px; }
-  .challenge-button { margin: 6px 0 10px; padding: 4px 10px; font-size: 9px; }
+  .challenge-button { flex: none; margin: 0; padding: 4px 10px; font-size: 9px; }
   .bridges { margin-top: 14px; border: 1px dashed var(--led-warn); border-radius: var(--radius-panel); padding: 12px 14px; } .bridges ul { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 10px; } .bridges li { display: flex; justify-content: space-between; gap: 14px; align-items: flex-start; } .bridges li p { margin: 4px 0 0; font-size: 12px; color: var(--muted); line-height: 1.5; } .bridges .route-actions { flex: none; margin-top: 0; }
-  .curriculum-map.embedded { padding: 0; border: 0; background: none; max-width: 1100px; margin: 0 auto; }
+  .curriculum-map.embedded { padding: 0; border: 0; background: none; }
   .search { display: flex; align-items: center; gap: 10px; border: 1px solid var(--node-border); border-radius: var(--radius-control); padding: 0 12px; background: var(--bg); color: var(--muted); margin-bottom: 20px; } .search:focus-within { outline: 1px solid var(--accent); } .search input { width: 100%; min-width: 0; border: 0; outline: none; background: none; color: var(--fg); font-size: 13px; padding: 12px 0; } .search span { flex-shrink: 0; font-size: 10px; } .empty { color: var(--muted); font-size: 13px; }
   .curriculum-map {
     grid-column: 1 / -1;
@@ -218,48 +234,73 @@
     color: var(--muted);
   }
   .close:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-  .phase-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
+  /* One stage after another across the full width; inside each, the topics as a grid of boxes. */
+  .phase-stack {
+    display: flex;
+    flex-direction: column;
     gap: 10px;
-
     padding-bottom: 6px;
   }
   .phase {
     border: 1px solid var(--border);
     border-radius: var(--radius-panel);
     background: var(--surface-2);
-    padding: 10px;
+    padding: 10px 12px 12px;
   }
   .phase.current {
     border-color: var(--ok-fg);
   }
+  .phase.folded { padding-bottom: 10px; }
   .phase-head {
     display: flex;
+    align-items: center;
     justify-content: space-between;
+    gap: 12px;
     color: var(--fg);
     font-size: 14px;
   }
-  .phase-head span {
+  .phase-fold {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    padding: 4px 8px 4px 2px;
+    border: 0;
+    border-radius: var(--radius-detail);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .phase-fold:hover { background: var(--surface); }
+  .phase-fold:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .chevron { display: inline-grid; place-items: center; color: var(--muted); transition: transform 0.18s ease; }
+  .phase.folded .chevron { transform: rotate(-90deg); }
+  .phase-head .count, .folded-note {
     color: var(--muted);
   }
   .you-are-here {
-    display: block;
-    margin-top: 3px;
+    margin-left: 4px;
   }
+  .folded-note { font-size: 10px; letter-spacing: 0.04em; text-transform: none; color: var(--faint); }
   ol {
     list-style: none;
     padding: 0;
     margin: 10px 0 0;
     display: grid;
-    gap: 7px;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+    gap: 8px;
   }
+  ol[hidden] { display: none; }
   li {
     display: grid;
     grid-template-columns: 16px 1fr;
-    gap: 6px;
-    padding: 8px;
+    gap: 8px;
+    padding: 10px 12px;
+    border: 1px solid var(--node-border);
     border-left: 2px solid var(--border);
+    border-radius: var(--radius-control);
     background: var(--surface);
   }
   li.complete {

@@ -4,7 +4,8 @@
   import type { AcceptedPath, PathChange } from '../../contracts/classes';
   import { app } from '../../stores.svelte';
   import { courseDefinition, isCustomCourse } from '../../catalog';
-  import { LayoutDashboard, Settings2, Compass, BookOpen, CalendarClock, Play, ArrowRight, PenLine, FileJson } from 'lucide-svelte';
+  import { LayoutDashboard, Settings2, Compass, BookOpen, CalendarClock, Play, ArrowRight, PenLine, FileJson, ListChecks } from 'lucide-svelte';
+  import { onEvent, type CustomCourseView } from '../../ipc';
   import CourseGlyph from '../../components/CourseGlyph.svelte';
   import CurriculumMap from '../../components/CurriculumMap.svelte';
   import ClassSettings from './ClassSettings.svelte';
@@ -21,6 +22,31 @@
   async function exportClass() {
     try { const result = await api.exportCustomCourse(program.subject_id); app.notify(`Class file written: ${result.file_name}`, { label: 'Show file', run: () => void api.revealExport(result.path) }); }
     catch (cause) { app.error = String(cause); }
+  }
+  /** The class's own record: its question bank, and whether the tutor is writing one now. */
+  let own = $state<CustomCourseView | null>(null);
+  let writingBank = $state(false);
+  async function loadOwn() {
+    if (!custom) return;
+    try { own = await api.getCustomCourse(program.subject_id); writingBank = own.working === 'bank'; } catch { /* the tab still works without it */ }
+  }
+  $effect(() => { void program.subject_id; void loadOwn(); });
+  $effect(() => {
+    if (!custom) return;
+    let off: (() => void) | undefined;
+    void onEvent('classroom:state', () => void loadOwn()).then((unlisten) => (off = unlisten));
+    return () => off?.();
+  });
+  const bankUsable = $derived((own?.bank?.questions ?? []).filter((q) => !q.voided).length);
+  /** Three cited questions per stage: they turn on the placement check and the unit challenges. */
+  async function writeBank() {
+    if (writingBank) return;
+    writingBank = true;
+    try {
+      own = await api.writeCustomCourseBank(program.subject_id);
+      await app.refresh();
+      app.notify(`${(own.bank?.questions ?? []).length} questions written for ${program.label}; the placement check and unit challenges are on.`);
+    } catch (cause) { app.error = String(cause); } finally { writingBank = false; }
   }
   const preparing = $derived(app.preparingClass !== null);
   const active = $derived(app.state?.active_classroom_sessions.find(s => s.subject_id === program.subject_id));
@@ -127,7 +153,7 @@
           {/if}
         {:else if item.id === 'curriculum'}
           {#if custom}
-            <div class="custom-tools"><span class="mono">YOUR OWN CLASS · VERSION {course.version}</span><span class="custom-copy">Edit the curriculum to publish a new version; lessons already taught keep their topics. The class file carries the course, not your progress.</span><span class="custom-actions"><button class="ghost mono-ghost small" onclick={() => app.openBuilder(program.subject_id)}><PenLine size={12} />Edit curriculum</button><button class="ghost mono-ghost small" onclick={exportClass}><FileJson size={12} />Export class file</button></span></div>
+            <div class="custom-tools"><span class="mono">YOUR OWN CLASS · VERSION {course.version}</span><span class="custom-copy">Edit the curriculum to publish a new version; lessons already taught keep their topics. The class file carries the course, not your progress.</span><span class="custom-actions"><button class="ghost mono-ghost small" onclick={() => app.openBuilder(program.subject_id)}><PenLine size={12} />Edit curriculum</button><button class="ghost mono-ghost small" onclick={writeBank} disabled={writingBank} title={bankUsable ? `${bankUsable} usable questions; writing again replaces them` : 'Three cited questions per stage, for the placement check and unit challenges'}><ListChecks size={12} />{writingBank ? 'Writing the bank…' : bankUsable ? `Write the bank again · ${bankUsable}` : 'Write the question bank'}</button><button class="ghost mono-ghost small" onclick={exportClass}><FileJson size={12} />Export class file</button></span></div>
           {/if}
           {#if program.kind === 'engineering'}
             {#if map}{#if mapError}<p class="error" role="alert">{mapError}</p>{/if}{#if challenge && program.accepted_path}<UnitChallenge courseId={program.subject_id} unit={challenge.unit} unitLabel={challenge.label} pathRevision={map.path?.revision ?? program.accepted_path.revision} onclose={() => (challenge = null)} onapplied={challengeApplied} />{/if}<CurriculumMap {map} embedded onrevise={program.accepted_path ? revisePath : undefined} {revising} onchallenge={program.accepted_path ? (unit, label) => (challenge = { unit, label }) : undefined} />{:else if mapLoading}<p class="loading" role="status">Loading curriculum…</p>{:else if mapError}<p class="error" role="alert">{mapError}</p><button class="ghost mono-ghost" onclick={loadMap}>Retry</button>{/if}
