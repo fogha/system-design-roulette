@@ -227,7 +227,9 @@
     finally { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } if (!view?.working) { busy = ''; busySince = null; fixing = null; } }
   }
   const review = () => tutorCall('review', (id) => api.reviewCustomCourse(id));
-  const verifySources = () => tutorCall('sources', (id) => api.verifyCustomCourseSources(id));
+  /** What the sources job started here is doing: a fetch of them all, or a hunt for replacements. */
+  let sourcesJob = $state<'fetch' | 'replace' | null>(null);
+  const verifySources = () => { sourcesJob = 'fetch'; return tutorCall('sources', (id) => api.verifyCustomCourseSources(id)).finally(() => (sourcesJob = null)); };
   const writeBank = () => tutorCall('bank', (id) => api.writeCustomCourseBank(id));
   /** The tutor makes the change a finding asks for; the draft in the editor follows. */
   function fixWithTutor(index: number) { fixing = index; return tutorCall('fix', (id) => api.fixCustomCourseFinding(id, index)); }
@@ -249,6 +251,10 @@
     await quick((id) => api.resolveCustomCourseFinding(id, index, status, note));
   }
   const acceptSource = (url: string, accepted: boolean) => quick((id) => api.acceptCustomCourseSource(id, url, accepted));
+  /** The source being replaced, so its row says so. */
+  let replacing = $state<string | null>(null);
+  function replaceSource(url: string) { replacing = url; sourcesJob = 'replace'; return tutorCall('sources', (id) => api.replaceCustomCourseSource(id, url)).finally(() => { replacing = null; sourcesJob = null; }); }
+  const replaceAllSources = () => { sourcesJob = 'replace'; return tutorCall('sources', (id) => api.replaceAllCustomCourseSources(id)).finally(() => (sourcesJob = null)); };
   const markRead = (read: boolean) => quick((id) => api.markCustomCourseRead(id, read));
   async function publish() {
     if (!view || busy) return;
@@ -441,19 +447,23 @@
             <button type="button" class="gate-fold" aria-expanded={!isFolded('sources', sourcesDone)} aria-label="Fold the source check" onclick={() => toggleGate('sources', sourcesDone)}><ChevronDown size={14} /></button>
             <span class="gate-no mono" aria-hidden="true">{#if sourcesDone}<Check size={13} strokeWidth={2.6} />{:else if !reviewDone}<Lock size={11} />{:else}02{/if}</span>
             <span class="check-tile"><Globe size={16} /></span>
-            <div><strong>Fetch every source</strong><small>The desk requests each primary source the way a lesson would. One that does not answer is replaced in the editor or kept knowingly; a lesson that cannot fetch a source says so, as bundled lessons do.</small></div>
-            <button type="button" class="ghost mono-ghost" onclick={verifySources} disabled={!!busy || !reviewDone}>{busy === 'sources' ? 'Fetching…' : checks.fetched ? 'Fetch again' : 'Fetch sources'}</button>
+            <div><strong>Fetch every source</strong><small>The desk requests each primary source the way a lesson would. One that does not answer can be swapped for another the desk finds (the search engine on the course's hosts, then the tutor's proposals, each fetched before it is taken), replaced in the editor, or kept knowingly; a lesson that cannot fetch a source says so, as bundled lessons do.</small></div>
+            <span class="gate-keys">
+              {#if checks.pending_sources > 0}<button type="button" class="ghost mono-ghost" onclick={replaceAllSources} disabled={!!busy || !reviewDone}><Wand2 size={12} />{sourcesJob === 'replace' && !replacing ? `Finding… ${checks.pending_sources} left` : `Find another for all ${checks.pending_sources}`}</button>{/if}
+              <button type="button" class="ghost mono-ghost" onclick={verifySources} disabled={!!busy || !reviewDone}>{sourcesJob === 'fetch' ? 'Fetching…' : checks.fetched ? 'Fetch again' : 'Fetch sources'}</button>
+            </span>
           </div>
           <p class="gate-state mono">
             {#if !reviewDone}after the review{:else if !checks.fetched}not fetched yet · required{:else}<span class="ok"><CircleCheck size={11} /> {view.sources.filter((s) => s.state === 'reachable').length} reachable</span>{#if unreachable.length} · <span class:warn={checks.pending_sources > 0}><CircleDashed size={11} /> {unreachable.length} did not answer{checks.pending_sources ? `, ${checks.pending_sources} to settle` : ', all kept knowingly'}</span>{/if}{#if checks.unchecked_sources} · <span class="warn"><CircleAlert size={11} /> {checks.unchecked_sources} added since the last fetch; fetch again</span>{/if}{/if}
           </p>
-          {#if busy === 'sources'}{@render liveFeed(DOING.sources)}{/if}
+          {#if busy === 'sources'}{@render liveFeed(sourcesJob === 'replace' ? 'finding another source' : DOING.sources)}{/if}
           {#if reviewDone && unreachable.length && !isFolded('sources', sourcesDone)}
             <ul class="sources">
               {#each unreachable as check (check.url)}
                 <li class:kept={check.accepted}>
                   <span class="state mono" class:off={check.state === 'off-host'}>{check.state}</span>
                   <span class="url mono" title={check.url}>{check.url}</span>
+                  {#if !check.accepted}<button type="button" class="text" onclick={() => replaceSource(check.url)} disabled={!!busy}><Wand2 size={11} /> {replacing === check.url ? 'finding another…' : 'Find another'}</button>{/if}
                   <button type="button" class="text" onclick={() => jumpTo(check.topic)}>{check.topic} <ArrowRight size={11} /></button>
                   <button type="button" class="text" class:quiet={check.accepted} onclick={() => acceptSource(check.url, !check.accepted)} disabled={!!busy}>{check.accepted ? 'Kept · undo' : 'Keep anyway'}</button>
                 </li>

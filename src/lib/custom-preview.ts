@@ -277,6 +277,26 @@ export const previewCustom = {
     for (const s of hits) s.accepted = accepted && s.state !== 'reachable';
     item.updated_at = now(); return view(id);
   },
+  /** The preview's search: the dead page's host index stands in for it. */
+  replaceSource: async (id: string, url: string) => {
+    const item = stored.get(id); if (!item) throw new Error('this class does not exist');
+    const check = item.sources.find((s) => s.url === url && s.state !== 'reachable' && !s.accepted); if (!check) throw new Error('that source is not one waiting to be settled');
+    item.working = 'sources'; previewTell();
+    await new Promise((r) => setTimeout(r, 1200));
+    const host = item.draft.source_hosts[0] ?? 'docs.example.org';
+    const replacement = `https://${host}/${check.topic}/`;
+    for (const topic of item.draft.topics) topic.curriculum.primary_sources = topic.curriculum.primary_sources.map((s) => (s === url ? replacement : s));
+    for (const s of item.sources) if (s.url === url) { s.url = replacement; s.state = 'reachable'; s.accepted = false; }
+    item.working = null; item.updated_at = now(); return view(id);
+  },
+  replaceAllSources: async (id: string) => {
+    const item = stored.get(id); if (!item) throw new Error('this class does not exist');
+    const cited = new Set(item.draft.topics.flatMap((t) => t.curriculum.primary_sources));
+    const pending = [...new Set(item.sources.filter((s) => s.state !== 'reachable' && !s.accepted && cited.has(s.url)).map((s) => s.url))];
+    if (!pending.length) throw new Error('every source is settled');
+    for (const url of pending) await previewCustom.replaceSource(id, url);
+    return view(id);
+  },
   markRead: async (id: string, read: boolean) => {
     const item = stored.get(id); if (!item) throw new Error('this class does not exist');
     item.marks.read_hash = read ? draftHash(item.draft) : ''; return view(id);

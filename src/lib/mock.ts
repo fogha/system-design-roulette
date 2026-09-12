@@ -820,6 +820,8 @@ export const mockApi = {
   fixAllCustomCourseFindings: previewCustom.fixAll,
   resolveCustomCourseFinding: previewCustom.resolveFinding,
   acceptCustomCourseSource: previewCustom.acceptSource,
+  replaceCustomCourseSource: previewCustom.replaceSource,
+  replaceAllCustomCourseSources: previewCustom.replaceAllSources,
   markCustomCourseRead: previewCustom.markRead,
   publishCustomCourse: previewCustom.publish,
   deleteCustomCourseDraft: previewCustom.remove,

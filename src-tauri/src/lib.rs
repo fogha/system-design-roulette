@@ -373,6 +373,8 @@ pub fn run() {
             commands::custom::fix_all_custom_course_findings,
             commands::custom::resolve_custom_course_finding,
             commands::custom::accept_custom_course_source,
+            commands::custom::replace_custom_course_source,
+            commands::custom::replace_all_custom_course_sources,
             commands::custom::mark_custom_course_read,
             commands::custom::publish_custom_course,
             commands::custom::delete_custom_course_draft,

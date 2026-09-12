@@ -305,6 +305,46 @@ fn publishing_needs_the_review_settled_the_sources_fetched_and_the_read_through_
         vec!["your own read-through of this version is not confirmed"]
     );
 
+    // A replacement found for a dead source goes into every topic that cites it
+    // and counts as reachable in the record of the fetch.
+    let dead = view.sources[0].url.clone();
+    let cited_before = view
+        .draft
+        .topics
+        .iter()
+        .flat_map(|t| t.curriculum.primary_sources.iter())
+        .filter(|u| **u == dead)
+        .count();
+    assert!(cited_before >= 1);
+    let view = custom::replace_source(
+        &conn,
+        &created.id,
+        &dead,
+        "https://docs.rs/clap/latest/clap/struct.Command.html",
+    )
+    .unwrap();
+    assert!(!view
+        .draft
+        .topics
+        .iter()
+        .flat_map(|t| t.curriculum.primary_sources.iter())
+        .any(|u| *u == dead));
+    assert!(view.sources.iter().all(|s| s.url != dead));
+    assert!(view.sources.iter().any(|s| s.url
+        == "https://docs.rs/clap/latest/clap/struct.Command.html"
+        && s.state == "reachable"));
+    assert_eq!(
+        view.checks.unchecked_sources, 0,
+        "the replacement was fetched before it was chosen"
+    );
+    assert!(custom::replace_source(
+        &conn,
+        &created.id,
+        "https://docs.rs/none",
+        "https://docs.rs/other"
+    )
+    .is_err());
+
     // The read-through is on this exact draft: an edit after it needs another.
     let view = custom::mark_read(&conn, &created.id, true).unwrap();
     assert!(view.checks.read && view.checks.blockers.is_empty());

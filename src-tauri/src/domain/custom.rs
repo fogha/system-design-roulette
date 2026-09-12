@@ -1218,6 +1218,52 @@ pub fn save_sources(
     get(conn, id)
 }
 
+/// Put another source in place of one that did not answer: in every topic
+/// that cites it, and in the last fetch's record, where the new address
+/// counts as reachable because it was fetched before it was chosen.
+pub fn replace_source(
+    conn: &Connection,
+    id: &str,
+    dead: &str,
+    replacement: &str,
+) -> Result<CustomCourseView> {
+    let existing = row(conn, id)?;
+    let mut draft: CourseDraft = serde_json::from_str(&existing.draft_json)?;
+    let mut cited = 0;
+    for topic in &mut draft.topics {
+        for source in &mut topic.curriculum.primary_sources {
+            if source == dead {
+                *source = replacement.to_string();
+                cited += 1;
+            }
+        }
+    }
+    if cited == 0 {
+        return Err(invalid("that source is no longer in the draft"));
+    }
+    let draft = normalize(draft);
+    conn.execute(
+        "UPDATE custom_courses SET draft_json=?2, updated_at=?3 WHERE id=?1",
+        params![id, serde_json::to_string(&draft)?, now()],
+    )?;
+    let mut sources: Vec<SourceCheck> = existing
+        .sources_json
+        .as_deref()
+        .map(serde_json::from_str)
+        .transpose()?
+        .unwrap_or_default();
+    for check in sources.iter_mut().filter(|check| check.url == dead) {
+        check.url = replacement.to_string();
+        check.state = "reachable".into();
+        check.accepted = false;
+    }
+    conn.execute(
+        "UPDATE custom_courses SET sources_json=?2 WHERE id=?1",
+        params![id, serde_json::to_string(&sources)?],
+    )?;
+    get(conn, id)
+}
+
 /// The learner keeps an unreachable source knowingly, or withdraws that.
 pub fn accept_source(
     conn: &Connection,

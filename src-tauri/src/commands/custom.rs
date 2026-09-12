@@ -300,6 +300,125 @@ pub fn resolve_custom_course_finding(
     Ok(view)
 }
 
+/// Which sources still need settling: unreachable or off the hosts, not
+/// accepted, and still cited by the draft. One entry per address.
+fn pending_sources(view: &CustomCourseView) -> Vec<(String, String)> {
+    let cited: std::collections::HashSet<&str> = view
+        .draft
+        .topics
+        .iter()
+        .flat_map(|t| t.curriculum.primary_sources.iter())
+        .map(String::as_str)
+        .collect();
+    let mut seen = std::collections::HashSet::new();
+    view.sources
+        .iter()
+        .filter(|s| s.state != "reachable" && !s.accepted && cited.contains(s.url.as_str()))
+        .filter(|s| seen.insert(s.url.clone()))
+        .map(|s| (s.topic.clone(), s.url.clone()))
+        .collect()
+}
+
+/// Find another source for one that did not answer and put it in the
+/// draft: the search engine on the course's hosts first, then the tutor's
+/// proposals, each fetched before it is taken.
+#[tauri::command]
+pub async fn replace_custom_course_source(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    jobs: State<'_, BuilderJobs>,
+    id: String,
+    url: String,
+) -> CmdResult<CustomCourseView> {
+    let (brief, draft, topic) = {
+        let conn = state.db.0.lock().unwrap();
+        let view = custom::get(&conn, &id).map_err(err)?;
+        let topic = pending_sources(&view)
+            .into_iter()
+            .find(|(_, dead)| *dead == url)
+            .map(|(topic, _)| topic)
+            .ok_or_else(|| "that source is not one waiting to be settled".to_string())?;
+        (view.brief, view.draft, topic)
+    };
+    if jobs.working(&id).is_some() {
+        return Err("the tutor is already working on this class".into());
+    }
+    let job = jobs.begin(&id, "sources");
+    let _run = state.generator.feed.begin(&format!("sources:{id}"), &id);
+    let found = state
+        .generator
+        .replace_custom_course_source(&brief, &draft, &topic, &url)
+        .await
+        .map_err(|error| format!("no replacement found: {error}"))
+        .inspect_err(|error| state.generator.feed.say(format!("class builder: {error}")));
+    let saved = found.and_then(|replacement| {
+        let conn = state.db.0.lock().unwrap();
+        custom::replace_source(&conn, &id, &url, &replacement.url).map_err(err)
+    });
+    drop(job);
+    tell(&app);
+    saved
+}
+
+/// Find another source for every one still waiting, in turn. One that has
+/// no answering alternative stays as it was; the rest go on.
+#[tauri::command]
+pub async fn replace_all_custom_course_sources(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    jobs: State<'_, BuilderJobs>,
+    id: String,
+) -> CmdResult<CustomCourseView> {
+    let pending = {
+        let conn = state.db.0.lock().unwrap();
+        pending_sources(&custom::get(&conn, &id).map_err(err)?)
+    };
+    if pending.is_empty() {
+        return Err("every source is settled".into());
+    }
+    if jobs.working(&id).is_some() {
+        return Err("the tutor is already working on this class".into());
+    }
+    let job = jobs.begin(&id, "sources");
+    let _run = state.generator.feed.begin(&format!("sources:{id}"), &id);
+    let total = pending.len();
+    let mut replaced = 0usize;
+    for (n, (topic, dead)) in pending.into_iter().enumerate() {
+        let (brief, draft) = {
+            let conn = state.db.0.lock().unwrap();
+            let view = custom::get(&conn, &id).map_err(err)?;
+            (view.brief, view.draft)
+        };
+        state.generator.feed.say(format!(
+            "class builder: source {} of {total}: {dead}",
+            n + 1
+        ));
+        match state
+            .generator
+            .replace_custom_course_source(&brief, &draft, &topic, &dead)
+            .await
+        {
+            Ok(replacement) => {
+                let conn = state.db.0.lock().unwrap();
+                custom::replace_source(&conn, &id, &dead, &replacement.url).map_err(err)?;
+                replaced += 1;
+            }
+            Err(error) => state
+                .generator
+                .feed
+                .say(format!("class builder: {dead} stays as it was; {error}")),
+        }
+        tell(&app);
+    }
+    state.generator.feed.say(format!(
+        "class builder: {replaced} of {total} source(s) replaced"
+    ));
+    let view = custom::get(&state.db.0.lock().unwrap(), &id).map_err(err);
+    drop(job);
+    tell(&app);
+    view
+}
+
 /// Keep an unreachable source knowingly, or withdraw that.
 #[tauri::command]
 pub fn accept_custom_course_source(

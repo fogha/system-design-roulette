@@ -1063,6 +1063,187 @@ pub async fn verify_sources(
     checks
 }
 
+/// Alternatives the tutor proposes for a source that did not answer.
+#[derive(Debug, Default, Deserialize)]
+struct Candidates {
+    #[serde(default)]
+    candidates: Vec<Candidate>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct Candidate {
+    #[serde(default)]
+    url: String,
+    #[serde(default)]
+    why: String,
+}
+
+/// A source found to stand in for one that did not answer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Replacement {
+    pub url: String,
+    /// Where it came from and why it fits, for the feed and the finding.
+    pub how: String,
+}
+
+impl Generator {
+    /// Find another source for a topic whose URL did not answer: first the
+    /// desk's search engine on the course's hosts, then the tutor's own
+    /// proposals, each candidate fetched before it is accepted. Nothing is
+    /// changed here; the caller writes the replacement into the draft.
+    pub async fn replace_custom_course_source(
+        &self,
+        brief: &CourseBrief,
+        draft: &CourseDraft,
+        topic_slug: &str,
+        dead: &str,
+    ) -> Result<Replacement> {
+        let scoped = self.scoped("course-source");
+        let topic = draft
+            .topics
+            .iter()
+            .find(|t| t.slug == topic_slug)
+            .ok_or_else(|| GenError::Parse(format!("no topic {topic_slug} in the draft")))?;
+        let hosts: Vec<&str> = draft.source_hosts.iter().map(String::as_str).collect();
+        let on_host = |url: &str| {
+            crate::research::host_of(url).is_some_and(|host| {
+                hosts
+                    .iter()
+                    .any(|allowed| host == *allowed || host.ends_with(&format!(".{allowed}")))
+            })
+        };
+        let taken: Vec<&str> = topic
+            .curriculum
+            .primary_sources
+            .iter()
+            .map(String::as_str)
+            .collect();
+        scoped.log(format!(
+            "class builder: looking for another source for \"{}\" in place of {dead}",
+            topic.title
+        ));
+
+        // 1. The search engine, when one is configured: real pages, on the hosts.
+        let mut candidates: Vec<(String, String)> = Vec::new();
+        let config = self.researcher.search_config();
+        if config.enabled() {
+            let query = format!("{} {}", topic.title, draft.native_label);
+            match crate::search::search(self.researcher.client(), &config, &query, 8, &hosts).await
+            {
+                Ok(results) => {
+                    for result in results {
+                        if on_host(&result.url) && !taken.contains(&result.url.as_str()) {
+                            candidates.push((
+                                result.url,
+                                format!("found by search: {}", result.title.trim()),
+                            ));
+                        }
+                    }
+                    scoped.log(format!(
+                        "class builder: search offered {} page(s) on the hosts",
+                        candidates.len()
+                    ));
+                }
+                Err(reason) => scoped.log(format!("class builder: search unavailable ({reason})")),
+            }
+        }
+
+        // 2. The tutor's proposals.
+        let agent = if brief.agent.is_empty() {
+            scoped.current_agent()
+        } else {
+            brief.agent.clone()
+        };
+        let model = if brief.model.is_empty() {
+            scoped.current_model()
+        } else {
+            brief.model.clone()
+        };
+        let custom_bin = if agent == "custom" {
+            brief.custom_agent_bin.clone()
+        } else {
+            scoped.current_custom_bin()
+        };
+        let prompt = format!(
+            "A primary source for a self-study topic did not answer and needs a replacement.\n\n\
+             TOPIC: {title}\nLEARNER OUTCOME: {outcome}\nMECHANISMS: {mechanisms}\n\
+             DEAD URL: {dead}\nOTHER SOURCES ON THE TOPIC (keep): {others}\n\
+             ALLOWED HOSTS: {hosts}\n\n\
+             Propose up to six alternative URLs on the allowed hosts that support this topic: \
+             reference pages, index or chapter pages, official texts. Only pages you are \
+             confident exist at that exact address; prefer stable index or chapter pages over \
+             deep anchors; most likely first. Each is fetched before it is accepted, so a \
+             guessed address is wasted.\n\n\
+             Return ONLY a JSON object: {{\"candidates\": [{{\"url\": \"https://...\", \"why\": \
+             \"what on the page supports the topic, one sentence\"}}]}}. No markdown fences, no commentary.",
+            title = topic.title,
+            outcome = topic.curriculum.learner_outcome,
+            mechanisms = topic.curriculum.mechanisms.join("; "),
+            others = taken
+                .iter()
+                .filter(|u| **u != dead)
+                .copied()
+                .collect::<Vec<_>>()
+                .join(" "),
+            hosts = hosts.join(", "),
+        );
+        match with_heartbeat(
+            &scoped.feed,
+            "asking for alternative sources",
+            scoped.run_exact_for::<Candidates>(
+                &agent,
+                &custom_bin,
+                &prompt,
+                false,
+                REVIEW_TIMEOUT,
+                &model,
+            ),
+        )
+        .await
+        {
+            Ok((proposed, _)) => {
+                let before = candidates.len();
+                for candidate in proposed.candidates {
+                    let url = candidate.url.trim().to_string();
+                    if on_host(&url)
+                        && url != dead
+                        && !taken.contains(&url.as_str())
+                        && !candidates.iter().any(|(u, _)| *u == url)
+                    {
+                        candidates.push((
+                            url,
+                            format!("proposed by the tutor: {}", candidate.why.trim()),
+                        ));
+                    }
+                }
+                scoped.log(format!(
+                    "class builder: the tutor proposed {} page(s) on the hosts",
+                    candidates.len() - before
+                ));
+            }
+            Err(error) => scoped.log(format!(
+                "class builder: the tutor could not propose alternatives ({error})"
+            )),
+        }
+
+        // 3. The first candidate that answers is the one.
+        for (url, how) in candidates.iter().take(12) {
+            if self.researcher.url_resolves(url).await {
+                scoped.log(format!("class builder: {url} answers; taking it ({how})"));
+                return Ok(Replacement {
+                    url: url.clone(),
+                    how: how.clone(),
+                });
+            }
+            scoped.log(format!("class builder: {url} did not answer either"));
+        }
+        Err(GenError::Quality(format!(
+            "no alternative for {dead} answered ({} tried)",
+            candidates.len().min(12)
+        )))
+    }
+}
+
 /// The stage labels a draft carries, for prompts and the feed.
 pub fn stage_labels(draft: &CourseDraft) -> Vec<(String, String)> {
     STAGES
