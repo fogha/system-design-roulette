@@ -378,7 +378,8 @@ pub fn list_execution_runs(
     state: State<'_, AppState>,
 ) -> CmdResult<Vec<crate::execution_log::RunSummary>> {
     let conn = state.db.0.lock().unwrap();
-    crate::execution_log::runs(&conn, 200).map_err(err)
+    let current = state.generator.feed.current().map(|(run, _)| run);
+    crate::execution_log::runs(&conn, 200, current.as_deref()).map_err(err)
 }
 
 /// Every runner line of one run, oldest first.

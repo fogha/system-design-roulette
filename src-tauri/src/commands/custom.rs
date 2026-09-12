@@ -93,7 +93,13 @@ pub async fn draft_custom_course(
         .generator
         .draft_custom_course(&id, &brief)
         .await
-        .map_err(|error| format!("the tutor could not draft the course: {error}"));
+        .map_err(|error| format!("the tutor could not draft the course: {error}"))
+        .inspect_err(|error| {
+            state
+                .generator
+                .feed
+                .say(format!("class builder: the draft failed: {error}"))
+        });
     // Save while the job is still marked, then tell the desk: a refresh that
     // arrives between the two would show the old draft as finished.
     let saved = drafted.and_then(|(draft, _issues, _source)| {
@@ -127,7 +133,13 @@ pub async fn review_custom_course(
         .generator
         .review_custom_course(&brief, &draft)
         .await
-        .map_err(|error| format!("the tutor could not review the course: {error}"));
+        .map_err(|error| format!("the tutor could not review the course: {error}"))
+        .inspect_err(|error| {
+            state
+                .generator
+                .feed
+                .say(format!("class builder: the review failed: {error}"))
+        });
     let saved = reviewed.and_then(|(findings, _)| {
         let conn = state.db.0.lock().unwrap();
         custom::save_review(&conn, &id, &findings).map_err(err)
@@ -167,7 +179,13 @@ pub async fn fix_custom_course_finding(
         .generator
         .fix_custom_course_finding(&brief, &draft, &finding)
         .await
-        .map_err(|error| format!("the tutor could not make the change: {error}"));
+        .map_err(|error| format!("the tutor could not make the change: {error}"))
+        .inspect_err(|error| {
+            state
+                .generator
+                .feed
+                .say(format!("class builder: the change failed: {error}"))
+        });
     let saved = fixed.and_then(|(changed, note, _)| {
         let conn = state.db.0.lock().unwrap();
         custom::save_draft(&conn, &id, changed).map_err(err)?;
@@ -287,7 +305,13 @@ pub async fn write_custom_course_bank(
         .generator
         .write_custom_course_bank(&brief, &draft)
         .await
-        .map_err(|error| format!("the tutor could not write the question bank: {error}"));
+        .map_err(|error| format!("the tutor could not write the question bank: {error}"))
+        .inspect_err(|error| {
+            state
+                .generator
+                .feed
+                .say(format!("class builder: the question bank failed: {error}"))
+        });
     let saved = written.and_then(|(bank, _)| {
         let conn = state.db.0.lock().unwrap();
         custom::save_bank(&conn, &id, &bank).map_err(err)

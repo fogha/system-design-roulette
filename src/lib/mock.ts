@@ -1,5 +1,5 @@
 import { previewConfiguration, savePreviewConfiguration, previewRunners, previewModels, previewLocal, rememberPreviewModel, desktopRequired } from './features/runners/preview';
-import type { FocusPolicy, CurriculumConceptView, RouteSummary } from './ipc';
+import type { FocusPolicy, CurriculumConceptView, RouteSummary, ExecutionRun, ExecutionLogLine } from './ipc';
 import type { RevisePath } from './contracts/classes';
 import type { AgentPolicy, RunnerId } from './contracts/agents';
 import { previewEnrollmentOptions, previewEnrollmentDraft, savePreviewEnrollmentDraft } from './enrollment-preview';
@@ -752,6 +752,28 @@ function pauseMockClassWithoutSchedule(subjectId: ClassroomSubjectId) {
   if (subjectId === 'german' || subjectId === 'italian') mockLanguageSettings[subjectId].enabled = false;
 }
 
+/** The Logs page in the preview: a finished lesson and a curriculum being drafted right now. */
+const PREVIEW_RUN_STARTED = Date.now() - 154_000;
+function previewRuns(): ExecutionRun[] {
+  const started = new Date(PREVIEW_RUN_STARTED).toISOString();
+  return [
+    { run_id: 'draft:custom-religious-latin', course_id: 'custom-religious-latin', label: 'Religious Latin', activity: 'draft', started_at: started, last_at: new Date(PREVIEW_RUN_STARTED + 90_000).toISOString(), lines: 4, outcome: 'running', error: null },
+    { run_id: 'study-typescript-1', course_id: 'typescript', label: 'TypeScript', activity: 'lesson', started_at: new Date(PREVIEW_RUN_STARTED - 3_600_000).toISOString(), last_at: new Date(PREVIEW_RUN_STARTED - 3_318_000).toISOString(), lines: 3, outcome: 'ready', error: null },
+  ];
+}
+function previewLogLines(): ExecutionLogLine[] {
+  const at = (offset: number) => new Date(PREVIEW_RUN_STARTED + offset).toISOString();
+  return [
+    { id: 1, at: at(-3_600_000), run_id: 'study-typescript-1', course_id: 'typescript', line: 'Claude Code · opus · lesson' },
+    { id: 2, at: at(-3_540_000), run_id: 'study-typescript-1', course_id: 'typescript', line: 'research: retrieved 4 primary source(s): www.typescriptlang.org' },
+    { id: 3, at: at(-3_318_000), run_id: 'study-typescript-1', course_id: 'typescript', line: 'Claude Code · finished in 282.0s' },
+    { id: 4, at: at(0), run_id: 'draft:custom-religious-latin', course_id: 'custom-religious-latin', line: 'class builder: asking claude (opus) to draft "Religious Latin"' },
+    { id: 5, at: at(200), run_id: 'draft:custom-religious-latin', course_id: 'custom-religious-latin', line: 'Claude Code · opus · course-draft' },
+    { id: 6, at: at(45_000), run_id: 'draft:custom-religious-latin', course_id: 'custom-religious-latin', line: 'class builder: still drafting (45s); a whole course takes a few minutes' },
+    { id: 7, at: at(90_000), run_id: 'draft:custom-religious-latin', course_id: 'custom-religious-latin', line: 'class builder: still drafting (90s); a whole course takes a few minutes' },
+  ];
+}
+
 export const mockApi = {
   getEnrollmentOptions: async (courseId: ClassroomSubjectId) => {
     const options = previewEnrollmentOptions(courseId);
@@ -1102,9 +1124,9 @@ export const mockApi = {
   },
   startClassReview: async () => { throw new Error('Reviews need the desktop app.'); },
   endBlock: async () => { throw new Error('Blocks need the desktop app.'); },
-  listExecutionRuns: async () => [],
-  getExecutionLog: async () => [],
-  getRecentExecutionLog: async () => [],
+  listExecutionRuns: async () => previewRuns(),
+  getExecutionLog: async (runId: string) => previewLogLines().filter((line) => line.run_id === runId),
+  getRecentExecutionLog: async () => previewLogLines(),
   resumeClassroomSession: async (
     subjectId: ClassroomSubjectId,
   ): Promise<ClassroomSessionStart | null> => {

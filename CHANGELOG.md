@@ -21,7 +21,8 @@ The product that System Design Roulette became. Same database, same visual chara
 - **Execution logs**: every line a runner reports while preparing a lesson, kept thirty days, with a Logs page.
 - **Your own classes**: a class builder on a five-step rail (Brief, Draft, Review, Verify, Enroll). The tutor drafts a curriculum from what you want to be able to do, reads it back, writes a question bank; the desk validates every topic, fetches every source, publishes the class into the catalog and teaches it like a bundled one. Class files export and import. Verify is three checks in order, all required before publishing: every review finding settled (fixed with the tutor, fixed by hand, or dismissed with a reason), every source fetched and the unreachable ones replaced or kept knowingly, and your own read-through confirmed.
 - **Writing rules**: every request to a runner carries the rules, every answer is scrubbed of em dashes outside code and read for the tells of machine writing (Wikipedia's documented signs, as a shared catalogue), and a lesson section, question, chat reply or class draft that fails is sent back with the reason. The bundled prompts and lessons were held to the same rules.
-- The desk's own confirm and prompt dialogs, and fields in the class editor that grow with their text.
+- The desk's own confirm and prompt dialogs, and fields in the class editor that grow with their text. Topic cards drag into a new order or another stage; stage sections fold; the four stages are square tiles with their own marks that jump to their topics.
+- The Logs page keeps time while a run is in flight: a beacon, a running duration on the run and in the tail, and the class builder's runs read as running, done or failed.
 - **Onboarding** in four steps: tutor, search, recovery (with a walkthrough of the ways out), deploy.
 - A design system (DESIGN.md): one page frame, mono labels, three custom keys (call to action, bracket, ghost), route tabs on a rail.
 

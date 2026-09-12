@@ -8,7 +8,7 @@
   import { slugify } from '../../../custom-preview';
   import { autosize } from '../../../actions/autosize';
   import Dropdown from '../../../components/Dropdown.svelte';
-  import { ChevronDown, ChevronUp, Trash2, ArrowUp, ArrowDown, Plus, X, CircleAlert } from 'lucide-svelte';
+  import { ChevronDown, ChevronUp, Trash2, ArrowUp, ArrowDown, Plus, X, CircleAlert, GripVertical } from 'lucide-svelte';
 
   let {
     topic = $bindable(),
@@ -18,9 +18,12 @@
     issues = [],
     open = $bindable(false),
     flash = false,
+    dragging = false,
     onremove,
     onmove,
     onchange,
+    ondragstart,
+    ondragend,
   }: {
     topic: DraftTopic;
     index: number;
@@ -31,10 +34,18 @@
     open?: boolean;
     /** Lit for a moment after a jump, so the card that was meant is the one seen. */
     flash?: boolean;
+    /** Being dragged to a new place; the card leaves a faint outline behind. */
+    dragging?: boolean;
     onremove: () => void;
     onmove: (direction: -1 | 1) => void;
     onchange: () => void;
+    /** The grip was taken; the parent runs the drag. */
+    ondragstart?: (event: DragEvent) => void;
+    ondragend?: () => void;
   } = $props();
+
+  /** The card is only draggable from its grip, so text in its fields stays selectable. */
+  let armed = $state(false);
 
   const tier = (phase: string) => ({ foundations: 0, mechanisms: 1, production: 2 }[phase] ?? 3);
   /** Topics that may be prerequisites: same or earlier stage, not itself. */
@@ -65,8 +76,19 @@
   const phases = $derived([...stages, { id: 'elective', label: 'Elective' }].map((stage) => ({ value: stage.id, label: stage.label, description: stage.id === 'elective' ? 'off the core route' : stage.id })));
 </script>
 
-<article class="topic" class:open class:flawed={issues.length > 0} class:flash id={`topic-${topic.slug || index}`}>
+<article
+  class="topic"
+  class:open
+  class:flawed={issues.length > 0}
+  class:flash
+  class:dragging
+  id={`topic-${topic.slug || index}`}
+  draggable={armed}
+  ondragstart={(event) => { if (!armed) { event.preventDefault(); return; } ondragstart?.(event); }}
+  ondragend={() => { armed = false; ondragend?.(); }}
+>
   <header class="topic-head">
+    <span class="grip" role="button" tabindex="-1" aria-label="Drag to reorder" title="Drag to reorder" onmousedown={() => (armed = true)} onmouseup={() => (armed = false)} onmouseleave={() => { if (!dragging) armed = false; }}><GripVertical size={13} /></span>
     <button type="button" class="disclosure" aria-expanded={open} onclick={() => (open = !open)}>
       <span class="no mono">{String(index + 1).padStart(2, '0')}</span>
       <span class="head-text">
@@ -144,6 +166,9 @@
   .topic { border: 1px solid var(--node-border); border-radius: var(--radius-control); background: var(--bg); transition: border-color 0.15s ease; scroll-margin-top: 14px; }
   .topic.open { border-color: color-mix(in srgb, var(--accent) 45%, var(--node-border)); }
   .topic.flawed { border-left: 3px solid var(--warn-fg); }
+  .topic.dragging { opacity: 0.35; border-style: dashed; }
+  .grip { flex: none; display: grid; place-items: center; width: 18px; height: 26px; margin-left: 2px; border-radius: var(--radius-detail); color: var(--faint); cursor: grab; }
+  .grip:hover { color: var(--accent); background: var(--surface); } .topic.dragging .grip { cursor: grabbing; }
   /* The card a jump landed on blinks twice, then settles. */
   .topic.flash { animation: flash 0.7s ease-in-out 3; }
   @keyframes flash { 0%, 100% { box-shadow: 0 0 0 0 transparent; border-color: color-mix(in srgb, var(--accent) 45%, var(--node-border)); } 50% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent), 0 0 24px color-mix(in srgb, var(--accent) 30%, transparent); border-color: var(--accent); } }

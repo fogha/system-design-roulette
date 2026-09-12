@@ -613,10 +613,12 @@ export interface ExecutionRun {
   run_id: string;
   course_id: ClassroomSubjectId | null;
   label: string;
+  /** `lesson` for a session preparation, or the class builder's `draft`, `review`, `sources`, `bank`, `fix`. */
+  activity: 'lesson' | 'draft' | 'review' | 'sources' | 'bank' | 'fix' | string;
   started_at: string;
   last_at: string;
   lines: number;
-  outcome: 'running' | 'queued' | 'ready' | 'failed' | 'unknown' | string;
+  outcome: 'running' | 'queued' | 'ready' | 'done' | 'failed' | 'unknown' | string;
   error: string | null;
 }
 export interface ExecutionLogLine { id: number; at: string; run_id: string | null; course_id: string | null; line: string }

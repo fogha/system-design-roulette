@@ -262,8 +262,9 @@ fn the_execution_log_keeps_lines_per_run_and_prunes_old_ones() {
     )
     .unwrap();
 
-    let runs = execution_log::runs(&conn, 10).unwrap();
+    let runs = execution_log::runs(&conn, 10, None).unwrap();
     assert_eq!(runs.len(), 2, "lines with no run are not a run");
+    assert_eq!(runs[0].activity, "lesson");
     assert_eq!(runs[0].run_id, "study-b", "newest first");
     assert_eq!(runs[1].lines, 2);
     assert_eq!(runs[1].label, "TypeScript", "the class label, not its id");
@@ -288,5 +289,45 @@ fn the_execution_log_keeps_lines_per_run_and_prunes_old_ones() {
     )
     .unwrap();
     assert_eq!(execution_log::prune(&conn, now).unwrap(), 1);
-    assert_eq!(execution_log::runs(&conn, 10).unwrap().len(), 2);
+    assert_eq!(execution_log::runs(&conn, 10, None).unwrap().len(), 2);
+
+    // A class builder run: running while the feed names it, then judged by
+    // its last line.
+    execution_log::append(
+        &conn,
+        Some(("draft:custom-rust", "custom-rust")),
+        "class builder: asking claude (opus) to draft \"Rust\"",
+        now + chrono::Duration::seconds(90),
+    )
+    .unwrap();
+    let runs = execution_log::runs(&conn, 10, Some("draft:custom-rust")).unwrap();
+    assert_eq!(
+        (runs[0].activity.as_str(), runs[0].outcome.as_str()),
+        ("draft", "running")
+    );
+    let runs = execution_log::runs(&conn, 10, None).unwrap();
+    assert_eq!(runs[0].outcome, "unknown");
+    execution_log::append(
+        &conn,
+        Some(("draft:custom-rust", "custom-rust")),
+        "class builder: 12 topics drafted, 0 issue(s) against the validator",
+        now + chrono::Duration::seconds(300),
+    )
+    .unwrap();
+    assert_eq!(
+        execution_log::runs(&conn, 10, None).unwrap()[0].outcome,
+        "done"
+    );
+    execution_log::append(
+        &conn,
+        Some(("review:custom-rust", "custom-rust")),
+        "class builder: the review failed: timed out",
+        now + chrono::Duration::seconds(400),
+    )
+    .unwrap();
+    let runs = execution_log::runs(&conn, 10, None).unwrap();
+    assert_eq!(
+        (runs[0].activity.as_str(), runs[0].outcome.as_str()),
+        ("review", "failed")
+    );
 }

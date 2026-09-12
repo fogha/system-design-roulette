@@ -9,7 +9,7 @@
   import { blankTopic, STAGES, validateDraft } from '../../../custom-preview';
   import { autosize } from '../../../actions/autosize';
   import TopicCard from './TopicCard.svelte';
-  import { Plus, X, CircleAlert, CircleCheck } from 'lucide-svelte';
+  import { Plus, X, CircleAlert, CircleCheck, ChevronDown, ArrowDown, PenLine } from 'lucide-svelte';
 
   let {
     draft = $bindable(),
@@ -25,6 +25,17 @@
     onchange: () => void;
   } = $props();
 
+  /**
+   * The four stages drawn as what they are: a plinth being laid, a crank
+   * turning a rod, a works with its roofline, two threads meeting in one.
+   */
+  const STAGE_MARKS: Record<string, string> = {
+    foundations: '<path d="M3 20h18" /><path d="M6 20v-4h12v4" /><path d="M8.5 16v-4h7v4" /><path d="M11 12V8h2v4" /><path d="M9 5h6" />',
+    mechanisms: '<circle cx="7.5" cy="14.5" r="4.5" /><circle cx="7.5" cy="14.5" r="1" /><path d="M10.5 11.5 16 6" /><rect x="15" y="3" width="6" height="6" rx="1.2" /><path d="M7.5 5.5v2.5" /><path d="M2.5 14.5H1" />',
+    production: '<path d="M2 21h20" /><path d="M4 21V11l5 3v-3l5 3v-3l6 3v7" /><path d="M8 18h2" /><path d="M13 18h2" /><path d="M17 4v4" /><path d="M15 4h4" />',
+    synthesis: '<path d="M3 5c6 0 6 14 12 14h5" /><path d="M3 19c6 0 6-14 12-14h5" /><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" /><path d="m18 3 2 2-2 2" /><path d="m18 17 2 2-2 2" />',
+  };
+  const STAGE_HINTS: Record<string, string> = { foundations: 'the ideas and the first observations', mechanisms: 'how it works underneath', production: 'using it under real constraints', synthesis: 'the capstone that produces the outcome' };
   const issues = $derived(validateDraft(draft));
   const headerIssues = $derived(issues.filter((issue) => !issue.at.startsWith('topics/')));
   const topicIssues = (slug: string) => issues.filter((issue) => issue.at === `topics/${slug}`);
@@ -36,6 +47,20 @@
   );
   let openSlug = $state<string | null>(null);
   let hostInput = $state('');
+  /** The stage whose name is being edited in its tile; the others show it clamped. */
+  let editingStage = $state<string | null>(null);
+  /** Stage sections folded to their head. A jump into a folded stage unfolds it. */
+  let folded = $state<Record<string, boolean>>({});
+  let flashStage = $state<string | null>(null);
+  const countIn = (stage: string) => draft.topics.filter((t) => t.curriculum.phase === stage).length;
+  function jumpToStage(stage: string) {
+    folded = { ...folded, [stage]: false };
+    setTimeout(() => {
+      document.getElementById(`stage-${stage}`)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      flashStage = stage;
+      setTimeout(() => (flashStage = null), 1600);
+    }, 40);
+  }
   /** The card a jump landed on, lit until the blink ends. */
   let flashSlug = $state<string | null>(null);
   let flashTimer: ReturnType<typeof setTimeout> | null = null;
@@ -72,8 +97,62 @@
     draft.topics = topics;
     onchange();
   }
+
+  /**
+   * Dragging a card by its grip. The drop lands before or after the card
+   * under the pointer (its upper or lower half), or at the end of a stage
+   * when the pointer is over the stage's empty space; dropping in another
+   * stage moves the topic there.
+   */
+  let dragging = $state<number | null>(null);
+  let drop = $state<{ index: number; after: boolean } | { stage: string } | null>(null);
+  function dragStart(index: number, event: DragEvent) {
+    dragging = index;
+    if (event.dataTransfer) { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', String(index)); }
+  }
+  function dragEnd() { dragging = null; drop = null; }
+  function overCard(index: number, event: DragEvent) {
+    if (dragging === null || dragging === index) return;
+    event.preventDefault();
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    const after = event.clientY > rect.top + rect.height / 2;
+    if (!drop || !('index' in drop) || drop.index !== index || drop.after !== after) drop = { index, after };
+  }
+  function overStage(stage: string, event: DragEvent) {
+    if (dragging === null) return;
+    event.preventDefault();
+    if (folded[stage]) folded = { ...folded, [stage]: false };
+    if (!drop || !('stage' in drop) || drop.stage !== stage) drop = { stage };
+  }
+  function dropHere(stage: string, event: DragEvent) {
+    event.preventDefault();
+    const from = dragging;
+    const target = drop;
+    dragEnd();
+    if (from === null || !target) return;
+    const topics = [...draft.topics];
+    const [moved] = topics.splice(from, 1);
+    let at = topics.length;
+    if ('index' in target) {
+      const anchor = target.index > from ? target.index - 1 : target.index;
+      at = anchor + (target.after ? 1 : 0);
+    } else {
+      const last = topics.map((t) => t.curriculum.phase as string).lastIndexOf(stage);
+      at = last < 0 ? topics.length : last + 1;
+    }
+    if (moved.curriculum.phase !== stage) {
+      moved.curriculum.phase = stage as DraftTopic['curriculum']['phase'];
+      // An elective is off the core route by definition.
+      if (stage === 'elective') moved.curriculum.core = false;
+    }
+    topics.splice(at, 0, moved);
+    draft.topics = topics;
+    onchange();
+  }
   function jump(at: string) {
     const slug = at.replace(/^topics\//, '');
+    const phase = draft.topics.find((t) => t.slug === slug)?.curriculum.phase;
+    if (phase) folded = { ...folded, [phase]: false };
     openSlug = slug;
     flashSlug = null;
     if (flashTimer) clearTimeout(flashTimer);
@@ -138,20 +217,40 @@
       <span class="eyebrow mono">THE FOUR STAGES <small>in this course's own words</small></span>
       <div class="stages">
         {#each draft.entry_points as entry, i (entry.id)}
-          <label class="field"><span class="mono">{String(i + 1).padStart(2, '0')} · {entry.id}</span><input value={entry.label} oninput={(e) => { draft.entry_points[i].label = e.currentTarget.value; onchange(); }} /></label>
+          <!-- The tile goes to its stage's topics; the name inside it is edited in place. -->
+          <div class="stage-tile" class:editing={editingStage === entry.id} role="group" aria-label={`Stage ${i + 1}, ${entry.id}`}>
+            <button type="button" class="stage-go" aria-label={`Go to the ${entry.label || entry.id} topics`} title="Go to this stage's topics" onclick={() => jumpToStage(entry.id)}>
+              <span class="stage-mark" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">{@html STAGE_MARKS[entry.id] ?? STAGE_MARKS.foundations}</svg>
+              </span>
+              <span class="stage-no mono">{String(i + 1).padStart(2, '0')}</span>
+              <span class="stage-id mono">{entry.id}</span>
+            </button>
+            {#if editingStage === entry.id}
+              <!-- svelte-ignore a11y_autofocus -->
+              <textarea autofocus use:autosize={{ min: 2, max: 3, value: entry.label }} value={entry.label} oninput={(e) => { draft.entry_points[i].label = e.currentTarget.value; onchange(); }} onblur={() => (editingStage = null)} onkeydown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); editingStage = null; } }} placeholder={STAGE_HINTS[entry.id]}></textarea>
+            {:else}
+              <button type="button" class="stage-label" class:placeholder={!entry.label.trim()} title={entry.label.trim() ? `${entry.label}\nclick to rename` : 'click to name this stage'} onclick={() => (editingStage = entry.id)}>{entry.label.trim() || STAGE_HINTS[entry.id]}</button>
+            {/if}
+            <span class="stage-foot mono"><span>{countIn(entry.id)} {countIn(entry.id) === 1 ? 'topic' : 'topics'}</span><PenLine size={10} aria-hidden="true" /></span>
+          </div>
         {/each}
       </div>
     </section>
 
     {#each byStage as stage (stage.id)}
-      <section class="block stage" aria-label={stage.label}>
-        <div class="stage-head">
-          <span class="eyebrow mono">{stage.id === 'elective' ? 'ELECTIVES' : `STAGE · ${stage.label.toUpperCase()}`} <b>{stage.topics.length}</b></span>
-          <button type="button" class="ghost mono-ghost small" onclick={() => addTopic(stage.id as DraftTopic['curriculum']['phase'])}><Plus size={12} />Add topic</button>
+      <section class="block stage" class:folded={folded[stage.id]} class:flash={flashStage === stage.id} aria-label={stage.label} id={`stage-${stage.id}`}>
+        <!-- A card dragged over a folded stage's head unfolds it, so it can land inside. -->
+        <div class="stage-head" role="presentation" ondragover={() => { if (dragging !== null && folded[stage.id]) folded = { ...folded, [stage.id]: false }; }}>
+          <button type="button" class="fold" aria-expanded={!folded[stage.id]} aria-controls={`stage-${stage.id}-topics`} onclick={() => (folded = { ...folded, [stage.id]: !folded[stage.id] })}>
+            <span class="chevron" aria-hidden="true"><ChevronDown size={14} /></span>
+            <span class="eyebrow mono">{stage.id === 'elective' ? 'ELECTIVES' : `STAGE · ${stage.label.toUpperCase()}`} <b>{stage.topics.length}</b>{#if folded[stage.id]}<small>folded</small>{/if}</span>
+          </button>
+          <button type="button" class="ghost mono-ghost small" onclick={() => { folded = { ...folded, [stage.id]: false }; addTopic(stage.id as DraftTopic['curriculum']['phase']); }}><Plus size={12} />Add topic</button>
         </div>
-        {#if stage.topics.length}
-          <div class="topics">
-            {#each stage.topics as { topic, index } (index)}
+        <div class="topics" id={`stage-${stage.id}-topics`} hidden={!!folded[stage.id] && dragging === null} class:receiving={dragging !== null} class:landing={!!drop && 'stage' in drop && drop.stage === stage.id} role="list" ondragover={(event) => overStage(stage.id, event)} ondrop={(event) => dropHere(stage.id, event)}>
+          {#each stage.topics as { topic, index } (index)}
+            <div class="slot" role="listitem" class:before={!!drop && 'index' in drop && drop.index === index && !drop.after} class:after={!!drop && 'index' in drop && drop.index === index && drop.after} ondragover={(event) => { event.stopPropagation(); overCard(index, event); }} ondrop={(event) => { event.stopPropagation(); dropHere(stage.id, event); }}>
               <TopicCard
                 bind:topic={draft.topics[index]}
                 {index}
@@ -160,15 +259,19 @@
                 issues={topicIssues(topic.slug)}
                 open={openSlug === topic.slug}
                 flash={flashSlug === topic.slug}
+                dragging={dragging === index}
                 onremove={() => removeTopic(index)}
                 onmove={(direction) => moveTopic(index, direction)}
                 onchange={() => { openSlug = draft.topics[index]?.slug ?? openSlug; onchange(); }}
+                ondragstart={(event) => dragStart(index, event)}
+                ondragend={dragEnd}
               />
-            {/each}
-          </div>
-        {:else}
-          <p class="empty">{stage.id === 'elective' ? 'No electives. Optional.' : 'No topics in this stage yet; it needs at least one core topic.'}</p>
-        {/if}
+            </div>
+          {/each}
+          {#if !stage.topics.length}
+            <p class="empty">{dragging !== null ? 'Drop here to move the topic into this stage.' : stage.id === 'elective' ? 'No electives. Optional.' : 'No topics in this stage yet; it needs at least one core topic.'}</p>
+          {/if}
+        </div>
       </section>
     {/each}
   </div>
@@ -201,11 +304,49 @@
   .host-input { flex: 1; min-width: 160px; border: 0; background: transparent; padding: 4px 6px; }
   .issues { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 10px 12px; list-style: none; border-left: 2px solid var(--warn-fg); background: var(--surface); }
   .issues li { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--warn-fg); } .issues li .mono { color: var(--muted); }
+  /* Four square tiles, one a stage: its mark top left, its number top right, its id, and its name in the course's words. */
   .stages { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
-  .stages .field > span { font-size: 9px; letter-spacing: 0.6px; color: var(--faint); }
+  /* The width is the column's; the square comes from the height following it, never the other way round. */
+  .stage-tile { position: relative; display: flex; flex-direction: column; gap: 4px; width: 100%; min-width: 0; aspect-ratio: 1 / 1; padding: 12px 12px 10px; border: 1px solid var(--node-border); border-radius: var(--radius-panel); background: linear-gradient(180deg, var(--surface), var(--bg)); overflow: hidden; transition: border-color 0.15s, box-shadow 0.15s; cursor: text; }
+  .stage-tile:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--node-border)); }
+  .stage-tile:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent); }
+  .stage-mark { display: grid; place-items: center; width: 38px; height: 38px; margin-bottom: 4px; border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--node-border)); border-radius: 10px; background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--accent); }
+  .stage-no { position: absolute; top: 12px; right: 12px; font-size: 9.5px; letter-spacing: 1px; color: var(--faint); }
+  .stage-id { font-size: 9px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--faint); }
+  .stage-tile { container-type: inline-size; cursor: default; }
+  .stage-go { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+  .stage-go:hover .stage-mark { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, transparent); }
+  .stage-go:focus-visible { outline: none; } .stage-go:focus-visible .stage-mark { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+  /* The name: two lines at most, then an ellipsis; the full text is a click away. */
+  .stage-label { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-top: 2px; padding: 4px 0 0; border: 0; background: transparent; color: var(--fg); font: 13.5px/1.4 var(--font-body); text-align: left; cursor: text; }
+  .stage-label:hover { color: var(--accent); } .stage-label.placeholder { color: var(--faint); font-style: italic; }
+  .stage-tile textarea { flex: 1; min-height: 0; margin-top: 2px; padding: 4px 0 0; border: 0; border-radius: 0; background: transparent; font: 13.5px/1.4 var(--font-body); color: var(--fg); }
+  .stage-tile textarea::placeholder { color: var(--faint); font-style: italic; }
+  .stage-tile textarea:focus { border: 0; }
+  .stage-foot { display: flex; align-items: center; justify-content: space-between; margin-top: auto; padding-top: 6px; font-size: 9px; letter-spacing: 0.6px; color: var(--faint); }
+  /* Narrow tiles take smaller type so the name still fits its two lines. */
+  @container (max-width: 200px) { .stage-label, .stage-tile textarea { font-size: 12px; } .stage-mark { width: 32px; height: 32px; } }
+  @container (max-width: 160px) { .stage-label, .stage-tile textarea { font-size: 11px; } .stage-id { font-size: 8px; } .stage-mark { width: 28px; height: 28px; } .stage-mark svg { width: 18px; height: 18px; } }
   .stage-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-  .topics { display: flex; flex-direction: column; gap: 8px; }
-  .empty { margin: 0; font-size: 11px; color: var(--faint); }
-  @media (max-width: 900px) { .editor { grid-template-columns: 1fr; } .rail { position: static; } .stages { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .fold { display: inline-flex; align-items: center; gap: 8px; min-width: 0; padding: 4px 6px 4px 2px; border: 0; border-radius: var(--radius-detail); background: transparent; color: inherit; text-align: left; cursor: pointer; }
+  .fold:hover { background: var(--surface); }
+  .chevron { display: inline-grid; place-items: center; color: var(--muted); transition: transform 0.18s ease; } .stage.folded .chevron { transform: rotate(-90deg); }
+  .fold small { margin-left: 8px; color: var(--faint); letter-spacing: 0.4px; text-transform: none; }
+  .stage.folded { gap: 0; }
+  .stage.flash { animation: stage-flash 0.8s ease-in-out 2; }
+  @keyframes stage-flash { 50% { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 28%, transparent); } }
+  .topics { display: flex; flex-direction: column; gap: 8px; border-radius: var(--radius-control); transition: box-shadow 0.15s; }
+  /* Folded away: the class's display would otherwise win over the hidden attribute. */
+  .topics[hidden] { display: none; }
+  /* While a card is in the air, every stage is a place it can land. */
+  .topics.receiving { min-height: 44px; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 25%, transparent); }
+  .topics.landing { box-shadow: inset 0 0 0 1px var(--accent), inset 0 0 18px color-mix(in srgb, var(--accent) 12%, transparent); }
+  .slot { position: relative; }
+  /* The insertion line where the card would land. */
+  .slot::before, .slot::after { content: ''; position: absolute; left: 6px; right: 6px; height: 2px; border-radius: 2px; background: var(--accent); box-shadow: 0 0 8px var(--accent); opacity: 0; pointer-events: none; transition: opacity 0.1s; }
+  .slot::before { top: -5px; } .slot::after { bottom: -5px; }
+  .slot.before::before, .slot.after::after { opacity: 1; }
+  .empty { margin: 0; padding: 6px 4px; font-size: 11px; color: var(--faint); }
+  @media (max-width: 900px) { .editor { grid-template-columns: 1fr; } .rail { position: static; } .stages { grid-template-columns: repeat(2, minmax(0, 1fr)); } .stage-tile { aspect-ratio: auto; } }
   @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
 </style>

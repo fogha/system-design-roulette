@@ -94,13 +94,37 @@ pub struct RunSummary {
     pub run_id: String,
     pub course_id: Option<String>,
     pub label: String,
+    /// What the run was doing: `lesson` for a session preparation, or the
+    /// class builder's `draft`, `review`, `sources`, `bank` or `fix`.
+    pub activity: String,
     pub started_at: String,
     pub last_at: String,
     pub lines: i64,
-    /// `running`, `ready`, `failed` or `unknown` from the preparation job, when
-    /// the run was a session preparation.
+    /// `running`, `ready`, `failed` or `unknown` from the preparation job
+    /// when the run was a session preparation; for the class builder's runs,
+    /// `running` while the feed names the run, then `done` or `failed` from
+    /// how its last line reads.
     pub outcome: String,
     pub error: Option<String>,
+}
+
+/// What a class builder run's last line says about how it ended.
+fn ended(last_line: &str) -> &'static str {
+    let line = last_line.to_lowercase();
+    if line.contains("failed") || line.contains("could not") || line.contains("nothing was applied")
+    {
+        "failed"
+    } else if line.contains("drafted")
+        || line.contains("finding(s)")
+        || line.contains("checked")
+        || line.contains("written")
+        || line.contains("applied")
+        || line.contains("issue(s) remain")
+    {
+        "done"
+    } else {
+        "unknown"
+    }
 }
 
 pub fn append(
@@ -133,15 +157,18 @@ pub fn prune(conn: &Connection, now: chrono::DateTime<chrono::Utc>) -> Result<us
     Ok(conn.execute("DELETE FROM execution_log_lines WHERE at < ?1", [cutoff])?)
 }
 
-/// Runs, newest first.
-pub fn runs(conn: &Connection, limit: i64) -> Result<Vec<RunSummary>> {
+/// Runs, newest first. `current` is the run the feed names right now, so a
+/// class builder run in flight reads as running.
+pub fn runs(conn: &Connection, limit: i64, current: Option<&str>) -> Result<Vec<RunSummary>> {
     let mut statement = conn.prepare(
         "SELECT l.run_id, l.course_id, MIN(l.at), MAX(l.at), COUNT(*),
-                COALESCE(j.status, 'unknown'), j.error,
-                COALESCE(p.label, l.course_id, 'desk')
+                j.status, j.error,
+                COALESCE(p.label, json_extract(c.draft_json, '$.label'), l.course_id, 'desk'),
+                (SELECT line FROM execution_log_lines z WHERE z.run_id = l.run_id ORDER BY z.id DESC LIMIT 1)
          FROM execution_log_lines l
          LEFT JOIN study_preparation_jobs j ON j.session_id = l.run_id
          LEFT JOIN classroom_programs p ON p.subject_id = l.course_id
+         LEFT JOIN custom_courses c ON c.id = l.course_id
          WHERE l.run_id IS NOT NULL
          GROUP BY l.run_id
          ORDER BY MAX(l.at) DESC
@@ -149,15 +176,33 @@ pub fn runs(conn: &Connection, limit: i64) -> Result<Vec<RunSummary>> {
     )?;
     let rows = statement
         .query_map([limit], |r| {
+            let run_id: String = r.get(0)?;
+            let job: Option<String> = r.get(5)?;
+            let last_line: Option<String> = r.get(8)?;
+            let activity = run_id
+                .split_once(':')
+                .map(|(kind, _)| kind)
+                .filter(|kind| matches!(*kind, "draft" | "review" | "sources" | "bank" | "fix"))
+                .unwrap_or("lesson")
+                .to_string();
+            let outcome = match job {
+                Some(status) => status,
+                None if current == Some(run_id.as_str()) => "running".into(),
+                None if activity != "lesson" => {
+                    ended(last_line.as_deref().unwrap_or_default()).into()
+                }
+                None => "unknown".into(),
+            };
             Ok(RunSummary {
-                run_id: r.get(0)?,
+                run_id,
                 course_id: r.get(1)?,
                 started_at: r.get(2)?,
                 last_at: r.get(3)?,
                 lines: r.get(4)?,
-                outcome: r.get(5)?,
+                outcome,
                 error: r.get(6)?,
                 label: r.get(7)?,
+                activity,
             })
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
