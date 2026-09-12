@@ -185,7 +185,8 @@
       <div class="glow" aria-hidden="true"></div>
       <ProgressRing value={app.state?.schedule_paused ? 0 : ringValue} size={206} stroke={7} pulse={!!next?.due} label={next ? `${next.label} in ${formatClassCountdown(next,now)}` : 'No upcoming class'}>
         <span class="ring-eyebrow mono">{app.state?.schedule_paused ? 'PAUSED' : next?.due ? 'DUE NOW' : 'NEXT CLASS'}</span>
-        <span class="ring-count mono" class:idle={!next}>{next ? formatClassCountdown(next,now) : '—:—:—'}</span>
+        {@const countdown = next ? formatClassCountdown(next, now) : '—:—:—'}
+        <span class="ring-count mono" class:idle={!next} class:long={countdown.length > 8}>{countdown}</span>
         <span class="ring-label">{next?.label ?? 'No upcoming appointments'}</span>
         <span class="ring-when mono">{app.state?.schedule_paused ? 'appointments paused' : formatClassTime(next,now)}</span>
       </ProgressRing>
@@ -239,9 +240,11 @@
   .glow { position: absolute; width: 260px; height: 260px; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--accent) 22%, transparent), transparent 62%); filter: blur(6px); animation: breathe 5s ease-in-out infinite; }
   .hero.due .glow { animation-duration: 1.6s; background: radial-gradient(circle, color-mix(in srgb, var(--accent) 40%, transparent), transparent 64%); }
   .ring-eyebrow { font-size: 8.5px; letter-spacing: 1.4px; color: var(--accent); }
-  .ring-count { font-size: 30px; line-height: 1; color: var(--fg); font-variant-numeric: tabular-nums; margin: 4px 0 2px; } .ring-count.idle { color: var(--faint); }
-  .ring-label { font-size: 13px; font-weight: 500; color: var(--fg); max-width: 140px; line-height: 1.25; }
-  .ring-when { font-size: 9px; color: var(--muted); margin-top: 2px; }
+  .ring-count { font-size: 30px; line-height: 1; color: var(--fg); font-variant-numeric: tabular-nums; white-space: nowrap; margin: 4px 0 2px; } .ring-count.idle { color: var(--faint); }
+  /* With days in front, the figure shrinks to stay inside the ring. */
+  .ring-count.long { font-size: 22px; letter-spacing: -0.3px; margin: 6px 0 4px; }
+  .ring-label { font-size: 13px; font-weight: 500; color: var(--fg); max-width: 150px; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ring-when { font-size: 9px; color: var(--muted); margin-top: 3px; }
   /* `backwards`, not `both`: a finished transform, even an identity one,
      would trap the heat map's fixed-position tip inside this section. */
   /* Below the hero: the habit first, one row across the whole desk (the
