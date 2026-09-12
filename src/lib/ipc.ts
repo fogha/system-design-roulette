@@ -340,6 +340,8 @@ export interface CustomCourseView {
   published_at: string | null;
   /** A tutor call in flight for this class, so leaving and coming back shows it. */
   working?: 'draft' | 'review' | 'sources' | 'bank' | 'fix' | null;
+  /** The finding a fix in flight is on. */
+  working_at?: number | null;
 }
 export interface CustomCourseSummary {
   id: string;

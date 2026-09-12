@@ -107,8 +107,18 @@
     draft = structuredClone(next.draft);
     // A call the desk is still running (started here or before the page was
     // left) shows as such, and the view is fetched again until it ends.
-    if (next.working) { busy = next.working; busySince ??= Date.now(); watch(next.id); }
+    if (next.working) { busy = next.working; busySince ??= Date.now(); fixing = next.working_at ?? null; watch(next.id); }
     else if (busy === 'draft' || busy === 'review' || busy === 'sources' || busy === 'bank' || busy === 'fix') { busy = ''; busySince = null; fixing = null; }
+  }
+  /**
+   * A view fetched while the tutor is still working: the findings it has
+   * settled so far, the draft as it stands, which finding it is on. Taken
+   * unless a save of the learner's own edits is pending, so a keystroke is
+   * never overwritten by the tutor's copy.
+   */
+  function adoptInFlight(fresh: CustomCourseView) {
+    if (saveTimer || saved === 'saving') { fixing = fresh.working_at ?? null; return; }
+    adopt(fresh);
   }
 
   /** While the desk works, ask again every few seconds; the desk also says when it is done. */
@@ -122,12 +132,32 @@
           if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
           adopt(fresh);
           if (drafted && step === 'draft') step = 'review';
+        } else {
+          adoptInFlight(fresh);
         }
       } catch { /* the next tick asks again */ }
     }, 4000);
   }
-  // The desk announces a finished call with a state refresh; read the class again then.
-  $effect(() => { void app.state; const current = view?.id; if (current && busy && pollTimer) untrack(() => api.getCustomCourse(current).then((fresh) => { if (!fresh.working) { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } adopt(fresh); if (drafted && step === 'draft') step = 'review'; } }).catch(() => {})); });
+  // The desk announces each step of a call with a state refresh; read the
+  // class again then. Only the refresh is a dependency: the view and the
+  // busy flag change with every adoption, and tracking them would fetch
+  // again on each fetch without end.
+  $effect(() => {
+    void app.state;
+    untrack(() => {
+      const current = view?.id;
+      if (!current || !busy || !pollTimer) return;
+      api.getCustomCourse(current).then((fresh) => {
+        if (!fresh.working) {
+          if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+          adopt(fresh);
+          if (drafted && step === 'draft') step = 'review';
+        } else {
+          adoptInFlight(fresh);
+        }
+      }).catch(() => {});
+    });
+  });
 
   function addHost() {
     const host = hostInput.trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '').toLowerCase();
@@ -370,7 +400,7 @@
             <span class="check-tile"><Bot size={16} /></span>
             <div><strong>The tutor reads it back</strong><small>Looks for outcomes that cannot be observed, missing or wrong prerequisites, topics that are one, stages that jump, sources that do not support their topic. Every finding is then fixed by the tutor, fixed by you, or dismissed with a reason.</small></div>
             <span class="gate-keys">
-              {#if checks.open_findings > 0}<button type="button" class="ghost mono-ghost" onclick={fixAll} disabled={!!busy}><Wand2 size={12} />{busy === 'fix' && fixing === null ? 'Fixing…' : `Fix all ${checks.open_findings}`}</button>{/if}
+              {#if checks.open_findings > 0}<button type="button" class="ghost mono-ghost" onclick={fixAll} disabled={!!busy}><Wand2 size={12} />{busy === 'fix' ? `Fixing… ${checks.open_findings} left` : `Fix all ${checks.open_findings}`}</button>{/if}
               <button type="button" class="ghost mono-ghost" onclick={review} disabled={!!busy}>{busy === 'review' ? 'Reading…' : checks.reviewed ? 'Read it again' : 'Read it back'}</button>
             </span>
           </div>
@@ -390,7 +420,7 @@
                     {#if finding.status !== 'open' && finding.note}<p class="note mono">{finding.status === 'dismissed' ? 'dismissed: ' : 'fixed '}{finding.note}</p>{/if}
                     <div class="finding-actions">
                       {#if finding.status === 'open'}
-                        <button type="button" class="ghost mono-ghost small" onclick={() => fixWithTutor(i)} disabled={!!busy}><Wand2 size={11} />{busy === 'fix' && fixing === i ? 'the tutor is changing it…' : 'Fix with the tutor'}</button>
+                        <button type="button" class="ghost mono-ghost small" onclick={() => fixWithTutor(i)} disabled={!!busy}><Wand2 size={11} />{busy === 'fix' && fixing === i ? 'the tutor is changing it…' : busy === 'fix' ? 'waiting its turn' : 'Fix with the tutor'}</button>
                         {#if finding.topic}<button type="button" class="text" onclick={() => jumpTo(finding.topic)}>Open {finding.topic} <ArrowRight size={11} /></button>{/if}
                         <button type="button" class="text" onclick={() => settle(i, 'fixed')} disabled={!!busy}><Check size={11} /> Fixed by hand</button>
                         <button type="button" class="text quiet" onclick={() => settle(i, 'dismissed')} disabled={!!busy}>Dismiss</button>

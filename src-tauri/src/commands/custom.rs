@@ -38,6 +38,7 @@ pub fn get_custom_course(
 ) -> CmdResult<CustomCourseView> {
     let mut view = custom::get(&state.db.0.lock().unwrap(), &id).map_err(err)?;
     view.working = jobs.working(&id);
+    view.working_at = jobs.working_at(&id);
     Ok(view)
 }
 
@@ -179,6 +180,7 @@ pub async fn fix_custom_course_finding(
         return Err("the tutor is already working on this class".into());
     }
     let job = jobs.begin(&id, "fix");
+    jobs.focus(&id, Some(index));
     let _run = state.generator.feed.begin(&format!("fix:{id}"), &id);
     let fixed = state
         .generator
@@ -245,6 +247,8 @@ pub async fn fix_all_custom_course_findings(
             };
             (view.brief, view.draft, finding)
         };
+        jobs.focus(&id, Some(index));
+        tell(&app);
         state.generator.feed.say(format!(
             "class builder: settling finding {} of {total}",
             n + 1

@@ -15,15 +15,21 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::Duration;
 
-/// The builder's calls in flight, by course id: `draft`, `review`, `sources`
-/// or `bank`. The interface asks for it when it opens a class, so leaving
-/// the page and coming back still shows what the tutor is doing.
+/// The builder's calls in flight, by course id: `draft`, `review`, `sources`,
+/// `bank` or `fix`, and for a fix the finding being changed. The interface
+/// asks for it when it opens a class, so leaving the page and coming back
+/// still shows what the tutor is doing, and which finding it is on.
 #[derive(Default)]
-pub struct BuilderJobs(pub Mutex<HashMap<String, String>>);
+pub struct BuilderJobs(pub Mutex<HashMap<String, (String, Option<usize>)>>);
 
 impl BuilderJobs {
     pub fn working(&self, id: &str) -> Option<String> {
-        self.0.lock().unwrap().get(id).cloned()
+        self.0.lock().unwrap().get(id).map(|(kind, _)| kind.clone())
+    }
+
+    /// The finding a fix is on, while one is.
+    pub fn working_at(&self, id: &str) -> Option<usize> {
+        self.0.lock().unwrap().get(id).and_then(|(_, at)| *at)
     }
 
     /// Mark a job in flight until the guard drops, however the call ends.
@@ -31,10 +37,17 @@ impl BuilderJobs {
         self.0
             .lock()
             .unwrap()
-            .insert(id.to_string(), kind.to_string());
+            .insert(id.to_string(), (kind.to_string(), None));
         JobGuard {
             jobs: self,
             id: id.to_string(),
+        }
+    }
+
+    /// Say which finding the job is on now.
+    pub fn focus(&self, id: &str, at: Option<usize>) {
+        if let Some(entry) = self.0.lock().unwrap().get_mut(id) {
+            entry.1 = at;
         }
     }
 }

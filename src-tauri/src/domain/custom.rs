@@ -265,9 +265,12 @@ pub struct CustomCourseView {
     pub updated_at: String,
     pub published_at: Option<String>,
     /// A tutor call in flight for this class (`draft`, `review`, `sources`,
-    /// `bank`), filled in by the command layer.
+    /// `bank`, `fix`), filled in by the command layer.
     #[serde(default)]
     pub working: Option<String>,
+    /// The finding a fix in flight is on, filled in by the command layer.
+    #[serde(default)]
+    pub working_at: Option<usize>,
 }
 
 /// A row of the list the Classes page shows.
@@ -1024,6 +1027,7 @@ fn view_of(row: Row) -> Result<CustomCourseView> {
         updated_at: row.updated_at,
         published_at: row.published_at,
         working: None,
+        working_at: None,
     })
 }
 

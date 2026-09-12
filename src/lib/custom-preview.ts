@@ -188,6 +188,10 @@ export function checksOf(item: { draft: CourseDraft; review: ReviewFinding[] | n
 /** The mock desk registers a program for a published class through this. */
 let publishHook: ((course: CourseDefinition) => void) | null = null;
 export function onPreviewPublish(hook: (course: CourseDefinition) => void) { publishHook = hook; }
+/** The mock desk's state refresh, announced the way the desk announces one. */
+let tellHook: (() => void) | null = null;
+export function onPreviewTell(hook: () => void) { tellHook = hook; }
+const previewTell = () => tellHook?.();
 
 function now() { return new Date().toISOString(); }
 /** Reviews and fetches not yet run are kept as `null` in the store; the view shows them as empty lists. */
@@ -196,7 +200,7 @@ function view(id: string): CustomCourseView {
   if (!item) throw new Error('this class does not exist');
   const issues = validateDraft(item.draft);
   const { marks: _marks, reviewed: _reviewed, fetched: _fetched, ...rest } = item;
-  return { ...rest, issues, checks: checksOf({ draft: item.draft, review: item.reviewed ? item.review : null, sources: item.fetched ? item.sources : null, marks: item.marks }, issues), draft: structuredClone(item.draft), brief: { ...item.brief }, review: item.review.map((f) => ({ ...f })), sources: item.sources.map((s) => ({ ...s })), bank: item.bank ? structuredClone(item.bank) : null, working: item.working ?? null };
+  return { ...rest, issues, checks: checksOf({ draft: item.draft, review: item.reviewed ? item.review : null, sources: item.fetched ? item.sources : null, marks: item.marks }, issues), draft: structuredClone(item.draft), brief: { ...item.brief }, review: item.review.map((f) => ({ ...f })), sources: item.sources.map((s) => ({ ...s })), bank: item.bank ? structuredClone(item.bank) : null, working: item.working ?? null, working_at: item.working_at ?? null };
 }
 
 function newId(title: string): string {
@@ -237,13 +241,15 @@ export const previewCustom = {
     const item = stored.get(id); if (!item) throw new Error('this class does not exist');
     const open = item.review.map((f, i) => (f.status === 'open' ? i : -1)).filter((i) => i >= 0);
     if (!open.length) throw new Error('every finding is already settled');
-    for (const index of open) await previewCustom.fixFinding(id, index);
+    // The desk announces each step with a refresh; the preview does the same.
+    for (const index of open) { item.working = 'fix'; item.working_at = index; previewTell(); await previewCustom.fixFinding(id, index); item.working = 'fix'; previewTell(); }
+    item.working = null; item.working_at = null;
     return view(id);
   },
   fixFinding: async (id: string, index: number) => {
     const item = stored.get(id); if (!item) throw new Error('this class does not exist');
     const finding = item.review[index]; if (!finding) throw new Error('that finding is not in the review');
-    item.working = 'fix';
+    item.working = 'fix'; item.working_at = index;
     await new Promise((r) => setTimeout(r, 1400));
     // The preview's tutor makes the smallest change: a prerequisite topic, or an elective.
     if (finding.topic) {
@@ -258,7 +264,7 @@ export const previewCustom = {
       item.draft.topics.push({ ...structuredClone(last), slug: `${last.slug}-extended`, title: `${last.title}, extended`, curriculum: { ...structuredClone(last.curriculum), phase: 'elective', core: false } });
       finding.note = 'by the tutor: added an elective that extends the capstone';
     }
-    finding.status = 'fixed'; item.working = null; item.updated_at = now(); return view(id);
+    finding.status = 'fixed'; item.working = null; item.working_at = null; item.updated_at = now(); return view(id);
   },
   resolveFinding: async (id: string, index: number, status: ReviewFinding['status'], note: string) => {
     const item = stored.get(id); if (!item) throw new Error('this class does not exist');

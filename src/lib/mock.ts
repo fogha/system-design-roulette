@@ -9,7 +9,7 @@ import type { AcceptedPath, AcceptPath } from './contracts/classes';
 import { acceptPreviewClassPath, previewClassPath, previewPathSummary, revisePreviewClassPath } from './class-preview';
 import { applyPreviewChallenge, getPreviewChallenge, savePreviewChallengeResponse, startPreviewChallenge, submitPreviewChallenge } from './challenge-preview';
 import { guessStatus } from './features/recovery/ladder';
-import { previewCustom, onPreviewPublish } from './custom-preview';
+import { previewCustom, onPreviewPublish, onPreviewTell } from './custom-preview';
 import { scheduleConflicts, conflictMessage, type ScheduleCandidate, type ConflictScope } from './features/classes/schedule-conflicts';
 import { COURSES, courseDefinition } from './catalog';
 import seedConcepts from '../../src-tauri/seed/concepts.json';
@@ -725,6 +725,7 @@ function mockPrograms(): ClassroomProgramView[] {
   return CLASSROOM_CATALOG.map((item) => mockClassroomProgram(item.id as ClassroomSubjectId));
 }
 // A class published in the preview joins the catalogue and gets a program.
+onPreviewTell(() => mockEmit('classroom:state', { refresh: true }));
 onPreviewPublish((course) => {
   if (CLASSROOM_CATALOG.some((item) => item.id === course.id)) return;
   CLASSROOM_CATALOG.push({ id: course.id, kind: course.kind, label: course.label, native: course.native_label, short: course.short_code });
