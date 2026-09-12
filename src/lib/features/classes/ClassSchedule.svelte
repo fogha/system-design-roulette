@@ -22,30 +22,24 @@
   }
   let view = $state<'times' | 'plan'>('times');
   let editing = $state(false), slotId = $state<number | null>(null), slotTime = $state('07:30'), slotDays = $state([1,2,3,4,5]);
-  /** Minutes and start per selected weekday. Every day the rule fires on is written down with its own minutes; a day's start is kept only when it differs from the rule's. */
+  /** Minutes per selected weekday; every day the rule fires on is written down with its own. A rule has one start time: a different time on some days is another rule. */
   let slotMinutes = $state<Record<number, number>>({});
-  let slotStarts = $state<Record<number, string>>({});
   const DAY_MINUTES = { min: 10, max: 480 };
   const PRESETS = [30, 60, 90, 120, 240];
   const minutesFor = (day: number) => slotMinutes[day] ?? program.session_minutes;
-  const startFor = (day: number) => slotStarts[day] ?? slotTime;
-  const varied = $derived(slotDays.some(day => minutesFor(day) !== minutesFor(slotDays[0]) || startFor(day) !== startFor(slotDays[0])));
+  const varied = $derived(slotDays.some(day => minutesFor(day) !== minutesFor(slotDays[0])));
   function setMinutes(day: number, value: number) {
     const minutes = Math.round(value);
     if (!Number.isFinite(minutes)) return;
     slotMinutes = { ...slotMinutes, [day]: Math.min(DAY_MINUTES.max, Math.max(DAY_MINUTES.min, minutes)) };
   }
-  function setStart(day: number, value: string) {
-    if (!/^\d{2}:\d{2}$/.test(value)) return;
-    slotStarts = { ...slotStarts, [day]: value };
-  }
   function applyToAll(day: number) {
-    const m = minutesFor(day), at = startFor(day);
+    const m = minutesFor(day);
     slotMinutes = Object.fromEntries(slotDays.map(d => [d, m]));
-    slotStarts = Object.fromEntries(slotDays.map(d => [d, at]));
   }
   function sentDurations() { return Object.fromEntries(slotDays.map(day => [String(day), minutesFor(day)])); }
-  function sentStarts() { return Object.fromEntries(slotDays.filter(day => startFor(day) !== slotTime).map(day => [String(day), startFor(day)])); }
+  /** No per-day starts: the rule's time is every day's time. */
+  function sentStarts(): Record<string, string> { return {}; }
   function hours(minutes: number) { return minutes % 60 === 0 ? `${minutes / 60} h` : minutes > 60 ? `${Math.floor(minutes / 60)} h ${minutes % 60} min` : `${minutes} min`; }
   function chip(minutes: number) { return minutes % 60 === 0 ? `${minutes / 60} h` : minutes > 60 ? `${Math.floor(minutes / 60)} h ${minutes % 60}` : `${minutes} min`; }
   function dayDurations(slot: { weekdays: number[]; durations: Record<string, number> }) {
@@ -78,7 +72,7 @@
   function flip(values: number[], day: number) { return values.includes(day) ? values.filter(d => d !== day) : [...values,day].sort(); }
   function edit(id?: number) {
     const slot = slots.find(s => s.id === id);
-    slotId = slot?.id ?? null; slotTime = slot ? time(slot.hour,slot.minute) : '07:30'; slotDays = slot ? [...slot.weekdays] : [1,2,3,4,5]; slotMinutes = slot ? Object.fromEntries(Object.entries(slot.durations).map(([d, m]) => [Number(d), m])) : {}; slotStarts = slot ? Object.fromEntries(Object.entries(slot.starts).map(([d, t]) => [Number(d), t])) : {}; editing = true; error = ''; message = '';
+    slotId = slot?.id ?? null; slotTime = slot ? time(slot.hour,slot.minute) : '07:30'; slotDays = slot ? [...slot.weekdays] : [1,2,3,4,5]; slotMinutes = slot ? Object.fromEntries(Object.entries(slot.durations).map(([d, m]) => [Number(d), m])) : {}; editing = true; error = ''; message = '';
   }
   async function saveSlot() {
     if (busy || !slotDays.length) return;
@@ -127,7 +121,6 @@
               {#each slotDays as day (day)}
                 <li>
                   <span class="mono day-name">{DAYS[day-1]}</span>
-                  <input class="day-start mono" type="time" value={startFor(day)} class:own={startFor(day) !== slotTime} aria-label={`Start time on ${WEEKDAY_NAMES[day-1]}`} oninput={(e) => setStart(day, e.currentTarget.value)} />
                   <input type="number" min={DAY_MINUTES.min} max={DAY_MINUTES.max} step="5" value={minutesFor(day)} aria-label={`Minutes on ${WEEKDAY_NAMES[day-1]}`} oninput={(e) => setMinutes(day, Number(e.currentTarget.value))} />
                   <span class="unit">min <em>{hours(minutesFor(day))}</em></span>
                   <span class="presets">{#each PRESETS as preset (preset)}<button type="button" class:on={minutesFor(day) === preset} onclick={() => setMinutes(day, preset)}>{chip(preset)}</button>{/each}</span>
@@ -173,7 +166,6 @@
   .day-minutes ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
   .day-minutes li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 7px 10px; border: 1px solid var(--node-border); border-radius: var(--radius-control); background: var(--bg); }
   .day-name { width: 34px; font-size: 10px; color: var(--violet-fg); } .day-minutes input { width: 72px; padding: 6px 8px; font-size: 12px; }
-  .day-minutes input.day-start { width: auto; padding: 5px 8px; font-size: 11px; color: var(--muted); } .day-minutes input.day-start.own { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--node-border)); }
   .slot-time small { display: block; font-size: 8px; letter-spacing: 0.8px; color: var(--muted); text-transform: uppercase; } .own-starts { display: block; margin-top: 4px; font-size: 10px; color: var(--accent); }
   .label small { margin-left: 8px; color: var(--faint); font-size: 10px; }
   .unit { font-size: 10px; color: var(--muted); } .unit em { font-style: normal; color: var(--fg); margin-left: 4px; }
