@@ -51,6 +51,13 @@
   let editingStage = $state<string | null>(null);
   /** Stage sections folded to their head. A jump into a folded stage unfolds it. */
   let folded = $state<Record<string, boolean>>({});
+  /** The course header folded to one line, so the topics are a shorter scroll away. */
+  let courseFolded = $state(false);
+  /** A rail issue on a header field unfolds the header before scrolling to the field. */
+  function jumpToField(at: string) {
+    courseFolded = false;
+    setTimeout(() => document.getElementById(`field-${at}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 40);
+  }
   let flashStage = $state<string | null>(null);
   const countIn = (stage: string) => draft.topics.filter((t) => t.curriculum.phase === stage).length;
   function jumpToStage(stage: string) {
@@ -171,7 +178,7 @@
       <span class="rail-label mono"><CircleAlert size={11} /> {issues.length} {issues.length === 1 ? 'THING' : 'THINGS'} TO FIX</span>
       <ul>
         {#each issues.slice(0, 24) as issue, i (i)}
-          <li><button type="button" onclick={() => (issue.at.startsWith('topics/') ? jump(issue.at) : document.getElementById(`field-${issue.at}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }))}><span class="mono">{issue.at.replace('topics/', '')}</span>{issue.message}</button></li>
+          <li><button type="button" onclick={() => (issue.at.startsWith('topics/') ? jump(issue.at) : jumpToField(issue.at))}><span class="mono">{issue.at.replace('topics/', '')}</span>{issue.message}</button></li>
         {/each}
         {#if issues.length > 24}<li class="more mono">and {issues.length - 24} more</li>{/if}
       </ul>
@@ -191,8 +198,14 @@
   </aside>
 
   <div class="sheet">
-    <section class="block" aria-label="The course">
-      <span class="eyebrow mono">THE COURSE</span>
+    <section class="block" class:folded={courseFolded} aria-label="The course">
+      <div class="stage-head">
+        <button type="button" class="fold" aria-expanded={!courseFolded} aria-controls="course-header-fields" onclick={() => (courseFolded = !courseFolded)}>
+          <span class="chevron" class:down={courseFolded} aria-hidden="true"><ChevronDown size={14} /></span>
+          <span class="eyebrow mono">THE COURSE{#if courseFolded}<small>{draft.label || 'unnamed'} · {draft.short_code || 'no code'} · {draft.source_hosts.length} {draft.source_hosts.length === 1 ? 'host' : 'hosts'}{#if headerIssues.length} · {headerIssues.length} to fix{/if}</small>{/if}</span>
+        </button>
+      </div>
+      <div id="course-header-fields" class="course-fields" hidden={courseFolded}>
       <div class="grid">
         <label class="field span-2" id="field-label"><span>Class name <small>as it reads in the list</small></span><input value={draft.label} oninput={(e) => { draft.label = e.currentTarget.value; onchange(); }} /></label>
         <label class="field" id="field-short_code"><span>Short code <small>1–4 letters</small></span><input class="mono" maxlength="4" value={draft.short_code} oninput={(e) => { draft.short_code = e.currentTarget.value.toUpperCase(); onchange(); }} /></label>
@@ -211,6 +224,7 @@
         </div>
       </div>
       {#if headerIssues.length}<ul class="issues">{#each headerIssues as issue (issue.at + issue.message)}<li><CircleAlert size={11} /> <span class="mono">{issue.at}</span> {issue.message}</li>{/each}</ul>{/if}
+      </div>
     </section>
 
     <section class="block" aria-label="Stages" id="field-entry_points">
@@ -223,9 +237,9 @@
               <span class="stage-mark" aria-hidden="true">
                 <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">{@html STAGE_MARKS[entry.id] ?? STAGE_MARKS.foundations}</svg>
               </span>
-              <span class="stage-no mono">{String(i + 1).padStart(2, '0')}</span>
-              <span class="stage-id mono">{entry.id}</span>
             </button>
+            <span class="stage-no mono">{String(i + 1).padStart(2, '0')}</span>
+            <span class="stage-id mono">{entry.id}</span>
             {#if editingStage === entry.id}
               <!-- svelte-ignore a11y_autofocus -->
               <textarea autofocus use:autosize={{ min: 2, max: 3, value: entry.label }} value={entry.label} oninput={(e) => { draft.entry_points[i].label = e.currentTarget.value; onchange(); }} onblur={() => (editingStage = null)} onkeydown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); editingStage = null; } }} placeholder={STAGE_HINTS[entry.id]}></textarea>
@@ -304,17 +318,18 @@
   .host-input { flex: 1; min-width: 160px; border: 0; background: transparent; padding: 4px 6px; }
   .issues { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 10px 12px; list-style: none; border-left: 2px solid var(--warn-fg); background: var(--surface); }
   .issues li { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--warn-fg); } .issues li .mono { color: var(--muted); }
-  /* Four square tiles, one a stage: its mark top left, its number top right, its id, and its name in the course's words. */
-  .stages { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+  /* Four tiles, one a stage: its mark, its number top right, its id, and its name in the course's words.
+     Square while the columns are narrow; once they widen the tile turns landscape, the mark beside the words. */
+  .stages { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; container: stages / inline-size; }
   /* The width is the column's; the square comes from the height following it, never the other way round. */
-  .stage-tile { position: relative; display: flex; flex-direction: column; gap: 4px; width: 100%; min-width: 0; aspect-ratio: 1 / 1; padding: 12px 12px 10px; border: 1px solid var(--node-border); border-radius: var(--radius-panel); background: linear-gradient(180deg, var(--surface), var(--bg)); overflow: hidden; transition: border-color 0.15s, box-shadow 0.15s; cursor: text; }
+  .stage-tile { position: relative; display: flex; flex-direction: column; gap: 4px; width: 100%; min-width: 0; aspect-ratio: 1 / 1; max-height: 200px; padding: 12px 12px 10px; border: 1px solid var(--node-border); border-radius: var(--radius-panel); background: linear-gradient(180deg, var(--surface), var(--bg)); overflow: hidden; transition: border-color 0.15s, box-shadow 0.15s; cursor: text; }
   .stage-tile:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--node-border)); }
   .stage-tile:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent); }
-  .stage-mark { display: grid; place-items: center; width: 38px; height: 38px; margin-bottom: 4px; border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--node-border)); border-radius: 10px; background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--accent); }
+  .stage-mark { display: grid; place-items: center; width: 38px; height: 38px; border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--node-border)); border-radius: 10px; background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--accent); }
   .stage-no { position: absolute; top: 12px; right: 12px; font-size: 9.5px; letter-spacing: 1px; color: var(--faint); }
   .stage-id { font-size: 9px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--faint); }
-  .stage-tile { container-type: inline-size; cursor: default; }
-  .stage-go { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+  .stage-tile { cursor: default; }
+  .stage-go { display: flex; align-items: flex-start; margin-bottom: 4px; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
   .stage-go:hover .stage-mark { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, transparent); }
   .stage-go:focus-visible { outline: none; } .stage-go:focus-visible .stage-mark { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
   /* The name: two lines at most, then an ellipsis; the full text is a click away. */
@@ -324,15 +339,24 @@
   .stage-tile textarea::placeholder { color: var(--faint); font-style: italic; }
   .stage-tile textarea:focus { border: 0; }
   .stage-foot { display: flex; align-items: center; justify-content: space-between; margin-top: auto; padding-top: 6px; font-size: 9px; letter-spacing: 0.6px; color: var(--faint); }
-  /* Narrow tiles take smaller type so the name still fits its two lines. */
-  @container (max-width: 200px) { .stage-label, .stage-tile textarea { font-size: 12px; } .stage-mark { width: 32px; height: 32px; } }
-  @container (max-width: 160px) { .stage-label, .stage-tile textarea { font-size: 11px; } .stage-id { font-size: 8px; } .stage-mark { width: 28px; height: 28px; } .stage-mark svg { width: 18px; height: 18px; } }
+  /* Four columns and three gaps: a row of 830px gives 200px tiles, 670px gives 160px, 1150px gives 280px. */
+  @container stages (max-width: 830px) { .stage-label, .stage-tile textarea { font-size: 12px; } .stage-mark { width: 32px; height: 32px; } }
+  @container stages (max-width: 670px) { .stage-label, .stage-tile textarea { font-size: 11px; } .stage-id { font-size: 8px; } .stage-mark { width: 28px; height: 28px; } .stage-mark svg { width: 18px; height: 18px; } }
+  /* Room to spare: the tile drops from a square to four by three, then to landscape with the mark beside the words. */
+  @container stages (min-width: 710px) { .stage-tile { aspect-ratio: 4 / 3; } }
+  @container stages (min-width: 1150px) {
+    .stage-tile { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: 'mark id' 'mark name' 'mark foot'; grid-template-rows: auto minmax(0, 1fr) auto; column-gap: 14px; row-gap: 2px; aspect-ratio: auto; min-height: 118px; max-height: none; padding: 14px 16px 12px; }
+    .stage-go { grid-area: mark; margin: 0; } .stage-mark { width: 44px; height: 44px; }
+    .stage-id { grid-area: id; padding-right: 32px; } .stage-label, .stage-tile textarea { grid-area: name; margin-top: 0; } .stage-foot { grid-area: foot; margin-top: 6px; }
+  }
   .stage-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
   .fold { display: inline-flex; align-items: center; gap: 8px; min-width: 0; padding: 4px 6px 4px 2px; border: 0; border-radius: var(--radius-detail); background: transparent; color: inherit; text-align: left; cursor: pointer; }
   .fold:hover { background: var(--surface); }
   .chevron { display: inline-grid; place-items: center; color: var(--muted); transition: transform 0.18s ease; } .stage.folded .chevron { transform: rotate(-90deg); }
   .fold small { margin-left: 8px; color: var(--faint); letter-spacing: 0.4px; text-transform: none; }
-  .stage.folded { gap: 0; }
+  .stage.folded, .block.folded { gap: 0; }
+  .course-fields { display: flex; flex-direction: column; gap: 12px; } .course-fields[hidden] { display: none; }
+  .chevron.down { transform: rotate(-90deg); }
   .stage.flash { animation: stage-flash 0.8s ease-in-out 2; }
   @keyframes stage-flash { 50% { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 28%, transparent); } }
   .topics { display: flex; flex-direction: column; gap: 8px; border-radius: var(--radius-control); transition: box-shadow 0.15s; }
