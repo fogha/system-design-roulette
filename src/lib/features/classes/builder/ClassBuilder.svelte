@@ -98,8 +98,22 @@
     try {
       const loaded = await api.getCustomCourse(courseId);
       adopt(loaded);
-      step = untrack(() => (loaded.working === 'draft' ? 'draft' : loaded.working ? 'verify' : drafted ? 'review' : 'draft'));
+      step = untrack(() => activeStep(loaded));
     } catch (cause) { error = String(cause); }
+  }
+  /**
+   * The step a class opens on: the first one that still has work in it,
+   * not the last one finished. A draft with editor issues opens on Review;
+   * a clean draft with checks to pass opens on Verify; a class that passes
+   * every check opens on Enroll.
+   */
+  function activeStep(loaded: CustomCourseView): StepKey {
+    if (loaded.working === 'draft') return 'draft';
+    const hasDraft = loaded.draft.topics.length > 1 || loaded.draft.topics[0]?.slug !== 'first-topic' || !!loaded.draft.summary;
+    if (!hasDraft) return 'draft';
+    if (loaded.issues.length) return 'review';
+    if (loaded.checks.blockers.length) return 'verify';
+    return 'enroll';
   }
   function adopt(next: CustomCourseView) {
     view = next;
