@@ -309,7 +309,8 @@
   .review-notes ul { margin: 0; padding-left: 18px; } .review-notes li { margin: 4px 0; line-height: 1.55; font-size: 12px; }
   .quality { display: flex; align-items: center; gap: 5px; color: var(--faint); font-size: 8px; }
   .chat-button { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-family: var(--font-mono); white-space: nowrap; }
-  .reading-pane { width: min(100%, 920px); margin: 0 auto; padding: 28px clamp(24px, 5vw, 72px) 64px; min-width: 0; }
+  /* The reading measure: wide enough to use a large window without the lines running long, centred in what the rail leaves. */
+  .reading-pane { width: min(100%, 1080px); margin: 0 auto; padding: 28px clamp(24px, 4vw, 56px) 64px; min-width: 0; }
   /* The section map keeps the reader company: a rail beside the reading on a
      wide window, a sticky strip above it on a narrow one (see LessonMap). */
   .reading-grid { display: grid; grid-template-columns: minmax(0, 1fr); }
@@ -317,7 +318,7 @@
   @media (min-width: 1180px) {
     .reading-grid.with-rail { grid-template-columns: 236px minmax(0, 1fr); gap: 8px; padding-left: 20px; }
     .reading-grid.with-rail .map-rail { display: block; position: sticky; top: 14px; align-self: start; max-height: calc(100vh - 210px); overflow-y: auto; padding-top: 28px; scrollbar-width: thin; }
-    .reading-grid.with-rail .reading-pane { margin: 0; }
+    .reading-grid.with-rail .reading-pane { margin: 0 auto; }
   }
   .exercise-end { margin-top: 40px; border-top: 1px solid var(--node-border); }
   .practice-pane { margin-top: 12px; border-top: 1px solid var(--node-border); border-radius: var(--radius-panel); padding: 24px; background: var(--surface); font-size: 15px; }
