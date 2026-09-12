@@ -147,11 +147,11 @@ export function mergeReviews(previous: ReviewFinding[], fresh: ReviewFinding[]):
   const used = previous.map(() => false);
   const merged = fresh.map((f) => {
     const next: ReviewFinding = { ...f, status: 'open', note: '', carried: false };
-    const at = previous.findIndex((old, i) => !used[i] && old.status !== 'open' && same(old, next));
+    const at = previous.findIndex((old, i) => !used[i] && same(old, next));
     if (at >= 0) { used[at] = true; next.status = previous[at].status; next.note = previous[at].note; }
     return next;
   });
-  previous.forEach((old, i) => { if (!used[i] && old.status !== 'open') merged.push({ ...old, carried: true }); });
+  previous.forEach((old, i) => { if (!used[i]) merged.push({ ...old, carried: true }); });
   return merged;
 }
 

@@ -173,9 +173,10 @@ fn reading_again_keeps_what_was_settled() {
             ("clap", "fixed", false),
             ("", "dismissed", false),
             ("testing", "open", false),
+            ("io", "open", true),
             ("errors", "fixed", true),
         ],
-        "repeated objections keep their settlement, settled ones not raised again are carried, open ones not raised again go"
+        "repeated objections keep their settlement; earlier ones not raised again are carried, open ones still open"
     );
     assert_eq!(merged[1].note, "electives come later");
     // Different topics never match, however alike the words.

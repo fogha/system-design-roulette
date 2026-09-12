@@ -165,6 +165,8 @@ fn draft_prompt(brief: &CourseBrief) -> String {
          - The outcome names something the learner will have made, not a feeling.\n\
          - Write for the learner's background: if they know nothing, foundations starts \
          from nothing.\n\n\
+         A reviewer reads the draft against this bar afterwards; write it so there is \
+         nothing to raise:\n{bar}\n\n\
          Return ONLY one JSON object with exactly this shape, no markdown fences, no \
          commentary:\n{schema}",
         outcome = brief.outcome.trim(),
@@ -176,20 +178,31 @@ fn draft_prompt(brief: &CourseBrief) -> String {
         },
         min = MIN_TOPICS.max(12),
         max = MAX_TOPICS.min(36),
+        bar = CURRICULUM_BAR,
         schema = draft_schema(),
     )
 }
 
-/// What the learner already settled, for the review prompt: a dismissed
-/// finding is not raised again; a fixed one only if the fix did not take.
-fn settled_text(settled: &[ReviewFinding]) -> String {
-    let lines: Vec<String> = settled
+/// The bar a curriculum is held to. The draft is written against it, the
+/// read reports against it, and a fix must not fall below it, so the
+/// three calls agree on what a problem is and the list of findings closes
+/// instead of growing with every read.
+const CURRICULUM_BAR: &str = "WHAT COUNTS AS A PROBLEM, BY WEIGHT:\n\
+- high: the outcome cannot be reached, or a lesson cannot be taught as written. A topic the outcome needs is missing; a prerequisite is missing, points at a later stage, or is wrong; a topic is really two, or too broad for one session; a stage jumps past what the earlier stage taught; a primary source does not support the topic it is attached to; a learner outcome that cannot be observed.\n\
+- medium: a lesson would be noticeably worse. A mechanism named but never taught anywhere; an artifact that cannot be produced in the working environment; evidence that does not show the outcome; a misconception that is not one.\n\
+- low: a small change that clearly helps the learner. Not style, not taste.\n\
+NOT A PROBLEM: an ordering that is equally valid; an addition that would make the course longer than the outcome needs; wording you would phrase differently; the names of the stages; a source you would have chosen instead of one that also supports the topic; a topic you consider optional when the learner did not ask for it.";
+
+/// The earlier reads, for a confirmation read: what was raised, and what
+/// the learner did about each.
+fn earlier_text(earlier: &[ReviewFinding]) -> String {
+    earlier
         .iter()
-        .filter(|f| f.status != "open")
-        .take(24)
+        .take(60)
         .map(|f| {
             format!(
-                "- [{}{}] {}",
+                "- [{}, {}{}] {}",
+                f.severity,
                 f.status,
                 if f.topic.is_empty() {
                     String::new()
@@ -199,15 +212,8 @@ fn settled_text(settled: &[ReviewFinding]) -> String {
                 f.message.trim()
             )
         })
-        .collect();
-    if lines.is_empty() {
-        return String::new();
-    }
-    format!(
-        "\n\nALREADY SETTLED by the learner in an earlier read. Do not raise a dismissed one \
-         again; raise a fixed one only if the draft still shows the problem:\n{}",
-        lines.join("\n")
-    )
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn issues_text(issues: &[DraftIssue]) -> String {
@@ -325,13 +331,18 @@ impl Generator {
     }
 
     /// Ask the tutor to read the draft back and say what is wrong with it.
-    /// `settled` are the findings the learner already fixed or dismissed;
-    /// the tutor is told not to raise them again.
+    ///
+    /// The first read is the full one: every problem against the bar, in
+    /// one pass, with no cap, so the list is complete the first time. A
+    /// later read is given the earlier findings with what the learner did
+    /// about each, and confirms: it raises only what the changes broke, or
+    /// a high-weight problem missed before. Without that, a demanding
+    /// reader finds a fresh batch on every read and the list never closes.
     pub async fn review_custom_course(
         &self,
         brief: &CourseBrief,
         draft: &CourseDraft,
-        settled: &[ReviewFinding],
+        earlier: &[ReviewFinding],
     ) -> Result<(Vec<ReviewFinding>, String)> {
         let scoped = self.scoped("course-review");
         let agent = if brief.agent.is_empty() {
@@ -353,31 +364,50 @@ impl Generator {
             "class builder: asking {agent} ({model}) to review \"{}\"",
             draft.label
         ));
-        let prompt = format!(
-            "Review this self-study curriculum as a demanding course designer. The learner \
-             wants to be able to: {outcome}. They already know: {background}.\n\n\
-             Look for: a topic whose learner outcome is not observable; a prerequisite that \
-             should exist and does not, or one that is wrong; two topics that are really \
-             one; a topic too broad for one session; a stage that jumps; a primary source \
-             that does not support the topic it is attached to; a missing topic without \
-             which the outcome cannot be reached; ordering that teaches a mechanism before \
-             its foundation. Do not restate the course. Be specific and brief.\n\n\
-             Return ONLY a JSON object: {{\"findings\": [{{\"severity\": \"high|medium|low\", \
-             \"topic\": \"slug of the topic concerned, or empty for the course as a whole\", \
-             \"message\": \"what is wrong, one or two sentences\", \"fix\": \"the concrete \
-             change you propose, or empty\"}}]}}. An empty list means the draft is sound. \
-             At most twelve findings, highest severity first.{settled}\n\n\
-             DRAFT:\n{draft}",
-            outcome = brief.outcome.trim(),
-            background = if brief.background.trim().is_empty() {
-                "not stated"
-            } else {
-                brief.background.trim()
-            },
-            settled = settled_text(settled),
-            draft = serde_json::to_string(draft)
-                .map_err(|error| GenError::Parse(format!("could not serialize draft: {error}")))?
-        );
+        let shape = "Return ONLY a JSON object: {\"findings\": [{\"severity\": \"high|medium|low\", \
+                     \"topic\": \"slug of the topic concerned, or empty for the course as a whole\", \
+                     \"message\": \"what is wrong, one or two sentences, specific\", \"fix\": \"the \
+                     concrete change you propose, or empty\"}]}. Highest weight first. A sound \
+                     draft returns an empty list; do not fill the list.";
+        let background = if brief.background.trim().is_empty() {
+            "not stated"
+        } else {
+            brief.background.trim()
+        };
+        let draft_json = serde_json::to_string(draft)
+            .map_err(|error| GenError::Parse(format!("could not serialize draft: {error}")))?;
+        let prompt = if earlier.is_empty() {
+            format!(
+                "Read this self-study curriculum once, completely, as its editor. The learner \
+                 wants to be able to: {outcome}. They already know: {background}.\n\n\
+                 This is the one full read. List every problem you can find now, in one pass, \
+                 as many as there are: later reads only confirm the changes and will not take \
+                 a second batch. Do not restate the course.\n\n{bar}\n\n{shape}\n\n\
+                 DRAFT:\n{draft_json}",
+                outcome = brief.outcome.trim(),
+                bar = CURRICULUM_BAR,
+            )
+        } else {
+            format!(
+                "You read this self-study curriculum before and raised the findings below; \
+                 the learner then settled them and the draft changed. The learner wants to be \
+                 able to: {outcome}. They already know: {background}.\n\n\
+                 Read it again to CONFIRM, not to start over. Raise a finding only if:\n\
+                 (a) a change broke something: a prerequisite now missing or pointing at a \
+                 later stage, a source now off its topic, a stage now jumping, a topic now \
+                 named nowhere; or\n\
+                 (b) a HIGH-weight problem that was there before and you did not raise.\n\
+                 Do not raise medium or low problems that were already present in the \
+                 earlier read: that read is settled and the list has to close, not grow. Do \
+                 not raise a dismissed finding again; raise a fixed one only if the draft \
+                 still shows the problem. Do not restate the course.\n\n{bar}\n\n\
+                 EARLIER FINDINGS (weight, what the learner did, topic):\n{earlier}\n\n{shape}\n\n\
+                 DRAFT:\n{draft_json}",
+                outcome = brief.outcome.trim(),
+                bar = CURRICULUM_BAR,
+                earlier = earlier_text(earlier),
+            )
+        };
         let (review, source) = with_heartbeat(
             &scoped.feed,
             "reviewing",
@@ -408,7 +438,7 @@ impl Generator {
                 }
                 finding
             })
-            .take(12)
+            .take(60)
             .collect();
         let rank = |severity: &str| match severity {
             "high" => 0,
@@ -579,7 +609,11 @@ fn fix_prompt(brief: &CourseBrief, draft: &CourseDraft, finding: &ReviewFinding)
          topic keeps the shape of the ones in the draft: a learner outcome of at least eight \
          words, at least two named mechanisms, a production scenario, at least one \
          misconception, evidence, an artifact, and at least two primary-source URLs on the \
-         course's hosts ({hosts}).\n{schema}\n\nDRAFT:\n{draft}",
+         course's hosts ({hosts}). Make the smallest change that settles the finding, and do \
+         not open another: a topic you add or move keeps every prerequisite pointing at a \
+         topic that exists in the same or an earlier stage, every source on its topic, and \
+         every topic one session's worth. A reader confirms the change afterwards against \
+         this bar:\n{bar}\n{schema}\n\nDRAFT:\n{draft}",
         outcome = brief.outcome.trim(),
         severity = finding.severity,
         topic = if finding.topic.is_empty() {
@@ -594,6 +628,7 @@ fn fix_prompt(brief: &CourseBrief, draft: &CourseDraft, finding: &ReviewFinding)
             finding.fix.trim()
         },
         hosts = draft.source_hosts.join(", "),
+        bar = CURRICULUM_BAR,
         schema = patch_schema(),
         draft = serde_json::to_string(draft).unwrap_or_default(),
     )
@@ -1199,6 +1234,27 @@ mod tests {
         );
         assert!(prompt.contains("FINDING (high, topic b): b is two topics"));
         assert!(prompt.contains("\"remove\""));
+        assert!(prompt.contains("WHAT COUNTS AS A PROBLEM"));
+    }
+
+    #[test]
+    fn the_first_read_is_full_and_later_reads_only_confirm() {
+        let earlier = vec![ReviewFinding {
+            severity: "medium".into(),
+            topic: "b".into(),
+            message: "b is two topics".into(),
+            fix: String::new(),
+            status: "dismissed".into(),
+            note: "no".into(),
+            carried: false,
+        }];
+        let text = earlier_text(&earlier);
+        assert_eq!(text, "- [medium, dismissed, b] b is two topics");
+        assert!(CURRICULUM_BAR.contains("- high:") && CURRICULUM_BAR.contains("NOT A PROBLEM"));
+        let brief = CourseBrief::default();
+        let prompt = draft_prompt(&brief);
+        assert!(prompt.contains("WHAT COUNTS AS A PROBLEM"));
+        assert!(!prompt.contains('\u{2014}'));
     }
 
     #[test]

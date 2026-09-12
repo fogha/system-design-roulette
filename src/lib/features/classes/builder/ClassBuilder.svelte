@@ -398,7 +398,7 @@
             <button type="button" class="gate-fold" aria-expanded={!isFolded('review', reviewDone)} aria-label="Fold the review" onclick={() => toggleGate('review', reviewDone)}><ChevronDown size={14} /></button>
             <span class="gate-no mono" aria-hidden="true">{#if reviewDone}<Check size={13} strokeWidth={2.6} />{:else}01{/if}</span>
             <span class="check-tile"><Bot size={16} /></span>
-            <div><strong>The tutor reads it back</strong><small>Looks for outcomes that cannot be observed, missing or wrong prerequisites, topics that are one, stages that jump, sources that do not support their topic. Every finding is then fixed by the tutor, fixed by you, or dismissed with a reason.</small></div>
+            <div><strong>The tutor reads it back</strong><small>One full read against a fixed bar: outcomes that cannot be observed, missing or wrong prerequisites, topics that are one, stages that jump, sources that do not support their topic. Every finding is then fixed by the tutor, fixed by you, or dismissed with a reason. A later read only confirms the changes; it does not bring a new batch.</small></div>
             <span class="gate-keys">
               {#if checks.open_findings > 0}<button type="button" class="ghost mono-ghost" onclick={fixAll} disabled={!!busy}><Wand2 size={12} />{busy === 'fix' ? `Fixing… ${checks.open_findings} left` : `Fix all ${checks.open_findings}`}</button>{/if}
               <button type="button" class="ghost mono-ghost" onclick={review} disabled={!!busy}>{busy === 'review' ? 'Reading…' : checks.reviewed ? 'Read it again' : 'Read it back'}</button>
@@ -406,7 +406,7 @@
           </div>
           <p class="gate-state mono">
             {#if !checks.reviewed}not read yet · required{:else if !view.review.length}read back with nothing to raise{:else}{view.review.length} finding{view.review.length === 1 ? '' : 's'} · {checks.open_findings ? `${checks.open_findings} open` : 'all settled'}{/if}
-            {#if checks.reviewed && !checks.review_current} · reviewed before your last edits; read it again if they were large{/if}
+            {#if checks.reviewed && !checks.review_current} · read before your last edits; another read is optional and only confirms them{/if}
           </p>
           {#if busy === 'review' || busy === 'fix'}{@render liveFeed(DOING[busy])}{/if}
           {#if view.review.length && !isFolded('review', reviewDone)}

@@ -120,15 +120,10 @@ pub async fn review_custom_course(
     jobs: State<'_, BuilderJobs>,
     id: String,
 ) -> CmdResult<CustomCourseView> {
-    let (brief, draft, settled) = {
+    let (brief, draft, earlier) = {
         let conn = state.db.0.lock().unwrap();
         let view = custom::get(&conn, &id).map_err(err)?;
-        let settled: Vec<_> = view
-            .review
-            .into_iter()
-            .filter(|f| f.status != "open")
-            .collect();
-        (view.brief, view.draft, settled)
+        (view.brief, view.draft, view.review)
     };
     if jobs.working(&id).is_some() {
         return Err("the tutor is already working on this class".into());
@@ -137,7 +132,7 @@ pub async fn review_custom_course(
     let _run = state.generator.feed.begin(&format!("review:{id}"), &id);
     let reviewed = state
         .generator
-        .review_custom_course(&brief, &draft, &settled)
+        .review_custom_course(&brief, &draft, &earlier)
         .await
         .map_err(|error| format!("the tutor could not review the course: {error}"))
         .inspect_err(|error| {

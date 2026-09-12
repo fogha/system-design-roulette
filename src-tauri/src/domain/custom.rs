@@ -158,11 +158,12 @@ fn same_finding(a: &ReviewFinding, b: &ReviewFinding) -> bool {
     all > 0 && shared * 2 >= all
 }
 
-/// A fresh read against what was already settled. A fresh finding that
-/// repeats a settled one keeps its settlement, so a dismissal or a fix is
-/// not undone by reading again; settled findings the tutor no longer
-/// raises are carried at the end as decided history; open ones it no
-/// longer raises are dropped.
+/// A fresh read against the earlier ones. A fresh finding that repeats a
+/// settled one keeps its settlement, so a dismissal or a fix is not undone
+/// by reading again. Earlier findings the tutor does not raise again are
+/// carried at the end, marked as such: settled ones as decided history,
+/// open ones because a later read only confirms and is told not to repeat
+/// them, so they stay the learner's to settle.
 pub fn merge_reviews(previous: &[ReviewFinding], fresh: Vec<ReviewFinding>) -> Vec<ReviewFinding> {
     let mut used = vec![false; previous.len()];
     let mut merged: Vec<ReviewFinding> = fresh
@@ -174,7 +175,7 @@ pub fn merge_reviews(previous: &[ReviewFinding], fresh: Vec<ReviewFinding>) -> V
             if let Some(index) = previous
                 .iter()
                 .enumerate()
-                .find(|(i, old)| !used[*i] && old.status != "open" && same_finding(old, &finding))
+                .find(|(i, old)| !used[*i] && same_finding(old, &finding))
                 .map(|(i, _)| i)
             {
                 used[index] = true;
@@ -185,7 +186,7 @@ pub fn merge_reviews(previous: &[ReviewFinding], fresh: Vec<ReviewFinding>) -> V
         })
         .collect();
     for (index, old) in previous.iter().enumerate() {
-        if !used[index] && old.status != "open" {
+        if !used[index] {
             let mut kept = old.clone();
             kept.carried = true;
             merged.push(kept);
