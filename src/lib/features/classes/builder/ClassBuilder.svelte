@@ -601,7 +601,8 @@
   .gate-fold:hover { background: var(--node-bg); color: var(--fg); } .gate.folded .gate-fold { transform: rotate(-90deg); }
   .gate.folded .gate-head small { display: none; }
   .gate.folded > :not(.gate-head):not(.gate-state):not(.feed-wrap) { display: none; }
-  .gate-head { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; } .gate-head > div { flex: 1; min-width: 200px; } .gate-head strong { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; } .gate-head strong em { font-style: normal; font-size: 8.5px; letter-spacing: 1px; text-transform: uppercase; color: var(--faint); } .gate-head small { display: block; margin-top: 4px; font-size: 11px; line-height: 1.5; color: var(--muted); max-width: 72ch; }
+  /* The words keep their width; when the keys do not fit beside them they drop to a row of their own, right-aligned. */
+  .gate-head { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; } .gate-head > div { flex: 1 1 380px; min-width: 0; } .gate-head strong { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; } .gate-head strong em { font-style: normal; font-size: 8.5px; letter-spacing: 1px; text-transform: uppercase; color: var(--faint); } .gate-head small { display: block; margin-top: 4px; font-size: 11px; line-height: 1.5; color: var(--muted); max-width: 72ch; }
   .gate-no { flex: none; display: grid; place-items: center; width: 26px; height: 26px; margin-top: 5px; border: 1px solid var(--node-border); border-radius: 8px; background: var(--node-bg); color: var(--faint); font-size: 9.5px; letter-spacing: 0.5px; }
   .gate.current .gate-no { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent); }
   .gate.done .gate-no { border-color: color-mix(in srgb, var(--led-ok) 55%, var(--node-border)); background: var(--ok-bg); color: var(--ok-fg); }
@@ -615,7 +616,8 @@
   .sev-col { flex: none; display: flex; flex-direction: column; gap: 5px; width: 74px; padding-top: 3px; }
   .sev { font-size: 9px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); }
   .pill { align-self: flex-start; padding: 1px 6px; border-radius: 999px; font-size: 8.5px; letter-spacing: 0.6px; text-transform: uppercase; } .pill.open { background: var(--warn-bg); color: var(--warn-fg); } .pill.fixed { background: var(--ok-bg); color: var(--ok-fg); } .pill.dismissed { background: var(--surface-2); color: var(--faint); } .pill.earlier { background: transparent; border: 1px dashed var(--node-border); color: var(--faint); white-space: nowrap; }
-  .gate-keys { display: inline-flex; flex-wrap: wrap; gap: 8px; }
+  .gate-keys { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-left: auto; }
+  .gate-head > .ghost:last-child { margin-left: auto; }
   .finding-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; } .finding-body p { margin: 0; font-size: 12px; line-height: 1.5; } .fix { color: var(--muted); font-size: 11.5px !important; } .fix b { color: var(--fg); font-weight: 500; }
   .note { font-size: 10px !important; letter-spacing: 0.3px; color: var(--ok-fg); } .findings li.settled .note { color: var(--muted); }
   .finding-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-top: 4px; }
