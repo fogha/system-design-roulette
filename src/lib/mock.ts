@@ -816,6 +816,7 @@ export const mockApi = {
   writeCustomCourseBank: previewCustom.writeBank,
   voidCustomQuestion: previewCustom.voidQuestion,
   fixCustomCourseFinding: previewCustom.fixFinding,
+  fixAllCustomCourseFindings: previewCustom.fixAll,
   resolveCustomCourseFinding: previewCustom.resolveFinding,
   acceptCustomCourseSource: previewCustom.acceptSource,
   markCustomCourseRead: previewCustom.markRead,

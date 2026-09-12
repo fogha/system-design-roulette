@@ -70,7 +70,7 @@ async fn the_tutor_drafts_reviews_and_writes_questions_for_a_brief() {
     eprintln!("validator: {:?}", custom::validate(&draft).len());
 
     let (findings, _) = generator
-        .review_custom_course(&brief, &draft)
+        .review_custom_course(&brief, &draft, &[])
         .await
         .expect("a review");
     eprintln!("review: {} finding(s)", findings.len());

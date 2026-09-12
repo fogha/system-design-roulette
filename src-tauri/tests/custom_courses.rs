@@ -111,6 +111,93 @@ fn checked(conn: &Connection, id: &str) -> custom::CustomCourseView {
 }
 
 #[test]
+fn reading_again_keeps_what_was_settled() {
+    let finding = |topic: &str, message: &str, status: &str, note: &str| custom::ReviewFinding {
+        severity: "medium".into(),
+        topic: topic.into(),
+        message: message.into(),
+        fix: String::new(),
+        status: status.into(),
+        note: note.into(),
+        carried: false,
+    };
+    let previous = vec![
+        finding(
+            "clap",
+            "The clap topic is too broad for one session and should be split",
+            "fixed",
+            "by the tutor: split it",
+        ),
+        finding(
+            "",
+            "The capstone stage has no elective for a learner who finishes early",
+            "dismissed",
+            "electives come later",
+        ),
+        finding(
+            "io",
+            "The io topic lacks a source on buffered reads",
+            "open",
+            "",
+        ),
+        finding(
+            "errors",
+            "Errors is taught before ownership is settled",
+            "fixed",
+            "by hand",
+        ),
+    ];
+    let fresh = vec![
+        finding(
+            "clap",
+            "The clap topic is too broad for a single session; split it",
+            "open",
+            "",
+        ),
+        finding(
+            "",
+            "The capstone stage still has no elective for someone who finishes early",
+            "open",
+            "",
+        ),
+        finding("testing", "Testing has no prerequisite on clap", "open", ""),
+    ];
+    let merged = custom::merge_reviews(&previous, fresh);
+    let brief: Vec<(&str, &str, bool)> = merged
+        .iter()
+        .map(|f| (f.topic.as_str(), f.status.as_str(), f.carried))
+        .collect();
+    assert_eq!(
+        brief,
+        vec![
+            ("clap", "fixed", false),
+            ("", "dismissed", false),
+            ("testing", "open", false),
+            ("errors", "fixed", true),
+        ],
+        "repeated objections keep their settlement, settled ones not raised again are carried, open ones not raised again go"
+    );
+    assert_eq!(merged[1].note, "electives come later");
+    // Different topics never match, however alike the words.
+    let other = custom::merge_reviews(
+        &[finding(
+            "io",
+            "The topic is too broad for one session",
+            "dismissed",
+            "no",
+        )],
+        vec![finding(
+            "clap",
+            "The topic is too broad for one session",
+            "open",
+            "",
+        )],
+    );
+    assert_eq!(other[0].status, "open");
+    assert!(other[1].carried);
+}
+
+#[test]
 fn publishing_needs_the_review_settled_the_sources_fetched_and_the_read_through_confirmed() {
     let (_file, conn) = fixture();
     let created = custom::create(&conn, &brief_titled("Rust checks"), "manual").unwrap();
@@ -137,6 +224,7 @@ fn publishing_needs_the_review_settled_the_sources_fetched_and_the_read_through_
         fix: "split it".into(),
         status: "fixed".into(),
         note: "stale".into(),
+        carried: false,
     };
     let view = custom::save_review(&conn, &created.id, &[finding.clone(), finding]).unwrap();
     assert!(view.checks.reviewed && view.checks.review_current);

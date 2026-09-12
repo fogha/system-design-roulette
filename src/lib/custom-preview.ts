@@ -133,6 +133,28 @@ export function cannedDraft(id: string, brief: CourseBrief): CourseDraft {
 interface Stored extends CustomCourseView { reviewed: boolean; fetched: boolean; marks: { review_hash: string; read_hash: string } }
 const stored = new Map<string, Stored>();
 
+/** Mirror of `domain::custom::merge_reviews`: a fresh read keeps what was settled. */
+export function mergeReviews(previous: ReviewFinding[], fresh: ReviewFinding[]): ReviewFinding[] {
+  const wordsOf = (m: string) => new Set(m.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((w) => w.length >= 3));
+  const same = (a: ReviewFinding, b: ReviewFinding) => {
+    if (a.topic !== b.topic) return false;
+    if (a.message.trim().toLowerCase() === b.message.trim().toLowerCase()) return true;
+    const x = wordsOf(a.message), y = wordsOf(b.message);
+    const shared = [...x].filter((w) => y.has(w)).length;
+    const all = new Set([...x, ...y]).size;
+    return all > 0 && shared * 2 >= all;
+  };
+  const used = previous.map(() => false);
+  const merged = fresh.map((f) => {
+    const next: ReviewFinding = { ...f, status: 'open', note: '', carried: false };
+    const at = previous.findIndex((old, i) => !used[i] && old.status !== 'open' && same(old, next));
+    if (at >= 0) { used[at] = true; next.status = previous[at].status; next.note = previous[at].note; }
+    return next;
+  });
+  previous.forEach((old, i) => { if (!used[i] && old.status !== 'open') merged.push({ ...old, carried: true }); });
+  return merged;
+}
+
 /** The stored draft, hashed the cheap way; only equality matters here. */
 function draftHash(draft: CourseDraft): string {
   const text = JSON.stringify(draft);
@@ -209,7 +231,14 @@ export const previewCustom = {
       { severity: 'medium', topic: first, message: 'The first topic assumes a toolchain is installed; a learner starting from nothing has no step for that.', fix: 'Add an installation-and-first-run step before it, or fold one into its lesson outcome.', status: 'open', note: '' },
       { severity: 'low', topic: '', message: 'The capstone stage has no elective; a learner who finishes early has nowhere to go.', fix: 'Add one elective topic that extends the capstone.', status: 'open', note: '' },
     ];
-    item.review = findings; item.marks.review_hash = draftHash(item.draft); item.reviewed = true; item.updated_at = now(); return view(id);
+    item.review = mergeReviews(item.review, findings); item.marks.review_hash = draftHash(item.draft); item.reviewed = true; item.updated_at = now(); return view(id);
+  },
+  fixAll: async (id: string) => {
+    const item = stored.get(id); if (!item) throw new Error('this class does not exist');
+    const open = item.review.map((f, i) => (f.status === 'open' ? i : -1)).filter((i) => i >= 0);
+    if (!open.length) throw new Error('every finding is already settled');
+    for (const index of open) await previewCustom.fixFinding(id, index);
+    return view(id);
   },
   fixFinding: async (id: string, index: number) => {
     const item = stored.get(id); if (!item) throw new Error('this class does not exist');

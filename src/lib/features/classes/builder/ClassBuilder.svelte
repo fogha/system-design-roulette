@@ -201,6 +201,8 @@
   const writeBank = () => tutorCall('bank', (id) => api.writeCustomCourseBank(id));
   /** The tutor makes the change a finding asks for; the draft in the editor follows. */
   function fixWithTutor(index: number) { fixing = index; return tutorCall('fix', (id) => api.fixCustomCourseFinding(id, index)); }
+  /** Every open finding in turn, each change saved before the next. */
+  const fixAll = () => tutorCall('fix', (id) => api.fixAllCustomCourseFindings(id));
   /** A quick change of the class's record, without the tutor. */
   async function quick(call: (id: string) => Promise<CustomCourseView>) {
     if (!view || busy) return;
@@ -367,7 +369,10 @@
             <span class="gate-no mono" aria-hidden="true">{#if reviewDone}<Check size={13} strokeWidth={2.6} />{:else}01{/if}</span>
             <span class="check-tile"><Bot size={16} /></span>
             <div><strong>The tutor reads it back</strong><small>Looks for outcomes that cannot be observed, missing or wrong prerequisites, topics that are one, stages that jump, sources that do not support their topic. Every finding is then fixed by the tutor, fixed by you, or dismissed with a reason.</small></div>
-            <button type="button" class="ghost mono-ghost" onclick={review} disabled={!!busy}>{busy === 'review' ? 'Reading…' : checks.reviewed ? 'Read it again' : 'Read it back'}</button>
+            <span class="gate-keys">
+              {#if checks.open_findings > 0}<button type="button" class="ghost mono-ghost" onclick={fixAll} disabled={!!busy}><Wand2 size={12} />{busy === 'fix' && fixing === null ? 'Fixing…' : `Fix all ${checks.open_findings}`}</button>{/if}
+              <button type="button" class="ghost mono-ghost" onclick={review} disabled={!!busy}>{busy === 'review' ? 'Reading…' : checks.reviewed ? 'Read it again' : 'Read it back'}</button>
+            </span>
           </div>
           <p class="gate-state mono">
             {#if !checks.reviewed}not read yet · required{:else if !view.review.length}read back with nothing to raise{:else}{view.review.length} finding{view.review.length === 1 ? '' : 's'} · {checks.open_findings ? `${checks.open_findings} open` : 'all settled'}{/if}
@@ -378,7 +383,7 @@
             <ol class="findings">
               {#each view.review as finding, i (i)}
                 <li class={finding.severity} class:settled={finding.status !== 'open'}>
-                  <span class="sev-col"><span class="sev mono">{finding.severity}</span><span class="pill mono {finding.status}">{finding.status}</span></span>
+                  <span class="sev-col"><span class="sev mono">{finding.severity}</span><span class="pill mono {finding.status}">{finding.status}</span>{#if finding.carried}<span class="pill mono earlier" title="Settled in an earlier read; the tutor did not raise it again">earlier read</span>{/if}</span>
                   <div class="finding-body">
                     <p>{finding.message}</p>
                     {#if finding.fix}<p class="fix"><b>Proposed:</b> {finding.fix}</p>{/if}
@@ -567,9 +572,10 @@
   .findings li { display: flex; gap: 10px; padding: 10px 12px; border: 1px solid var(--node-border); border-left-width: 3px; border-radius: var(--radius-control); background: var(--node-bg); }
   .findings li.high { border-left-color: var(--led-err); } .findings li.medium { border-left-color: var(--warn-fg); } .findings li.low { border-left-color: var(--node-border); }
   .findings li.settled { border-left-color: color-mix(in srgb, var(--led-ok) 55%, var(--node-border)); } .findings li.settled .finding-body > p:first-child { color: var(--muted); }
-  .sev-col { flex: none; display: flex; flex-direction: column; gap: 5px; width: 64px; padding-top: 3px; }
+  .sev-col { flex: none; display: flex; flex-direction: column; gap: 5px; width: 74px; padding-top: 3px; }
   .sev { font-size: 9px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); }
-  .pill { align-self: flex-start; padding: 1px 6px; border-radius: 999px; font-size: 8.5px; letter-spacing: 0.6px; text-transform: uppercase; } .pill.open { background: var(--warn-bg); color: var(--warn-fg); } .pill.fixed { background: var(--ok-bg); color: var(--ok-fg); } .pill.dismissed { background: var(--surface-2); color: var(--faint); }
+  .pill { align-self: flex-start; padding: 1px 6px; border-radius: 999px; font-size: 8.5px; letter-spacing: 0.6px; text-transform: uppercase; } .pill.open { background: var(--warn-bg); color: var(--warn-fg); } .pill.fixed { background: var(--ok-bg); color: var(--ok-fg); } .pill.dismissed { background: var(--surface-2); color: var(--faint); } .pill.earlier { background: transparent; border: 1px dashed var(--node-border); color: var(--faint); white-space: nowrap; }
+  .gate-keys { display: inline-flex; flex-wrap: wrap; gap: 8px; }
   .finding-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; } .finding-body p { margin: 0; font-size: 12px; line-height: 1.5; } .fix { color: var(--muted); font-size: 11.5px !important; } .fix b { color: var(--fg); font-weight: 500; }
   .note { font-size: 10px !important; letter-spacing: 0.3px; color: var(--ok-fg); } .findings li.settled .note { color: var(--muted); }
   .finding-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-top: 4px; }

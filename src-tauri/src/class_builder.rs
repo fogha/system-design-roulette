@@ -167,6 +167,36 @@ fn draft_prompt(brief: &CourseBrief) -> String {
     )
 }
 
+/// What the learner already settled, for the review prompt: a dismissed
+/// finding is not raised again; a fixed one only if the fix did not take.
+fn settled_text(settled: &[ReviewFinding]) -> String {
+    let lines: Vec<String> = settled
+        .iter()
+        .filter(|f| f.status != "open")
+        .take(24)
+        .map(|f| {
+            format!(
+                "- [{}{}] {}",
+                f.status,
+                if f.topic.is_empty() {
+                    String::new()
+                } else {
+                    format!(", {}", f.topic)
+                },
+                f.message.trim()
+            )
+        })
+        .collect();
+    if lines.is_empty() {
+        return String::new();
+    }
+    format!(
+        "\n\nALREADY SETTLED by the learner in an earlier read. Do not raise a dismissed one \
+         again; raise a fixed one only if the draft still shows the problem:\n{}",
+        lines.join("\n")
+    )
+}
+
 fn issues_text(issues: &[DraftIssue]) -> String {
     issues
         .iter()
@@ -282,10 +312,13 @@ impl Generator {
     }
 
     /// Ask the tutor to read the draft back and say what is wrong with it.
+    /// `settled` are the findings the learner already fixed or dismissed;
+    /// the tutor is told not to raise them again.
     pub async fn review_custom_course(
         &self,
         brief: &CourseBrief,
         draft: &CourseDraft,
+        settled: &[ReviewFinding],
     ) -> Result<(Vec<ReviewFinding>, String)> {
         let scoped = self.scoped("course-review");
         let agent = if brief.agent.is_empty() {
@@ -320,7 +353,7 @@ impl Generator {
              \"topic\": \"slug of the topic concerned, or empty for the course as a whole\", \
              \"message\": \"what is wrong, one or two sentences\", \"fix\": \"the concrete \
              change you propose, or empty\"}}]}}. An empty list means the draft is sound. \
-             At most twelve findings, highest severity first.\n\n\
+             At most twelve findings, highest severity first.{settled}\n\n\
              DRAFT:\n{draft}",
             outcome = brief.outcome.trim(),
             background = if brief.background.trim().is_empty() {
@@ -328,6 +361,7 @@ impl Generator {
             } else {
                 brief.background.trim()
             },
+            settled = settled_text(settled),
             draft = serde_json::to_string(draft)
                 .map_err(|error| GenError::Parse(format!("could not serialize draft: {error}")))?
         );
@@ -1147,6 +1181,7 @@ mod tests {
                 fix: String::new(),
                 status: "open".into(),
                 note: String::new(),
+                carried: false,
             },
         );
         assert!(prompt.contains("FINDING (high, topic b): b is two topics"));

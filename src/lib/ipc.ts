@@ -277,6 +277,8 @@ export interface ReviewFinding {
   status: 'open' | 'fixed' | 'dismissed';
   /** What the tutor changed, "by hand", or why it was dismissed. */
   note: string;
+  /** Settled in an earlier read and not raised again since. */
+  carried?: boolean;
 }
 export interface SourceCheck {
   topic: string;
@@ -971,6 +973,7 @@ const realApi = {
   writeCustomCourseBank: (id: string) => invoke<CustomCourseView>('write_custom_course_bank', { id }),
   voidCustomQuestion: (id: string, questionId: string, reason: string) => invoke<CustomCourseView>('void_custom_question', { id, questionId, reason }),
   fixCustomCourseFinding: (id: string, index: number) => invoke<CustomCourseView>('fix_custom_course_finding', { id, index }),
+  fixAllCustomCourseFindings: (id: string) => invoke<CustomCourseView>('fix_all_custom_course_findings', { id }),
   resolveCustomCourseFinding: (id: string, index: number, status: ReviewFinding['status'], note: string) => invoke<CustomCourseView>('resolve_custom_course_finding', { id, index, status, note }),
   acceptCustomCourseSource: (id: string, url: string, accepted: boolean) => invoke<CustomCourseView>('accept_custom_course_source', { id, url, accepted }),
   markCustomCourseRead: (id: string, read: boolean) => invoke<CustomCourseView>('mark_custom_course_read', { id, read }),

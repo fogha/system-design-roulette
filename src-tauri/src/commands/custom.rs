@@ -119,10 +119,15 @@ pub async fn review_custom_course(
     jobs: State<'_, BuilderJobs>,
     id: String,
 ) -> CmdResult<CustomCourseView> {
-    let (brief, draft) = {
+    let (brief, draft, settled) = {
         let conn = state.db.0.lock().unwrap();
         let view = custom::get(&conn, &id).map_err(err)?;
-        (view.brief, view.draft)
+        let settled: Vec<_> = view
+            .review
+            .into_iter()
+            .filter(|f| f.status != "open")
+            .collect();
+        (view.brief, view.draft, settled)
     };
     if jobs.working(&id).is_some() {
         return Err("the tutor is already working on this class".into());
@@ -131,7 +136,7 @@ pub async fn review_custom_course(
     let _run = state.generator.feed.begin(&format!("review:{id}"), &id);
     let reviewed = state
         .generator
-        .review_custom_course(&brief, &draft)
+        .review_custom_course(&brief, &draft, &settled)
         .await
         .map_err(|error| format!("the tutor could not review the course: {error}"))
         .inspect_err(|error| {
@@ -199,6 +204,84 @@ pub async fn fix_custom_course_finding(
     drop(job);
     tell(&app);
     saved
+}
+
+/// Ask the tutor to settle every open finding, one after another, each
+/// change applied and saved before the next so later fixes see earlier
+/// ones. A finding whose change fails stays open; the rest go on.
+#[tauri::command]
+pub async fn fix_all_custom_course_findings(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    jobs: State<'_, BuilderJobs>,
+    id: String,
+) -> CmdResult<CustomCourseView> {
+    let open: Vec<usize> = {
+        let conn = state.db.0.lock().unwrap();
+        let view = custom::get(&conn, &id).map_err(err)?;
+        view.review
+            .iter()
+            .enumerate()
+            .filter(|(_, f)| f.status == "open")
+            .map(|(i, _)| i)
+            .collect()
+    };
+    if open.is_empty() {
+        return Err("every finding is already settled".into());
+    }
+    if jobs.working(&id).is_some() {
+        return Err("the tutor is already working on this class".into());
+    }
+    let job = jobs.begin(&id, "fix");
+    let _run = state.generator.feed.begin(&format!("fix:{id}"), &id);
+    let total = open.len();
+    let mut failed = 0usize;
+    for (n, index) in open.into_iter().enumerate() {
+        let (brief, draft, finding) = {
+            let conn = state.db.0.lock().unwrap();
+            let view = custom::get(&conn, &id).map_err(err)?;
+            let Some(finding) = view.review.get(index).cloned() else {
+                continue;
+            };
+            (view.brief, view.draft, finding)
+        };
+        state.generator.feed.say(format!(
+            "class builder: settling finding {} of {total}",
+            n + 1
+        ));
+        match state
+            .generator
+            .fix_custom_course_finding(&brief, &draft, &finding)
+            .await
+        {
+            Ok((changed, note, _)) => {
+                let conn = state.db.0.lock().unwrap();
+                custom::save_draft(&conn, &id, changed).map_err(err)?;
+                let note = if note.is_empty() {
+                    "by the tutor".to_string()
+                } else {
+                    format!("by the tutor: {note}")
+                };
+                custom::resolve_finding(&conn, &id, index, "fixed", &note).map_err(err)?;
+            }
+            Err(error) => {
+                failed += 1;
+                state.generator.feed.say(format!(
+                    "class builder: finding {} of {total} stays open; the change failed: {error}",
+                    n + 1
+                ));
+            }
+        }
+        tell(&app);
+    }
+    state.generator.feed.say(format!(
+        "class builder: {} of {total} finding(s) settled by the tutor",
+        total - failed
+    ));
+    let view = custom::get(&state.db.0.lock().unwrap(), &id).map_err(err);
+    drop(job);
+    tell(&app);
+    view
 }
 
 /// Settle a finding by hand: `fixed` after editing, `dismissed` with a

@@ -370,6 +370,7 @@ pub fn run() {
             commands::custom::write_custom_course_bank,
             commands::custom::void_custom_question,
             commands::custom::fix_custom_course_finding,
+            commands::custom::fix_all_custom_course_findings,
             commands::custom::resolve_custom_course_finding,
             commands::custom::accept_custom_course_source,
             commands::custom::mark_custom_course_read,

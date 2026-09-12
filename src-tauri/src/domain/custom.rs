@@ -123,10 +123,75 @@ pub struct ReviewFinding {
     /// was dismissed.
     #[serde(default)]
     pub note: String,
+    /// Settled in an earlier read and not raised again since; kept so what
+    /// was decided stays in view.
+    #[serde(default)]
+    pub carried: bool,
 }
 
 fn open() -> String {
     "open".into()
+}
+
+/// The words a finding is recognised by across reads.
+fn finding_words(message: &str) -> HashSet<String> {
+    message
+        .to_lowercase()
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| w.len() >= 3)
+        .map(str::to_string)
+        .collect()
+}
+
+/// Whether a fresh finding is the same objection as an earlier one: the
+/// same topic, and messages that share most of their words.
+fn same_finding(a: &ReviewFinding, b: &ReviewFinding) -> bool {
+    if a.topic != b.topic {
+        return false;
+    }
+    if a.message.trim().eq_ignore_ascii_case(b.message.trim()) {
+        return true;
+    }
+    let (x, y) = (finding_words(&a.message), finding_words(&b.message));
+    let shared = x.intersection(&y).count();
+    let all = x.union(&y).count();
+    all > 0 && shared * 2 >= all
+}
+
+/// A fresh read against what was already settled. A fresh finding that
+/// repeats a settled one keeps its settlement, so a dismissal or a fix is
+/// not undone by reading again; settled findings the tutor no longer
+/// raises are carried at the end as decided history; open ones it no
+/// longer raises are dropped.
+pub fn merge_reviews(previous: &[ReviewFinding], fresh: Vec<ReviewFinding>) -> Vec<ReviewFinding> {
+    let mut used = vec![false; previous.len()];
+    let mut merged: Vec<ReviewFinding> = fresh
+        .into_iter()
+        .map(|mut finding| {
+            finding.status = "open".into();
+            finding.note.clear();
+            finding.carried = false;
+            if let Some(index) = previous
+                .iter()
+                .enumerate()
+                .find(|(i, old)| !used[*i] && old.status != "open" && same_finding(old, &finding))
+                .map(|(i, _)| i)
+            {
+                used[index] = true;
+                finding.status = previous[index].status.clone();
+                finding.note = previous[index].note.clone();
+            }
+            finding
+        })
+        .collect();
+    for (index, old) in previous.iter().enumerate() {
+        if !used[index] && old.status != "open" {
+            let mut kept = old.clone();
+            kept.carried = true;
+            merged.push(kept);
+        }
+    }
+    merged
 }
 
 /// One primary source and whether the desk could fetch it.
@@ -1060,23 +1125,21 @@ fn save_marks(conn: &Connection, id: &str, marks: &Marks) -> Result<()> {
     Ok(())
 }
 
-/// Keep what the tutor found. Every finding starts open; the mark says
-/// which draft was read.
+/// Keep what the tutor found, merged with what was already settled (see
+/// [`merge_reviews`]). The mark says which draft was read.
 pub fn save_review(
     conn: &Connection,
     id: &str,
     review: &[ReviewFinding],
 ) -> Result<CustomCourseView> {
     let existing = row(conn, id)?;
-    let review: Vec<ReviewFinding> = review
-        .iter()
-        .cloned()
-        .map(|mut finding| {
-            finding.status = "open".into();
-            finding.note.clear();
-            finding
-        })
-        .collect();
+    let previous: Vec<ReviewFinding> = existing
+        .review_json
+        .as_deref()
+        .map(serde_json::from_str)
+        .transpose()?
+        .unwrap_or_default();
+    let review = merge_reviews(&previous, review.to_vec());
     conn.execute(
         "UPDATE custom_courses SET review_json=?2, updated_at=?3 WHERE id=?1",
         params![id, serde_json::to_string(&review)?, now()],
