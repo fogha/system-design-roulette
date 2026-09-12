@@ -459,16 +459,18 @@ fn bank_prompt(brief: &CourseBrief, draft: &CourseDraft) -> String {
         .collect::<Vec<_>>()
         .join("\n");
     format!(
-        "Write the placement check for a self-study course: {per} four-choice questions for          each of the four stages (foundations, mechanisms, production, synthesis), {total} in          all, each on a different core topic of its stage where the stage has enough topics.          A question tests whether the learner already has the topic's outcome; it is short,          concrete, answerable in under a minute, and its key is verifiable from the topic's          primary sources. The three wrong choices are plausible mistakes, not jokes. Cite one          of the topic's sources per question.
-
-         COURSE: {title}
-OUTCOME: {outcome}
-WHAT THE LEARNER ALREADY KNOWS: {background}
-         SOURCE HOSTS: {hosts}
-
-CORE TOPICS:
-{topics}
-
+        "Write the placement check for a self-study course: exactly {per} four-choice \
+         questions for EACH of the four stages (foundations, mechanisms, production, \
+         synthesis), {total} in all. Every question names a core topic from the list below, \
+         and the topic's stage is the question's stage: count them per stage before you \
+         answer. Spread a stage's questions over its core topics; when a stage has fewer \
+         core topics than {per}, write more than one question on the same topic rather than \
+         fewer questions. A question tests whether the learner already has the topic's \
+         outcome; it is short, concrete, answerable in under a minute, and its key is \
+         verifiable from the topic's primary sources. The three wrong choices are plausible \
+         mistakes, not jokes. Cite one of the topic's sources per question.\n\n\
+         COURSE: {title}\nOUTCOME: {outcome}\nWHAT THE LEARNER ALREADY KNOWS: {background}\n\
+         SOURCE HOSTS: {hosts}\n\nCORE TOPICS:\n{topics}\n\n\
          Return ONLY a JSON object: {{\"questions\": [{{\"topic\": \"slug from the list\", \
          \"label\": \"3-6 words naming the skill\", \"prompt\": \"the question\", \"choices\": \
          [\"four\", \"distinct\", \"answers\", \"here\"], \"answer\": \"the correct choice, word \

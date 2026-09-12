@@ -100,6 +100,10 @@ Each call is announced in the execution feed with its own run so the Logs page s
 
 A third card on the Verify step asks the tutor for the bank: three cited four-choice questions per stage on core topics of that stage, in the placement check's own shape (`placement::Question` with a `source`, and `voided`/`void_reason` for disputes). `class_builder::bank_from_written` holds the tutor's answer to that shape and sends the reasons back once. The bank is stored on the class (migration v14) and registered with the course; `placement::bank` and `has_bank` answer for a custom course from the registry, leaving voided questions out, and a bank counts only while every stage still has three usable questions. Enrollment options and the curriculum map say whether the check and unit challenges are available. A learner disputes a key from the placement result (**This key is wrong**); the question is set aside and listed as disputed in the builder until the bank is written again.
 
+### 2.8 Trying the tutor calls for real
+
+`cargo test --test custom_tutor_live -- --ignored --nocapture` runs the drafting, review and bank calls against a real runner (Ollama and `qwen2.5:7b` by default; `PRINCIPIA_LIVE_AGENT` and `PRINCIPIA_LIVE_MODEL` choose another) and prints what came back. On 2026-09-12 with the 7B model: a draft of 6 to 9 topics in 80 to 135 s that parsed, normalized and passed all but one or two validator checks after the correction round; a review of six findings with proposed fixes; and a bank that the shape check refused with a named reason (a stage two questions short). Larger models are expected to meet the 12-to-36 topic ask and the three-per-stage rule; the checks stand either way.
+
 ## 3. Later passes
 
 - **Retrieval from the bank.** Written questions could feed retrieval sessions before a lesson has been taught on the topic; today retrieval draws on the previous lesson's own questions.
