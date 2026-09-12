@@ -4,7 +4,8 @@
    * course, on a five-step rail. Brief (what you want to be able to do),
    * Draft (the tutor writes it, you write it, or a file), Review (edit
    * until it reads right), Verify (the tutor reads it back; the sources
-   * are fetched), Enroll (publish and set a starting point).
+   * are fetched), Publish (make it a class; the starting point and study
+   * times are set from the class itself, like any other).
    */
   import { onMount, untrack } from 'svelte';
   import { api, type CourseBrief, type CourseDraft, type CustomCourseView } from '../../../ipc';
@@ -25,7 +26,7 @@
     { key: 'draft', title: 'Draft', Icon: Bot, ahead: 'tutor, hand or file' },
     { key: 'review', title: 'Review', Icon: PenLine, ahead: 'edit the topics' },
     { key: 'verify', title: 'Verify', Icon: ShieldCheck, ahead: 'read back, fetch, confirm' },
-    { key: 'enroll', title: 'Enroll', Icon: Rocket, ahead: 'publish' },
+    { key: 'enroll', title: 'Publish', Icon: Rocket, ahead: 'make it a class' },
   ] as const;
   type StepKey = (typeof STEPS)[number]['key'];
   let step = $state<StepKey>('brief');
@@ -411,7 +412,7 @@
 
   {:else if step === 'verify' && draft && view && checks}
     <section class="panel" aria-label="Verify">
-      <div class="panel-head"><h3>Three checks before you enroll</h3><p>In order, each unlocking the next: the tutor reads the draft back and every finding is settled; every source is fetched and the unreachable ones replaced or kept knowingly; you confirm your own read-through. None of them changes the draft on its own.</p></div>
+      <div class="panel-head"><h3>Three checks before you publish</h3><p>In order, each unlocking the next: the tutor reads the draft back and every finding is settled; every source is fetched and the unreachable ones replaced or kept knowingly; you confirm your own read-through. None of them changes the draft on its own.</p></div>
       <ol class="gates">
         <li class="gate" class:done={reviewDone} class:current={!reviewDone} class:folded={isFolded('review', reviewDone)}>
           <div class="gate-head">
@@ -523,26 +524,26 @@
       </ol>
       <footer class="nav">
         <button type="button" class="ghost mono-ghost" onclick={() => go('review')}><ArrowLeft size={12} />Back to the editor</button>
-        <span class="hint mono" class:warn-text={!canEnroll}>{canEnroll ? 'ready to enroll' : checks.blockers[0]}</span>
+        <span class="hint mono" class:warn-text={!canEnroll}>{canEnroll ? 'ready to publish' : checks.blockers[0]}</span>
         <button type="button" class="cta mono-cta" disabled={!canEnroll} onclick={() => (step = 'enroll')}>Continue <ArrowRight size={13} /></button>
       </footer>
     </section>
 
   {:else if step === 'enroll' && draft && view}
     <section class="panel" aria-label="Enroll">
-      <div class="panel-head"><h3>{view.status === 'published' ? `Publish version ${view.version + 1}` : 'Publish and enroll'}</h3><p>{view.status === 'published' ? 'The class keeps its history and its accepted path; the new version is what lessons are planned from next.' : 'Publishing makes the class real: it joins your classes with a custom badge and the starting-point flow opens.'}</p></div>
+      <div class="panel-head"><h3>{view.status === 'published' ? `Publish version ${view.version + 1}` : 'Publish the class'}</h3><p>{view.status === 'published' ? 'The class keeps its history and its accepted path; the new version is what lessons are planned from next.' : 'Publishing makes the class real: it joins your classes with a custom badge and opens like any other. From there you set its starting point and study times when you are ready.'}</p></div>
       <ul class="manifest">
         <li><span class="mf-label mono">CLASS</span><strong>{draft.label}</strong><small>{draft.short_code} · {draft.native_label || 'your own course'}</small></li>
         <li><span class="mf-label mono">TOPICS</span><strong>{draft.topics.length}</strong><small>{draft.topics.filter((t) => t.curriculum.core).length} core · {draft.entry_points.map((e) => e.label).join(' → ')}</small></li>
         <li><span class="mf-label mono">TUTOR</span><strong>{brief.agent} / {brief.model || 'runner default'}</strong><small>from the brief; changeable in the class's Settings tab</small></li>
         <li><span class="mf-label mono">CHECKS</span><strong class:warn={!canEnroll}>{canEnroll ? 'all pass' : view.checks.blockers[0]}</strong><small>{view.review.length ? `${settled} of ${view.review.length} finding${view.review.length === 1 ? '' : 's'} settled` : 'read back, nothing raised'} · {view.sources.length ? `${unreachable.length} source${unreachable.length === 1 ? '' : 's'} kept unreachable` : 'sources fetched'} · read-through {view.checks.read ? 'confirmed' : 'pending'} · {bankQuestions.length ? `${bankQuestions.length - voided.length} questions` : 'no question bank'}</small></li>
       </ul>
-      <p class="after mono">after publishing: choose a starting point ({bankQuestions.length ? 'from scratch, a stage, or the placement check' : 'from scratch or a stage; the placement check needs the question bank'}) → add study times → the class activates</p>
+      <p class="after mono">then, from the class: a starting point ({bankQuestions.length ? 'from scratch, a stage, or the placement check' : 'from scratch or a stage; the placement check needs the question bank'}) → study times → the class activates</p>
       <footer class="nav">
         <button type="button" class="ghost mono-ghost" onclick={() => (step = 'verify')}><ArrowLeft size={12} />Back</button>
         <span class="hint mono">{canEnroll ? 'ready' : 'the desk will refuse until every check passes'}</span>
         <button type="button" class="ghost mono-ghost" onclick={exportFile} disabled={!!busy}><Save size={12} />Export class file</button>
-        <button type="button" class="cta mono-cta" onclick={publish} disabled={!!busy || !canEnroll}><Rocket size={13} />{busy === 'publish' ? 'Publishing…' : view.status === 'published' ? `Publish v${view.version + 1}` : 'Publish and enroll'}</button>
+        <button type="button" class="cta mono-cta" onclick={publish} disabled={!!busy || !canEnroll}><Rocket size={13} />{busy === 'publish' ? 'Publishing…' : view.status === 'published' ? `Publish v${view.version + 1}` : 'Publish'}</button>
       </footer>
     </section>
   {/if}

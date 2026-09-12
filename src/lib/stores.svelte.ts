@@ -101,11 +101,12 @@ class AppStore {
   async refresh() {
     const request = ++this.refreshRequest;
     try {
-      const next = await api.getAppState();
+      // The learner's own courses come with the catalog, and a class that
+      // was just published is in the state; the catalog is registered
+      // first so every course lookup answers by the time the state shows.
+      const [next, catalog] = await Promise.all([api.getAppState(), api.getCatalog().catch(() => null)]);
       if (request !== this.refreshRequest) return;
-      // The learner's own courses come with the catalog; register them so
-      // course lookups answer for a class made after the page loaded.
-      api.getCatalog().then(registerCourses).catch(() => {});
+      if (catalog) registerCourses(catalog);
       this.state = next;
       this.route();
       this.followFocus();

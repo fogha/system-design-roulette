@@ -8,7 +8,7 @@ This document is the plan and the contract. Section 1 is the learner's process, 
 
 ### 1.1 Where it starts
 
-Two places, both labelled **New class**: the button beside "Browse courses" on the Classes page and the last card in the course browser. Either opens the class builder, a screen with a five-step rail like the setup wizard: **Brief → Draft → Review → Verify → Enroll**.
+Two places, both labelled **New class**: the button beside "Browse courses" on the Classes page and the last card in the course browser. Either opens the class builder, a screen with a five-step rail like the setup wizard: **Brief → Draft → Review → Verify → Publish**.
 
 ### 1.2 Brief: what you want to be able to do
 
@@ -53,9 +53,9 @@ The question bank (section 2.7) comes fourth and stays optional; it unlocks afte
 
 The writing rules (`docs/WRITING_RULES.md`) apply to the draft as to everything else: em dashes are removed when it is saved, and a field or a topic that reads like a machine wrote it is listed in the editor's rail and blocks publishing until it is changed.
 
-### 1.6 Enroll
+### 1.6 Publish
 
-Saving publishes the course: it appears in the catalogue with a **custom** badge, gets a class record, and the ordinary starting-point flow opens. Foundations and a declared stage work at once. The placement check needs a question bank, which the tutor can write in a later pass (section 3); until then the flow says so and offers the other two.
+Publishing makes the course real: it appears in the catalogue with a **custom** badge, gets a class record, and opens like any other class, on its overview. The starting point (foundations, a declared stage, or the placement check if the class has a question bank) and the study times are then set from the class itself, whenever the learner is ready.
 
 Everything after that is the same as any class: schedule, activation, lessons prepared ahead of each study time, blocks, retrieval, PDFs.
 

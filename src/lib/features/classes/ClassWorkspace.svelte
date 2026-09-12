@@ -42,7 +42,8 @@
   $effect(() => { void app.state; void app.builder; void loadDrafts(); });
   const building = $derived(app.builder);
   function closeBuilder() { app.builder = null; void loadDrafts(); }
-  function published(id: string) { app.builder = null; void loadDrafts(); tabsByClass.set(id as ClassroomSubjectId, 'entry'); select(id as ClassroomSubjectId); }
+  /** A class just published opens like any other, on its overview; the starting point and study times are set from there. */
+  function published(id: string) { app.builder = null; void loadDrafts(); tabsByClass.set(id as ClassroomSubjectId, 'overview'); select(id as ClassroomSubjectId); }
   function select(id: ClassroomSubjectId) {
     selected = id;
     app.classSelection = id;
