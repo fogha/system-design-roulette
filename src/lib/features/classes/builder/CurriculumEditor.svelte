@@ -5,6 +5,7 @@
    * words, and the topics grouped by stage. Validation runs as they type;
    * what the desk objects to is listed beside the rail and on each card.
    */
+  import { untrack } from 'svelte';
   import type { CourseDraft, DraftIssue, DraftTopic } from '../../../ipc';
   import { blankTopic, STAGES, validateDraft } from '../../../custom-preview';
   import { autosize } from '../../../actions/autosize';
@@ -72,9 +73,12 @@
   let flashSlug = $state<string | null>(null);
   let flashTimer: ReturnType<typeof setTimeout> | null = null;
 
+  // Only `focus` is a dependency here: `jump` reads and writes the fold and
+  // open state, and an effect that tracked those would re-run on its own
+  // writes without end, taking the page's reactivity down with it.
   $effect(() => {
     const target = focus;
-    if (target) jump(`topics/${target.slug}`);
+    if (target) untrack(() => jump(`topics/${target.slug}`));
   });
 
   function addHost() {
