@@ -1376,7 +1376,7 @@ impl Generator {
         std::env::var("PRINCIPIA_MODEL").unwrap_or_else(|_| self.model.lock().unwrap().clone())
     }
 
-    fn log(&self, msg: impl Into<String>) {
+    pub(crate) fn log(&self, msg: impl Into<String>) {
         self.feed.say(msg);
     }
 
@@ -2639,7 +2639,7 @@ CURATED_LESSON:
         Ok(corrected)
     }
 
-    async fn run_exact_for<T: serde::de::DeserializeOwned>(
+    pub(crate) async fn run_exact_for<T: serde::de::DeserializeOwned>(
         &self,
         agent: &str,
         custom_bin: &str,
@@ -2809,7 +2809,7 @@ CURATED_LESSON:
         Ok(request)
     }
 
-    fn scoped(&self, purpose: &str) -> Self {
+    pub(crate) fn scoped(&self, purpose: &str) -> Self {
         let agent = self.agent.lock().unwrap();
         let model = self.model.lock().unwrap();
         let custom = self.custom_bin.lock().unwrap();

@@ -1,8 +1,9 @@
 // Generated from src-tauri/seed/catalog.json. Run npm run catalog:generate.
 export type FocusArea = "system-design" | "javascript" | "typescript" | "frontend-architecture" | "developer-tooling" | "linux-bash" | "bash-scripting";
 export type LanguageId = "german" | "italian";
-export type ClassroomSubjectId = FocusArea | LanguageId;
-export const COURSE_FINGERPRINTS: Record<ClassroomSubjectId, string> = {
+export type CustomSubjectId = `custom-${string}`;
+export type ClassroomSubjectId = FocusArea | LanguageId | CustomSubjectId;
+export const COURSE_FINGERPRINTS: Record<FocusArea | LanguageId, string> = {
   "system-design": "2b6ee917fda6e1b2eccb10a01748f0426e44c8befbe6cbd324646778a1ffc200",
   "javascript": "b03b2c7257dab1f884dbad94f58ae6d1873d0f50a77f900a46cc567d7ae973b2",
   "typescript": "da0ca51fc16b8b1006a5cb7e9e7a24fca5bd1495c0c0731c31e3f15efe3840a7",

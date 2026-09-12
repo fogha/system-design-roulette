@@ -8,6 +8,7 @@ import {
   type LanguageLessonView,
 } from './ipc';
 import type { ClassTab } from './features/classes/class-navigation';
+import { registerCourses } from './catalog';
 import type { Destination } from './app/navigation';
 
 export type Screen =
@@ -45,6 +46,13 @@ class AppStore {
   openClass(subjectId: ClassroomSubjectId | null = null, tab: ClassTab = 'overview') {
     this.classSelection = subjectId;
     this.classTab = tab;
+    this.builder = null;
+    this.navigate('classes');
+  }
+  /** The class builder in the Classes workspace: a new class, or a draft or published class by id. */
+  builder = $state<string | 'new' | null>(null);
+  openBuilder(id: string | 'new' = 'new') {
+    this.builder = id;
     this.navigate('classes');
   }
   genStatus = $state<string>('');
@@ -90,6 +98,9 @@ class AppStore {
     try {
       const next = await api.getAppState();
       if (request !== this.refreshRequest) return;
+      // The learner's own courses come with the catalog; register them so
+      // course lookups answer for a class made after the page loaded.
+      api.getCatalog().then(registerCourses).catch(() => {});
       this.state = next;
       this.route();
       this.followFocus();

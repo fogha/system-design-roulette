@@ -3,8 +3,8 @@
   import { api, type ClassroomProgramView, type CurriculumMapView, type FocusArea } from '../../ipc';
   import type { AcceptedPath, PathChange } from '../../contracts/classes';
   import { app } from '../../stores.svelte';
-  import { courseDefinition } from '../../catalog';
-  import { LayoutDashboard, Settings2, Compass, BookOpen, CalendarClock, Play, ArrowRight } from 'lucide-svelte';
+  import { courseDefinition, isCustomCourse } from '../../catalog';
+  import { LayoutDashboard, Settings2, Compass, BookOpen, CalendarClock, Play, ArrowRight, PenLine, FileJson } from 'lucide-svelte';
   import CourseGlyph from '../../components/CourseGlyph.svelte';
   import CurriculumMap from '../../components/CurriculumMap.svelte';
   import ClassSettings from './ClassSettings.svelte';
@@ -16,6 +16,12 @@
   let { program, initialTab = 'overview', ontabchange }: { program: ClassroomProgramView; initialTab?: ClassTab; ontabchange?: (tab: ClassTab) => void } = $props();
   const uid = $props.id();
   const course = $derived(courseDefinition(program.subject_id)!);
+  /** A class the learner made: it can be edited as a new version and exported as a file. */
+  const custom = $derived(isCustomCourse(program.subject_id));
+  async function exportClass() {
+    try { const result = await api.exportCustomCourse(program.subject_id); app.notify(`Class file written: ${result.file_name}`, { label: 'Show file', run: () => void api.revealExport(result.path) }); }
+    catch (cause) { app.error = String(cause); }
+  }
   const preparing = $derived(app.preparingClass !== null);
   const active = $derived(app.state?.active_classroom_sessions.find(s => s.subject_id === program.subject_id));
   const slots = $derived(app.state?.classroom_slots.filter(s => s.subject_id === program.subject_id) ?? []);
@@ -95,7 +101,7 @@
 
 <article class="class-detail" aria-label={`${program.label} controls`}>
   <header class="class-header">
-    <div class="identity"><CourseGlyph courseId={program.subject_id} size={46} /><div><div class="eyebrow mono">{program.kind === 'language' ? 'LANGUAGE' : 'ENGINEERING'} / {program.short_code}<span class:enabled={program.enabled} class="status">{program.completed ? 'Completed' : program.enabled ? 'Active' : 'Inactive'}</span></div><h2>{program.label}</h2><p>{program.native_label}</p></div></div>
+    <div class="identity"><CourseGlyph courseId={program.subject_id} size={46} /><div><div class="eyebrow mono">{program.kind === 'language' ? 'LANGUAGE' : 'ENGINEERING'} / {program.short_code}{#if custom}<span class="custom-badge">custom · {course.version}</span>{/if}<span class:enabled={program.enabled} class="status">{program.completed ? 'Completed' : program.enabled ? 'Active' : 'Inactive'}</span></div><h2>{program.label}</h2><p>{program.native_label}</p></div></div>
     <div class="header-actions"><button class="ghost mono-ghost" onclick={toggle} disabled={busy || opening || preparing}>{busy ? 'Saving…' : program.enabled ? 'Pause class' : !program.accepted_path ? 'Set starting point' : slots.some(slot => slot.enabled) ? 'Activate class' : 'Set study times'}</button><button class="cta mono-cta" disabled={(!program.enabled && !active) || opening || preparing || !!heldElsewhere} title={heldElsewhere ? `A focused ${heldLabel} session holds the desk.` : undefined} onclick={() => open()}><Play size={13} />{opening ? 'Opening…' : pending ? 'Retry preparation' : active ? 'Resume' : program.completed ? 'Revisit' : 'Learn now'}</button>{#if pending}<button class="ghost mono-ghost" onclick={discard} disabled={busy || opening || preparing}>Discard lesson</button>{/if}</div>
     {#if heldElsewhere}<p class="held mono" role="status">A focused {heldLabel} session holds the desk. {program.label} waits until it finishes.</p>{/if}
   </header>
@@ -120,6 +126,9 @@
             {#if path && !editingPath}<PathPreview embedded path={path.recommendation} acceptedRevision={path.revision} onclose={() => select('overview')} onfoundations={() => editingPath = true} />{:else}<EnrollmentSetup embedded courseId={program.subject_id} onclose={setupClosed} />{/if}
           {/if}
         {:else if item.id === 'curriculum'}
+          {#if custom}
+            <div class="custom-tools"><span class="mono">YOUR OWN CLASS · VERSION {course.version}</span><span class="custom-copy">Edit the curriculum to publish a new version; lessons already taught keep their topics. The class file carries the course, not your progress.</span><span class="custom-actions"><button class="ghost mono-ghost small" onclick={() => app.openBuilder(program.subject_id)}><PenLine size={12} />Edit curriculum</button><button class="ghost mono-ghost small" onclick={exportClass}><FileJson size={12} />Export class file</button></span></div>
+          {/if}
           {#if program.kind === 'engineering'}
             {#if map}{#if mapError}<p class="error" role="alert">{mapError}</p>{/if}{#if challenge && program.accepted_path}<UnitChallenge courseId={program.subject_id} unit={challenge.unit} unitLabel={challenge.label} pathRevision={map.path?.revision ?? program.accepted_path.revision} onclose={() => (challenge = null)} onapplied={challengeApplied} />{/if}<CurriculumMap {map} embedded onrevise={program.accepted_path ? revisePath : undefined} {revising} onchallenge={program.accepted_path ? (unit, label) => (challenge = { unit, label }) : undefined} />{:else if mapLoading}<p class="loading" role="status">Loading curriculum…</p>{:else if mapError}<p class="error" role="alert">{mapError}</p><button class="ghost mono-ghost" onclick={loadMap}>Retry</button>{/if}
           {:else}
@@ -139,6 +148,8 @@
   .class-header { flex-shrink: 0; padding: 22px 24px; display: flex; justify-content: space-between; align-items: center; gap: 18px; background: linear-gradient(110deg,var(--surface),var(--node-bg)); }
   .identity { display: flex; align-items: center; gap: 14px; min-width: 0; } .eyebrow { font-size: 10px; color: var(--muted); letter-spacing: .7px; } h2 { font: 26px/1.2 var(--font-display); margin: 7px 0 5px; } .identity p { font: 10px var(--font-mono); margin: 0; color: var(--muted); }
   .status { color: var(--muted); background: var(--bg); border: 1px solid var(--node-border); border-radius: var(--radius-detail); margin-left: 10px; padding: 2px 6px; letter-spacing: 0; } .status.enabled { color: var(--led-ok); }
+  .custom-badge { margin-left: 8px; padding: 2px 7px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--node-border)); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); color: var(--accent); font-size: 9px; letter-spacing: 0.6px; text-transform: lowercase; }
+  .custom-tools { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; padding: 10px 14px; border: 1px dashed color-mix(in srgb, var(--accent) 40%, var(--node-border)); border-radius: var(--radius-control); } .custom-tools > .mono { font-size: 9px; letter-spacing: 1.2px; color: var(--accent); } .custom-copy { flex: 1; min-width: 220px; font-size: 11px; color: var(--muted); line-height: 1.5; } .custom-actions { display: flex; gap: 8px; flex-wrap: wrap; }
   .header-actions { display: flex; flex-wrap: wrap; gap: 8px; flex-shrink: 0; } .header-actions button { font-size: 11px; white-space: nowrap; padding: 10px 12px; }
   .tabs { display: flex; gap: 6px; padding: 0 24px; border-top: 1px solid var(--node-divider); border-bottom: 1px solid var(--node-border); flex-shrink: 0; overflow-x: auto; background: var(--node-bg); }
   .tabs button { position: relative; display: flex; align-items: center; justify-content: center; gap: 7px; flex-shrink: 0; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 16px 9px 14px; font: 11px var(--font-mono); color: var(--muted); cursor: pointer; white-space: nowrap; }

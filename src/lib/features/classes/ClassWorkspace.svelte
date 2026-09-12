@@ -3,8 +3,10 @@
   import type { ClassroomSubjectId } from '../../ipc';
   import CourseGlyph from '../../components/CourseGlyph.svelte';
   import Dropdown from '../../components/Dropdown.svelte';
-  import { Search, X } from 'lucide-svelte';
+  import { Search, X, Plus, PenLine } from 'lucide-svelte';
   import ClassDetail from './ClassDetail.svelte';
+  import ClassBuilder from './builder/ClassBuilder.svelte';
+  import { api, type CustomCourseSummary } from '../../ipc';
   import { filterClasses, type ClassFilter, type ClassTab } from './class-navigation';
 
   const initialSelection = app.classSelection;
@@ -21,6 +23,13 @@
   const visible = $derived(filterClasses(programs, query, filter, id => slots.some(s => s.subject_id === id) || sessions.some(s => s.subject_id === id)));
   const options = [{ value: 'all', label: 'All classes' }, { value: 'active', label: 'Active' }, { value: 'paused', label: 'Paused' }, { value: 'completed', label: 'Completed' }];
   $effect(() => { if (!selected && programs.length) select(app.classSelection ?? programs[0].subject_id); });
+  /** Classes being built: drafts not yet published. */
+  let drafts = $state<CustomCourseSummary[]>([]);
+  async function loadDrafts() { try { drafts = (await api.listCustomCourses()).filter((c) => c.status === 'draft'); } catch { drafts = []; } }
+  $effect(() => { void app.state; void app.builder; void loadDrafts(); });
+  const building = $derived(app.builder);
+  function closeBuilder() { app.builder = null; void loadDrafts(); }
+  function published(id: string) { app.builder = null; void loadDrafts(); tabsByClass.set(id as ClassroomSubjectId, 'entry'); select(id as ClassroomSubjectId); }
   function select(id: ClassroomSubjectId) {
     selected = id;
     app.classSelection = id;
@@ -47,14 +56,25 @@
   <aside aria-label="Class browser">
     <div class="browser-tools">
       <div class="browser-heading"><span class="mono">YOUR CLASSES</span><span class="count mono">{programs.length}</span></div>
+      <button type="button" class="bracket new-class" class:on={building === 'new'} onclick={() => app.openBuilder('new')}><span class="bracket-well"><Plus size={12} /></span>New class</button>
       <div class="search"><Search size={15} /><input bind:this={searchInput} type="search" aria-label="Search classes" placeholder="Find a class…" bind:value={query} />{#if query}<button aria-label="Clear class search" onclick={() => { query = ''; searchInput.focus(); }}><X size={14} /></button>{/if}</div>
       <Dropdown label="Show classes" bind:value={filter} {options} />
     </div>
     <nav class="class-list" aria-label="Choose a class">
+      {#if drafts.length}
+        <div class="drafts-heading mono">DRAFTS <span>{drafts.length}</span></div>
+        {#each drafts as item (item.id)}
+          <button onkeydown={move} data-course class="class-row draft" class:selected={building === item.id} aria-current={building === item.id ? 'true' : undefined} onclick={() => app.openBuilder(item.id)}>
+            <span class="draft-glyph"><PenLine size={15} /></span>
+            <span class="row-copy"><strong>{item.label || 'Untitled class'}</strong><small><i class="pen"></i>{item.topics} {item.topics === 1 ? 'topic' : 'topics'} · {item.origin}<span class="progress mono">draft</span></small></span>
+          </button>
+        {/each}
+        <div class="drafts-heading mono">CLASSES</div>
+      {/if}
       {#each visible as program (program.subject_id)}
         {@const due = slots.some(s => s.subject_id === program.subject_id && s.owed)}
         {@const running = sessions.some(s => s.subject_id === program.subject_id)}
-        <button onkeydown={move} data-course class="class-row" class:selected={selected === program.subject_id} aria-current={selected === program.subject_id ? 'true' : undefined} onclick={() => select(program.subject_id)}>
+        <button onkeydown={move} data-course class="class-row" class:selected={!building && selected === program.subject_id} aria-current={!building && selected === program.subject_id ? 'true' : undefined} onclick={() => { app.builder = null; select(program.subject_id); }}>
           <CourseGlyph courseId={program.subject_id} size={34} />
           <span class="row-copy"><strong>{program.label}</strong><small><i class:enabled={program.enabled} class:due></i>{running ? 'In progress' : due ? 'Study time due' : program.completed ? 'Completed' : program.enabled ? 'Active' : 'Inactive'}<span class="progress mono">{Math.round(program.progress * 100)}%</span></small></span>
         </button>
@@ -63,10 +83,13 @@
     <div class="browser-footer mono">{visible.length} of {programs.length} classes<span>↑ ↓ to browse</span></div>
   </aside>
   <div class="details">
+    {#if building}
+      {#key building}<ClassBuilder id={building === 'new' ? null : building} onclose={closeBuilder} onpublished={published} />{/key}
+    {/if}
     {#each programs.filter(p => visited.includes(p.subject_id)) as program (program.subject_id)}
-      <div class="detail-instance" hidden={selected !== program.subject_id}><ClassDetail {program} initialTab={program.subject_id === (initialSelection ?? programs[0]?.subject_id) ? initialTab : 'overview'} ontabchange={tab => rememberTab(program.subject_id, tab)} /></div>
+      <div class="detail-instance" hidden={!!building || selected !== program.subject_id}><ClassDetail {program} initialTab={tabsByClass.get(program.subject_id) ?? (program.subject_id === (initialSelection ?? programs[0]?.subject_id) ? initialTab : 'overview')} ontabchange={tab => rememberTab(program.subject_id, tab)} /></div>
     {/each}
-    {#if !selected}<div class="empty"><p role="status">Loading your classes…</p></div>{/if}
+    {#if !selected && !building}<div class="empty"><p role="status">Loading your classes…</p></div>{/if}
   </div>
 </section>
 
@@ -86,6 +109,10 @@
   .class-row + .class-row { margin-top: 3px; }
   .class-row:hover { background: var(--node-bg); border-color: var(--node-border); }
   .class-row.selected { background: var(--surface-2); border-color: var(--violet); box-shadow: inset 3px 0 var(--violet-fg); }
+  .new-class { width: 100%; justify-content: center; } .new-class.on { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); color: var(--fg); }
+  .drafts-heading { display: flex; justify-content: space-between; padding: 8px 9px 4px; font-size: 9px; letter-spacing: 1px; color: var(--faint); } .drafts-heading span { color: var(--accent); }
+  .draft-glyph { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border: 1px dashed color-mix(in srgb, var(--accent) 45%, var(--node-border)); border-radius: 6px; color: var(--accent); background: var(--bg); }
+  .row-copy small i.pen { background: var(--accent); }
   .row-copy { min-width: 0; flex: 1; }
   strong { display: block; font-size: 12px; line-height: 1.45; font-weight: 500; }
   small { display: flex; gap: 5px; align-items: center; color: var(--muted); font-size: 10px; margin-top: 5px; }

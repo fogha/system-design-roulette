@@ -1,6 +1,7 @@
 pub mod agents;
 pub mod challenges;
 pub mod classes;
+pub mod custom;
 use crate::db;
 use crate::domain::assessments::RoundId;
 use crate::state::AppState;

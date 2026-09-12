@@ -4,7 +4,8 @@ import { createHash } from 'node:crypto';
 
 const manifest = JSON.parse(await readFile(new URL('../src-tauri/seed/catalog.json', import.meta.url), 'utf8'));
 const union = (kind) => manifest.courses.filter((course) => course.kind === kind).map((course) => JSON.stringify(course.id)).join(' | ');
-let generated = `// Generated from src-tauri/seed/catalog.json. Run npm run catalog:generate.\nexport type FocusArea = ${union('engineering')};\nexport type LanguageId = ${union('language')};\nexport type ClassroomSubjectId = FocusArea | LanguageId;\n`;
+// A learner's own class carries the custom prefix; its id is only known at runtime.
+let generated = `// Generated from src-tauri/seed/catalog.json. Run npm run catalog:generate.\nexport type FocusArea = ${union('engineering')};\nexport type LanguageId = ${union('language')};\nexport type CustomSubjectId = \`custom-\${string}\`;\nexport type ClassroomSubjectId = FocusArea | LanguageId | CustomSubjectId;\n`;
 // Hash the exact snapshot native enrollment stores. Object keys are sorted;
 // arrays retain their authored order. This is also checked by Rust tests.
 const canonical = (value) => Array.isArray(value)
@@ -27,7 +28,7 @@ for (const course of manifest.courses) {
   const prompt = await readFile(new URL(`../src-tauri/${course.prompt_path}`, import.meta.url), 'utf8');
   fingerprints[course.course_id] = createHash('sha256').update(JSON.stringify(canonical({ course, curriculum, prompt, reference_lessons: references }))).digest('hex');
 }
-generated += `export const COURSE_FINGERPRINTS: Record<ClassroomSubjectId, string> = ${JSON.stringify(fingerprints, null, 2)};\n`;
+generated += `export const COURSE_FINGERPRINTS: Record<FocusArea | LanguageId, string> = ${JSON.stringify(fingerprints, null, 2)};\n`;
 const destination = new URL('../src/lib/catalog.generated.ts', import.meta.url);
 if (process.argv.includes('--check')) {
   if (await readFile(destination, 'utf8').catch(() => '') !== generated) {

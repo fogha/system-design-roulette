@@ -2,6 +2,7 @@ pub mod agents;
 pub mod alarm;
 pub mod audio;
 pub mod catalog;
+pub mod class_builder;
 pub mod classroom;
 pub mod commands;
 pub mod db;
@@ -354,6 +355,18 @@ pub fn run() {
             commands::classes::get_class_path,
             commands::classes::accept_class_path,
             commands::classes::revise_class_path,
+            commands::custom::list_custom_courses,
+            commands::custom::get_custom_course,
+            commands::custom::create_custom_course,
+            commands::custom::save_custom_course_brief,
+            commands::custom::save_custom_course_draft,
+            commands::custom::draft_custom_course,
+            commands::custom::review_custom_course,
+            commands::custom::verify_custom_course_sources,
+            commands::custom::publish_custom_course,
+            commands::custom::delete_custom_course_draft,
+            commands::custom::export_custom_course,
+            commands::custom::import_custom_course,
             commands::challenges::get_unit_challenge,
             commands::challenges::start_unit_challenge,
             commands::challenges::save_unit_challenge_response,

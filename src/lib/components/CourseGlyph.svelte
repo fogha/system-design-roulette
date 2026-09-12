@@ -23,6 +23,9 @@
       <rect x="7" y="9" width="34" height="30" rx="3" /><path d="M7 16h34m-28 7 5 4-5 4m10 0h9" /><circle cx="12" cy="12.5" r="1" class="signal" />
     {:else if courseId === 'bash-scripting'}
       <path d="M14 7h15l8 8v26H14Zm15 0v8h8M10 17H7v20h3M20 22l4 3-4 3m8 0h3" /><path d="M20 34h11" class="pipe" />
+    {:else if courseId.startsWith('custom-')}
+      <!-- A learner's own class: a sheet they wrote on, with the pen still there. -->
+      <path d="M10 8h20l8 8v24H10Zm20 0v8h8" /><path d="M15 22h12M15 28h9" class="pipe" /><path d="m27 35 9-9 3 3-9 9h-3Z" class="signal-stroke" />
     {:else}
       <path d="M7 10h25v19H19l-7 6v-6H7Z" /><path d="M36 18h5v20h-5v5l-7-5h-8v-5" class="pipe" />
       {#if courseId === 'german'}<path d="M13 17h12m-12 6h8" />{:else}<path d="M19 15v10m-5-10h10m-10 10h10" />{/if}
@@ -36,4 +39,5 @@
   .frame { fill: var(--bg); stroke: var(--node-border); }
   .pipe { stroke: var(--violet-fg); stroke-dasharray: 2.5 3; }
   .signal { fill: var(--led-ok); stroke: var(--bg); }
+  .signal-stroke { stroke: var(--led-ok); }
 </style>

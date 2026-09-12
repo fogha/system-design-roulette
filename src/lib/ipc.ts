@@ -220,6 +220,93 @@ export interface CurriculumBrief {
   related_concepts: string[];
 }
 
+/** A learner's own class, as the builder edits it. Mirrors `domain::custom`. */
+export interface CourseBrief {
+  title: string;
+  outcome: string;
+  background: string;
+  trusted_hosts: string[];
+  agent: string;
+  model: string;
+  custom_agent_bin: string;
+}
+export interface TopicBrief {
+  phase: 'foundations' | 'mechanisms' | 'production' | 'synthesis' | 'elective';
+  core: boolean;
+  learner_outcome: string;
+  mechanisms: string[];
+  production_scenario: string;
+  misconceptions: string[];
+  evidence: string;
+  artifact: string;
+  primary_sources: string[];
+  related_concepts: string[];
+}
+export interface DraftTopic {
+  slug: string;
+  title: string;
+  category: string;
+  prereqs: string[];
+  curriculum: TopicBrief;
+}
+export interface CourseDraft {
+  id: string;
+  label: string;
+  native_label: string;
+  short_code: string;
+  title: string;
+  summary: string;
+  context: string;
+  outcome: string;
+  environment: string;
+  source_hosts: string[];
+  entry_points: { id: string; label: string }[];
+  topics: DraftTopic[];
+}
+export interface DraftIssue {
+  /** A header field, or `topics/<slug>`. */
+  at: string;
+  message: string;
+}
+export interface ReviewFinding {
+  severity: 'high' | 'medium' | 'low';
+  topic: string;
+  message: string;
+  fix: string;
+}
+export interface SourceCheck {
+  topic: string;
+  url: string;
+  state: 'reachable' | 'unreachable' | 'off-host';
+}
+export interface CustomCourseView {
+  id: string;
+  version: number;
+  status: 'draft' | 'published';
+  origin: 'tutor' | 'manual' | 'import';
+  brief: CourseBrief;
+  draft: CourseDraft;
+  issues: DraftIssue[];
+  review: ReviewFinding[];
+  sources: SourceCheck[];
+  created_at: string;
+  updated_at: string;
+  published_at: string | null;
+}
+export interface CustomCourseSummary {
+  id: string;
+  label: string;
+  version: number;
+  status: 'draft' | 'published';
+  origin: 'tutor' | 'manual' | 'import';
+  topics: number;
+  updated_at: string;
+}
+export interface ClassExport {
+  path: string;
+  file_name: string;
+}
+
 export interface CurriculumConceptView {
   id: number;
   slug: string;
@@ -821,6 +908,19 @@ const realApi = {
   acceptClassPath: (input: AcceptPath) => invoke<AcceptedPath>('accept_class_path', { input }),
   getPathRecommendation: (draftId: EnrollmentDraftId, expectedRevision: number) => invoke<PathRecommendation>('get_path_recommendation', { draftId, expectedRevision }),
   getCatalog: () => invoke<CourseDefinition[]>('get_catalog'),
+  /** A learner's own classes: the builder from brief to published course. */
+  listCustomCourses: () => invoke<CustomCourseSummary[]>('list_custom_courses'),
+  getCustomCourse: (id: string) => invoke<CustomCourseView>('get_custom_course', { id }),
+  createCustomCourse: (brief: CourseBrief, origin: 'tutor' | 'manual' | 'import') => invoke<CustomCourseView>('create_custom_course', { brief, origin }),
+  saveCustomCourseBrief: (id: string, brief: CourseBrief) => invoke<CustomCourseView>('save_custom_course_brief', { id, brief }),
+  saveCustomCourseDraft: (id: string, draft: CourseDraft) => invoke<CustomCourseView>('save_custom_course_draft', { id, draft }),
+  draftCustomCourse: (id: string) => invoke<CustomCourseView>('draft_custom_course', { id }),
+  reviewCustomCourse: (id: string) => invoke<CustomCourseView>('review_custom_course', { id }),
+  verifyCustomCourseSources: (id: string) => invoke<CustomCourseView>('verify_custom_course_sources', { id }),
+  publishCustomCourse: (id: string) => invoke<CustomCourseView>('publish_custom_course', { id }),
+  deleteCustomCourseDraft: (id: string) => invoke<void>('delete_custom_course_draft', { id }),
+  exportCustomCourse: (id: string) => invoke<ClassExport>('export_custom_course', { id }),
+  importCustomCourse: (text: string) => invoke<CustomCourseView>('import_custom_course', { text }),
   markFrontendReady: () => invoke<void>('mark_frontend_ready'),
   setClassFocusPolicy: (subjectId: ClassroomSubjectId, policy: FocusPolicy) =>
     invoke<ClassroomProgramView>('set_class_focus_policy', { subjectId, policy }),

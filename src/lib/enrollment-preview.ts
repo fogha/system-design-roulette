@@ -14,7 +14,7 @@ export function previewEnrollmentOptions(courseId: ClassroomSubjectId): Enrollme
   const course = courseDefinition(courseId);
   if (!course) throw new Error('Unknown course');
   return {
-    course: { course_id: courseId, version: course.version, fingerprint: COURSE_FINGERPRINTS[courseId] },
+    course: { course_id: courseId, version: course.version, fingerprint: (COURSE_FINGERPRINTS as Record<string, string>)[courseId] ?? `preview-${courseId}-${course.version}` },
     entry_points: course.entry_points.map((point) => ({ ...point })),
     familiarity_options: course.kind === 'engineering'
       ? concepts.filter((concept) => concept.focus === courseId).map((concept) => ({ id: concept.slug, label: concept.title, group: concept.curriculum.phase }))

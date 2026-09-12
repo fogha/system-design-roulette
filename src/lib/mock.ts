@@ -9,6 +9,7 @@ import type { AcceptedPath, AcceptPath } from './contracts/classes';
 import { acceptPreviewClassPath, previewClassPath, previewPathSummary, revisePreviewClassPath } from './class-preview';
 import { applyPreviewChallenge, getPreviewChallenge, savePreviewChallengeResponse, startPreviewChallenge, submitPreviewChallenge } from './challenge-preview';
 import { guessStatus } from './features/recovery/ladder';
+import { previewCustom, onPreviewPublish } from './custom-preview';
 import { scheduleConflicts, conflictMessage, type ScheduleCandidate, type ConflictScope } from './features/classes/schedule-conflicts';
 import { COURSES, courseDefinition } from './catalog';
 import seedConcepts from '../../src-tauri/seed/concepts.json';
@@ -120,7 +121,8 @@ const SHAPED_EXERCISE: NonNullable<EngineeringLessonView['exercise']> = {
   hints: ['Start from the request that crosses the failed link.', 'Ask what the client sees on each branch; that is the policy made visible.', 'The revisit signal is usually the partition rate or the oversell count.'],
 };
 function referenceFor(focus: FocusArea): ReferenceLesson {
-  const slug = courseDefinition(focus)!.reference_lessons[0];
+  // A learner's own class has no bundled lesson; the preview borrows one.
+  const slug = courseDefinition(focus)?.reference_lessons[0] ?? courseDefinition('system-design')!.reference_lessons[0];
   const lesson = Object.values(referenceFiles).find((lesson) => lesson.slug === slug);
   if (!lesson) throw new Error(`Missing reference lesson for ${focus}`);
   return lesson;
@@ -722,6 +724,12 @@ let previewFreeOnly = true;
 function mockPrograms(): ClassroomProgramView[] {
   return CLASSROOM_CATALOG.map((item) => mockClassroomProgram(item.id as ClassroomSubjectId));
 }
+// A class published in the preview joins the catalogue and gets a program.
+onPreviewPublish((course) => {
+  if (CLASSROOM_CATALOG.some((item) => item.id === course.id)) return;
+  CLASSROOM_CATALOG.push({ id: course.id, kind: course.kind, label: course.label, native: course.native_label, short: course.short_code });
+  mockClassroomSettings[course.id] = { enabled: false, agent: mockAgent, model: mockModel, customBin: '', sessionMinutes: 30, learningGoal: '', targetWeeklyMinutes: 0, focusPolicy: 'advisory' as FocusPolicy };
+});
 function rejectMockConflicts(candidates: ScheduleCandidate[], scope: ConflictScope = {}) {
   const conflicts = scheduleConflicts(candidates, mockClassroomSlots, mockPrograms(), scope);
   if (conflicts.length) throw new Error(conflictMessage(conflicts));
@@ -774,7 +782,19 @@ export const mockApi = {
   getPathRecommendation: recommendPreviewPath,
   getEnrollmentDraft: async (courseId: ClassroomSubjectId) => previewEnrollmentDraft(courseId),
   saveEnrollmentDraft: async (input: SaveEnrollmentDraft) => savePreviewEnrollmentDraft(input),
-  getCatalog: async () => [...COURSES],
+  getCatalog: async () => [...COURSES, ...previewCustom.published()],
+  listCustomCourses: previewCustom.list,
+  getCustomCourse: previewCustom.get,
+  createCustomCourse: previewCustom.create,
+  saveCustomCourseBrief: previewCustom.saveBrief,
+  saveCustomCourseDraft: previewCustom.saveDraft,
+  draftCustomCourse: previewCustom.draft,
+  reviewCustomCourse: previewCustom.review,
+  verifyCustomCourseSources: previewCustom.verify,
+  publishCustomCourse: previewCustom.publish,
+  deleteCustomCourseDraft: previewCustom.remove,
+  exportCustomCourse: previewCustom.export,
+  importCustomCourse: previewCustom.import,
   getAppState: async () => appState(),
   checkAgent: async () => false,
   getRunnerConfiguration: async (runner: string) => previewConfiguration(runner),
@@ -1069,7 +1089,7 @@ export const mockApi = {
       return { kind: 'language', lesson: mockActiveLanguage };
     }
     mockEngineeringSessionId += 1;
-    mockActiveEngineering = mockEngineeringLesson(subjectId);
+    mockActiveEngineering = mockEngineeringLesson(subjectId as FocusArea);
     mockActiveEngineering.session_id = String(mockEngineeringSessionId);
     return { kind: 'engineering', lesson: mockActiveEngineering };
   },
