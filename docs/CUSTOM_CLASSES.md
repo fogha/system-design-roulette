@@ -105,4 +105,5 @@ A third card on the Verify step asks the tutor for the bank: three cited four-ch
 - **Retrieval from the bank.** Written questions could feed retrieval sessions before a lesson has been taught on the topic; today retrieval draws on the previous lesson's own questions.
 - **Editing single questions** in the builder rather than writing the whole bank again after a dispute.
 - **Re-accepting a path after a curriculum edit** with the changed topics marked.
+- **Retiring a published class.** Today a published class can be paused like any class but not removed; a retire action that hides it from the catalogue while keeping its lessons is the missing piece.
 - **Sharing**: an import from a URL, and a catalogue of shared classes. Not now.

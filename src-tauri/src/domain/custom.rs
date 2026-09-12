@@ -48,7 +48,9 @@ pub struct CourseBrief {
 /// when the course is published.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct DraftTopic {
+    #[serde(default)]
     pub slug: String,
+    #[serde(default)]
     pub title: String,
     #[serde(default)]
     pub category: String,
@@ -59,9 +61,13 @@ pub struct DraftTopic {
 }
 
 /// The editable course: what the builder shows and the tutor writes.
+/// Every field defaults so the tutor's answer, which never carries the id
+/// and may miss a field, still parses and is then held to the validator.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct CourseDraft {
+    #[serde(default)]
     pub id: String,
+    #[serde(default)]
     pub label: String,
     #[serde(default)]
     pub native_label: String,
@@ -99,10 +105,12 @@ pub struct DraftIssue {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ReviewFinding {
     /// `high`, `medium` or `low`.
+    #[serde(default)]
     pub severity: String,
     /// The bare slug of the topic concerned, or empty for the course.
     #[serde(default)]
     pub topic: String,
+    #[serde(default)]
     pub message: String,
     #[serde(default)]
     pub fix: String,
@@ -1191,6 +1199,18 @@ mod tests {
         assert_eq!(tidy.topics[1].prereqs, vec!["own-ership"]);
         assert_eq!(tidy.short_code, "RC");
         assert_eq!(tidy.entry_points.len(), 4);
+    }
+
+    #[test]
+    fn a_tutor_answer_without_an_id_still_parses() {
+        let raw = r#"{"label": "Rust", "title": "Rust for tools", "topics": [{"title": "Ownership", "curriculum": {"phase": "foundations", "core": true}}]}"#;
+        let draft: CourseDraft = serde_json::from_str(raw).unwrap();
+        assert_eq!(draft.id, "");
+        assert_eq!(draft.topics[0].slug, "");
+        let tidy = normalize(draft);
+        assert_eq!(tidy.topics[0].slug, "ownership");
+        assert_eq!(tidy.entry_points.len(), 4);
+        assert!(!validate(&tidy).is_empty());
     }
 
     #[test]

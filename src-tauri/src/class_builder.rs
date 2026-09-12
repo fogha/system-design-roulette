@@ -299,13 +299,19 @@ impl Generator {
 }
 
 /// One question as the tutor writes it; the desk assigns ids and criteria.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct WrittenQuestion {
+    #[serde(default)]
     pub topic: String,
+    #[serde(default)]
     pub label: String,
+    #[serde(default)]
     pub prompt: String,
+    #[serde(default)]
     pub choices: Vec<String>,
+    #[serde(default)]
     pub answer: String,
+    #[serde(default)]
     pub explanation: String,
     #[serde(default)]
     pub source: String,
