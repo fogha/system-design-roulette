@@ -46,9 +46,14 @@ class AppStore {
   openClass(subjectId: ClassroomSubjectId | null = null, tab: ClassTab = 'overview') {
     this.classSelection = subjectId;
     this.classTab = tab;
+    // A request the open workspace can follow, since it reads the selection
+    // and the tab only when it mounts.
+    if (subjectId) this.classRequest = { id: subjectId, tab, at: Date.now() };
     this.builder = null;
     this.navigate('classes');
   }
+  /** The last class and tab asked for by name, with when, so the same ask twice still lands. */
+  classRequest = $state<{ id: ClassroomSubjectId; tab: ClassTab; at: number } | null>(null);
   /** The class builder in the Classes workspace: a new class, or a draft or published class by id. */
   builder = $state<string | 'new' | null>(null);
   openBuilder(id: string | 'new' = 'new') {

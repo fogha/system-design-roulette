@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { app } from '../../stores.svelte';
   import type { ClassroomSubjectId } from '../../ipc';
   import CourseGlyph from '../../components/CourseGlyph.svelte';
@@ -23,6 +24,18 @@
   const visible = $derived(filterClasses(programs, query, filter, id => slots.some(s => s.subject_id === id) || sessions.some(s => s.subject_id === id)));
   const options = [{ value: 'all', label: 'All classes' }, { value: 'active', label: 'Active' }, { value: 'paused', label: 'Paused' }, { value: 'completed', label: 'Completed' }];
   $effect(() => { if (!selected && programs.length) select(app.classSelection ?? programs[0].subject_id); });
+  // A class asked for by name while the workspace is open: switch to it and
+  // hand its detail the tab.
+  $effect(() => {
+    const request = app.classRequest;
+    if (!request) return;
+    untrack(() => {
+      if (!programs.some((p) => p.subject_id === request.id)) return;
+      tabsByClass.set(request.id, request.tab);
+      app.builder = null;
+      select(request.id);
+    });
+  });
   /** Classes being built: drafts not yet published. */
   let drafts = $state<CustomCourseSummary[]>([]);
   async function loadDrafts() { try { drafts = (await api.listCustomCourses()).filter((c) => c.status === 'draft'); } catch { drafts = []; } }
@@ -87,7 +100,7 @@
       {#key building}<ClassBuilder id={building === 'new' ? null : building} onclose={closeBuilder} onpublished={published} />{/key}
     {/if}
     {#each programs.filter(p => visited.includes(p.subject_id)) as program (program.subject_id)}
-      <div class="detail-instance" hidden={!!building || selected !== program.subject_id}><ClassDetail {program} initialTab={tabsByClass.get(program.subject_id) ?? (program.subject_id === (initialSelection ?? programs[0]?.subject_id) ? initialTab : 'overview')} ontabchange={tab => rememberTab(program.subject_id, tab)} /></div>
+      <div class="detail-instance" hidden={!!building || selected !== program.subject_id}><ClassDetail {program} initialTab={tabsByClass.get(program.subject_id) ?? (program.subject_id === (initialSelection ?? programs[0]?.subject_id) ? initialTab : 'overview')} requested={app.classRequest?.id === program.subject_id ? app.classRequest : null} ontabchange={tab => rememberTab(program.subject_id, tab)} /></div>
     {/each}
     {#if !selected && !building}<div class="empty"><p role="status">Loading your classes…</p></div>{/if}
   </div>

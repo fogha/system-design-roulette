@@ -14,7 +14,7 @@
   import PathPreview from './PathPreview.svelte';
   import UnitChallenge from './UnitChallenge.svelte';
   import type { ClassTab } from './class-navigation';
-  let { program, initialTab = 'overview', ontabchange }: { program: ClassroomProgramView; initialTab?: ClassTab; ontabchange?: (tab: ClassTab) => void } = $props();
+  let { program, initialTab = 'overview', requested = null, ontabchange }: { program: ClassroomProgramView; initialTab?: ClassTab; /** A tab asked for by name after mount, with when, so the same ask twice still lands. */ requested?: { tab: ClassTab; at: number } | null; ontabchange?: (tab: ClassTab) => void } = $props();
   const uid = $props.id();
   const course = $derived(courseDefinition(program.subject_id)!);
   /** A class the learner made: it can be edited as a new version and exported as a file. */
@@ -60,6 +60,7 @@
     { id: 'schedule', label: 'Schedule', icon: CalendarClock },
   ] as const;
   function select(id: ClassTab) { tab = id; ontabchange?.(id); if (!visited.includes(id)) visited = [...visited, id]; }
+  $effect(() => { const ask = requested; if (ask) untrack(() => select(ask.tab)); });
   function key(event: KeyboardEvent, index: number) {
     if (!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
     event.preventDefault();
