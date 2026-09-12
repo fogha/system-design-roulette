@@ -4,7 +4,9 @@
 
 # Principia Desk
 
-**Understand deeply. Practice daily.** A macOS desk for learning subjects from their foundations: nine classes with personal starting points, lessons taught by your own AI tutor from verified primary sources, durable appointments, and enforcement you choose per class.
+[![Site](https://img.shields.io/badge/site-principia.ndelucien.com-ef9f27)](https://principia.ndelucien.com) [![Release](https://img.shields.io/github/v/release/dark-matter08/system-design-roulette?color=534ab7)](https://github.com/dark-matter08/system-design-roulette/releases/latest) [![CI](https://github.com/dark-matter08/system-design-roulette/actions/workflows/ci.yml/badge.svg)](https://github.com/dark-matter08/system-design-roulette/actions/workflows/ci.yml) [![Licence](https://img.shields.io/badge/licence-MIT-9fe1cb)](LICENSE)
+
+**Understand deeply. Practice daily.** A macOS desk for learning subjects from their foundations: nine classes with personal starting points, lessons taught by your own AI tutor from verified primary sources, durable appointments, and enforcement you choose per class. The site is [principia.ndelucien.com](https://principia.ndelucien.com); the story of how it came to be is on [ndelucien.com](https://ndelucien.com).
 
 Principia Desk keeps the visual character of its predecessor and its database, and replaces the once-a-day routine with classes you schedule, a shared study runtime that saves every step, and honest progress denominators.
 
@@ -210,6 +212,23 @@ Numbered migrations still run after a pre-upgrade backup, and finished daily-rou
 ```
 
 Design principle: **Rust owns all authority.** Lifecycles, locks, grading and selection live in the backend; the webview renders and requests transitions, which Rust validates. Data lives in `~/Library/Application Support/com.darkmatter.system-design-roulette/` as a SQLite database with WAL journaling and pre-upgrade backups. Contracts are described in [docs/SHARED_SESSION_RUNTIME.md](docs/SHARED_SESSION_RUNTIME.md) and [docs/STORAGE.md](docs/STORAGE.md); the design system in [DESIGN.md](DESIGN.md).
+
+## Documentation
+
+| Where | What |
+|---|---|
+| [CHANGELOG.md](CHANGELOG.md) | What changed, release by release |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | How to set up, the gates, how a change is made |
+| [SECURITY.md](SECURITY.md) | What counts as a security report and where a key may go |
+| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | How we treat each other |
+| [DESIGN.md](DESIGN.md) | The design system: tokens, components, vocabulary |
+| [docs/STORAGE.md](docs/STORAGE.md) | The database, migrations and enrollment contracts |
+| [docs/SHARED_SESSION_RUNTIME.md](docs/SHARED_SESSION_RUNTIME.md) | Sessions, stages, preparation and grading |
+| [docs/CUSTOM_CLASSES.md](docs/CUSTOM_CLASSES.md) | Your own classes: the process and what is underneath |
+| [docs/TEACHER.md](docs/TEACHER.md) | The teacher agent and the mastery ledger |
+| [docs/CATALOG.md](docs/CATALOG.md) | The course catalogue and how a course is authored |
+| [docs/PRODUCT_EVOLUTION_PLAN.md](docs/PRODUCT_EVOLUTION_PLAN.md) | The plan and its record, increment by increment |
+| [landing/](landing/README.md) | The site, principia.ndelucien.com, and how it deploys |
 
 ## Development
 
