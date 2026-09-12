@@ -42,7 +42,9 @@ The nine courses are not the limit. **New class** on the Classes page opens the 
 4. **Verify.** The tutor reads the draft back and returns findings with proposed fixes; the desk fetches every primary source and reports which ones answered. Both optional, both repeatable.
 5. **Enroll.** Publishing registers the course, writes its topics into the curriculum under the class's id and opens the starting-point flow. From then on the class is any class: study times, lessons prepared ahead, blocks, retrieval on earlier topics, PDFs, enforcement, the custom badge the only difference.
 
-A published class can be edited into a new version (lessons already taught keep their topics) and exported as one file, under `Documents/Principia Desk/classes/`, that carries the course and nothing personal. Until its question bank is written, a custom class offers the two starting points that need none and no unit challenges; that pass, and disputing a generated answer key, are next. The design is in `docs/CUSTOM_CLASSES.md`.
+The tutor can also **write the question bank**: three cited four-choice questions per stage on the course's core topics, held to the same shape as the bundled banks (the key among four distinct choices, a source on the course's hosts, every stage sampled three times). With it, the placement check and unit challenges work for the class; without it, the class offers the two starting points that need none. A learner who believes a written key is wrong disputes it from the check's result: the question stops counting, is left out of every sample, and is listed as disputed in the builder until the bank is written again.
+
+A published class can be edited into a new version (lessons already taught keep their topics) and exported as one file, under `Documents/Principia Desk/classes/`, that carries the course and nothing personal. The design is in `docs/CUSTOM_CLASSES.md`.
 
 ## Lessons on one shared runtime
 

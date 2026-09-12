@@ -9,6 +9,7 @@ use super::{
         LearningGoal,
     },
 };
+use crate::catalog;
 use crate::db::{DbError, Result};
 use rusqlite::{Connection, TransactionBehavior};
 use serde::{Deserialize, Serialize};
@@ -32,6 +33,15 @@ pub struct Question {
     pub answer: String,
     pub explanation: String,
     pub followup_for: Option<String>,
+    /// The primary source a written question cites; authored banks have none.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub source: String,
+    /// A learner disputed the key; the question stops counting and is left
+    /// out of every sample until it is corrected.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub voided: bool,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub void_reason: String,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Bank {
@@ -53,24 +63,62 @@ fn digest(value: &impl Serialize) -> Result<String> {
     Ok(format!("{:x}", Sha256::digest(serde_json::to_vec(value)?)))
 }
 
-/// Whether an authored diagnostic bank exists for the course, without
-/// validating it (that happens when it is used).
+/// Whether a diagnostic bank exists for the course, authored or written
+/// for a learner's own class, without validating it (that happens when it
+/// is used).
 pub fn has_bank(course_id: &str) -> bool {
+    if catalog::is_custom(course_id) {
+        // A written bank counts only while it still samples every stage
+        // three times; a disputed question can take it below that. This
+        // is the structural part of the check only: the full validation
+        // reads the enrollment options, which ask this question.
+        return catalog::custom_bank(course_id)
+            .and_then(|value| serde_json::from_value::<Bank>(value).ok())
+            .is_some_and(|bank| {
+                ["foundations", "mechanisms", "production", "synthesis"]
+                    .iter()
+                    .all(|stage| {
+                        bank.questions
+                            .iter()
+                            .filter(|q| {
+                                !q.voided && q.followup_for.is_none() && q.entry_point == *stage
+                            })
+                            .count()
+                            >= CRITERIA_PER_ENTRY_POINT
+                    })
+            });
+    }
     serde_json::from_str::<Banks>(include_str!("../../seed/diagnostics.json"))
         .map(|banks| banks.courses.iter().any(|b| b.course_id == course_id))
         .unwrap_or(false)
 }
 
 pub fn bank(course_id: &str) -> Result<Bank> {
-    let banks: Banks = serde_json::from_str(include_str!("../../seed/diagnostics.json"))?;
-    if banks.schema_version != 1 {
-        return Err(invalid("unsupported diagnostic bank version"));
-    }
-    let bank = banks
-        .courses
-        .into_iter()
-        .find(|b| b.course_id == course_id)
-        .ok_or_else(|| invalid("diagnostic unavailable for this course"))?;
+    let bank = if catalog::is_custom(course_id) {
+        // A learner's own class: the bank the tutor wrote, registered with
+        // the course. Voided questions are left out of every sample.
+        let mut bank: Bank = serde_json::from_value(
+            catalog::custom_bank(course_id)
+                .ok_or_else(|| invalid("this class has no question bank yet"))?,
+        )?;
+        bank.questions.retain(|q| !q.voided);
+        bank
+    } else {
+        let banks: Banks = serde_json::from_str(include_str!("../../seed/diagnostics.json"))?;
+        if banks.schema_version != 1 {
+            return Err(invalid("unsupported diagnostic bank version"));
+        }
+        banks
+            .courses
+            .into_iter()
+            .find(|b| b.course_id == course_id)
+            .ok_or_else(|| invalid("diagnostic unavailable for this course"))?
+    };
+    validate_bank(course_id, bank)
+}
+
+/// The same checks for every bank, authored or written.
+pub fn validate_bank(course_id: &str, bank: Bank) -> Result<Bank> {
     let options = enrollment::options(course_id)?;
     let mut ids = HashSet::new();
     let mut criteria = HashSet::new();

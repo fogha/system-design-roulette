@@ -8,6 +8,7 @@ use crate::domain::custom::{
     self, CourseBrief, CourseDraft, DraftIssue, ReviewFinding, SourceCheck, MAX_TOPICS, MIN_TOPICS,
     STAGES,
 };
+use crate::domain::placement::{Bank, Choice, Question, CRITERIA_PER_ENTRY_POINT};
 use crate::generator::{GenError, Generator, Result};
 use serde::Deserialize;
 use std::time::Duration;
@@ -15,6 +16,7 @@ use std::time::Duration;
 /// How long a drafting call may take. A whole curriculum is a long answer.
 const DRAFT_TIMEOUT: Duration = Duration::from_secs(420);
 const REVIEW_TIMEOUT: Duration = Duration::from_secs(240);
+const BANK_TIMEOUT: Duration = Duration::from_secs(360);
 
 /// The shape the tutor is asked for, as a schema the prompt shows. It is the
 /// draft itself minus the id, which the desk assigns.
@@ -296,6 +298,258 @@ impl Generator {
     }
 }
 
+/// One question as the tutor writes it; the desk assigns ids and criteria.
+#[derive(Debug, Clone, Deserialize)]
+pub struct WrittenQuestion {
+    pub topic: String,
+    pub label: String,
+    pub prompt: String,
+    pub choices: Vec<String>,
+    pub answer: String,
+    pub explanation: String,
+    #[serde(default)]
+    pub source: String,
+}
+
+#[derive(Deserialize)]
+struct WrittenBank {
+    questions: Vec<WrittenQuestion>,
+}
+
+/// Hold the tutor's questions to the bank's shape: exactly three per stage,
+/// each on a core topic of that stage, four distinct choices with the key
+/// among them, an explanation, and a source on the course's hosts. The
+/// reasons come back for a correction round.
+pub fn bank_from_written(
+    draft: &CourseDraft,
+    written: Vec<WrittenQuestion>,
+) -> std::result::Result<Bank, String> {
+    let mut reasons = Vec::new();
+    let mut questions = Vec::new();
+    let mut per_stage = std::collections::HashMap::<String, usize>::new();
+    let on_host = |url: &str| {
+        crate::research::host_of(url).is_some_and(|host| {
+            draft
+                .source_hosts
+                .iter()
+                .any(|allowed| host == *allowed || host.ends_with(&format!(".{allowed}")))
+        })
+    };
+    for (index, item) in written.into_iter().enumerate() {
+        let n = index + 1;
+        let Some(topic) = draft.topics.iter().find(|t| t.slug == item.topic) else {
+            reasons.push(format!(
+                "question {n}: topic {:?} is not in the course",
+                item.topic
+            ));
+            continue;
+        };
+        let stage = topic.curriculum.phase.clone();
+        if stage == "elective" {
+            reasons.push(format!(
+                "question {n}: {} is an elective; sample a core topic",
+                item.topic
+            ));
+            continue;
+        }
+        if item.prompt.trim().is_empty()
+            || item.label.trim().is_empty()
+            || item.explanation.trim().is_empty()
+        {
+            reasons.push(format!(
+                "question {n}: prompt, label and explanation are all required"
+            ));
+            continue;
+        }
+        let choices: Vec<String> = item
+            .choices
+            .iter()
+            .map(|c| c.trim().to_string())
+            .filter(|c| !c.is_empty())
+            .collect();
+        let distinct: std::collections::HashSet<&str> =
+            choices.iter().map(|c| c.as_str()).collect();
+        if choices.len() != 4 || distinct.len() != 4 {
+            reasons.push(format!("question {n}: exactly four distinct choices"));
+            continue;
+        }
+        let Some(key) = choices.iter().position(|c| c == item.answer.trim()) else {
+            reasons.push(format!(
+                "question {n}: the answer must be one of the choices, word for word"
+            ));
+            continue;
+        };
+        if !item.source.trim().is_empty() && !on_host(&item.source) {
+            reasons.push(format!(
+                "question {n}: the source must be on the course's hosts"
+            ));
+            continue;
+        }
+        let count = per_stage.entry(stage.clone()).or_default();
+        if *count >= CRITERIA_PER_ENTRY_POINT {
+            // Extra questions for a stage are kept out rather than failing the bank.
+            continue;
+        }
+        *count += 1;
+        let ordinal = questions.len() + 1;
+        questions.push(Question {
+            id: format!("{}-entry-{ordinal}", draft.id),
+            criterion: format!("{}-criterion-{ordinal}", draft.id),
+            competency: format!("{}-{}", draft.id, topic.slug),
+            entry_point: stage,
+            label: item.label.trim().to_string(),
+            prompt: item.prompt.trim().to_string(),
+            choices: choices
+                .iter()
+                .enumerate()
+                .map(|(i, text)| Choice {
+                    id: (i + 1).to_string(),
+                    text: text.clone(),
+                })
+                .collect(),
+            answer: (key + 1).to_string(),
+            explanation: item.explanation.trim().to_string(),
+            followup_for: None,
+            source: item.source.trim().to_string(),
+            voided: false,
+            void_reason: String::new(),
+        });
+    }
+    for (stage, _) in STAGES {
+        let have = per_stage.get(stage).copied().unwrap_or(0);
+        if have < CRITERIA_PER_ENTRY_POINT {
+            reasons.push(format!(
+                "the {stage} stage has {have} usable question(s); it needs {CRITERIA_PER_ENTRY_POINT}, each on a core topic of that stage"
+            ));
+        }
+    }
+    if !reasons.is_empty() {
+        return Err(reasons.join("\n"));
+    }
+    Ok(Bank {
+        course_id: draft.id.clone(),
+        version: format!("written-{}", chrono::Utc::now().format("%Y%m%d%H%M%S")),
+        estimated_minutes: 14,
+        scope_note: "Twelve short questions, three for each stage of this course, written by the tutor from the course's own sources, so the check can place you at any stage rather than guessing past the ones it never sampled.".into(),
+        questions,
+    })
+}
+
+fn bank_prompt(brief: &CourseBrief, draft: &CourseDraft) -> String {
+    let topics = draft
+        .topics
+        .iter()
+        .filter(|t| t.curriculum.core && t.curriculum.phase != "elective")
+        .map(|t| {
+            format!(
+                "- {} [{}]: {} — outcome: {} — sources: {}",
+                t.slug,
+                t.curriculum.phase,
+                t.title,
+                t.curriculum.learner_outcome,
+                t.curriculum.primary_sources.join(" ")
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!(
+        "Write the placement check for a self-study course: {per} four-choice questions for          each of the four stages (foundations, mechanisms, production, synthesis), {total} in          all, each on a different core topic of its stage where the stage has enough topics.          A question tests whether the learner already has the topic's outcome; it is short,          concrete, answerable in under a minute, and its key is verifiable from the topic's          primary sources. The three wrong choices are plausible mistakes, not jokes. Cite one          of the topic's sources per question.
+
+         COURSE: {title}
+OUTCOME: {outcome}
+WHAT THE LEARNER ALREADY KNOWS: {background}
+         SOURCE HOSTS: {hosts}
+
+CORE TOPICS:
+{topics}
+
+         Return ONLY a JSON object: {{\"questions\": [{{\"topic\": \"slug from the list\", \
+         \"label\": \"3-6 words naming the skill\", \"prompt\": \"the question\", \"choices\": \
+         [\"four\", \"distinct\", \"answers\", \"here\"], \"answer\": \"the correct choice, word \
+         for word\", \"explanation\": \"why, in one or two sentences\", \"source\": \"one of \
+         the topic's source URLs\"}}]}}. No markdown fences, no commentary.",
+        per = CRITERIA_PER_ENTRY_POINT,
+        total = CRITERIA_PER_ENTRY_POINT * 4,
+        title = draft.title,
+        outcome = draft.outcome,
+        background = if brief.background.trim().is_empty() {
+            "not stated"
+        } else {
+            brief.background.trim()
+        },
+        hosts = draft.source_hosts.join(", "),
+    )
+}
+
+impl Generator {
+    /// Ask the tutor to write the question bank: three cited questions per
+    /// stage. A bank that fails the shape goes back once with the reasons.
+    pub async fn write_custom_course_bank(
+        &self,
+        brief: &CourseBrief,
+        draft: &CourseDraft,
+    ) -> Result<(Bank, String)> {
+        let scoped = self.scoped("course-bank");
+        let agent = if brief.agent.is_empty() {
+            scoped.current_agent()
+        } else {
+            brief.agent.clone()
+        };
+        let model = if brief.model.is_empty() {
+            scoped.current_model()
+        } else {
+            brief.model.clone()
+        };
+        let custom_bin = if agent == "custom" {
+            brief.custom_agent_bin.clone()
+        } else {
+            scoped.current_custom_bin()
+        };
+        scoped.log(format!(
+            "class builder: asking {agent} ({model}) for the question bank of \"{}\"",
+            draft.label
+        ));
+        let prompt = bank_prompt(brief, draft);
+        let (written, source) = scoped
+            .run_exact_for::<WrittenBank>(&agent, &custom_bin, &prompt, false, BANK_TIMEOUT, &model)
+            .await?;
+        let first = bank_from_written(draft, written.questions);
+        let bank = match first {
+            Ok(bank) => bank,
+            Err(reasons) => {
+                scoped.log(format!(
+                    "class builder: the bank failed its checks; asking for one correction\n{reasons}"
+                ));
+                let correction = format!(
+                    "Correct this question bank. It failed these checks:\n{reasons}\n\n\
+                     Keep the good questions; replace or fix the others. Return ONLY the \
+                     complete JSON object in the same shape.\n\nORIGINAL_REQUEST:\n{prompt}"
+                );
+                let (again, _) = scoped
+                    .run_exact_for::<WrittenBank>(
+                        &agent,
+                        &custom_bin,
+                        &correction,
+                        false,
+                        BANK_TIMEOUT,
+                        &model,
+                    )
+                    .await?;
+                bank_from_written(draft, again.questions).map_err(|remaining| {
+                    GenError::Parse(format!(
+                        "the question bank failed its checks after one correction: {remaining}"
+                    ))
+                })?
+            }
+        };
+        scoped.log(format!(
+            "class builder: {} questions written, three per stage",
+            bank.questions.len()
+        ));
+        Ok((bank, source))
+    }
+}
+
 /// The tutor's draft with the desk's id and the brief's hosts folded in.
 fn with_id(mut draft: CourseDraft, id: &str, brief: &CourseBrief) -> CourseDraft {
     draft.id = id.into();
@@ -381,6 +635,88 @@ pub fn stage_labels(draft: &CourseDraft) -> Vec<(String, String)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::CurriculumBrief;
+    use crate::domain::custom::DraftTopic;
+
+    fn draft_with_topics() -> CourseDraft {
+        let topic = |slug: &str, phase: &str| DraftTopic {
+            slug: slug.into(),
+            title: format!("Topic {slug}"),
+            category: "fundamentals".into(),
+            prereqs: vec![],
+            curriculum: CurriculumBrief {
+                phase: phase.into(),
+                core: true,
+                primary_sources: vec!["https://doc.rust-lang.org/book/".into()],
+                ..Default::default()
+            },
+        };
+        CourseDraft {
+            id: "custom-rust".into(),
+            label: "Rust".into(),
+            title: "Rust".into(),
+            source_hosts: vec!["doc.rust-lang.org".into()],
+            entry_points: custom::default_stages(),
+            topics: vec![
+                topic("a", "foundations"),
+                topic("b", "mechanisms"),
+                topic("c", "production"),
+                topic("d", "synthesis"),
+            ],
+            ..Default::default()
+        }
+    }
+
+    fn written(topic: &str, answer: &str) -> WrittenQuestion {
+        WrittenQuestion {
+            topic: topic.into(),
+            label: "A skill".into(),
+            prompt: "Which is it?".into(),
+            choices: vec!["one".into(), "two".into(), "three".into(), "four".into()],
+            answer: answer.into(),
+            explanation: "Because.".into(),
+            source: "https://doc.rust-lang.org/book/".into(),
+        }
+    }
+
+    #[test]
+    fn a_written_bank_is_held_to_three_per_stage_on_core_topics_with_the_key_among_the_choices() {
+        let draft = draft_with_topics();
+        let mut questions = Vec::new();
+        for topic in ["a", "b", "c", "d"] {
+            for _ in 0..3 {
+                questions.push(written(topic, "two"));
+            }
+        }
+        let bank = bank_from_written(&draft, questions.clone()).unwrap();
+        assert_eq!(bank.questions.len(), 12);
+        assert_eq!(bank.questions[0].competency, "custom-rust-a");
+        assert_eq!(bank.questions[0].answer, "2");
+        assert_eq!(bank.questions[0].choices.len(), 4);
+        assert_eq!(bank.questions[11].entry_point, "synthesis");
+        assert!(bank.questions.iter().all(|q| !q.voided));
+        // A missing stage, a key not among the choices, an unknown topic.
+        let short = questions[..9].to_vec();
+        let reasons = bank_from_written(&draft, short).unwrap_err();
+        assert!(reasons.contains("synthesis stage has 0"));
+        let mut bad_key = questions.clone();
+        bad_key[0].answer = "five".into();
+        assert!(bank_from_written(&draft, bad_key)
+            .unwrap_err()
+            .contains("word for word"));
+        let mut unknown = questions.clone();
+        unknown[0].topic = "zz".into();
+        assert!(bank_from_written(&draft, unknown)
+            .unwrap_err()
+            .contains("not in the course"));
+        // A fourth question for a stage is set aside, not a failure.
+        let mut extra = questions.clone();
+        extra.push(written("a", "one"));
+        assert_eq!(
+            bank_from_written(&draft, extra).unwrap().questions.len(),
+            12
+        );
+    }
 
     #[test]
     fn the_drafting_prompt_carries_the_brief_and_the_shape() {

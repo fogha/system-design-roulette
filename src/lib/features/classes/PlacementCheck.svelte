@@ -20,6 +20,14 @@
   let alive = false;
   let unsubscribe: (() => void) | undefined;
   const question = $derived(check?.questions[index]);
+  /** A learner's own class: a written key can be disputed from its result. */
+  const custom = $derived(draft.course.course_id.startsWith('custom-'));
+  let disputed = $state<string[]>([]);
+  async function dispute(questionId: string) {
+    const reason = prompt('What is wrong with this key? (optional, kept with the question)') ?? '';
+    try { await api.voidCustomQuestion(draft.course.course_id, questionId, reason); disputed = [...disputed, questionId]; }
+    catch (cause) { error = String(cause); }
+  }
   const selected = $derived(question ? work?.responses[question.id]?.answer ?? '' : '');
   const recovery = $derived(work?.status === 'conflict' || work?.status === 'error');
   const demonstrated = $derived(check?.criteria.filter((row) => row.verdict === 'passed').length ?? 0);
@@ -133,7 +141,7 @@
           {@const rows = check.criteria.filter((row) => row.verdict === group.key)}
           {#if rows.length}
             <h4 class="group mono">{group.title} · {rows.length}</h4>
-            <div class="results">{#each rows as row (row.id)}<details><summary><span>{row.label}</span><span class:passed={row.verdict === 'passed'} class="verdict mono">{label(row.verdict)}</span></summary>{#each row.evidence as item, i}<div class="evidence"><p class="mono">{i === 0 ? 'Initial sample' : 'Follow-up'} · {label(item.verdict)}</p><p>{item.explanation}</p><p><strong>Expected:</strong> {item.expected_answer}</p></div>{/each}</details>{/each}</div>
+            <div class="results">{#each rows as row (row.id)}<details><summary><span>{row.label}</span><span class:passed={row.verdict === 'passed'} class="verdict mono">{label(row.verdict)}</span></summary>{#each row.evidence as item, i}<div class="evidence"><p class="mono">{i === 0 ? 'Initial sample' : 'Follow-up'} · {label(item.verdict)}</p><p>{item.explanation}</p><p><strong>Expected:</strong> {item.expected_answer}</p>{#if custom}{#if disputed.includes(item.question_id)}<p class="disputed mono">key disputed · set aside until the bank is corrected</p>{:else}<button type="button" class="dispute" onclick={() => dispute(item.question_id)}>This key is wrong</button>{/if}{/if}</div>{/each}</details>{/each}</div>
           {/if}
         {/each}
         <p class="scope">Every stage of this course was sampled, three skills each. What you did not demonstrate becomes a refresher or the place your lessons start; nothing is left unmeasured.</p>
@@ -179,6 +187,8 @@
   .verdict { display: inline-block; margin-left: 12px; color: var(--muted); font-size: 10px; }
   .passed { color: var(--teal-fg); }
   .evidence { margin: 10px 0; padding: 0 12px; border-left: 1px solid var(--node-border); color: var(--muted); font-size: 12px; }
+  .dispute { padding: 2px 0; border: 0; background: transparent; color: var(--warn-fg); font: 11px var(--font-body); cursor: pointer; text-decoration: underline dotted; }
+  .disputed { font-size: 9.5px; letter-spacing: 0.5px; color: var(--warn-fg); }
   .evidence .mono { font-size: 10px; color: var(--fg); }
   @media(max-width:620px) { .check { padding: 20px 16px; } .actions { justify-content: flex-start; } }
   .check.embedded { width: 100%; max-width: 1000px; padding: 0; }

@@ -16,6 +16,7 @@ Principia Desk stores its profile under `com.darkmatter.principia-desk` in a dat
 - v11 adds `execution_log_lines`: every line the tutor's runner reports while preparing a lesson, tagged with the session being prepared, kept thirty days and capped per run.
 - v12 lets a study-time rule start at a different time on each weekday it fires on (`starts_json`, keyed by ISO weekday, holding `HH:MM`); a day not listed uses the rule's own hour and minute.
 - v13 adds `custom_courses`: a learner's own classes, with the brief, the editable draft, the last published definition, curriculum and prompt, and the last tutor review and source check. Topics of a published course live in `concepts` under the course id.
+- v14 adds `custom_courses.bank_json`: the question bank the tutor wrote for a learner's own class, in the diagnostic bank's shape with a cited source per question, absent until written.
 
 Migration SQL and the frozen `legacy_v1.rs` implementation contribute to their checksums. Once committed, do not edit these sources, even for formatting. Add a new migration for later changes. The runner itself may evolve without changing an already-applied migration's meaning.
 

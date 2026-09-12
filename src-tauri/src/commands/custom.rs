@@ -118,6 +118,58 @@ pub async fn verify_custom_course_sources(
     custom::save_sources(&conn, &id, &checks).map_err(err)
 }
 
+/// Ask the tutor to write the question bank: three cited questions per
+/// stage. It is kept with the class and registered when the class is
+/// published, which turns on the placement check and unit challenges.
+#[tauri::command]
+pub async fn write_custom_course_bank(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+) -> CmdResult<CustomCourseView> {
+    let (brief, draft) = {
+        let conn = state.db.0.lock().unwrap();
+        let view = custom::get(&conn, &id).map_err(err)?;
+        if !view.issues.is_empty() {
+            return Err(format!(
+                "fix the draft before writing its questions: {}",
+                view.issues[0].message
+            ));
+        }
+        (view.brief, view.draft)
+    };
+    let _run = state.generator.feed.begin(&format!("bank:{id}"), &id);
+    let (bank, _) = state
+        .generator
+        .write_custom_course_bank(&brief, &draft)
+        .await
+        .map_err(|error| format!("the tutor could not write the question bank: {error}"))?;
+    let conn = state.db.0.lock().unwrap();
+    let view = custom::save_bank(&conn, &id, &bank).map_err(err)?;
+    tell(&app);
+    Ok(view)
+}
+
+/// A learner disputes a written key. The question stops counting and is
+/// left out of every sample until it is corrected.
+#[tauri::command]
+pub fn void_custom_question(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+    question_id: String,
+    reason: String,
+) -> CmdResult<CustomCourseView> {
+    let view = custom::void_question(&state.db.0.lock().unwrap(), &id, &question_id, &reason)
+        .map_err(err)?;
+    state.generator.feed.say(format!(
+        "class builder: a key in {} was disputed ({question_id}); the question is set aside",
+        view.draft.label
+    ));
+    tell(&app);
+    Ok(view)
+}
+
 /// Publish the draft as a course. The desk refreshes its catalog view.
 #[tauri::command]
 pub fn publish_custom_course(

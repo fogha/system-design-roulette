@@ -190,6 +190,29 @@ pub fn unregister_custom(id: &str) {
         .write()
         .unwrap()
         .retain(|(existing, _)| existing != id);
+    register_custom_bank(id, None);
+}
+
+/// Question banks of custom courses, keyed by id, in the diagnostic bank's
+/// shape, so the placement check and unit challenges find them without a
+/// database in hand.
+static CUSTOM_BANKS: RwLock<Vec<(String, serde_json::Value)>> = RwLock::new(Vec::new());
+
+pub fn register_custom_bank(id: &str, bank: Option<serde_json::Value>) {
+    let mut banks = CUSTOM_BANKS.write().unwrap();
+    banks.retain(|(existing, _)| existing != id);
+    if let Some(bank) = bank {
+        banks.push((id.to_string(), bank));
+    }
+}
+
+pub fn custom_bank(id: &str) -> Option<serde_json::Value> {
+    CUSTOM_BANKS
+        .read()
+        .unwrap()
+        .iter()
+        .find(|(existing, _)| existing == id)
+        .map(|(_, bank)| bank.clone())
 }
 
 /// The topics of a registered custom course, in the seed's shape.

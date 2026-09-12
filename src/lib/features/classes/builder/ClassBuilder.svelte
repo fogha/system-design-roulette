@@ -14,7 +14,7 @@
   import Dropdown from '../../../components/Dropdown.svelte';
   import ModelPicker from '../../../components/ModelPicker.svelte';
   import CurriculumEditor from './CurriculumEditor.svelte';
-  import { ArrowLeft, ArrowRight, Bot, Check, FileJson, FileUp, PenLine, Rocket, ShieldCheck, Sparkles, Trash2, Globe, CircleAlert, CircleCheck, CircleDashed, X, Save } from 'lucide-svelte';
+  import { ArrowLeft, ArrowRight, Bot, Check, FileJson, FileUp, PenLine, Rocket, ShieldCheck, Sparkles, Trash2, Globe, CircleAlert, CircleCheck, CircleDashed, X, Save, ListChecks } from 'lucide-svelte';
 
   let { id = null, onclose, onpublished }: { id?: string | null; onclose: () => void; onpublished: (id: string) => void } = $props();
 
@@ -34,7 +34,7 @@
   let draft = $state<CourseDraft | null>(null);
   let hostInput = $state('');
   let runners = $state<RunnerInfo[]>([]);
-  let busy = $state<'' | 'create' | 'draft' | 'review' | 'sources' | 'publish' | 'save' | 'import' | 'delete' | 'export'>('');
+  let busy = $state<'' | 'create' | 'draft' | 'review' | 'sources' | 'bank' | 'publish' | 'save' | 'import' | 'delete' | 'export'>('');
   let error = $state('');
   let saved = $state<'idle' | 'saving' | 'saved'>('idle');
   let fileInput = $state<HTMLInputElement | undefined>(undefined);
@@ -47,6 +47,9 @@
   const drafted = $derived(!!draft && (draft.topics.length > 1 || draft.topics[0]?.slug !== 'first-topic' || !!draft.summary));
   const unreachable = $derived((view?.sources ?? []).filter((s) => s.state !== 'reachable'));
   const highFindings = $derived((view?.review ?? []).filter((f) => f.severity === 'high').length);
+  const bankQuestions = $derived(view?.bank?.questions ?? []);
+  const voided = $derived(bankQuestions.filter((q) => q.voided));
+  const bankStale = $derived.by(() => { const d = draft; return !!d && bankQuestions.some((q) => !d.topics.some((t) => `${d.id}-${t.slug}` === q.competency)); });
 
   onMount(() => {
     api.listAgentRunners().then((list) => (runners = list)).catch(() => {});
@@ -134,6 +137,12 @@
     await flush();
     busy = 'sources'; error = '';
     try { adopt(await api.verifyCustomCourseSources(view.id)); } catch (cause) { error = String(cause); } finally { busy = ''; }
+  }
+  async function writeBank() {
+    if (!view || busy) return;
+    await flush();
+    busy = 'bank'; error = '';
+    try { adopt(await api.writeCustomCourseBank(view.id)); } catch (cause) { error = String(cause); } finally { busy = ''; }
   }
   async function publish() {
     if (!view || busy) return;
@@ -306,6 +315,20 @@
           {/if}
         </div>
       </div>
+      <div class="check-card bank-card">
+        <div class="check-head"><span class="check-tile"><ListChecks size={16} /></span><div><strong>Write the question bank</strong><small>Three cited four-choice questions per stage, on the course's core topics. They power the placement check and unit challenges; without them the class starts from scratch or a stage you choose. Held to the same shape as the bundled banks.</small></div><button type="button" class="ghost mono-ghost" onclick={writeBank} disabled={!!busy || issues.length > 0} title={issues.length ? 'Fix the editor first' : ''}>{busy === 'bank' ? 'Writing…' : bankQuestions.length ? 'Write it again' : 'Write the bank'}</button></div>
+        {#if busy === 'bank' && logTail.length}<pre class="feed mono">{logTail.join('\n')}</pre>{/if}
+        {#if bankQuestions.length}
+          <div class="source-summary mono"><span class="ok"><CircleCheck size={11} /> {bankQuestions.length - voided.length} usable</span>{#if voided.length}<span class="warn"><CircleAlert size={11} /> {voided.length} disputed</span>{/if}{#if bankStale}<span class="warn"><CircleAlert size={11} /> some questions point at topics no longer in the draft; write it again</span>{/if}</div>
+          <ol class="bank-list">
+            {#each bankQuestions as q (q.id)}
+              <li class:voided={q.voided}><span class="stage mono">{q.entry_point}</span><div class="q"><p>{q.prompt}</p><small>key: {q.choices.find((c) => c.id === q.answer)?.text ?? q.answer}{#if q.source} · <span class="mono">{q.source}</span>{/if}{#if q.voided} · <b>disputed:</b> {q.void_reason || 'no reason given'}{/if}</small></div></li>
+            {/each}
+          </ol>
+        {:else if busy !== 'bank'}
+          <p class="hint">Not written yet. Optional; it can be written after the class is published, from its Curriculum tab.</p>
+        {/if}
+      </div>
       <footer class="nav">
         <button type="button" class="ghost mono-ghost" onclick={() => (step = 'review')}><ArrowLeft size={12} />Back to the editor</button>
         <span class="hint mono">{highFindings ? `${highFindings} high-severity finding${highFindings === 1 ? '' : 's'} open` : issues.length ? `${issues.length} to fix in the editor` : 'ready'}</span>
@@ -320,9 +343,9 @@
         <li><span class="mf-label mono">CLASS</span><strong>{draft.label}</strong><small>{draft.short_code} · {draft.native_label || 'your own course'}</small></li>
         <li><span class="mf-label mono">TOPICS</span><strong>{draft.topics.length}</strong><small>{draft.topics.filter((t) => t.curriculum.core).length} core · {draft.entry_points.map((e) => e.label).join(' → ')}</small></li>
         <li><span class="mf-label mono">TUTOR</span><strong>{brief.agent} / {brief.model || 'runner default'}</strong><small>from the brief; changeable in the class's Settings tab</small></li>
-        <li><span class="mf-label mono">CHECKS</span><strong class:warn={issues.length > 0}>{issues.length ? `${issues.length} to fix` : 'all pass'}</strong><small>{view.review.length ? `${view.review.length} review finding${view.review.length === 1 ? '' : 's'}` : 'not read back'} · {view.sources.length ? `${unreachable.length} source${unreachable.length === 1 ? '' : 's'} to look at` : 'sources not fetched'}</small></li>
+        <li><span class="mf-label mono">CHECKS</span><strong class:warn={issues.length > 0}>{issues.length ? `${issues.length} to fix` : 'all pass'}</strong><small>{view.review.length ? `${view.review.length} review finding${view.review.length === 1 ? '' : 's'}` : 'not read back'} · {view.sources.length ? `${unreachable.length} source${unreachable.length === 1 ? '' : 's'} to look at` : 'sources not fetched'} · {bankQuestions.length ? `${bankQuestions.length - voided.length} questions` : 'no question bank'}</small></li>
       </ul>
-      <p class="after mono">after publishing: choose a starting point (from scratch or a stage; the placement check needs a question bank, a later pass) → add study times → the class activates</p>
+      <p class="after mono">after publishing: choose a starting point ({bankQuestions.length ? 'from scratch, a stage, or the placement check' : 'from scratch or a stage; the placement check needs the question bank'}) → add study times → the class activates</p>
       <footer class="nav">
         <button type="button" class="ghost mono-ghost" onclick={() => (step = 'verify')}><ArrowLeft size={12} />Back</button>
         <span class="hint mono">{issues.length ? 'the desk will refuse until the editor is clean' : 'ready'}</span>
@@ -393,6 +416,11 @@
   .source-summary { display: flex; gap: 14px; font-size: 10px; letter-spacing: 0.5px; color: var(--muted); } .source-summary span { display: inline-flex; align-items: center; gap: 5px; } .source-summary .ok { color: var(--ok-fg); } .source-summary .warn { color: var(--warn-fg); }
   .sources { display: flex; flex-direction: column; gap: 5px; margin: 0; padding: 0; list-style: none; max-height: 260px; overflow-y: auto; }
   .sources li { display: flex; align-items: center; gap: 10px; font-size: 11px; } .state { flex: none; width: 76px; font-size: 9px; letter-spacing: 0.6px; color: var(--warn-fg); } .state.off { color: var(--led-err); } .url { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 10.5px; }
+  .bank-card { grid-column: 1 / -1; }
+  .bank-list { display: flex; flex-direction: column; gap: 5px; margin: 0; padding: 0; list-style: none; max-height: 320px; overflow-y: auto; }
+  .bank-list li { display: flex; gap: 10px; padding: 8px 10px; border: 1px solid var(--node-border); border-radius: var(--radius-control); background: var(--node-bg); } .bank-list li.voided { opacity: 0.6; border-style: dashed; }
+  .bank-list .stage { flex: none; width: 82px; font-size: 9px; letter-spacing: 0.6px; color: var(--accent); padding-top: 2px; }
+  .bank-list .q { display: flex; flex-direction: column; gap: 3px; min-width: 0; } .bank-list .q p { margin: 0; font-size: 12px; line-height: 1.45; } .bank-list .q small { font-size: 10.5px; color: var(--muted); overflow-wrap: anywhere; } .bank-list .q small b { color: var(--warn-fg); font-weight: 500; }
   .manifest { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
   .manifest li { display: flex; flex-direction: column; gap: 3px; padding: 12px 14px; border: 1px solid var(--node-border); border-radius: var(--radius-panel); background: var(--surface); }
   .mf-label { font-size: 9px; letter-spacing: 1.2px; color: var(--faint); } .manifest strong { font-size: 13px; font-weight: 500; } .manifest strong.warn { color: var(--warn-fg); } .manifest small { font-size: 11px; color: var(--muted); line-height: 1.45; }

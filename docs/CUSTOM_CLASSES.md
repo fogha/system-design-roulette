@@ -96,8 +96,13 @@ Each call is announced in the execution feed with its own run so the Logs page s
 
 `get_custom_course_draft`, `save_custom_course_draft`, `draft_custom_course` (tutor), `review_custom_course` (tutor), `verify_custom_course_sources`, `publish_custom_course`, `export_custom_course`, `import_custom_course`, `delete_custom_course` (draft only; a published course with history is retired, not deleted).
 
+### 2.7 The question bank (done)
+
+A third card on the Verify step asks the tutor for the bank: three cited four-choice questions per stage on core topics of that stage, in the placement check's own shape (`placement::Question` with a `source`, and `voided`/`void_reason` for disputes). `class_builder::bank_from_written` holds the tutor's answer to that shape and sends the reasons back once. The bank is stored on the class (migration v14) and registered with the course; `placement::bank` and `has_bank` answer for a custom course from the registry, leaving voided questions out, and a bank counts only while every stage still has three usable questions. Enrollment options and the curriculum map say whether the check and unit challenges are available. A learner disputes a key from the placement result (**This key is wrong**); the question is set aside and listed as disputed in the builder until the bank is written again.
+
 ## 3. Later passes
 
-- **Questions and the placement check.** The tutor writes three to five cited questions per topic; they feed retrieval, unit challenges and a generated diagnostic bank (three per stage). A learner who believes a generated key is wrong can **void** the question from the check result: it stops counting, is excluded from sampling, and appears in the class editor's Questions tab for correction. The bundled validator holds every generated question to the same shape.
+- **Retrieval from the bank.** Written questions could feed retrieval sessions before a lesson has been taught on the topic; today retrieval draws on the previous lesson's own questions.
+- **Editing single questions** in the builder rather than writing the whole bank again after a dispute.
 - **Re-accepting a path after a curriculum edit** with the changed topics marked.
 - **Sharing**: an import from a URL, and a catalogue of shared classes. Not now.

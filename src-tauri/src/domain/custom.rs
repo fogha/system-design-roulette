@@ -130,6 +130,9 @@ pub struct CustomCourseView {
     pub issues: Vec<DraftIssue>,
     pub review: Vec<ReviewFinding>,
     pub sources: Vec<SourceCheck>,
+    /// The question bank the tutor wrote, if any: three cited questions
+    /// per stage in the placement check's shape.
+    pub bank: Option<crate::domain::placement::Bank>,
     pub created_at: String,
     pub updated_at: String,
     pub published_at: Option<String>,
@@ -660,6 +663,7 @@ struct Row {
     curriculum_json: Option<String>,
     review_json: Option<String>,
     sources_json: Option<String>,
+    bank_json: Option<String>,
     created_at: String,
     updated_at: String,
     published_at: Option<String>,
@@ -668,7 +672,8 @@ struct Row {
 fn row(conn: &Connection, id: &str) -> Result<Row> {
     conn.query_row(
         "SELECT id, version, status, origin, brief_json, draft_json, definition_json,
-                curriculum_json, review_json, sources_json, created_at, updated_at, published_at
+                curriculum_json, review_json, sources_json, created_at, updated_at, published_at,
+                bank_json
          FROM custom_courses WHERE id=?1",
         [id],
         |r| {
@@ -686,6 +691,7 @@ fn row(conn: &Connection, id: &str) -> Result<Row> {
                 created_at: r.get(10)?,
                 updated_at: r.get(11)?,
                 published_at: r.get(12)?,
+                bank_json: r.get(13)?,
             })
         },
     )
@@ -714,6 +720,10 @@ fn view_of(row: Row) -> Result<CustomCourseView> {
             .map(|json| serde_json::from_str(&json))
             .transpose()?
             .unwrap_or_default(),
+        bank: row
+            .bank_json
+            .map(|json| serde_json::from_str(&json))
+            .transpose()?,
         created_at: row.created_at,
         updated_at: row.updated_at,
         published_at: row.published_at,
@@ -835,6 +845,69 @@ pub fn save_sources(
     get(conn, id)
 }
 
+/// The bank a class may sample: the stored one with questions whose topic
+/// the draft no longer has left out. None without questions.
+fn bank_for(draft: &CourseDraft, bank_json: Option<&str>) -> Result<Option<Value>> {
+    let Some(json) = bank_json else {
+        return Ok(None);
+    };
+    let mut bank: crate::domain::placement::Bank = serde_json::from_str(json)?;
+    let slugs: Vec<String> = draft
+        .topics
+        .iter()
+        .map(|t| format!("{}-{}", draft.id, t.slug))
+        .collect();
+    bank.questions.retain(|q| slugs.contains(&q.competency));
+    if bank.questions.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(serde_json::to_value(bank)?))
+}
+
+/// Keep the bank the tutor wrote. It is checked against the draft's topics
+/// and stages the way an authored bank is checked, once the class is
+/// published; until then it is held as written.
+pub fn save_bank(
+    conn: &Connection,
+    id: &str,
+    bank: &crate::domain::placement::Bank,
+) -> Result<CustomCourseView> {
+    let existing = row(conn, id)?;
+    let json = serde_json::to_string(bank)?;
+    conn.execute(
+        "UPDATE custom_courses SET bank_json=?2, updated_at=?3 WHERE id=?1",
+        params![id, json, now()],
+    )?;
+    if existing.status == "published" {
+        let draft: CourseDraft = serde_json::from_str(&existing.draft_json)?;
+        catalog::register_custom_bank(id, bank_for(&draft, Some(&json))?);
+    }
+    get(conn, id)
+}
+
+/// A learner disputes a written key: the question stops counting and is
+/// left out of every sample until it is corrected in the builder.
+pub fn void_question(
+    conn: &Connection,
+    id: &str,
+    question_id: &str,
+    reason: &str,
+) -> Result<CustomCourseView> {
+    let existing = row(conn, id)?;
+    let Some(json) = existing.bank_json.as_deref() else {
+        return Err(invalid("this class has no question bank"));
+    };
+    let mut bank: crate::domain::placement::Bank = serde_json::from_str(json)?;
+    let question = bank
+        .questions
+        .iter_mut()
+        .find(|q| q.id == question_id)
+        .ok_or_else(|| invalid("that question is not in the bank"))?;
+    question.voided = true;
+    question.void_reason = reason.trim().chars().take(400).collect();
+    save_bank(conn, id, &bank)
+}
+
 /// Publish the draft: register the definition, write the topics, make sure
 /// the class has a program. Refused while the validator objects.
 pub fn publish(conn: &Connection, id: &str) -> Result<CustomCourseView> {
@@ -906,6 +979,7 @@ pub fn publish(conn: &Connection, id: &str) -> Result<CustomCourseView> {
             &brief.custom_agent_bin,
         )
         .map_err(DbError::Invalid)?;
+        catalog::register_custom_bank(id, bank_for(&draft, existing.bank_json.as_deref())?);
         Ok(())
     })();
     if let Err(error) = written {
@@ -941,7 +1015,7 @@ pub fn load_published(conn: &Connection) -> Result<usize> {
         return Ok(0);
     }
     let mut statement = conn.prepare(
-        "SELECT id, definition_json, curriculum_json FROM custom_courses WHERE status='published'",
+        "SELECT id, definition_json, curriculum_json, draft_json, bank_json FROM custom_courses WHERE status='published'",
     )?;
     let rows = statement
         .query_map([], |r| {
@@ -949,11 +1023,13 @@ pub fn load_published(conn: &Connection) -> Result<usize> {
                 r.get::<_, String>(0)?,
                 r.get::<_, Option<String>>(1)?,
                 r.get::<_, Option<String>>(2)?,
+                r.get::<_, String>(3)?,
+                r.get::<_, Option<String>>(4)?,
             ))
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     let mut loaded = 0;
-    for (id, definition, curriculum) in rows {
+    for (id, definition, curriculum, draft, bank) in rows {
         let (Some(definition), Some(curriculum)) = (definition, curriculum) else {
             log::warn!("custom course {id} is published without a definition");
             continue;
@@ -961,6 +1037,8 @@ pub fn load_published(conn: &Connection) -> Result<usize> {
         let definition: OwnedCourse = serde_json::from_str(&definition)?;
         let curriculum: Value = serde_json::from_str(&curriculum)?;
         catalog::register_custom(definition, curriculum);
+        let draft: CourseDraft = serde_json::from_str(&draft)?;
+        catalog::register_custom_bank(&id, bank_for(&draft, bank.as_deref())?);
         loaded += 1;
     }
     Ok(loaded)

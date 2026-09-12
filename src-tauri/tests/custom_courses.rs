@@ -305,3 +305,116 @@ fn a_class_file_round_trips_and_a_draft_can_be_deleted_but_a_published_class_can
     custom::publish(&conn, &created.id).unwrap();
     assert!(custom::delete_draft(&conn, &created.id).is_err());
 }
+
+#[test]
+fn a_written_bank_turns_on_the_placement_check_and_a_disputed_key_is_set_aside() {
+    use principia_desk_lib::class_builder::{bank_from_written, WrittenQuestion};
+    let (_file, conn) = fixture();
+    let created = custom::create(&conn, &brief_titled("Rust with questions"), "manual").unwrap();
+    let draft = complete(created.draft.clone());
+    custom::save_draft(&conn, &created.id, draft.clone()).unwrap();
+    // No bank: the check is unavailable, the two other routes work.
+    custom::publish(&conn, &created.id).unwrap();
+    assert!(!placement::has_bank(&created.id));
+    assert!(
+        !enrollment::options(&created.id)
+            .unwrap()
+            .diagnostic_available
+    );
+
+    // Three questions per stage on core topics of that stage.
+    let written = |topic: &str| WrittenQuestion {
+        topic: topic.into(),
+        label: "A skill".into(),
+        prompt: "Which one?".into(),
+        choices: vec!["one".into(), "two".into(), "three".into(), "four".into()],
+        answer: "three".into(),
+        explanation: "Because the third is right.".into(),
+        source: "https://doc.rust-lang.org/book/".into(),
+    };
+    let mut questions = Vec::new();
+    for topic in [
+        "ownership",
+        "errors",
+        "ownership",
+        "clap",
+        "clap",
+        "clap",
+        "testing",
+        "testing",
+        "testing",
+        "release",
+        "release",
+        "release",
+    ] {
+        questions.push(written(topic));
+    }
+    let bank =
+        bank_from_written(&custom::get(&conn, &created.id).unwrap().draft, questions).unwrap();
+    assert_eq!(bank.questions.len(), 12);
+    let view = custom::save_bank(&conn, &created.id, &bank).unwrap();
+    assert!(view.bank.is_some());
+    assert!(placement::has_bank(&created.id));
+    assert!(
+        enrollment::options(&created.id)
+            .unwrap()
+            .diagnostic_available
+    );
+    let usable = placement::bank(&created.id).unwrap();
+    assert_eq!(usable.questions.len(), 12);
+    assert_eq!(
+        usable.questions[0].competency,
+        format!("{}-ownership", created.id)
+    );
+
+    // The placement check runs on it: a diagnostic entry, a started round.
+    let options = enrollment::options(&created.id).unwrap();
+    let mut configuration = options.default_configuration;
+    configuration.entry = EntryChoice::Diagnostic;
+    let enrollment_draft = enrollment::save_draft(
+        &conn,
+        &SaveEnrollmentDraft {
+            id: None,
+            expected_revision: None,
+            course: options.course.clone(),
+            configuration,
+        },
+    )
+    .unwrap();
+    let round = placement::start(
+        &conn,
+        &enrollment_draft.id,
+        enrollment_draft.revision,
+        false,
+    )
+    .unwrap();
+    assert_eq!(
+        round.questions.len(),
+        12,
+        "every stage is sampled three times"
+    );
+
+    // A disputed key is set aside from the next sample and the bank shows why.
+    let disputed = usable.questions[0].id.clone();
+    let view = custom::void_question(
+        &conn,
+        &created.id,
+        &disputed,
+        "the key contradicts the book",
+    )
+    .unwrap();
+    let stored = view.bank.unwrap();
+    let voided = stored.questions.iter().find(|q| q.id == disputed).unwrap();
+    assert!(voided.voided);
+    assert_eq!(voided.void_reason, "the key contradicts the book");
+    assert!(
+        placement::bank(&created.id).is_err(),
+        "with one stage short of three, no new check can start until the bank is corrected"
+    );
+    assert!(!placement::has_bank(&created.id));
+
+    // Loading after a restart registers the bank again, still without the voided question.
+    catalog::unregister_custom(&created.id);
+    custom::load_published(&conn).unwrap();
+    assert!(catalog::custom_bank(&created.id).is_some());
+}

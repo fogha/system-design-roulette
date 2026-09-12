@@ -791,6 +791,8 @@ export const mockApi = {
   draftCustomCourse: previewCustom.draft,
   reviewCustomCourse: previewCustom.review,
   verifyCustomCourseSources: previewCustom.verify,
+  writeCustomCourseBank: previewCustom.writeBank,
+  voidCustomQuestion: previewCustom.voidQuestion,
   publishCustomCourse: previewCustom.publish,
   deleteCustomCourseDraft: previewCustom.remove,
   exportCustomCourse: previewCustom.export,

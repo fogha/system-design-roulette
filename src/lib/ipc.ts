@@ -279,6 +279,29 @@ export interface SourceCheck {
   url: string;
   state: 'reachable' | 'unreachable' | 'off-host';
 }
+/** One question of a written bank, in the placement check's shape. */
+export interface BankQuestion {
+  id: string;
+  criterion: string;
+  competency: string;
+  entry_point: string;
+  label: string;
+  prompt: string;
+  choices: { id: string; text: string }[];
+  answer: string;
+  explanation: string;
+  followup_for: string | null;
+  source?: string;
+  voided?: boolean;
+  void_reason?: string;
+}
+export interface QuestionBank {
+  course_id: string;
+  version: string;
+  estimated_minutes: number;
+  scope_note: string;
+  questions: BankQuestion[];
+}
 export interface CustomCourseView {
   id: string;
   version: number;
@@ -289,6 +312,8 @@ export interface CustomCourseView {
   issues: DraftIssue[];
   review: ReviewFinding[];
   sources: SourceCheck[];
+  /** The question bank the tutor wrote, once it has. */
+  bank: QuestionBank | null;
   created_at: string;
   updated_at: string;
   published_at: string | null;
@@ -919,6 +944,8 @@ const realApi = {
   draftCustomCourse: (id: string) => invoke<CustomCourseView>('draft_custom_course', { id }),
   reviewCustomCourse: (id: string) => invoke<CustomCourseView>('review_custom_course', { id }),
   verifyCustomCourseSources: (id: string) => invoke<CustomCourseView>('verify_custom_course_sources', { id }),
+  writeCustomCourseBank: (id: string) => invoke<CustomCourseView>('write_custom_course_bank', { id }),
+  voidCustomQuestion: (id: string, questionId: string, reason: string) => invoke<CustomCourseView>('void_custom_question', { id, questionId, reason }),
   publishCustomCourse: (id: string) => invoke<CustomCourseView>('publish_custom_course', { id }),
   deleteCustomCourseDraft: (id: string) => invoke<void>('delete_custom_course_draft', { id }),
   exportCustomCourse: (id: string) => invoke<ClassExport>('export_custom_course', { id }),

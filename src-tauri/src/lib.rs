@@ -363,6 +363,8 @@ pub fn run() {
             commands::custom::draft_custom_course,
             commands::custom::review_custom_course,
             commands::custom::verify_custom_course_sources,
+            commands::custom::write_custom_course_bank,
+            commands::custom::void_custom_question,
             commands::custom::publish_custom_course,
             commands::custom::delete_custom_course_draft,
             commands::custom::export_custom_course,

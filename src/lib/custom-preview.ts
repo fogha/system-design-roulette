@@ -4,7 +4,7 @@
  * validator rules the native side holds a draft to, so the editor behaves
  * the same way before the desktop app is attached.
  */
-import type { ClassExport, CourseBrief, CourseDraft, CustomCourseSummary, CustomCourseView, DraftIssue, DraftTopic, ReviewFinding, SourceCheck } from './ipc';
+import type { ClassExport, CourseBrief, CourseDraft, CustomCourseSummary, CustomCourseView, DraftIssue, DraftTopic, QuestionBank, ReviewFinding, SourceCheck } from './ipc';
 import { registerCourses, type CourseDefinition } from './catalog';
 
 export const STAGES: { id: DraftTopic['curriculum']['phase']; label: string }[] = [
@@ -136,7 +136,7 @@ function now() { return new Date().toISOString(); }
 function view(id: string): CustomCourseView {
   const item = stored.get(id);
   if (!item) throw new Error('this class does not exist');
-  return { ...item, issues: validateDraft(item.draft), draft: structuredClone(item.draft), brief: { ...item.brief }, review: [...item.review], sources: [...item.sources] };
+  return { ...item, issues: validateDraft(item.draft), draft: structuredClone(item.draft), brief: { ...item.brief }, review: [...item.review], sources: [...item.sources], bank: item.bank ? structuredClone(item.bank) : null };
 }
 
 function newId(title: string): string {
@@ -153,7 +153,7 @@ export const previewCustom = {
     if (!brief.title.trim()) throw new Error('give the class a title');
     if (words(brief.outcome) < 5) throw new Error('say what you want to be able to do, in a sentence at least');
     const id = newId(brief.title);
-    stored.set(id, { id, version: 0, status: 'draft', origin, brief: { ...brief }, draft: blankDraft(id, brief), issues: [], review: [], sources: [], created_at: now(), updated_at: now(), published_at: null });
+    stored.set(id, { id, version: 0, status: 'draft', origin, brief: { ...brief }, draft: blankDraft(id, brief), issues: [], review: [], sources: [], bank: null, created_at: now(), updated_at: now(), published_at: null });
     return view(id);
   },
   saveBrief: async (id: string, brief: CourseBrief) => { const item = stored.get(id); if (!item) throw new Error('this class does not exist'); item.brief = { ...brief }; item.updated_at = now(); return view(id); },
@@ -179,6 +179,29 @@ export const previewCustom = {
     const checks: SourceCheck[] = [];
     for (const topic of item.draft.topics) for (const url of topic.curriculum.primary_sources) checks.push({ topic: topic.slug, url, state: !onHost(item.draft.source_hosts, url) ? 'off-host' : /example\.com|invalid/.test(url) ? 'unreachable' : 'reachable' });
     item.sources = checks; item.updated_at = now(); return view(id);
+  },
+  writeBank: async (id: string) => {
+    const item = stored.get(id); if (!item) throw new Error('this class does not exist');
+    const issues = validateDraft(item.draft);
+    if (issues.length) throw new Error(`fix the draft before writing its questions: ${issues[0].message}`);
+    await new Promise((r) => setTimeout(r, 1500));
+    const stages = ['foundations', 'mechanisms', 'production', 'synthesis'];
+    const questions: QuestionBank['questions'] = [];
+    for (const stage of stages) {
+      const core = item.draft.topics.filter((t) => t.curriculum.phase === stage && t.curriculum.core);
+      for (let i = 0; i < 3; i++) {
+        const topic = core[i % core.length];
+        const n = questions.length + 1;
+        questions.push({ id: `${id}-entry-${n}`, criterion: `${id}-criterion-${n}`, competency: `${id}-${topic.slug}`, entry_point: stage, label: `${topic.title.split(' ').slice(0, 3).join(' ')}`, prompt: `In ${topic.title.toLowerCase()}, which statement holds?`, choices: [{ id: '1', text: 'The first plausible mistake' }, { id: '2', text: 'The mechanism as the source describes it' }, { id: '3', text: 'A common misconception' }, { id: '4', text: 'An unrelated fact' }], answer: '2', explanation: 'The source names the mechanism; the others are the misconceptions the lesson warns about.', followup_for: null, source: topic.curriculum.primary_sources[0] ?? '' });
+      }
+    }
+    item.bank = { course_id: id, version: `written-${Date.now()}`, estimated_minutes: 14, scope_note: 'Twelve short questions, three for each stage of this course, written by the tutor from the course\'s own sources.', questions };
+    item.updated_at = now(); return view(id);
+  },
+  voidQuestion: async (id: string, questionId: string, reason: string) => {
+    const item = stored.get(id); if (!item?.bank) throw new Error('this class has no question bank');
+    const q = item.bank.questions.find((q) => q.id === questionId); if (!q) throw new Error('that question is not in the bank');
+    q.voided = true; q.void_reason = reason.trim().slice(0, 400); item.updated_at = now(); return view(id);
   },
   publish: async (id: string) => {
     const item = stored.get(id); if (!item) throw new Error('this class does not exist');
