@@ -1129,6 +1129,7 @@ export const mockApi = {
   startClassReview: async () => { throw new Error('Reviews need the desktop app.'); },
   endBlock: async () => { throw new Error('Blocks need the desktop app.'); },
   listExecutionRuns: async () => previewRuns(),
+  reportFrontendError: async (message: string) => { console.error(message); },
   getExecutionLog: async (runId: string) => previewLogLines().filter((line) => line.run_id === runId),
   getRecentExecutionLog: async () => previewLogLines(),
   resumeClassroomSession: async (

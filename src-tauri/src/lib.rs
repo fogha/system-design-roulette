@@ -341,6 +341,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::mark_frontend_ready,
+            commands::report_frontend_error,
             commands::get_app_state,
             commands::get_catalog,
             commands::get_enrollment_options,

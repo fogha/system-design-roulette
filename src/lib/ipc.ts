@@ -1100,6 +1100,7 @@ const realApi = {
   startClassReview: (subjectId: ClassroomSubjectId, occurrenceId?: string | null) => invoke<ClassroomSessionStart>('start_class_review', { subjectId, occurrenceId: occurrenceId ?? null }),
   endBlock: (occurrenceId: string) => invoke<{ id: string; disposition: string }>('end_block', { occurrenceId }),
   listExecutionRuns: () => invoke<ExecutionRun[]>('list_execution_runs'),
+  reportFrontendError: (message: string) => invoke<void>('report_frontend_error', { message }),
   getExecutionLog: (runId: string) => invoke<ExecutionLogLine[]>('get_execution_log', { runId }),
   getRecentExecutionLog: (limit?: number) => invoke<ExecutionLogLine[]>('get_recent_execution_log', { limit: limit ?? null }),
   submitClassroomEngineeringSession: (input: {

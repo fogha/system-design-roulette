@@ -206,10 +206,20 @@ pub fn set_kiosk_level(state: State<'_, AppState>, level: String) -> CmdResult<(
 /// engage (a dead webview has no escape hatch).
 #[tauri::command]
 pub fn mark_frontend_ready(app: AppHandle, state: State<'_, AppState>) -> CmdResult<()> {
+    log::info!("frontend ready");
     state.frontend_ready.store(true, Ordering::SeqCst);
     // An active focused class session recovers its enforcement only now.
     crate::enforcement::restore(&app, &state);
     Ok(())
+}
+
+/// A failure in the interface, so it lands in the process log and the
+/// execution feed instead of only in a toast nobody can copy.
+#[tauri::command]
+pub fn report_frontend_error(state: State<'_, AppState>, message: String) {
+    let message: String = message.chars().take(2000).collect();
+    log::error!("frontend: {message}");
+    state.generator.feed.say(format!("interface: {message}"));
 }
 
 #[tauri::command]

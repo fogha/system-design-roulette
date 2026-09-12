@@ -1,6 +1,7 @@
 <script lang="ts">
   import '../lib/theme.css';
   import { app, shouldShowEscapeHatch } from '../lib/stores.svelte';
+  import { api } from '../lib/ipc';
   import SetupWizard from '../lib/screens/SetupWizard.svelte';
   import Today from '../lib/screens/Today.svelte';
   import Classes from '../lib/features/classes/Classes.svelte';
@@ -25,6 +26,8 @@
   // loading dots with nothing to say; the toast says what broke instead.
   function surface(message: string) {
     if (!app.error) app.error = message;
+    // The desk's log keeps it too, so it can be read from a terminal.
+    void api.reportFrontendError(message).catch(() => {});
   }
   $effect(() => {
     const onError = (event: ErrorEvent) => surface(`Something broke in the desk: ${event.message}`);
